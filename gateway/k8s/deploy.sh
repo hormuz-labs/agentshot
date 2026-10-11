@@ -8,7 +8,8 @@ root=$(cd "$here/../.." && pwd)
 gcloud compute addresses describe manul-gateway --global >/dev/null 2>&1 || gcloud compute addresses create manul-gateway --global
 kubectl create namespace manul --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n manul create configmap bifrost-config --from-file=config.json="$here/config.json" --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n manul create configmap account-code --from-file=index.ts="$root/account/src/index.ts" --from-file=media.ts="$root/account/src/media.ts" --from-file=server.mjs="$root/account/server.mjs" --dry-run=client -o yaml | kubectl apply -f -
+npm --prefix "$root" run account:build
+kubectl -n manul create configmap account-code --from-file=server.mjs="$root/out/account/server.mjs" --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n manul create configmap manul-media --from-file=media.json="$here/media.json" --dry-run=client -o yaml | kubectl apply -f -
 kubectl get secret manul-secrets -n manul >/dev/null || { echo "Create the manul-secrets secret first (gateway/README.md)."; exit 1; }
 # production keys from gateway/.env, if there is one (the restart below picks them up)

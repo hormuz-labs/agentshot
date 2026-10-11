@@ -1,0 +1,115 @@
+// Real renderer + real WebGL, fake AG-UI activity: no provider accounts or paid AI calls.
+// npm run build && node test/e2e/mascot.e2e.mjs [screenshot folder]
+import { _electron as electron } from 'playwright-core'
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { prepareElectron } from '../../scripts/run-electron.mjs'
+
+const root = join(import.meta.dirname, '../..')
+const tmp = mkdtempSync(join(tmpdir(), 'manul-mascot-'))
+const out = process.argv[2] || join(tmp, 'screenshots')
+mkdirSync(out, { recursive: true })
+const executablePath = await prepareElectron()
+const env = { ...process.env, MANUL_PROJECTS: join(tmp, 'projects') }
+delete env.ELECTRON_RENDERER_URL
+const app = await electron.launch({ cwd: root, executablePath, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env })
+try {
+  const win = await app.firstWindow()
+  const errors = []
+  win.on('pageerror', e => errors.push(e.message))
+  await win.waitForSelector('text=What are we making?')
+  await app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('agent:ready'); ipcMain.handle('agent:ready', () => true) })
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.isVisible()).webContents.send('agent:ready'))
+  const mascot = win.locator('[data-mascot-state]:visible')
+  await win.waitForSelector('[data-mascot-renderer="webgl"]', { timeout: 30000 })
+  await win.screenshot({ path: join(out, 'home.png') })
+  const video = join(tmp, 'A little film.mp4')
+  execFileSync(join(root, 'resources/bin', `${process.platform}-${process.arch}`, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=#ada48d:s=640x360:d=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
+  await app.evaluate(({ ipcMain }, video) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => video) }, video)
+  await win.click('text=Drop a video here')
+  await win.getByRole('button', { name: 'Start', exact: true }).click()
+  await win.waitForSelector('text=What should change?')
+  await win.waitForSelector('[data-mascot-renderer="webgl"]')
+  const project = await win.locator('[data-project-row][aria-current="true"]').getAttribute('data-project-row')
+  const send = async (type, rest = {}) => app.evaluate(({ BrowserWindow }, { project, type, rest }) => {
+    BrowserWindow.getAllWindows().find(w => w.isVisible()).webContents.send('agui', project, { type, timestamp: Date.now(), ...rest })
+  }, { project, type, rest })
+  const state = async name => { await win.waitForSelector(`[data-mascot-state="${name}"]:visible`); await win.waitForSelector('[data-mascot-renderer="webgl"]:visible') }
+  await send('MESSAGES_SNAPSHOT', { messages: [{ id: 'u', role: 'user', content: 'Make this feel like a quiet Sunday morning.' }] })
+  await send('RUN_STARTED')
+  await state('thinking')
+  await win.screenshot({ path: join(out, 'thinking.png') })
+  await send('TEXT_MESSAGE_CONTENT', { messageId: 'reply', delta: 'I’ll soften the opening, let the shots breathe, and find a gentler rhythm.' })
+  await state('speaking')
+  await send('TEXT_MESSAGE_END')
+  const assistant = { id: 'a', role: 'assistant', content: 'I’ll soften the opening, let the shots breathe, and find a gentler rhythm.', toolCalls: [{ id: 'render', type: 'function', function: { name: 'ffmpeg', arguments: JSON.stringify({ args: ['-i', 'media/film.mp4', 'versions/sunday.mp4'] }) } }] }
+  await send('MESSAGES_SNAPSHOT', { messages: [{ id: 'u', role: 'user', content: 'Make this feel like a quiet Sunday morning.' }, assistant] })
+  await send('ACTIVITY_SNAPSHOT', { activityType: 'tools', content: { running: ['render'] } })
+  await state('working')
+  assert.ok((await win.locator('[role="status"]').allTextContents()).some(s => s.includes('Rendering your edit')))
+  const moving1 = await mascot.screenshot()
+  await win.waitForTimeout(300)
+  assert.ok(!moving1.equals(await mascot.screenshot()), 'working animates the real 3D rig')
+  await win.screenshot({ path: join(out, 'working.png') })
+  const question = { id: 'q', role: 'assistant', toolCalls: [{ id: 'question', type: 'function', function: { name: 'ask_user', arguments: JSON.stringify({ question: 'Which mood should the opening have?', options: [{ label: 'Gentle' }, { label: 'Bright' }] }) } }] }
+  await send('MESSAGES_SNAPSHOT', { messages: [{ id: 'u', role: 'user', content: 'Make this feel like a quiet Sunday morning.' }, assistant, question] })
+  await send('ACTIVITY_SNAPSHOT', { activityType: 'tools', content: { running: ['question'] } })
+  await state('waiting')
+  await win.screenshot({ path: join(out, 'waiting.png') })
+  await send('MESSAGES_SNAPSHOT', { messages: [{ id: 'u', role: 'user', content: 'Make this feel like a quiet Sunday morning.' }, assistant] })
+  await send('ACTIVITY_SNAPSHOT', { activityType: 'tools', content: { running: ['render'] } })
+  await state('working')
+  await mascot.click()
+  await win.waitForTimeout(200)
+  await mascot.screenshot({ path: join(out, 'pet.png') })
+  await win.emulateMedia({ reducedMotion: 'reduce' })
+  await win.waitForSelector('[data-reduced-motion="true"][data-mascot-renderer="webgl"]')
+  await win.waitForTimeout(350)
+  const still1 = await mascot.screenshot()
+  await win.waitForTimeout(450)
+  const still2 = await mascot.screenshot()
+  assert.ok(still1.equals(still2), 'reduced motion renders a still pose, without ongoing animation')
+  await win.emulateMedia({ reducedMotion: 'no-preference' })
+  await state('working')
+  await win.evaluate(() => document.documentElement.classList.add('dark'))
+  await win.screenshot({ path: join(out, 'dark.png') })
+  await win.evaluate(() => document.documentElement.classList.remove('dark'))
+  await send('ACTIVITY_SNAPSHOT', { activityType: 'tools', content: { running: [] } })
+  await send('RUN_FINISHED')
+  await state('success')
+  await win.screenshot({ path: join(out, 'finished.png') })
+  await state('idle')
+  await win.mouse.move(5, 5)
+  await win.waitForSelector('[data-mascot-state="sleeping"]:visible', { timeout: 45000 })
+  await mascot.click()
+  await state('idle')
+  await send('RUN_ERROR', { message: 'The provider is temporarily unavailable. Please try again.' })
+  await state('error')
+  await win.getByRole('button', { name: 'New project', exact: true }).click()
+  await win.waitForSelector('text=What are we making?')
+  assert.equal(await win.locator('[data-mascot-renderer="webgl"]').count(), 1, 'hidden project releases its WebGL context')
+  await win.locator('[data-project-row]').first().click()
+  await state('error')
+  assert.equal(await win.locator('[data-mascot-renderer="webgl"]').count(), 1, 'returning to a project restores just its companion')
+  await win.getByRole('button', { name: 'New project', exact: true }).click()
+  await win.waitForSelector('[data-mascot-renderer="webgl"]:visible')
+  await mascot.focus()
+  await win.keyboard.press('Enter')
+  assert.ok(await mascot.getAttribute('aria-label'), 'the pet interaction is keyboard accessible')
+  await win.evaluate(() => {
+    const canvas = document.querySelector('[data-mascot-renderer="webgl"] canvas')
+    canvas.getContext('webgl2').getExtension('WEBGL_lose_context').loseContext()
+  })
+  await win.waitForSelector('[data-mascot-renderer="fallback"]:visible')
+  assert.equal(await mascot.locator('svg').count(), 1, 'a local cat illustration survives WebGL context loss')
+  assert.deepEqual(errors, [], 'no renderer exceptions')
+  console.log('mascot e2e: ok —', out)
+} finally {
+  await app.close()
+  // Keep the screenshots for visual review; disposable app data never touches the real user profile.
+  rmSync(join(tmp, 'ud'), { recursive: true, force: true })
+  rmSync(join(tmp, 'projects'), { recursive: true, force: true })
+}

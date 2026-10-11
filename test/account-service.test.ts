@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handle, NEW_KEY, verify, type Env } from '../account/src/index'
+import { memoryCreditStore, type CreditStore } from '../account/src/credit'
 
 // The account service against fake Clerk (userinfo, users, metadata), fake Bifrost (customers, virtual keys) and fake
 // Dodo Payments (checkouts).
@@ -12,12 +13,18 @@ const env: Env = {
 let metadata: any
 let keys: Record<string, any>
 let calls: { method: string; url: string; auth?: string; body?: any }[]
+let credits: CreditStore
+let recordFailures = 0
+let lostBudgetReplies = 0
 
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 beforeEach(() => {
   metadata = {}
   keys = {}
   calls = []
+  credits = memoryCreditStore()
+  recordFailures = 0
+  lostBudgetReplies = 0
   vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
     const url = String(input)
     const method = init.method || 'GET'
@@ -26,7 +33,10 @@ beforeEach(() => {
     calls.push({ method, url, auth, body })
     if (url === 'https://clerk.test/oauth/userinfo') return auth === 'Bearer good' ? reply({ sub: 'user_1', email: 'ada@example.com' }) : reply({}, 401)
     if (url === 'https://api.clerk.com/v1/users/user_1' && method === 'GET') return reply({ id: 'user_1', private_metadata: metadata })
-    if (url === 'https://api.clerk.com/v1/users/user_1/metadata' && method === 'PATCH') { metadata = { ...metadata, ...body.private_metadata }; return reply({}) }
+    if (url === 'https://api.clerk.com/v1/users/user_1/metadata' && method === 'PATCH') {
+      if (body.private_metadata.payments && recordFailures-- > 0) return reply({}, 503)
+      metadata = { ...metadata, ...body.private_metadata }; return reply({})
+    }
     if (url === 'https://gw.test/api/governance/customers' && method === 'POST') return reply({ customer: { id: 'cus_1', name: body.name } })
     if (url === 'https://gw.test/api/governance/virtual-keys' && method === 'POST') {
       const id = `vk_${Object.keys(keys).length + 1}`
@@ -36,6 +46,7 @@ beforeEach(() => {
     const vk = /^https:\/\/gw\.test\/api\/governance\/virtual-keys\/(.+)$/.exec(url)?.[1]
     if (vk && method === 'PUT') {
       for (const b of body.budgets) Object.assign(keys[vk].budgets.find((x: any) => x.id === b.id), b)   // in place: usage kept
+      if (lostBudgetReplies-- > 0) throw new Error('connection lost after budget update')
       return reply({ virtual_key: keys[vk] })
     }
     if (vk) return keys[vk] ? reply({ virtual_key: keys[vk] }) : reply({ error: 'not found' }, 404)
@@ -45,7 +56,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-const call = (path: string, init: RequestInit = {}) => handle(new Request(`https://account.test${path}`, init), env)
+const call = (path: string, init: RequestInit = {}) => handle(new Request(`https://account.test${path}`, init), env, credits)
 const ask = (token?: string) => call('/v1/key', { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {} })
 const asKey = (key: string, id: string) => ({ authorization: `Bearer ${key}`, 'x-manul-key-id': id })
 const signed = (body: object, at = Math.floor(Date.now() / 1000), secret = SECRET) => {
@@ -111,6 +122,8 @@ describe('the account service: credit and payments', () => {
       customer: { email: 'ada@example.com' },
       return_url: 'https://account.manul.si/paid',
       metadata: { virtual_key_id: 'vk_1', user_id: 'user_1' },
+      billing_currency: 'USD',
+      feature_flags: { allow_currency_selection: false },
     })
     expect((await call('/v1/checkout', { method: 'POST', headers: asKey('sk-bf-vk_1', 'vk_1'), body: JSON.stringify({ amount: 0.2 }) })).status).toBe(400)
   })
@@ -133,6 +146,75 @@ describe('the account service: credit and payments', () => {
     expect((await call('/v1/dodo/webhook', signed(paid('pay_x', 99900), undefined, 'whsec_' + Buffer.from('not-ours').toString('base64')))).status).toBe(401)
     expect((await call('/v1/dodo/webhook', signed(paid('pay_x', 99900), Math.floor(Date.now() / 1000) - 3600))).status).toBe(401)
     expect(await (await call('/v1/dodo/webhook', signed(paid('pay_y', 500, 0, {})))).json()).toMatchObject({ skipped: expect.any(String) })
+    expect(keys.vk_1.budgets[0].max_limit).toBe(2)
+  })
+
+  it('repairs payment metadata after a failure without adding the credit a second time', async () => {
+    await ask('good')
+    recordFailures = 1
+    const hook = () => call('/v1/dodo/webhook', signed(paid('pay_retry', 1000)))
+    expect((await hook()).status).toBe(502)
+    expect(keys.vk_1.budgets[0].max_limit).toBe(12)
+    expect(metadata.payments).toBeUndefined()
+    expect(await (await hook()).json()).toEqual({ ok: true, already: true })
+    expect(metadata.payments).toEqual({ pay_retry: 10 })
+    expect(keys.vk_1.budgets[0].max_limit).toBe(12)
+  })
+
+  it('retries an ambiguous gateway update as the same absolute budget', async () => {
+    await ask('good')
+    lostBudgetReplies = 1
+    const hook = () => call('/v1/dodo/webhook', signed(paid('pay_lost', 1000)))
+    await expect(hook()).rejects.toThrow('connection lost')
+    expect(keys.vk_1.budgets[0].max_limit).toBe(12)
+    expect((await hook()).status).toBe(200)
+    expect(keys.vk_1.budgets[0].max_limit).toBe(12)
+    expect(metadata.payments).toEqual({ pay_lost: 10 })
+  })
+
+  it('serializes duplicate and distinct concurrent payments on one key', async () => {
+    await ask('good')
+    keys.vk_1.budgets[0].current_usage = 0.25
+    const events = [paid('pay_a', 1000), paid('pay_a', 1000), paid('pay_b', 500)]
+    const results = await Promise.all(events.map(e => call('/v1/dodo/webhook', signed(e))))
+    expect(results.every(r => r.status === 200)).toBe(true)
+    expect(keys.vk_1.budgets[0]).toMatchObject({ max_limit: 17, current_usage: 0.25 })
+    expect(metadata.payments).toEqual({ pay_a: 10, pay_b: 5 })
+  })
+
+  it('blocks disabled keys on every account endpoint', async () => {
+    await ask('good')
+    keys.vk_1.is_active = false
+    for (const path of ['/v1/balance', '/v1/voices', '/v1/checkout', '/v1/voice', '/v1/music']) {
+      expect((await call(path, { method: ['/v1/balance', '/v1/voices'].includes(path) ? 'GET' : 'POST', headers: asKey('sk-bf-vk_1', 'vk_1'), body: ['/v1/balance', '/v1/voices'].includes(path) ? undefined : '{}' })).status).toBe(403)
+    }
+    expect(calls.some(c => c.url.startsWith('https://dodo.test'))).toBe(false)
+  })
+
+  it('rejects amounts below $5 before creating checkout', async () => {
+    await ask('good')
+    calls = []
+    for (const amount of [1, 4.99, 1001, 'NaN']) {
+      const r = await call('/v1/checkout', { method: 'POST', headers: asKey('sk-bf-vk_1', 'vk_1'), body: JSON.stringify({ amount }) })
+      expect(r.status).toBe(400)
+      expect((await r.json()).error).toContain('$5')
+    }
+    expect(calls.some(c => c.url.startsWith('https://dodo.test'))).toBe(false)
+    expect((await call('/v1/checkout', { method: 'POST', headers: asKey('sk-bf-vk_1', 'vk_1'), body: '{"amount":5}' })).status).toBe(200)
+  })
+
+  it('grants only configured gateway providers', async () => {
+    const r = await handle(new Request('https://account.test/v1/key', { method: 'POST', headers: { authorization: 'Bearer good' } }), { ...env, BIFROST_PROVIDERS: 'gemini,openai,anthropic' }, credits)
+    expect(r.status).toBe(200)
+    const created = calls.find(c => c.url.endsWith('/virtual-keys') && c.method === 'POST')!
+    expect(created.body.provider_configs.map((p: any) => p.provider)).toEqual(['anthropic', 'gemini', 'openai'])
+  })
+
+  it('refuses payments addressed to another account key and invalid payment amounts', async () => {
+    await ask('good')
+    keys.vk_1.name = 'different-user'
+    expect((await call('/v1/dodo/webhook', signed(paid('pay_other', 1000)))).status).toBe(422)
+    expect((await call('/v1/dodo/webhook', signed(paid('pay_negative', -100)))).status).toBe(422)
     expect(keys.vk_1.budgets[0].max_limit).toBe(2)
   })
 

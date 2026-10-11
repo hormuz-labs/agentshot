@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handle, MEDIA, price, type Env, type MediaConfig } from '../account/src/index'
+import { memoryCreditStore, type CreditStore } from '../account/src/credit'
 
 // Voice and music for Manul keys: the account service picks the vendor from media.json, makes it with Manul's key,
 // takes the price off the caller's credit, and never says who made it. Fake Bifrost and fake vendors.
@@ -10,6 +11,7 @@ const env: Env = { CLERK_ISSUER: 'https://clerk.test', CLERK_SECRET_KEY: 'sk', B
 let vk: any
 let vendor: string[]
 let vendorAnswer: () => Response
+let credits: CreditStore
 const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } })
 const mp3 = () => new Response(new Uint8Array([0xff, 0xfb, 9]), { headers: { 'content-type': 'audio/mpeg' } })
 
@@ -17,6 +19,7 @@ beforeEach(() => {
   vk = { id: 'vk_1', name: 'user_1', value: 'sk-bf-1', is_active: true, budgets: [{ id: 'b0', max_limit: 2, current_usage: 0.5, reset_duration: '100Y' }] }
   vendor = []
   vendorAnswer = mp3
+  credits = memoryCreditStore()
   vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
     const url = String(input), method = init.method || 'GET'
     if (url === 'https://gw.test/api/governance/virtual-keys/vk_1') {
@@ -30,7 +33,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 const as = { authorization: 'Bearer sk-bf-1', 'x-manul-key-id': 'vk_1', 'content-type': 'application/json' }
-const post = (path: string, body: object, e: Env = env) => handle(new Request(`https://account.test${path}`, { method: 'POST', headers: as, body: JSON.stringify(body) }), e)
+const post = (path: string, body: object, e: Env = env) => handle(new Request(`https://account.test${path}`, { method: 'POST', headers: as, body: JSON.stringify(body) }), e, credits)
 const withConfig = (c: MediaConfig): Env => {
   const f = join(mkdtempSync(join(tmpdir(), 'manul-media-')), 'media.json')
   writeFileSync(f, JSON.stringify(c))
@@ -103,7 +106,7 @@ describe('voice and music with a Manul key', () => {
   })
 
   it('only for the key’s owner, and bad requests are turned away', async () => {
-    const r = await handle(new Request('https://account.test/v1/voice', { method: 'POST', headers: { ...as, authorization: 'Bearer stolen' }, body: '{"text":"x"}' }), env)
+    const r = await handle(new Request('https://account.test/v1/voice', { method: 'POST', headers: { ...as, authorization: 'Bearer stolen' }, body: '{"text":"x"}' }), env, credits)
     expect(r.status).toBe(401)
     expect((await post('/v1/voice', { text: '' })).status).toBe(400)
     expect((await post('/v1/music', { prompt: 'x', seconds: 30, sections: [{ name: 'A', seconds: 10 }] })).status).toBe(400)
@@ -115,5 +118,22 @@ describe('voice and music with a Manul key', () => {
     const { voices } = await r.json()
     expect(voices[0]).toEqual({ name: 'narrator', about: expect.any(String) })
     expect(JSON.stringify(voices)).not.toMatch(/Sulafat|EXAVITQu4vr4xnSDxMaL/)
+  })
+
+  it('serializes media reservations so two calls cannot spend the same balance', async () => {
+    vk.budgets[0].current_usage = 1.9
+    vendorAnswer = () => reply({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/mpeg', data: 'AAAA' } }] } }] })
+    const results = await Promise.all([post('/v1/music', { prompt: 'x', seconds: 30 }), post('/v1/music', { prompt: 'x', seconds: 30 })])
+    expect(results.map(r => r.status)).toEqual([200, 402])
+    expect(vendor).toHaveLength(1)
+    expect(vk.budgets[0].max_limit).toBe(1.92)
+  })
+
+  it('never calls the vendor with a disabled key', async () => {
+    vk.is_active = false
+    expect((await post('/v1/voice', { text: 'Hello.' })).status).toBe(403)
+    expect((await post('/v1/music', { prompt: 'x', seconds: 30 })).status).toBe(403)
+    expect(vendor).toEqual([])
+    expect(vk.budgets[0].max_limit).toBe(2)
   })
 })

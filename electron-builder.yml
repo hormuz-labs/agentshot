@@ -29,6 +29,8 @@ extraResources:
     to: py
   - from: THIRD_PARTY_NOTICES.md
     to: THIRD_PARTY_NOTICES.md
+  - from: LICENSES/three-MIT.txt
+    to: LICENSES/three-MIT.txt
 mac:
   category: public.app-category.video
   target:

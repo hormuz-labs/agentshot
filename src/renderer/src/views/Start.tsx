@@ -4,6 +4,7 @@ import { extOf, kindByName } from '../../../shared/file-kinds'
 import { FileIcon } from './FilesPanel'
 import { JobsTray } from '@/components/JobsTray'
 import { Button } from '@/components/ui/button'
+import { ManulMascot } from '@/components/mascot/ManulMascot'
 import { cn } from '@/lib/utils'
 import type { Project } from '../../../shared/types'
 
@@ -57,9 +58,9 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
         <JobsTray />
       </div>
 
-      <div className="flex flex-1 flex-col items-center overflow-auto px-6 pb-16 pt-[16vh]">
+      <div className="flex flex-1 flex-col items-center overflow-auto px-6 pb-16 pt-[7vh]">
+        <ManulMascot state={busy ? 'working' : prompt ? 'thinking' : 'idle'} size={156} className="mb-1 shrink-0" />
         <div className="mb-8 flex items-center gap-3">
-          <img src="./manul.svg" alt="" className="size-10" draggable={false} />
           <h1 className="font-serif text-[34px] font-normal tracking-[-0.01em] text-fg">What are we making?</h1>
         </div>
 

@@ -22,6 +22,8 @@ npm run dev                  # Manul, with hot reload
 
 Add a key in **Settings → Keys** (⌘,), drop a video on the start screen, and ask for something.
 
+On macOS, `npm run dev` and `npm start` use a cached `Manul.app` development launcher so the Dock shows Manul's name and icon. It refreshes automatically when Electron or the icon changes.
+
 | Command | What it does |
 |---|---|
 | `npm run dev` | The app with hot reload |

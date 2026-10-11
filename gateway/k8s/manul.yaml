@@ -87,8 +87,13 @@ spec:
           env:
             - { name: CLERK_ISSUER, value: https://clerk.manul.si }          # Clerk production
             - { name: BIFROST_URL, value: "http://bifrost:8080" }   # the admin API, over the cluster network
+            - { name: BIFROST_PROVIDERS, value: "anthropic,gemini,openai,azure" }
             - { name: CLERK_SECRET_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: CLERK_SECRET_KEY } } }
             - { name: BIFROST_AUTH, valueFrom: { secretKeyRef: { name: manul-secrets, key: BIFROST_AUTH } } }
+            # Account journal shares the existing Postgres database, using its own table.
+            - { name: PG_HOST, valueFrom: { secretKeyRef: { name: manul-secrets, key: PG_HOST } } }
+            - { name: PG_USER, valueFrom: { secretKeyRef: { name: manul-secrets, key: PG_USER } } }
+            - { name: PG_PASSWORD, valueFrom: { secretKeyRef: { name: manul-secrets, key: PG_PASSWORD } } }
             # credit: $2 to start, then Dodo Payments (test mode until going live)
             - { name: FREE_CREDIT, value: "2" }
             - { name: DODO_API, value: https://test.dodopayments.com }

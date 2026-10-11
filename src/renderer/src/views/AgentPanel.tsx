@@ -8,6 +8,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { resultsOf, type AgentState } from '@/lib/agui'
 import { ConsentCard, useConsents } from '@/components/ConsentStack'
 import { ModelPicker } from '@/components/ModelPicker'
+import { ManulCompanion } from '@/components/mascot/ManulCompanion'
 import type { Project } from '../../../shared/types'
 import { cn, timecode } from '@/lib/utils'
 import type { Anchor } from '../../../shared/types'
@@ -275,11 +276,12 @@ function MentionList({ items, query, pick, onPick, onHover }: { items: Mention[]
   )
 }
 
-export function AgentPanel({ project, projectInfo, model, agent, anchor, onClearAnchor, attached = [], onAttach, onDetach, onAdd, onSend, onStop, ready, onKeys, inputRef }: {
+export function AgentPanel({ project, projectInfo, model, agent, anchor, onClearAnchor, attached = [], onAttach, onDetach, onAdd, onSend, onStop, ready, onKeys, inputRef, active = true }: {
   project: string
   projectInfo: Project
   model?: { provider: string; modelId: string }
   agent: AgentState
+  active?: boolean
   anchor?: Anchor
   onClearAnchor(): void
   /** What's attached to the next message: files (paths in media/), versions (their renders), motion clips (clips/<id>). */
@@ -395,7 +397,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
         <div className={cn(col, 'space-y-5 pb-8 pt-3')}>
         {empty && (
           <div className="pt-[14vh] text-center">
-            <img src="./manul.svg" alt="" className="mx-auto mb-4 size-10" draggable={false} />
+            <ManulCompanion agent={agent} needsConsent={consents.length > 0} active={active} hero />
             <h2 className="font-serif text-[30px] font-normal tracking-[-0.01em]">What should change?</h2>
             <p className="mx-auto mt-2 max-w-[460px] text-dim">Say it in your own words. To point at a moment, press <Kbd>N</Kbd> on the film, drag across the timeline, or <Kbd>B</Kbd> to box part of the picture.</p>
           </div>
@@ -409,11 +411,13 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
         {agent.error && (
           <div className="flex gap-2 rounded-lg border border-bad/30 bg-bad/10 p-2.5 text-xs text-bad"><TriangleAlert className="mt-px size-3.5 shrink-0" /><span data-selectable>{agent.error}</span></div>
         )}
-        {agent.busy && <div className="flex items-center gap-2 text-dim"><div className="orb size-3.5 rounded-full" /><span>Working…</span></div>}
         </div>
       </div>
 
-      <div className={cn(col, 'pb-5')}>{box}</div>
+      <div className={cn(col, 'pb-5')}>
+        {!empty && <ManulCompanion agent={agent} needsConsent={consents.length > 0} active={active} />}
+        {box}
+      </div>
     </div>
   )
 }

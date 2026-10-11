@@ -20,6 +20,8 @@
 // id. A key turned off in the gateway's dashboard stays off: signing in again doesn't make a new one.
 
 import { readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { changeCredit, reconcile, type Budget, type CreditStore, type Journal } from './credit.ts'
 import { checkMusic, checkVoice, compose, KEY_ENV, MediaError, speak, VENDOR_NAME, VOICES, type Choice, type MusicRequest, type Voice, type VoiceRequest } from './media.ts'
 
 export interface Env {
@@ -31,6 +33,14 @@ export interface Env {
   BIFROST_URL: string
   /** the gateway's admin credential, as the Authorization header: "Basic base64(user:password)" */
   BIFROST_AUTH: string
+  /** Persistent account credit journal (Postgres); independent of Bifrost's tables. */
+  ACCOUNT_DATABASE_URL?: string
+  /** Separate local account metadata from deployed keys/payments in the same Clerk instance. */
+  ACCOUNT_METADATA_KEY?: string
+  /** Configured provider IDs, used to keep new-key grants valid for this gateway. */
+  BIFROST_PROVIDERS?: string
+  /** Only before local dashboard setup; production uses BIFROST_AUTH. */
+  BIFROST_SETUP_TOKEN?: string
   /** JSON: what a new key gets (rate_limit, provider_configs); default NEW_KEY below */
   NEW_KEY?: string
   /** USD a new person starts with; default 2 */
@@ -99,26 +109,27 @@ const fail = (status: number, error: string) => json({ error }, status)
 const page = (msg: string) => new Response(`<!doctype html><meta charset="utf-8"><title>Manul</title><body style="font:15px system-ui;display:grid;place-items:center;height:90vh;color:#141413;background:#fbfbf9"><p>${msg}</p>`, { headers: { 'content-type': 'text/html; charset=utf-8' } })
 const cents = (usd: number) => Math.round(usd * 100)
 
-type Budget = { id: string; max_limit: number; current_usage?: number; reset_duration: string }
 type VirtualKey = { id: string; name: string; description?: string; value: string; is_active: boolean; budgets?: Budget[] }
 type Meta = { bifrost?: { customer_id: string; virtual_key_id: string }; payments?: Record<string, number> }
 
-export async function handle(req: Request, env: Env): Promise<Response> {
+export async function handle(req: Request, env: Env, credits?: CreditStore): Promise<Response> {
   const url = new URL(req.url)
   const clerk = (path: string, init: RequestInit = {}) =>
-    fetch(`${CLERK_API}${path}`, { ...init, headers: { authorization: `Bearer ${env.CLERK_SECRET_KEY}`, 'content-type': 'application/json', ...init.headers } })
+    fetch(`${CLERK_API}${path}`, { signal: AbortSignal.timeout(10_000), ...init, headers: { authorization: `Bearer ${env.CLERK_SECRET_KEY}`, 'content-type': 'application/json', ...init.headers } })
   const bifrost = (path: string, init: RequestInit = {}) =>
-    fetch(`${env.BIFROST_URL.replace(/\/+$/, '')}/api/governance${path}`, { ...init, headers: { authorization: env.BIFROST_AUTH, 'content-type': 'application/json', ...init.headers } })
+    fetch(`${env.BIFROST_URL.replace(/\/+$/, '')}/api/governance${path}`, { signal: AbortSignal.timeout(10_000), ...init, headers: { ...(env.BIFROST_AUTH ? { authorization: env.BIFROST_AUTH } : { 'X-Bifrost-Setup-Token': env.BIFROST_SETUP_TOKEN || '' }), 'content-type': 'application/json', ...init.headers } })
   const getKey = async (id: string) => {
     const r = await bifrost(`/virtual-keys/${encodeURIComponent(id)}`)
     return r.ok ? ((await r.json()) as { virtual_key: VirtualKey }).virtual_key : r.status === 404 ? null : undefined
   }
   const meta = async (userId: string) => {
     const r = await clerk(`/users/${encodeURIComponent(userId)}`)
-    return r.ok ? (((await r.json()) as { private_metadata?: Meta }).private_metadata || {}) : undefined
+    if (!r.ok) return undefined
+    const all = ((await r.json()) as { private_metadata?: Record<string, unknown> }).private_metadata || {}
+    return (env.ACCOUNT_METADATA_KEY ? all[env.ACCOUNT_METADATA_KEY] || {} : all) as Meta
   }
   const saveMeta = (userId: string, m: Meta) =>
-    clerk(`/users/${encodeURIComponent(userId)}/metadata`, { method: 'PATCH', body: JSON.stringify({ private_metadata: m }) })
+    clerk(`/users/${encodeURIComponent(userId)}/metadata`, { method: 'PATCH', body: JSON.stringify({ private_metadata: env.ACCOUNT_METADATA_KEY ? { [env.ACCOUNT_METADATA_KEY]: m } : m }) })
 
   /** The caller's key, proven by its value (the app sends the Manul key and the key id it was given with it). */
   const caller = async (): Promise<VirtualKey | Response> => {
@@ -128,6 +139,8 @@ export async function handle(req: Request, env: Env): Promise<Response> {
     const vk = await getKey(id)
     if (vk === undefined) return fail(502, 'Could not reach the gateway. Try again in a moment.')
     if (!vk || !same(vk.value, value)) return fail(401, 'Sign in again.')
+    // Audio and checkout use the admin API, so Bifrost's inference middleware cannot enforce this for us.
+    if (!vk.is_active) return fail(403, 'Your Manul key is turned off. Contact support.')
     return vk
   }
 
@@ -156,7 +169,7 @@ export async function handle(req: Request, env: Env): Promise<Response> {
     const token = /^Bearer (.+)$/.exec(req.headers.get('authorization') || '')?.[1]
     if (!token) return fail(401, 'Sign in first.')
     // who: Clerk checks its own token
-    const who = await fetch(`${env.CLERK_ISSUER.replace(/\/+$/, '')}/oauth/userinfo`, { headers: { authorization: `Bearer ${token}` } })
+    const who = await fetch(`${env.CLERK_ISSUER.replace(/\/+$/, '')}/oauth/userinfo`, { signal: AbortSignal.timeout(10_000), headers: { authorization: `Bearer ${token}` } })
     if (!who.ok) return fail(401, 'Your sign-in has expired. Sign in again.')
     const { sub, email } = await who.json() as { sub: string; email?: string }
     if (!sub) return fail(401, 'Your sign-in has expired. Sign in again.')
@@ -186,10 +199,14 @@ export async function handle(req: Request, env: Env): Promise<Response> {
     }
     const paid = Object.values(m.payments || {}).reduce((a, b) => a + b, 0)
     const credit = (link ? 0 : Number(env.FREE_CREDIT ?? 2)) + paid
+    const grants = env.NEW_KEY ? JSON.parse(env.NEW_KEY) : NEW_KEY
+    // Local gateways can omit Azure; granting an absent provider makes key creation fail.
+    const providers = env.BIFROST_PROVIDERS?.split(',').map(p => p.trim()).filter(Boolean)
     const v = await bifrost('/virtual-keys', {
       method: 'POST',
       body: JSON.stringify({
-        ...(env.NEW_KEY ? JSON.parse(env.NEW_KEY) : NEW_KEY),
+        ...grants,
+        ...(providers ? { provider_configs: grants.provider_configs.filter((p: { provider: string }) => providers.includes(p.provider)) } : {}),
         budgets: [{ max_limit: credit, reset_duration: FOREVER }],
         name: sub, description: name, customer_id: customerId, is_active: true,
       }),
@@ -207,7 +224,7 @@ export async function handle(req: Request, env: Env): Promise<Response> {
     if (!env.DODO_API_KEY || !env.DODO_PRODUCT_ID) return fail(503, 'Adding credit isn’t available yet.')
     const body = await req.json().catch(() => ({})) as { amount?: number }
     const amount = body.amount != null ? Number(body.amount) : undefined
-    if (amount != null && !(amount >= 1 && amount <= 1000)) return fail(400, 'Choose an amount between $1 and $1,000.')
+    if (amount != null && !(Number.isFinite(amount) && amount >= 5 && amount <= 1000)) return fail(400, 'Choose an amount between $5 and $1,000.')
     const r = await fetch(`${(env.DODO_API || 'https://test.dodopayments.com').replace(/\/+$/, '')}/checkouts`, {
       method: 'POST',
       headers: { authorization: `Bearer ${env.DODO_API_KEY}`, 'content-type': 'application/json' },
@@ -216,6 +233,9 @@ export async function handle(req: Request, env: Env): Promise<Response> {
         ...(vk.description?.includes('@') ? { customer: { email: vk.description } } : {}),
         return_url: `${(env.PUBLIC_URL || 'https://account.manul.si').replace(/\/+$/, '')}/paid`,
         metadata: { virtual_key_id: vk.id, user_id: vk.name },
+        // Credit is denominated in USD and the webhook intentionally rejects other currencies.
+        billing_currency: 'USD',
+        feature_flags: { allow_currency_selection: false },
       }),
     })
     const out = await r.json().catch(() => ({})) as { checkout_url?: string }
@@ -225,8 +245,20 @@ export async function handle(req: Request, env: Env): Promise<Response> {
 
   /** Voice or music, made with Manul's keys and paid for with the caller's credit. */
   async function generate(kind: 'voice' | 'music') {
+    if (!credits) return fail(503, 'Credit storage is unavailable. Try again later.')
+    const id = req.headers.get('x-manul-key-id')
+    if (!id) return fail(401, 'Sign in first.')
+    return credits.lock(id, journal => generateLocked(kind, journal))
+  }
+
+  async function generateLocked(kind: 'voice' | 'music', journal: Journal) {
     const vk = await caller()
     if (vk instanceof Response) return vk
+    const put = putBudget(vk.id)
+    await reconcile(journal, put)
+    const fresh = await getKey(vk.id)
+    if (!fresh) return fail(502, 'Could not reach the gateway.')
+    if (!fresh.is_active) return fail(403, 'Your Manul key is turned off. Contact support.')
     const body = await req.json().catch(() => null) as VoiceRequest & MusicRequest
     const cfg = await mediaConfig(env)
     const choice = cfg[kind], voices = { ...VOICES, ...cfg.voices }
@@ -238,14 +270,21 @@ export async function handle(req: Request, env: Env): Promise<Response> {
       console.error(`media: ${kind} → ${choice.provider}/${choice.model} has no ${cost == null ? 'price in media.json' : 'key'}`)
       return fail(503, `${what} isn’t available right now. Try again later.`)
     }
-    const b = vk.budgets?.[0]
+    const b = fresh.budgets?.[0]
     const left = (b?.max_limit ?? 0) - (b?.current_usage ?? 0)
     if (left < cost) return fail(402, `You're out of Manul credit: this needs $${cost.toFixed(2)} and $${Math.max(0, left).toFixed(2)} is left. Add credit in Settings → Keys → Manul key.`)
+    if (!b) return fail(402, 'You are out of Manul credit.')
+    const operation = 'media:' + randomUUID()
+    // Reserve before the vendor call, so concurrent gateway inference sees the reduced budget.
+    await changeCredit(journal, operation, vk.id, -cost, b, put)
 
     let audio
     try {
       audio = kind === 'voice' ? await speak(choice, key, body, { voices }) : await compose(choice, key, body)
     } catch (e) {
+      const now = await getKey(vk.id)
+      if (!now?.budgets?.[0]) throw new Error('Could not refund failed media generation.')
+      await changeCredit(journal, operation + ':refund', vk.id, cost, now.budgets[0], put)
       if (!(e instanceof MediaError)) throw e
       console.error(`media: ${kind} → ${choice.provider}/${choice.model}: ${e.message}`)
       if (e.status !== 422) return fail(e.status === 429 ? 429 : 502, `${what} couldn't be made right now. Try again in a moment.`)
@@ -254,47 +293,53 @@ export async function handle(req: Request, env: Env): Promise<Response> {
       return fail(422, `${what} couldn't be made: ${e.message.replace(hide, 'the model')}.`)
     }
 
-    // pay: the credit goes down by the price (a fresh read, so a payment that just landed isn't undone)
-    const now = await getKey(vk.id)
-    const nb = now?.budgets?.[0]
-    const up = nb && await bifrost(`/virtual-keys/${encodeURIComponent(vk.id)}`, {
-      method: 'PUT', body: JSON.stringify({ budgets: [{ id: nb.id, max_limit: Math.round((nb.max_limit - cost) * 10000) / 10000, reset_duration: nb.reset_duration }] }),
-    })
-    if (!up || !up.ok) console.error(`media: could not charge ${vk.name} $${cost} for ${kind}`)
     console.log(JSON.stringify({ media: kind, user: vk.name, provider: choice.provider, model: choice.model, usd: cost }))
     return new Response(audio.data as Uint8Array<ArrayBuffer>, { headers: { 'content-type': audio.type, 'x-manul-cost': cost.toFixed(4) } })
+  }
+
+  function putBudget(id: string) {
+    return async (budget: Budget) => {
+      const r = await bifrost(`/virtual-keys/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ budgets: [{ id: budget.id, max_limit: budget.max_limit, reset_duration: budget.reset_duration }] }) })
+      if (!r.ok) throw new Error('Could not update the credit. Try again in a moment.')
+    }
   }
 
   async function webhook() {
     const raw = await req.text()
     if (!env.DODO_WEBHOOK_SECRET || !(await verify(env.DODO_WEBHOOK_SECRET, req.headers, raw))) return fail(401, 'Bad signature.')
-    const event = JSON.parse(raw) as { type: string; data: { payment_id: string; total_amount: number; tax?: number | null; currency: string; metadata?: Record<string, string> } }
+    let event: { type: string; data: { payment_id: string; total_amount: number; tax?: number | null; currency: string; metadata?: Record<string, string> } }
+    try { event = JSON.parse(raw) } catch { return fail(400, 'Invalid webhook payload.') }
     if (event.type !== 'payment.succeeded') return json({ ok: true })
     const { payment_id, metadata } = event.data
     const userId = metadata?.user_id, keyId = metadata?.virtual_key_id
     if (!userId || !keyId) return json({ ok: true, skipped: 'not a Manul credit payment' })
     if (event.data.currency !== 'USD') return fail(422, `Unexpected currency ${event.data.currency}.`)
     const dollars = (event.data.total_amount - (event.data.tax || 0)) / 100   // the price, before tax
-
-    const m = await meta(userId)
-    if (!m) return fail(502, 'Could not reach accounts.')                     // Dodo retries
-    if (m.payments?.[payment_id] != null) return json({ ok: true, already: true })
-    const vk = await getKey(keyId)
-    if (!vk) return fail(502, 'Could not reach the gateway.')
-    const b = vk.budgets?.[0]
-    const budgets = [b ? { id: b.id, max_limit: b.max_limit + dollars, reset_duration: b.reset_duration } : { max_limit: dollars, reset_duration: FOREVER }]
-    const up = await bifrost(`/virtual-keys/${encodeURIComponent(keyId)}`, { method: 'PUT', body: JSON.stringify({ budgets }) })
-    if (!up.ok) return fail(502, 'Could not add the credit.')
-    const saved = await saveMeta(userId, { payments: { ...(m.payments || {}), [payment_id]: dollars } })
-    if (!saved.ok) return fail(502, 'Could not record the payment.')
-    return json({ ok: true, credited: dollars })
+    if (!payment_id || !Number.isSafeInteger(event.data.total_amount) || !Number.isSafeInteger(event.data.tax || 0) || dollars <= 0) return fail(422, 'Invalid payment amount.')
+    if (!credits) return fail(503, 'Credit storage is unavailable. Try again later.')
+    return credits.lock(keyId, async journal => {
+      await reconcile(journal, putBudget(keyId))
+      const m = await meta(userId)
+      if (!m) return fail(502, 'Could not reach accounts.')                     // Dodo retries
+      if (m.payments?.[payment_id] != null) return json({ ok: true, already: true })
+      const vk = await getKey(keyId)
+      if (!vk) return fail(502, 'Could not reach the gateway.')
+      if (vk.name !== userId || m.bifrost?.virtual_key_id !== keyId) return fail(422, 'Payment does not match this account.')
+      const b = vk.budgets?.[0]
+      if (!b) return fail(502, 'The key has no credit budget.')
+      const added = await changeCredit(journal, 'dodo:' + payment_id, keyId, dollars, b, putBudget(keyId))
+      // Clerk is a mirror, not the idempotency record. Retry this write without repeating the credit.
+      const saved = await saveMeta(userId, { payments: { ...(m.payments || {}), [payment_id]: dollars } })
+      if (!saved.ok) return fail(502, 'Could not record the payment.')
+      return json(added ? { ok: true, credited: dollars } : { ok: true, already: true })
+    })
   }
 }
 
 /** Standard Webhooks: base64(HMAC-SHA256(key, `${id}.${timestamp}.${body}`)), key = base64 after "whsec_"; within 5 minutes. */
 export async function verify(secret: string, headers: Headers, body: string, now = Date.now()) {
   const id = headers.get('webhook-id'), ts = headers.get('webhook-timestamp'), sigs = headers.get('webhook-signature')
-  if (!id || !ts || !sigs || Math.abs(now / 1000 - Number(ts)) > 300) return false
+  if (!id || !ts || !sigs || !/^\d+$/.test(ts) || Math.abs(now / 1000 - Number(ts)) > 300) return false
   const key = await crypto.subtle.importKey('raw', Uint8Array.from(atob(secret.replace(/^whsec_/, '')), c => c.charCodeAt(0)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
   const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${id}.${ts}.${body}`)))
   const want = btoa(String.fromCharCode(...mac))

@@ -3,11 +3,49 @@ services:
   bifrost:
     image: maximhq/bifrost:v2.2.6
     user: "0"
-    ports: ["8089:8080"]
+    ports: ["127.0.0.1:8089:8080"]
     env_file: .env
     volumes:
       - data:/app/data
       - ./config.json:/app/data/config.json:ro
     restart: unless-stopped
+  account-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: manul_account
+      POSTGRES_USER: manul
+      POSTGRES_PASSWORD: local-manul
+    ports: ["127.0.0.1:55439:5432"]
+    volumes: ["account-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manul -d manul_account"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  account:
+    build:
+      context: ..
+      dockerfile: account/Dockerfile
+    ports: ["127.0.0.1:8090:8080"]
+    env_file: .env
+    environment:
+      PORT: "8080"
+      ACCOUNT_DATABASE_URL: postgresql://manul:local-manul@account-db:5432/manul_account
+      BIFROST_URL: http://bifrost:8080
+      BIFROST_PROVIDERS: anthropic,gemini,openai
+      CLERK_ISSUER: ${CLERK_ISSUER:-https://clerk.manul.si}
+      PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:8090}
+      ACCOUNT_METADATA_KEY: manul_local
+    healthcheck:
+      test: ["CMD", "node", "--input-type=module", "-e", "const r = await fetch('http://127.0.0.1:8080/healthz'); process.exit(r.ok ? 0 : 1)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      account-db:
+        condition: service_healthy
+      bifrost:
+        condition: service_started
 volumes:
   data:
+  account-data:

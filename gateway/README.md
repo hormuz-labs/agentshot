@@ -13,7 +13,7 @@ The gateway is [Bifrost](https://github.com/maximhq/bifrost). It holds the vendo
    key as `Authorization: Bearer` ([src/main/gateway.ts](../src/main/gateway.ts)).
 2. Bifrost checks the virtual key (whether it's known, its budget, its rate limit and its allowed models).
 3. The **routing rule** `model == 'manul'` picks the provider and model ([k8s/config.json](k8s/config.json):
-   Gemini 3.8 Flash in production; the local [config.json](config.json) still routes to Claude Opus 5.5).
+   Gemini 3.8 Flash in production and the local [config.json](config.json)).
 4. Bifrost translates the request to that vendor's API and the reply back.
 
 This route was chosen because Bifrost's translation through it keeps each vendor's tool-call state across a multi-step
@@ -82,6 +82,10 @@ MANUL_GATEWAY=http://localhost:8089 npm run dev
 
 The app finds the gateway at `MANUL_GATEWAY`, else at `gateway` in the app's config.json, else at
 `https://gateway.manul.si`.
+
+Compose also starts the account service on port 8090 and a dedicated credit-journal Postgres database on port 55439.
+For local Clerk sign-in and payments, set `MANUL_ACCOUNT=http://127.0.0.1:8090` alongside the gateway override.
+See [account/README.md](../account/README.md#local-development) for local admin authentication and Dodo tunnel setup.
 
 ## Checking Bifrost
 

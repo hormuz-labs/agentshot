@@ -8,3 +8,4 @@ resources/models/
 resources/lib/*.min.js
 resources/lib/fonts/
 resources/bsk-ext/
+.env

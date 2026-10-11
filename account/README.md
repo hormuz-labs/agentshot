@@ -36,7 +36,9 @@ App ◀── { key, email }  (key into the keychain, email shown in Settings)
   suggested), with tax added on top.
 - **Applying a payment:** Dodo's signed `payment.succeeded` webhook to `/v1/dodo/webhook` raises the budget by the price
   before tax. The budget keeps what was already used. Each payment ID is applied once and recorded in the Clerk
-  user's private metadata, `payments`.
+  user's private metadata, `payments`. The durable `manul_credit_operations` Postgres table records each intended
+  absolute budget before the gateway update. Per-key advisory locks coordinate replicas and media reservations;
+  retries after a gateway timeout or Clerk recording failure reuse the same target rather than adding credit twice.
 - **Test mode:** this runs in Dodo's **Test Mode**, on the Trypitch business. The product is
   `pdt_0NpQ911WjTgC2ZbB2ljyX` and the webhook endpoint is `ep_3KUfoABJlmYJnHsTr2tDwMurU4T`. Going live means
   creating the same product and webhook in Live Mode, putting their IDs and keys in `manul-secrets`, and setting
@@ -50,8 +52,30 @@ App ◀── { key, email }  (key into the keychain, email shown in Settings)
 as the key, return the audio. The request shapes and the vendor calls are in [src/media.ts](src/media.ts), which the
 app also uses with a person's own keys. The service picks the vendor and model from media.json (`MEDIA_CONFIG`; see
 [gateway/README.md → Voice and music](../gateway/README.md#voice-and-music)). It turns the request away when the
-credit left doesn't cover the price (402). Otherwise it makes the audio with our vendor key and lowers the key's
-budget by the price. Errors never name the vendor. `GET /v1/voices` lists Manul's voice names.
+credit left doesn't cover the price (402). It reserves the price from the budget before calling the vendor and
+refunds vendor failures. Disabled keys are refused (403). Errors never name the vendor. `GET /v1/voices` lists Manul's voice names.
+
+## Local development
+
+From the project root, fill `gateway/.env` using `.env.example`, then run:
+
+```bash
+docker compose -f gateway/docker-compose.yml up -d --build --wait
+MANUL_ACCOUNT=http://127.0.0.1:8090 MANUL_GATEWAY=http://127.0.0.1:8089 npm run dev -- --user-data-dir=/tmp/manul-local-test
+```
+
+Compose starts Bifrost (8089), the account service (8090), and its persistent Postgres journal. Use a new test email;
+local metadata is under `private_metadata.manul_local`, separate from deployed keys and payments. Configure
+`CLERK_ISSUER` and the desktop auth overrides together when using a different Clerk instance.
+
+The setup token authorizes local admin API calls before dashboard setup. After creating a dashboard login, set
+`BIFROST_AUTH=Basic <base64(username:password)>` in `gateway/.env` and recreate the account container. For host-side
+development, stop only the account container and run `npm run account:dev`; it supplies defaults for the same local
+database and gateway. `npm run account:build` bundles the server and Postgres driver for the ConfigMap deployment.
+
+For Dodo local testing, expose port 8090 with an HTTPS tunnel, set `PUBLIC_URL` to that URL, and create a separate
+test-mode webhook at `<tunnel>/v1/dodo/webhook`. Put its signing secret in `gateway/.env` and recreate the account
+container. The existing production-domain webhook does not deliver to localhost.
 
 ## Clerk
 
@@ -77,3 +101,4 @@ local work. Point the app at it with `MANUL_AUTH_ISSUER` and `MANUL_AUTH_CLIENT_
 
 - `test/account-service.test.ts`: this service, against a fake Clerk and Bifrost.
 - `test/account.test.ts`: the app's sign-in, against a fake Clerk and account service.
+- `test/account-bifrost.integration.test.ts`: real Bifrost + Postgres, process restart and independent replica retries.

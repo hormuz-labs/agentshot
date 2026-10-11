@@ -339,6 +339,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
               projectInfo={p}
               model={p.model}
               agent={agent}
+              active={active}
               anchor={anchor}
               onClearAnchor={() => { setAnchor(undefined); setDrawing(false) }}
               attached={attached}

@@ -94,3 +94,21 @@ textarea, input, [data-selectable] { user-select: text; }
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
   animation: beam 2.4s linear infinite;
 }
+
+/* The Pallas's cat sits on the page, without a tile or a competing chat bubble. */
+.manul-mascot { position: relative; display: inline-block; flex-shrink: 0; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 24px; vertical-align: middle; touch-action: manipulation; }
+.manul-mascot:focus-visible { outline: 2px solid var(--color-amber); outline-offset: -6px; }
+.manul-mascot canvas, .manul-mascot-fallback { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.manul-mascot canvas { opacity: 0; transition: opacity .2s ease; }
+.manul-mascot canvas.is-ready { opacity: 1; }
+.manul-mascot-sleep { position: absolute; right: 9%; top: 18%; color: var(--color-faint); font-family: var(--font-serif); font-size: 14px; transform: rotate(-12deg); }
+.manul-mascot-sleep span { position: absolute; left: 8px; top: -9px; font-size: 11px; }
+.manul-companion { display: flex; align-items: center; gap: 2px; min-height: 68px; margin: -5px 0 1px -10px; }
+.manul-companion-hero { margin: -28px auto 8px; }
+.manul-companion-tag { color: var(--color-faint); font-size: 10px; font-weight: 400; }
+.manul-companion-pulse { margin-left: auto; margin-right: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--color-amber); animation: companion-pulse 1.8s ease-in-out infinite; }
+@keyframes companion-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .manul-mascot canvas { transition: none; }
+  .manul-companion-pulse { animation: none; }
+}
