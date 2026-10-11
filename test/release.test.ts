@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error plain JS module
 import { renderCask } from '../scripts/homebrew-cask.mjs'
@@ -38,5 +40,50 @@ describe('Linux package', () => {
     const yml = readFileSync(new URL('../electron-builder.yml', import.meta.url), 'utf8')
     expect(yml).toMatch(/depends: \[[^\]]*"libasound2t64 \| libasound2"/)
     expect(yml).toMatch(/depends: \[[^\]]*libnss3/)
+  })
+})
+
+describe.each(['README.md', 'RELEASING.md', 'scripts/apt-repo.sh'])('APT install instructions in %s', (file) => {
+  const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
+  const command = (file.endsWith('.sh')
+    ? source.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)![1].replaceAll('&amp;', '&')
+    : source.match(/```bash\n(curl -fsSL https:\/\/apt\.manul\.si[\s\S]*?)\n```/)![1])
+  // Run the published command without network access, sudo or changes to the host's APT configuration.
+  const shell = `
+curl() { printf 'public key\\n'; }
+sudo() { "$@"; }
+gpg() {
+  while [ "$1" = --batch ] || [ "$1" = --yes ]; do shift; done
+  [ "$*" = '--dearmor -o /usr/share/keyrings/manul.gpg' ] || return 2
+  read -r key
+  [ "$key" = 'public key' ] || return 2
+  printf 'key\\n'
+  [ "$FAIL_AT" != key ]
+}
+tee() {
+  [ "$*" = /etc/apt/sources.list.d/manul.list ] || return 2
+  read -r source
+  [ "$source" = 'deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main' ] || return 2
+  printf 'source\\n'
+}
+apt() { printf '%s\\n' "$*"; [ "$FAIL_AT" != "$1" ]; }
+`
+
+  it.each([false, true])('installs when copied with flattened newlines: %s', (flatten) => {
+    const result = spawnSync('bash', ['-c', shell + (flatten ? command.replaceAll('\n', ' ') : command)], {
+      encoding: 'utf8', env: { ...process.env, FAIL_AT: '' },
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('key\nsource\nupdate\ninstall manul\n')
+  })
+
+  it.each(['key', 'update'])('stops if %s fails instead of attempting installation', (failAt) => {
+    const result = spawnSync('bash', ['-c', shell + command.replaceAll('\n', ' ')], {
+      encoding: 'utf8', env: { ...process.env, FAIL_AT: failAt },
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe(failAt === 'key' ? 'key\n' : 'key\nsource\nupdate\n')
   })
 })

@@ -171,8 +171,8 @@ Install Manul from https://github.com/hormuz-labs/manul. On macOS run `brew inst
 On Debian or Ubuntu, add the signed apt repository once and apt keeps Manul up to date:
 
 ```bash
-curl -fsSL https://apt.manul.si/manul.gpg | sudo gpg --dearmor -o /usr/share/keyrings/manul.gpg
-echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list
+curl -fsSL https://apt.manul.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &&
+echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &&
 sudo apt update && sudo apt install manul
 ```
 

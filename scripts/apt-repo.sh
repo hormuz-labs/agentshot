@@ -4,8 +4,8 @@
 # The out dir holds only small files: package lists, signatures, the public key and a `_redirects` file.
 # The .deb files themselves stay on GitHub Releases: `pool/<tag>/<file>` redirects there, and apt follows it.
 # Served by Cloudflare Pages at apt.manul.si (free, nothing billable). Users run:
-#   curl -fsSL https://apt.manul.si/manul.gpg | sudo gpg --dearmor -o /usr/share/keyrings/manul.gpg
-#   echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list
+#   curl -fsSL https://apt.manul.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &&
+#   echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &&
 #   sudo apt update && sudo apt install manul
 set -eu
 DEBS=$1
@@ -40,8 +40,8 @@ cat > index.html <<EOF
 <!doctype html><meta charset="utf-8"><title>Manul apt repository</title>
 <body style="font:16px/1.5 system-ui;max-width:46rem;margin:3rem auto;padding:0 1rem">
 <h1>Manul apt repository</h1>
-<pre style="white-space:pre-wrap">curl -fsSL https://apt.manul.si/manul.gpg | sudo gpg --dearmor -o /usr/share/keyrings/manul.gpg
-echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list
+<pre style="white-space:pre-wrap">curl -fsSL https://apt.manul.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &amp;&amp;
+echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &amp;&amp;
 sudo apt update &amp;&amp; sudo apt install manul</pre>
 <p><a href="$REPO_URL">Manul on GitHub</a></p>
 EOF
