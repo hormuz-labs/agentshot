@@ -15,12 +15,13 @@ const CAPS: { cap: string; label: string }[] = [
   { cap: 'voice', label: 'AI voice' },
 ]
 
-export function KeysPanel() {
+export function KeysPanel({ tourTab }: { tourTab?: 'own' | 'manul' } = {}) {
   const [keys, setKeys] = useState<KeyInfo[]>([])
+  const [tab, setTab] = useState('own')
   const [editing, setEditing] = useState<string | null>(null)
   const [value, setValue] = useState('')
   const [customKeyed, setCustomKeyed] = useState(false)
-  useEffect(() => { window.manul.keys.list().then(setKeys) }, [])
+  useEffect(() => { window.manul.keys.list().then(keys => { setKeys(keys); setTab(keys.some(k => k.env === MANUL && k.set) ? 'manul' : 'own') }) }, [])
 
   const save = async (env: string, v: string) => {
     setKeys(await window.manul.keys.set(env, v.trim()))
@@ -34,10 +35,10 @@ export function KeysPanel() {
   return (
     <div>
       <PanelHeader title="Keys" description="Manul talks to AI models with your keys. They are stored encrypted in your system keychain." />
-      <Tabs defaultValue={manul?.set ? 'manul' : 'own'} key={manul ? 'ready' : 'loading'}>
+      <Tabs value={tourTab ?? tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="own"><KeyRound className="size-3.5" />Your own keys</TabsTrigger>
-          <TabsTrigger value="manul"><Sparkles className="size-3.5" />Manul key{manul?.set && <span className="size-1.5 rounded-full bg-ok" />}</TabsTrigger>
+          <TabsTrigger data-tour="own-key-tab" value="own"><KeyRound className="size-3.5" />Your own keys</TabsTrigger>
+          <TabsTrigger data-tour="manul-key-tab" value="manul"><Sparkles className="size-3.5" />Manul key{manul?.set && <span className="size-1.5 rounded-full bg-ok" />}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="own" className="space-y-2">

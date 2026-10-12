@@ -1,44 +1,92 @@
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { Hand, Volume2, VolumeX, AudioLines } from 'lucide-react'
 import { mascotLabels, type MascotState } from '@/lib/mascot'
+import { cursorGaze, gestureDuration, petGestures, type MascotGesture } from '@/lib/mascot-motion'
+import { catVoice, useMascotSound } from '@/lib/mascot-sound'
+import { Tip } from '@/components/ui/tooltip'
 import type { MascotScene } from './scene'
 
-/** A local SVG stays visible during lazy loading and on machines without WebGL. */
+/** The same full-body brand portrait stays visible while loading and on machines without WebGL. */
 function CatFallback() {
-  return <svg viewBox="0 0 160 160" fill="none" aria-hidden="true" className="manul-mascot-fallback">
-    <ellipse cx="80" cy="139" rx="45" ry="7" fill="#736b5d" opacity=".12" />
-    <path d="M114 128c30 6 37-17 19-22" stroke="#888378" strokeWidth="14" strokeLinecap="round" />
-    <ellipse cx="80" cy="106" rx="35" ry="33" fill="#99958b" />
-    <ellipse cx="80" cy="113" rx="23" ry="23" fill="#c6bca8" />
-    <ellipse cx="65" cy="134" rx="13" ry="8" fill="#b7b0a2" /><ellipse cx="95" cy="134" rx="13" ry="8" fill="#b7b0a2" />
-    <ellipse cx="39" cy="52" rx="12" ry="16" fill="#99958b" /><ellipse cx="121" cy="52" rx="12" ry="16" fill="#99958b" />
-    <ellipse cx="39" cy="53" rx="7" ry="10" fill="#9e8578" /><ellipse cx="121" cy="53" rx="7" ry="10" fill="#9e8578" />
-    <path d="M28 86l-5-7 7-3-4-9 8-2c3-29 89-29 92 0l8 2-4 9 7 3-5 7 3 8-10 2c-14 22-76 22-90 0l-10-2 3-8Z" fill="#aaa496" />
-    <ellipse cx="58" cy="76" rx="13" ry="10" fill="#514943" /><ellipse cx="102" cy="76" rx="13" ry="10" fill="#514943" />
-    <ellipse cx="58" cy="77" rx="10" ry="8" fill="#cda047" /><ellipse cx="102" cy="77" rx="10" ry="8" fill="#cda047" />
-    <ellipse cx="59" cy="78" rx="4" ry="6" fill="#242721" /><ellipse cx="101" cy="78" rx="4" ry="6" fill="#242721" />
-    <circle cx="55" cy="74" r="2" fill="#fff8e9" /><circle cx="98" cy="74" r="2" fill="#fff8e9" />
-    <path d="m46 68 23 3m22 0 23-3" stroke="#969184" strokeWidth="6" strokeLinecap="round" />
-    <ellipse cx="72" cy="95" rx="12" ry="10" fill="#d3c6ac" /><ellipse cx="88" cy="95" rx="12" ry="10" fill="#d3c6ac" />
-    <path d="M74 86q6-4 12 0l-6 6-6-6Z" fill="#67504b" /><path d="M80 92v7m0-1-5 3m5-3 5 3" stroke="#67504b" strokeWidth="2" strokeLinecap="round" />
-    <path d="m47 85-6 5m7 0-4 5m68-10 6 5m-7 0 4 5" stroke="#62594e" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="m58 97-30-4m30 7-31 3m75-6 30-4m-30 7 31 3" stroke="#e3d6bb" strokeWidth="1.2" strokeLinecap="round" />
-  </svg>
+  return <img src="./manul.png" alt="" aria-hidden="true" className="manul-mascot-fallback" draggable={false} />
 }
 
-export function ManulMascot({ state = 'idle', size = 112, active = true, className = '' }: {
-  state?: MascotState; size?: number; active?: boolean; className?: string
-}) {
+export type MascotHandle = { react(gesture: MascotGesture): void }
+
+export function MascotControls({ onGesture, inline = false }: { onGesture(gesture: MascotGesture): void; inline?: boolean }) {
+  const [sound, toggleSound] = useMascotSound()
+  return <span className={inline ? 'manul-mascot-actions' : 'manul-mascot-controls'} role="group" aria-label="Manul interactions">
+    <Tip label="High-five"><button type="button" aria-label="Raise Manul’s paw" onClick={() => onGesture('wave')}><Hand aria-hidden="true" /></button></Tip>
+    <Tip label="Hear Manul’s growl"><button type="button" aria-label="Hear Manul’s growl" onClick={() => onGesture('growl')}><AudioLines aria-hidden="true" /></button></Tip>
+    <Tip label={sound ? 'Mute mascot sounds' : 'Unmute mascot sounds'}><button type="button" aria-label={sound ? 'Mute mascot sounds' : 'Unmute mascot sounds'} aria-pressed={!sound} onClick={toggleSound}>{sound ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}</button></Tip>
+  </span>
+}
+
+export const ManulMascot = forwardRef<MascotHandle, {
+  state?: MascotState; size?: number; active?: boolean; className?: string; controls?: boolean
+}>(function ManulMascot({ state = 'idle', size = 112, active = true, className = '', controls = true }, ref) {
   const host = useRef<HTMLButtonElement>(null), canvas = useRef<HTMLCanvasElement>(null)
-  const live = useRef({ state, active, pointer: { x: 0, y: 0 }, hop: false, reduced: false })
+  const live = useRef({ state, active, pointer: { x: 0, y: 0 }, gesture: null as MascotGesture | null, pressed: false, reduced: false, highFpsUntil: 0 })
   live.current.state = state; live.current.active = active
   const [ready, setReady] = useState(false), [failed, setFailed] = useState(false)
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [reaction, setReaction] = useState<MascotGesture | null>(null)
+  const petCount = useRef(0), reactionTimer = useRef(0), pressHandled = useRef(false)
+  const trigger = (gesture: MascotGesture, userGesture = true) => {
+    if (!live.current.active) return
+    live.current.gesture = gesture; live.current.highFpsUntil = performance.now() + 2000
+    setReaction(gesture)
+    window.clearTimeout(reactionTimer.current)
+    reactionTimer.current = window.setTimeout(() => setReaction(null), gestureDuration[gesture] * 1000)
+    host.current?.dispatchEvent(new Event('mascot-update'))
+    if (userGesture) void catVoice(gesture === 'growl' ? 'growl' : gesture === 'wave' ? 'chirrup' : 'purr', true)
+  }
+  useImperativeHandle(ref, () => ({ react: trigger }))
+  useEffect(() => () => window.clearTimeout(reactionTimer.current), [])
   live.current.reduced = reduced
   useEffect(() => {
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)')
     const change = () => setReduced(preference.matches)
     preference.addEventListener('change', change); return () => preference.removeEventListener('change', change)
   }, [])
+
+  useEffect(() => {
+    if (!active) return
+    let bounds = host.current?.getBoundingClientRect(), hoverTimer = 0
+    const measure = () => { bounds = host.current?.getBoundingClientRect() }
+    const reset = () => {
+      live.current.pointer = { x: 0, y: 0 }; live.current.pressed = false
+      host.current?.style.setProperty('--cat-gaze-x', '0px'); host.current?.style.setProperty('--cat-gaze-y', '0px')
+    }
+    const move = (e: PointerEvent) => {
+      if (document.hidden || live.current.reduced || !bounds || !host.current?.checkVisibility({ visibilityProperty: true })) return
+      // Ignore other panels while a modal/tour covers this mascot.
+      if (document.querySelector('[role="dialog"]')) { reset(); return }
+      live.current.pointer = cursorGaze(e.clientX, e.clientY, bounds)
+      live.current.highFpsUntil = performance.now() + 350
+      host.current.style.setProperty('--cat-gaze-x', `${live.current.pointer.x * 3}px`)
+      host.current.style.setProperty('--cat-gaze-y', `${live.current.pointer.y * 2}px`)
+      const near = e.clientX >= bounds.left - 18 && e.clientX <= bounds.right + 18 && e.clientY >= bounds.top - 18 && e.clientY <= bounds.bottom + 18
+      if (near && !hoverTimer) hoverTimer = window.setTimeout(() => {
+        hoverTimer = -1
+        if (!live.current.pressed && live.current.state === 'idle' && !live.current.gesture && performance.now() > live.current.highFpsUntil) trigger('peek', false)
+      }, 800)
+      else if (!near && hoverTimer) { window.clearTimeout(hoverTimer); hoverTimer = 0 }
+    }
+    const resize = new ResizeObserver(measure)
+    if (host.current) resize.observe(host.current)
+    window.addEventListener('pointermove', move, { passive: true })
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    window.addEventListener('blur', reset)
+    document.addEventListener('pointerleave', reset)
+    return () => {
+      window.clearTimeout(hoverTimer); resize.disconnect()
+      window.removeEventListener('pointermove', move); window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true); window.removeEventListener('blur', reset)
+      document.removeEventListener('pointerleave', reset)
+    }
+  }, [active])
 
   useEffect(() => {
     if (failed || !active || !host.current || !canvas.current) return
@@ -54,16 +102,20 @@ export function ManulMascot({ state = 'idle', size = 112, active = true, classNa
       lastTime = now
       const state = live.current.state
       const reduced = live.current.reduced
-      const fps = state === 'idle' || state === 'sleeping' ? 24 : 30
-      if (now - lastFrame >= 1000 / fps || reduced) {
-        if (live.current.hop && !reduced) { scene.hop(clock); live.current.hop = false }
-        scene.render(clock, state, reduced, live.current.pointer, document.documentElement.classList.contains('dark'))
+      const fps = live.current.pressed || live.current.gesture || now < live.current.highFpsUntil ? 60 : state === 'idle' || state === 'sleeping' ? 30 : 40
+      if (now - lastFrame >= 1000 / fps - .5 || reduced) {
+        if (live.current.gesture) {
+          if (!reduced) scene.react(live.current.gesture, clock)
+          live.current.gesture = null
+        }
+        scene.render(clock, state, reduced, live.current.pointer, document.documentElement.classList.contains('dark'), live.current.pressed)
         lastFrame = now
       }
       if (!reduced) frame = requestAnimationFrame(draw)
     }
     const wake = () => {
-      lastTime = 0
+      if (!frame) lastTime = 0
+      lastFrame = 0 // pointer-down is drawn on the next frame, never behind the idle frame limiter
       if (!frame && !stopped && visible && !document.hidden) frame = requestAnimationFrame(draw)
     }
     const resize = new ResizeObserver(() => {
@@ -92,18 +144,37 @@ export function ManulMascot({ state = 'idle', size = 112, active = true, classNa
       surface.removeEventListener('webglcontextlost', onLost); scene?.dispose(); setReady(false)
     }
   }, [active, failed])
-  useEffect(() => { host.current?.dispatchEvent(new Event('mascot-update')) }, [state, reduced])
-  return <button ref={host} type="button" className={`manul-mascot ${className}`} style={{ width: size, height: size }}
+  useEffect(() => {
+    if (reduced) {
+      live.current.pointer = { x: 0, y: 0 }
+      host.current?.style.setProperty('--cat-gaze-x', '0px'); host.current?.style.setProperty('--cat-gaze-y', '0px')
+    }
+    host.current?.dispatchEvent(new Event('mascot-update'))
+    if (active && state === 'success') void catVoice('chirrup')
+    else if (active && state === 'error') void catVoice('growl')
+  }, [state, reduced, active])
+  return <span className={`manul-mascot-wrap ${className}`} style={{ width: size, height: size }}>
+    <button ref={host} type="button" className="manul-mascot" style={{ width: size, height: size }}
     data-mascot-state={state} data-mascot-renderer={ready ? 'webgl' : 'fallback'} data-reduced-motion={reduced}
+    data-mascot-reaction={reaction ?? 'none'}
     aria-label={`${mascotLabels[state]}. Pet Manul.`} title="Pet Manul"
-    onPointerMove={e => {
-      const bounds = e.currentTarget.getBoundingClientRect()
-      live.current.pointer = { x: (e.clientX - bounds.left) / bounds.width * 2 - 1, y: (e.clientY - bounds.top) / bounds.height * 2 - 1 }
+    onPointerDown={e => {
+      if (e.button !== 0) return
+      pressHandled.current = true; live.current.pressed = true
+      e.currentTarget.setPointerCapture(e.pointerId)
+      trigger(petGestures[petCount.current++ % petGestures.length])
     }}
-    onPointerLeave={() => { live.current.pointer = { x: 0, y: 0 } }}
-    onClick={() => { live.current.hop = true; host.current?.dispatchEvent(new Event('mascot-update')) }}>
+    onPointerUp={() => { live.current.pressed = false; host.current?.dispatchEvent(new Event('mascot-update')) }}
+    onPointerCancel={() => { pressHandled.current = false; live.current.pressed = false }}
+    onClick={e => {
+      if (e.detail === 0 || !pressHandled.current) trigger(petGestures[petCount.current++ % petGestures.length])
+      pressHandled.current = false
+    }}>
     {!ready && <CatFallback />}
     <canvas key={active ? 'active' : 'inactive'} ref={canvas} aria-hidden="true" className={ready ? 'is-ready' : ''} />
     {state === 'sleeping' && <span className="manul-mascot-sleep" aria-hidden="true">z<span>z</span></span>}
+    {!reduced && (reaction === 'pet' || reaction === 'nuzzle') && <span key={reaction} className="manul-mascot-delight" aria-hidden="true"><i>✧</i><i>✧</i><i>♡</i></span>}
   </button>
-}
+  {controls && <MascotControls onGesture={trigger} />}
+  </span>
+})

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AgentState } from '@/lib/agui'
 import { mascotActivity, type MascotState } from '@/lib/mascot'
-import { ManulMascot } from './ManulMascot'
+import { ManulMascot, MascotControls, type MascotHandle } from './ManulMascot'
 
 /** One companion per conversation, not one WebGL context per message. */
 export function ManulCompanion({ agent, needsConsent, active = true, hero = false }: {
   agent: AgentState; needsConsent: boolean; active?: boolean; hero?: boolean
 }) {
   const activity = mascotActivity(agent, needsConsent)
+  const mascot = useRef<MascotHandle>(null)
   const previousBusy = useRef(agent.busy)
   const [celebrating, setCelebrating] = useState(false), [sleeping, setSleeping] = useState(false)
   useEffect(() => {
@@ -32,10 +33,11 @@ export function ManulCompanion({ agent, needsConsent, active = true, hero = fals
   }, [activity.state, active, celebrating])
   const state: MascotState = activity.state === 'idle' ? celebrating ? 'success' : sleeping ? 'sleeping' : 'idle' : activity.state
   return <div className={hero ? 'manul-companion-hero' : 'manul-companion'} data-companion-state={state}>
-    <ManulMascot state={state} size={hero ? 156 : 76} active={active} />
-    {!hero && <div className="min-w-0">
-      <div className="flex items-center gap-1.5"><span className="font-medium text-fg">Manul</span><span className="manul-companion-tag">your editing companion</span></div>
-      <p className="mt-0.5 truncate text-xs text-dim" role="status" aria-live="polite">{celebrating ? 'All done. Your turn to take a look.' : sleeping ? 'A little catnap. Still here for you.' : activity.label}</p>
+    <ManulMascot ref={mascot} state={state} size={hero ? 156 : 88} active={active} controls={hero} />
+    {!hero && <div className="manul-companion-copy min-w-0">
+      <div className="manul-companion-name"><span className="font-medium text-fg">Manul</span><span className="manul-companion-tag">your editing companion</span></div>
+      <p className="manul-companion-status truncate text-dim" role="status" aria-live="polite">{celebrating ? 'All done. Your turn to take a look.' : sleeping ? 'A little catnap. Still here for you.' : activity.label}</p>
+      <MascotControls inline onGesture={gesture => mascot.current?.react(gesture)} />
     </div>}
     {!hero && agent.busy && <span className="manul-companion-pulse" aria-hidden="true" />}
   </div>

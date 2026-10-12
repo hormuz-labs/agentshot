@@ -9,6 +9,7 @@ import { getConfig, setConfig } from './config'
 import { MANUL_KEY } from './gateway'
 import { setKey } from './keys'
 import type { AccountStatus } from '../shared/types'
+import { brandPage } from '../shared/brand-page'
 
 /** Clerk's Frontend API (the OAuth issuer, production), the "Manul desktop" OAuth app's client id (public, PKCE), and the
  *  account service. For the development instance: MANUL_AUTH_ISSUER=https://good-wildcat-5360.clerk.accounts.dev
@@ -25,7 +26,7 @@ const REDIRECT = `http://127.0.0.1:${CALLBACK_PORT}/oauth/callback`
 export const accountStatus = (): AccountStatus => ({ email: getConfig().account?.email, available: !!AUTH.clientId() })
 
 const b64url = (b: Buffer) => b.toString('base64url')
-const PAGE = (msg: string) => `<!doctype html><meta charset="utf-8"><title>Manul</title><body style="font:15px system-ui;display:grid;place-items:center;height:90vh;color:#141413;background:#fbfbf9"><p>${msg}</p>`
+const PAGE = brandPage
 
 let pending: { server: Server; cancel: () => void } | null = null
 

@@ -7,6 +7,7 @@ import type { Cue } from '../shared/subtitles'
 import type { Edit } from '../shared/timeline'
 import type { SubtitleLink } from '../shared/types'
 import type { TelemetryState } from '../shared/telemetry'
+import type { SettingsOpened } from '../shared/onboarding'
 
 export type SubtitlesState = { link?: SubtitleLink; cues: Cue[]; candidates: string[] }
 /** How many edits can be undone (back) and redone (forward). */
@@ -26,6 +27,10 @@ const on = <T extends unknown[]>(ch: string) => (fn: (...args: T) => void) => {
 }
 
 const api = {
+  onboarding: {
+    settingsOpened: () => ipcRenderer.invoke('onboarding:settings-opened') as Promise<SettingsOpened>,
+    finishSettings: (status: 'completed' | 'skipped') => ipcRenderer.invoke('onboarding:settings-finish', status) as Promise<void>,
+  },
   info: () => ipcRenderer.invoke('app:info') as Promise<{ version: string; platform: string; projectsRoot: string }>,
   telemetry: {
     state: () => ipcRenderer.invoke('telemetry:state') as Promise<TelemetryState>,

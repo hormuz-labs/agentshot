@@ -1,6 +1,7 @@
 // End to end in the real app: render a GSAP clip frame-exact and check pixels at known times.
 // Run: npm run build && node test/e2e/clips.e2e.mjs
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdtempSync, readFileSync } from 'node:fs'
@@ -26,6 +27,7 @@ const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${jo
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   const p = await win.evaluate(f => window.manul.project.create(f), video)
   cpSync(join(root, 'test', 'fixtures', 'clips', 'slide'), join(p.dir, 'clips', 'slide'), { recursive: true })
 

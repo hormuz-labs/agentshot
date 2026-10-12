@@ -1,5 +1,6 @@
 // Footage the player can't decode (ProRes) gets a preview copy and plays; the original stays the source.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync } from 'node:fs'
@@ -14,6 +15,7 @@ const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${jo
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'master.mov'))
   await win.click('text=Drop a video here')
   await win.locator('button:has(svg.lucide-arrow-up)').click()

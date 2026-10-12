@@ -67,13 +67,14 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
         <div className={cn('w-full max-w-[680px] rounded-2xl border bg-surface p-2.5 shadow-[0_1px_2px_var(--color-shade),0_6px_24px_-12px_var(--color-shade)] transition-colors',
           over ? 'border-amber bg-amber-soft' : 'border-line')}>
           {file ? (
-            <div className="mb-1 flex items-center gap-2 rounded-xl bg-raised px-3 py-2">
+            <div data-tour="import" className="mb-1 flex items-center gap-2 rounded-xl bg-raised px-3 py-2">
               <Film className="size-4 text-amber" />
               <span className="flex-1 truncate" title={file}>{file.split('/').pop()}</span>
               <button className="rounded p-0.5 text-faint hover:text-fg" onClick={() => setFile(null)}><X className="size-3.5" /></button>
             </div>
           ) : (
             <button
+              data-tour="import"
               onClick={pickVideo}
               className="mb-1 flex w-full flex-col items-center gap-1 rounded-xl border border-dashed border-line-strong py-7 text-dim transition-colors hover:border-amber/60 hover:bg-amber-soft hover:text-fg"
             >
@@ -95,6 +96,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
             </div>
           )}
           <textarea
+            data-tour="start-prompt"
             ref={input}
             rows={2}
             value={prompt}
@@ -106,7 +108,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
           <div className="flex items-center gap-1">
             <button onClick={pickVideo} title="Choose a video" className="flex size-8 items-center justify-center rounded-lg text-dim hover:bg-hover hover:text-fg"><Paperclip className="size-4" /></button>
             <span className="flex-1" />
-            <Button size="icon" variant="primary" className="rounded-lg" disabled={!file || busy} onClick={go} aria-label="Start">
+            <Button data-tour="start" size="icon" variant="primary" className="rounded-lg" disabled={!file || busy} onClick={go} aria-label="Start">
               {busy ? <Loader2 className="animate-spin" /> : <ArrowUp />}
             </Button>
           </div>
@@ -119,7 +121,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
           </button>
         )}
 
-        <div className="mt-5 flex max-w-[680px] flex-wrap justify-center gap-2">
+        <div data-tour="ideas" className="mt-5 flex max-w-[680px] flex-wrap justify-center gap-2">
           {IDEAS.map(i => (
             <button key={i} onClick={() => { setPrompt(i); input.current?.focus() }} className="rounded-lg border border-line bg-panel px-3 py-1.5 text-[12.5px] text-dim hover:border-line-strong hover:bg-surface hover:text-fg">{i}</button>
           ))}

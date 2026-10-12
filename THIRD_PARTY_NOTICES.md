@@ -73,6 +73,12 @@ MIT licence, Copyright © 2010–2026 three.js authors, https://github.com/mrdoo
 Bundled into the renderer for the original procedural Pallas's cat; licence text in
 [LICENSES/three-MIT.txt](LICENSES/three-MIT.txt).
 
+## Driver.js (the first-run product walkthrough)
+
+MIT licence, Copyright (c) Kamran Ahmed, https://driverjs.com, https://github.com/nilbuild/driver.js.
+Bundled into the renderer for spotlight positioning and walkthrough navigation, with Manul's own visual theme;
+licence text in [LICENSES/driver-MIT.txt](LICENSES/driver-MIT.txt).
+
 ## Unpacking the files users add (npm package in the app)
 
 - **yauzl 3.4.0** (unpacking .zip files): MIT, Copyright (c) 2014 Josh Wolfe, https://github.com/thejoshwolfe/yauzl;

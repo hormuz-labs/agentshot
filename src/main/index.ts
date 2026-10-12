@@ -19,6 +19,7 @@ import { thumbnails } from './thumbnails'
 import * as Tools from './tools'
 import * as Whisper from './whisper'
 import { getConfig, setConfig } from './config'
+import { OnboardingStore } from './onboarding'
 import { UsageTelemetry } from './telemetry'
 import type { TelemetryState } from '../shared/telemetry'
 import type { BaseEvent } from '@ag-ui/core'
@@ -477,6 +478,9 @@ const describe = (a: Anchor) =>
 
 // ---------------------------------------------------------------- IPC
 function wire() {
+  const onboarding = new OnboardingStore()
+  ipcMain.handle('onboarding:settings-opened', () => onboarding.opened())
+  ipcMain.handle('onboarding:settings-finish', (_e, status: 'completed' | 'skipped') => onboarding.finish(status))
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, projectsRoot: Projects.projectsRoot() }))
   ipcMain.handle('update:state', () => updates?.state())
   ipcMain.handle('update:check', () => updates?.check())
@@ -736,7 +740,7 @@ function agentRuns(dir: string, e: BaseEvent) {
 
 // ---------------------------------------------------------------- window
 // The app icon. Packaged builds get it from build/ through electron-builder; in development set it by hand.
-const ICON = join(import.meta.dirname, '../../build/icon.png')
+const ICON = app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(import.meta.dirname, '../../build/icon.png')
 /** The window's colour before the page paints: the sidebar's, light or dark. */
 const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#0e0d0c' : '#fbfbf9')
 

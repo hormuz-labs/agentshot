@@ -1,5 +1,6 @@
 // Real imported video: visible, distinct thumbnails; seeking and range selection still work.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
@@ -18,6 +19,7 @@ const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${jo
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   await app.evaluate(({ ipcMain }, file) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => file) }, source)
   await win.click('text=Drop a video here')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
