@@ -1,5 +1,6 @@
 // The native menu and the ⌘K palette drive the same commands.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding, dismissSettingsOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
@@ -19,8 +20,10 @@ const click = label => app.evaluate(({ Menu }, l) => {
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   // menu → settings section
   await click('Keys…')
+  await dismissSettingsOnboarding(win)
   await win.waitForSelector('[role="dialog"] h2:text-is("Keys")')
   await win.keyboard.press('Escape')
   // open a project, then the palette from the menu, search, run

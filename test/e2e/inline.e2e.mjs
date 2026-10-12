@@ -3,6 +3,7 @@
 // the conversation shut. (The send is caught in the main process; no model is called.)
 // The window opens on screen: keep your own mouse off it while this runs, or its moves mix into the drags.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
@@ -18,6 +19,7 @@ try {
   const win = await app.firstWindow()
   await win.setViewportSize({ width: 1600, height: 900 })
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   await app.evaluate(({ ipcMain }, f) => {
     ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f)
     ipcMain.removeHandler('agent:send'); ipcMain.handle('agent:send', (_e, dir, msg) => { (globalThis.__sent ||= []).push(msg) })

@@ -5,6 +5,7 @@
 // the message fails at the model (no real call is ever paid for); what's checked is what the user sees.
 // MANUL_E2E_SHOTS=<folder> saves screenshots there.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -31,6 +32,7 @@ try {
   const win = await app.firstWindow()
   await win.setViewportSize({ width: 1400, height: 860 })
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'film.mp4'))
   await win.click('text=Drop a video here')
   await win.locator('button:has(svg.lucide-arrow-up)').click()

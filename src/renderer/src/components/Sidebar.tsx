@@ -1,10 +1,11 @@
 // The sidebar, as in Claude's app: search, a new project, every project, the one on screen opened up as a tree of its
 // chats and its files, and settings at the foot. Open projects keep working in the background.
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Loader2, PanelLeft, Plus, Search, Settings, Sparkles, Brain, X } from 'lucide-react'
+import { ChevronRight, CircleHelp, Loader2, PanelLeft, Plus, Search, Settings, Sparkles, Brain, X } from 'lucide-react'
 import { Tip } from '@/components/ui/tooltip'
 import { useAgent } from '@/lib/agui'
 import { cn } from '@/lib/utils'
+import { runCommand } from '@/lib/commands'
 import type { Section } from '@/views/SettingsDialog'
 import { FilesTree } from '@/views/FilesPanel'
 import { pickFiles } from '@/lib/attach'
@@ -118,7 +119,7 @@ export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onSett
         <Nav icon={Brain} label="Memory" onClick={() => onSettings('memory')} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
+      <div data-tour="projects" className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
         <div className="px-2.5 pb-1 pt-1 text-xs font-medium text-faint">Projects</div>
         {rows.length === 0 && <p className="px-2.5 py-1 text-xs text-faint">{q ? 'No project matches.' : 'Your projects will show here.'}</p>}
         <div className="space-y-px">
@@ -130,10 +131,15 @@ export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onSett
       </div>
 
       <div className="flex h-12 shrink-0 items-center gap-2 border-t border-line px-3">
-        <img src="./manul.svg" alt="" className="size-6" draggable={false} />
+        <img src="./manul.png" alt="" className="size-7 object-contain" draggable={false} />
         <span className="flex-1 text-[13px] font-medium">Manul</span>
+        <Tip label="Product tour" side="top">
+          <button onClick={() => runCommand('tour')} className="flex size-7 items-center justify-center rounded-md text-dim hover:bg-hover hover:text-fg" aria-label="Product tour">
+            <CircleHelp className="size-4" />
+          </button>
+        </Tip>
         <Tip label="Settings" side="top">
-          <button onClick={() => onSettings('appearance')} className="flex size-7 items-center justify-center rounded-md text-dim hover:bg-hover hover:text-fg" aria-label="Settings">
+          <button data-tour="settings" onClick={() => onSettings('appearance')} className="flex size-7 items-center justify-center rounded-md text-dim hover:bg-hover hover:text-fg" aria-label="Settings">
             <Settings className="size-4" />
           </button>
         </Tip>

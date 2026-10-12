@@ -2,6 +2,7 @@
 // Files drops into the film where it lands. Both play at once (no render) and ⌘Z undoes them.
 // The window opens on screen: keep your own mouse off it while this runs, or its moves mix into the drags.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync } from 'node:fs'
@@ -22,6 +23,7 @@ try {
   const win = await app.firstWindow()
   await win.setViewportSize({ width: 1600, height: 900 })
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'film.mp4'))
   await win.click('text=Drop a video here'); await win.locator('button[aria-label="Start"]').click()
   await win.waitForSelector('[data-project-title]')

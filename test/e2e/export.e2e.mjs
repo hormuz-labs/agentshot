@@ -1,6 +1,7 @@
 // Export through the real UI: 9:16 with an .srt from the transcript, and 16:9 with captions in the picture.
 // Needs macOS `say` (speech) and a whisper engine (found on the machine or bundled + model); skipped otherwise.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
@@ -20,6 +21,7 @@ const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${jo
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'talk.mp4'))
   await win.click('text=Drop a video here')
   await win.locator('button:has(svg.lucide-arrow-up)').click()

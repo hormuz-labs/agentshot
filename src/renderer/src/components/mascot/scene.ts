@@ -2,6 +2,7 @@
 // Shared geometry and instanced, tapered fur keep the small desktop companion inexpensive to draw.
 import * as T from 'three'
 import type { MascotState } from '@/lib/mascot'
+import { blinkAmount, gestureDuration, gesturePose, type MascotGesture } from '@/lib/mascot-motion'
 
 export type MascotScene = ReturnType<typeof createMascotScene>
 
@@ -70,19 +71,26 @@ export function createMascotScene(canvas: HTMLCanvasElement) {
   fluff(body, [0, -.48, -.1], [.85, .83, .69], 2900, .12, '#99958c')
   mesh(body, cream, 0, -.52, .51, .55, .54, .22)
   fluff(head, [0, 0, 0], [1.02, .72, .64], 4200, .105, '#99958c', true)
+  const ears: T.Group[] = []
   for (const side of [-1, 1]) {
     // Low, widely spaced, rounded ears are the Pallas's cat's distinctive silhouette.
     const ear = new T.Group(); ear.position.set(side * .9, .43, -.09); ear.rotation.z = side * -.22; head.add(ear)
+    ears.push(ear)
     fluff(ear, [0, 0, 0], [.25, .3, .15], 440, .06, '#99958c')
     mesh(ear, dark, 0, .01, .105, .172, .22, .055)
     mesh(ear, earPink, 0, .02, .145, .118, .16, .028)
     fluff(head, [side * .74, -.23, .19], [.47, .41, .43], 1200, .15, '#b7b0a2', true)
   }
-  const paws: T.Group[] = []
+  const paws: T.Group[] = [], arms: T.Group[] = []
   for (const side of [-1, 1]) {
-    const paw = new T.Group(); paw.position.set(side * .4, -1.04, .48); body.add(paw); paws.push(paw)
+    const arm = new T.Group(); arm.position.set(side * .43, -.45, .37); body.add(arm); arms.push(arm)
+    fluff(arm, [0, -.28, .035], [.19, .36, .2], 260, .045, '#99958c')
+    const paw = new T.Group(); paw.position.set(0, -.59, .11); arm.add(paw); paws.push(paw)
     fluff(paw, [0, 0, 0], [.27, .21, .32], 350, .055, '#b7b0a2')
     for (const dx of [-.06, .06]) mesh(paw, coat, dx, -.05, .295, .011, .066, .008)
+    // Paw pads appear when the front leg turns up to wave.
+    mesh(paw, earPink, 0, -.19, .08, .1, .025, .12)
+    for (const dx of [-.12, 0, .12]) mesh(paw, noseMat, dx, -.16, .23, .045, .025, .05)
   }
   // A thick, ringed tail curled beside its paws.
   const tail = new T.Group(); tail.position.set(.68, -.93, -.18); body.add(tail)
@@ -95,14 +103,15 @@ export function createMascotScene(canvas: HTMLCanvasElement) {
   }
   mesh(tail, dark, .29, -.07, .87, .152, .152, .16)
 
-  const eyes: T.Group[] = [], brows: T.Mesh[] = []
+  const eyes: T.Group[] = [], pupils: T.Group[] = [], brows: T.Mesh[] = []
   for (const side of [-1, 1]) {
     mesh(head, dark, side * .395, .035, .586, .245, .185, .085)
     const eye = new T.Group(); eye.position.set(side * .395, .035, .651); head.add(eye); eyes.push(eye)
     mesh(eye, eyeMat, 0, 0, 0, .185, .145, .05)
-    mesh(eye, pupilMat, side * -.013, 0, .05, .073, .092, .021) // round pupils, unlike a domestic cat
-    mesh(eye, glintMat, -.044, .049, .074, .029, .022, .008)
-    mesh(eye, glintMat, .039, -.04, .069, .011, .009, .006)
+    const pupil = new T.Group(); eye.add(pupil); pupils.push(pupil)
+    mesh(pupil, pupilMat, side * -.013, 0, .05, .073, .092, .021) // round pupils, unlike a domestic cat
+    mesh(pupil, glintMat, -.044, .049, .074, .029, .022, .008)
+    mesh(pupil, glintMat, .039, -.04, .069, .011, .009, .006)
     const brow = mesh(head, coat, side * .385, .19, .638, .285, .082, .075)
     brow.rotation.z = side * .15; brows.push(brow)
     // Dark tear stripes and tiny forehead markings.
@@ -121,7 +130,14 @@ export function createMascotScene(canvas: HTMLCanvasElement) {
   const nose = mesh(head, noseMat, 0, -.225, .813, .12, .072, .055)
   nose.rotation.z = Math.PI
   const mouth = new T.Group(); mouth.position.set(0, -.39, .817); head.add(mouth)
-  mesh(mouth, dark, 0, 0, 0, .072, .022, .015)
+  const mouthInside = mesh(mouth, dark, 0, -.025, -.012, .09, .065, .025)
+  const jaw = new T.Group(); jaw.position.set(0, -.005, 0); mouth.add(jaw)
+  mesh(jaw, cream, 0, -.055, -.005, .14, .053, .055)
+  const tongue = mesh(mouth, earPink, 0, -.055, .014, .045, .021, .01)
+  const fangGeometry = geometry(new T.ConeGeometry(.013, .047, 8)); fangGeometry.rotateZ(Math.PI)
+  for (const side of [-1, 1]) {
+    const fang = new T.Mesh(fangGeometry, glintMat); fang.position.set(side * .055, -.015, .019); mouth.add(fang)
+  }
   for (const side of [-1, 1]) {
     for (let i = 0; i < 3; i++) mesh(head, dark, side * (.15 + (i % 2) * .065), -.3 - i * .044, .843 - i * .012, .012, .012, .008)
     // Fine, softly lit whiskers. Curves follow the muzzle instead of flat screen-space strokes.
@@ -142,48 +158,101 @@ export function createMascotScene(canvas: HTMLCanvasElement) {
   shadow.rotation.x = -Math.PI / 2; shadow.position.set(.08, -1.29, .05); scene.add(shadow)
 
   let previous = 0, currentState: MascotState = 'idle', entered = 0, pointerX = 0, pointerY = 0
-  let hopAt = -100, sleeping = 0
+  let gesture: MascotGesture | null = null, gestureAt = -100, sleeping = 0, pressure = 0
+  let nextBlink = 2.2, blinkAt = -100, doubleBlink = false, nextFidget = 8, fidget = 0
   const damp = (from: number, to: number, dt: number) => T.MathUtils.damp(from, to, 8, dt)
-  function render(time: number, state: MascotState, reduced: boolean, pointer: { x: number; y: number }, darkTheme: boolean) {
+  function render(time: number, state: MascotState, reduced: boolean, pointer: { x: number; y: number }, darkTheme: boolean, pressed = false) {
     const dt = reduced ? 10 : Math.min(Math.max(time - previous, .001), .1); previous = time
-    if (state !== currentState) { currentState = state; entered = time }
+    if (state !== currentState) {
+      currentState = state; entered = time
+      if (!reduced && state === 'success') { gesture = 'wave'; gestureAt = time }
+      else if (!reduced && state === 'waiting') { gesture = 'peek'; gestureAt = time }
+      else if (!reduced && state === 'error') { gesture = 'growl'; gestureAt = time }
+      else if (!reduced && state === 'sleeping') { gesture = 'yawn'; gestureAt = time }
+    }
     const t = reduced ? 0 : time, age = reduced ? 10 : time - entered
-    pointerX = damp(pointerX, reduced ? 0 : pointer.x, dt); pointerY = damp(pointerY, reduced ? 0 : pointer.y, dt)
+    pointerX = T.MathUtils.damp(pointerX, reduced ? 0 : pointer.x, 22, dt); pointerY = T.MathUtils.damp(pointerY, reduced ? 0 : pointer.y, 22, dt)
+    pressure = T.MathUtils.damp(pressure, pressed && !reduced ? 1 : 0, 35, dt)
     sleeping = damp(sleeping, state === 'sleeping' ? 1 : 0, dt)
     const work = state === 'working', thinking = state === 'thinking', talk = state === 'speaking'
     const celebrating = state === 'success' && age < 2.3
-    const hopAge = t - hopAt
-    const hop = !reduced && hopAge >= 0 && hopAge < .85 ? Math.sin(hopAge / .85 * Math.PI) * .4 : 0
+    if (!reduced && state === 'idle' && time > nextFidget && !pressed && !gesture) {
+      gesture = fidget++ % 3 === 2 ? 'yawn' : 'peek'; gestureAt = time
+      nextFidget = time + 13 + random() * 8
+    }
+    const gestureAge = t - gestureAt
+    const pose = gesturePose(reduced ? null : gesture, gestureAge)
+    if (gesture && gestureAge > gestureDuration[gesture]) gesture = null
+    const hop = pose.lift
     const bounce = reduced ? 0 : celebrating ? Math.abs(Math.sin(age * 5)) * .17 * Math.max(0, 1 - age / 2.3) : work ? Math.sin(t * 5.5) * .025 : 0
     const breath = Math.sin(t * (state === 'sleeping' ? 1.7 : 2.3)) * .012
-    root.position.y = damp(root.position.y, bounce + hop, dt)
-    root.scale.set(1 - hop * .1, 1 + breath + hop * .12, 1 - hop * .05)
+    root.position.y = bounce + hop - pressure * .035
+    const stretch = pose.squash - pressure * .08
+    root.scale.set(1 - stretch * .45, 1 + breath + stretch, 1 - stretch * .25)
     root.rotation.y = damp(root.rotation.y, -.09 + pointerX * .13 + (!reduced && work ? Math.sin(t * 2.2) * .035 : 0), dt)
-    const yaw = pointerX * .19 + (reduced ? 0 : Math.sin(t * .56) * .065)
+    const yaw = pointerX * .16 + (reduced ? 0 : Math.sin(t * .56) * .04)
     head.rotation.y = damp(head.rotation.y, yaw, dt)
-    head.rotation.x = damp(head.rotation.x, sleeping * .17 + pointerY * .1 + (state === 'error' ? .07 : thinking ? -.055 : 0), dt)
-    head.rotation.z = damp(head.rotation.z, thinking ? -.13 + Math.sin(t * 1.2) * .025 : state === 'waiting' ? .1 : state === 'error' ? -.09 : celebrating ? Math.sin(age * 5) * .065 : Math.sin(t * .7) * .018, dt)
+    head.rotation.x = damp(head.rotation.x, sleeping * .17 + pointerY * .085 + pose.lean + (state === 'error' ? .07 : thinking ? -.055 : 0), dt)
+    head.rotation.z = damp(head.rotation.z, pose.tilt + (thinking ? -.13 + Math.sin(t * 1.2) * .025 : state === 'waiting' ? .1 : state === 'error' ? -.09 : celebrating ? Math.sin(age * 5) * .065 : Math.sin(t * .7) * .018), dt)
     head.position.y = .47 + breath
-    tail.rotation.y = damp(tail.rotation.y, reduced ? 0 : Math.sin(t * (work ? 3 : 1.4)) * (work ? .15 : .065), dt)
+    tail.rotation.y = damp(tail.rotation.y, reduced ? 0 : Math.sin(t * (gesture ? 5 : work ? 3 : 1.4)) * (gesture ? .2 : work ? .15 : .065), dt)
     paws.forEach((paw, i) => {
-      paw.position.y = -1.04 + (reduced ? 0 : work ? Math.max(0, Math.sin(t * 7 + i * Math.PI)) * .11 : celebrating ? .07 : 0)
-      paw.rotation.x = work && !reduced ? Math.sin(t * 7 + i * Math.PI) * .13 : 0
+      const raise = i === 1 ? pose.paw : 0
+      arms[i].position.x = (i === 0 ? -1 : 1) * (.43 + raise * .5)
+      arms[i].position.y = -.45 + raise * .5
+      arms[i].rotation.x = raise * -2.25 + (work && !reduced ? Math.sin(t * 7 + i * Math.PI) * .16 : 0)
+      arms[i].rotation.z = i === 1 ? raise * .8 + pose.wave : 0
+      paw.position.y = -.59 + (reduced ? 0 : work ? Math.max(0, Math.sin(t * 7 + i * Math.PI)) * .055 : 0)
+      paw.rotation.x = raise * -.55
+      paw.rotation.z = i === 1 ? pose.wave * .5 : 0
     })
-    const blinkPhase = t % 5.7
-    const blink = !reduced && blinkPhase > 5.42 ? Math.sin((blinkPhase - 5.42) / .28 * Math.PI) : 0
-    eyes.forEach(eye => { eye.scale.y = Math.max(.055, (1 - sleeping * .93) * (1 - blink * .95)) })
+    if (!reduced && time >= nextBlink) { blinkAt = time; doubleBlink = random() > .72; nextBlink = time + 2.4 + random() * 4 }
+    const blink = reduced ? 0 : blinkAmount(time - blinkAt, doubleBlink)
+    eyes.forEach((eye, i) => {
+      eye.scale.y = Math.max(.035, (1 - sleeping * .96) * (1 - Math.max(blink, pose.squint) * .96))
+      pupils[i].position.x = pointerX * .065
+      pupils[i].position.y = -pointerY * .046
+      pupils[i].scale.setScalar(gesture === 'peek' ? 1.06 : 1)
+    })
+    ears.forEach((ear, i) => {
+      const side = i === 0 ? -1 : 1
+      const twitch = reduced ? 0 : Math.max(0, Math.sin(t * 1.3 + i * 2) - .97) * 2
+      ear.rotation.z = side * (-.22 + pose.ears + twitch)
+      ear.rotation.x = sleeping * -.15 + pose.mouth * -.13
+    })
     brows.forEach((brow, i) => {
       brow.rotation.z = damp(brow.rotation.z, (i === 0 ? -1 : 1) * (state === 'error' ? -.12 : thinking ? .22 : .15), dt)
       brow.position.y = .19 + (talk ? .022 : 0) - sleeping * .035
     })
-    mouth.scale.y = damp(mouth.scale.y, talk && !reduced ? 1 + Math.max(0, Math.sin(t * 11)) * 2.2 : 1, dt)
+    const opening = Math.max(pose.mouth, talk && !reduced ? .08 + Math.max(0, Math.sin(t * 11)) * .12 : 0)
+    mouthInside.scale.y = .015 + opening * .075
+    jaw.position.y = -.005 - opening * .115
+    tongue.visible = opening > .2
+    mouth.children.forEach(o => { if (o instanceof T.Mesh && o.geometry === fangGeometry) o.visible = opening > .45 })
     shadowMaterial.opacity = darkTheme ? .48 : .85
     shadow.scale.setScalar(1 - hop * .22)
     renderer.render(scene, camera)
+    // Tiny pose diagnostics for the actual rig, without React updates on every animation frame.
+    canvas.dataset.gazeX = pointerX.toFixed(3); canvas.dataset.gazeY = pointerY.toFixed(3)
+    canvas.dataset.blink = Math.max(blink, pose.squint).toFixed(3)
+    canvas.dataset.paw = pose.paw.toFixed(3); canvas.dataset.lift = hop.toFixed(3)
+    canvas.dataset.gesture = gesture ?? 'none'
+    canvas.dataset.mouth = opening.toFixed(3)
   }
   return {
     render,
-    hop(time: number) { hopAt = time },
+    /** Reproducible, straight-on full-body brand portrait; uses the exact same geometry as the companion. */
+    renderLogo(size = 1024) {
+      renderer.setPixelRatio(1); renderer.setSize(size, size, false)
+      camera.left = -1.7; camera.right = 1.7; camera.top = 1.7; camera.bottom = -1.7
+      camera.position.set(.12, .08, 9); camera.lookAt(.12, .08, 0); camera.updateProjectionMatrix()
+      render(0, 'idle', true, { x: 0, y: 0 }, false)
+      root.rotation.set(0, 0, 0); head.rotation.set(0, 0, 0)
+      shadowMaterial.opacity = .45
+      renderer.render(scene, camera)
+      return canvas.toDataURL('image/png')
+    },
+    react(kind: MascotGesture, time: number) { gesture = kind; gestureAt = time; nextFidget = time + 15; if (kind === 'pet') { blinkAt = time + .12; doubleBlink = false } },
     resize(width: number, height: number) {
       renderer.setSize(width, height, false)
       const aspect = width / height

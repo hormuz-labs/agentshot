@@ -39,7 +39,7 @@ export function AboutPanel() {
   return (
     <div>
       <div className="mb-6 flex items-center gap-4">
-        <img src="./manul.svg" className="size-16" alt="" />
+        <img src="./manul.png" className="size-20 object-contain" alt="" />
         <div>
           <div className="text-[18px] font-semibold">Manul</div>
           <div className="text-dim">Version {info?.version} · {info?.platform === 'darwin' ? 'macOS' : info?.platform}</div>

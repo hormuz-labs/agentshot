@@ -1,5 +1,6 @@
 // Several projects open in the sidebar: each keeps its own playhead, they close, and they come back after a relaunch.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
@@ -25,6 +26,7 @@ let app = await launch()
 try {
   win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   const openFile = async name => {
     await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, `${name}.mp4`))
     await win.click('text=Drop a video here')

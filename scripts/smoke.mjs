@@ -1,6 +1,7 @@
 // Smoke test: launch the built app, open a generated test video, take screenshots of each screen.
 // Usage: npm run build && node scripts/smoke.mjs [out-dir] ["prompt for the agent"]
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from '../test/e2e/onboarding.mjs'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -26,6 +27,7 @@ const win = await app.firstWindow()
 win.on('console', m => { if (m.type() === 'error') console.log('console error:', m.text()) })
 await win.setViewportSize({ width: 1440, height: 900 }).catch(() => {})
 await win.waitForSelector('text=What are we making?')
+await dismissOnboarding(win)
 await win.screenshot({ path: join(out, '1-start.png') })
 
 // pick the file through the app's own IPC (the native dialog can't be driven), then send the prompt

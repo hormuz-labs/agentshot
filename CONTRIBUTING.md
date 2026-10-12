@@ -28,6 +28,8 @@ On macOS, `npm run dev` and `npm start` use a cached `Manul.app` development lau
 |---|---|
 | `npm run dev` | The app with hot reload |
 | `npm run typecheck` | TypeScript, no emit |
+| `npm run brand` | Regenerates the full-body 3D mascot logo and all app/account icon assets |
+| `npm run test:mascot` | Checks gaze tracking, touch response, paw/growl interactions, and compact controls in Electron |
 | `npm test` | Unit and integration tests (Vitest) |
 | `npm run test:e2e` | The real app, end to end (Playwright) |
 | `npm run smoke` | Builds, launches, screenshots each screen (set `GEMINI_API_KEY` and pass a prompt to test the agent) |

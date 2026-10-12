@@ -147,7 +147,7 @@ export function Scrubber({ dir, revision, fps: rate, duration, time, notes, rang
   const overlays = shown.overlays || []
 
   return (
-    <div ref={root} className="relative shrink-0 select-none rounded-lg border border-line bg-panel px-2 pb-2">
+    <div data-tour="timeline" ref={root} className="relative shrink-0 select-none rounded-lg border border-line bg-panel px-2 pb-2">
       {ask && range && (() => {
         // above the selection's middle (or the note's moment), where the strip shows it now, kept inside the box
         const r = root.current?.getBoundingClientRect(), b = bar.current?.getBoundingClientRect()

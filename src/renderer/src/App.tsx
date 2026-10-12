@@ -3,6 +3,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAgent } from '@/lib/agui'
 import { ConsentStack } from '@/components/ConsentStack'
 import { TelemetryConsent } from '@/components/TelemetryConsent'
+import { ProductTour } from '@/components/ProductTour'
 import { CommandPalette } from '@/components/CommandPalette'
 import { Sidebar, SidebarToggle } from '@/components/Sidebar'
 import { Resizer, useWidth } from '@/components/ui/resizer'
@@ -21,6 +22,8 @@ export function App() {
   const [tabs, setTabs] = useState<Tabs>({ open: [], active: null })
   const [projects, setProjects] = useState<Record<string, { p: Project; prompt?: string; files?: string[] }>>({})
   const restored = useRef(false)
+  const [tabsRestored, setTabsRestored] = useState(false)
+  const [consentSettled, setConsentSettled] = useState(false)
   const [settings, setSettings] = useState<Section | null>(null)
   const [ready, setReady] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -52,6 +55,7 @@ export function App() {
       const open = saved.open.filter(d => ok[d])
       setTabs({ open, active: saved.active && ok[saved.active] ? saved.active : open[0] ?? null })
       restored.current = true
+      setTabsRestored(true)
     })
   }, [])
   useEffect(() => { if (restored.current) window.manul.tabs.set(tabs) }, [tabs])
@@ -95,6 +99,11 @@ export function App() {
   // the sidebar folded away entirely, as in Claude's app: its toggle sits by the traffic lights, at the start of the title bar
   const lead = collapsed ? <SidebarToggle onClick={() => setCollapsed(false)} /> : undefined
   const loaded = Object.fromEntries(Object.entries(projects).map(([d, x]) => [d, x.p]))
+  const prepareTour = useCallback(() => {
+    setCollapsed(false)
+    window.dispatchEvent(new Event('manul:tour-prepare'))
+  }, [])
+  const tourKeys = useCallback(() => setSettings('keys'), [])
   return (
     <TooltipProvider>
       <div className="flex h-full">
@@ -121,13 +130,15 @@ export function App() {
         </div>
       </div>
       <ConsentStack except={tabs.active ?? undefined} />
-      <TelemetryConsent />
+      <TelemetryConsent onSettled={setConsentSettled} />
       <CommandPalette open={palette} onOpenChange={setPalette}
         onAsk={tabs.active ? q => window.manul.agent.send(tabs.active!, { text: q }).catch(e => setNotice(String(e.message))) : undefined} />
       <SettingsDialog section={settings} onSection={setSettings} onClose={() => { setSettings(null); check() }} />
+      <ProductTour project={tabs.active} restored={tabsRestored} ready={ready}
+        blocked={!consentSettled || !!settings || palette} onPrepare={prepareTour} onKeys={tourKeys} />
       {ready2update && (
         <div className="fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-xl border border-amber/30 bg-surface px-3 py-2 shadow-xl shadow-shade">
-          <img src="./manul.svg" className="size-6" alt="" />
+          <img src="./manul.png" className="size-7 object-contain" alt="" />
           <span className="text-xs">Manul {ready2update} is ready.</span>
           <button className="rounded-md bg-amber px-2 py-1 text-xs font-medium text-on-amber" onClick={() => window.manul.updates.install()}>Restart</button>
           <button className="text-xs text-faint hover:text-fg" onClick={() => setReady2update(null)}>Later</button>

@@ -12,6 +12,8 @@ files:
 asar: true
 # Manul's own tools and assets live next to the app, never inside the asar archive
 extraResources:
+  - from: build/icon.png
+    to: icon.png
   - from: resources/bin/${platform}-${arch}
     to: bin
     filter: ["ffmpeg", "ffprobe", "whisper-cli", "manul-beats", "manul-speakers", "manul-vision", "manul-fence", "bsk"]
@@ -31,6 +33,8 @@ extraResources:
     to: THIRD_PARTY_NOTICES.md
   - from: LICENSES/three-MIT.txt
     to: LICENSES/three-MIT.txt
+  - from: LICENSES/driver-MIT.txt
+    to: LICENSES/driver-MIT.txt
 mac:
   category: public.app-category.video
   target:

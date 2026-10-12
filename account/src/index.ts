@@ -21,6 +21,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
+import { brandPage } from '../../src/shared/brand-page.ts'
 import { changeCredit, reconcile, type Budget, type CreditStore, type Journal } from './credit.ts'
 import { checkMusic, checkVoice, compose, KEY_ENV, MediaError, speak, VENDOR_NAME, VOICES, type Choice, type MusicRequest, type Voice, type VoiceRequest } from './media.ts'
 
@@ -106,7 +107,7 @@ export const NEW_KEY = {
 const CLERK_API = 'https://api.clerk.com/v1'
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 const fail = (status: number, error: string) => json({ error }, status)
-const page = (msg: string) => new Response(`<!doctype html><meta charset="utf-8"><title>Manul</title><body style="font:15px system-ui;display:grid;place-items:center;height:90vh;color:#141413;background:#fbfbf9"><p>${msg}</p>`, { headers: { 'content-type': 'text/html; charset=utf-8' } })
+const page = (msg: string) => new Response(brandPage(msg), { headers: { 'content-type': 'text/html; charset=utf-8' } })
 const cents = (usd: number) => Math.round(usd * 100)
 
 type VirtualKey = { id: string; name: string; description?: string; value: string; is_active: boolean; budgets?: Budget[] }

@@ -100,6 +100,10 @@ Your projects are in the sidebar, the one on screen opened up into its chats and
 
 <sub>Light by default, dark if you prefer, or follow the system: <b>Settings → Appearance</b>.</sub>
 
+The little Manul beside your message follows your cursor, blinks, and reacts when you pet it. The three small icons under
+its status give you a high-five, a throaty growl, and a sound toggle; hover for a tooltip. It waves when an edit is finished,
+and takes a catnap when you leave it alone. The full-body 3D cat is also Manul’s app logo.
+
 ## What a session feels like
 
 
@@ -211,6 +215,15 @@ paid work with it — just don't build a competing product from it. Every releas
 ships. Bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain), or wait for the single **Manul key**, coming soon.
 
 On first run Manul asks whether to send crash reports and usage statistics. Both boxes start unticked, and you can change them anytime in Settings → About. It never sends your footage, file or project names, prompts, transcripts or keys. [Exactly what is sent](telemetry/README.md).
+
+A first-run walkthrough shows you how to connect a key, add footage and give your first direction. After you open your
+first video, the editor tour covers notes, boxes, files, proposals, versions and export. Replay it anytime using the
+sidebar’s **Product tour** button, **Help → Product Tour**, or by searching “tour” in the command palette (**⌘K** on Mac,
+**Ctrl+K** on Linux). The walkthrough remembers completion or dismissal on this computer.
+
+The first time you open Settings, a short Keys and Browser tour explains **Manul key**, **your own provider keys
+(BYOK)**, and which browser the assistant uses. Manul records that first open and remembers completion or dismissal in
+its local onboarding database.
 
 Want to hack on it? Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 

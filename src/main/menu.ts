@@ -57,6 +57,7 @@ export function buildMenu(win: () => BrowserWindow | null) {
       { type: 'separator' }, { role: 'minimize' }, { role: 'zoom' }, ...(mac ? [{ type: 'separator' } as MenuItemConstructorOptions, { role: 'front' } as MenuItemConstructorOptions] : []),
     ] },
     { role: 'help', submenu: [
+      cmd('tour', 'Product Tour'),
       { label: 'Roadmap', click: () => shell.openExternal('https://github.com/hormuz-labs/manul/blob/main/ROADMAP.md') },
       { label: 'Report a Problem', click: () => shell.openExternal('https://github.com/hormuz-labs/manul/issues/new') },
     ] },

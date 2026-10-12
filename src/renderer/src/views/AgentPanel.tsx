@@ -414,7 +414,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
         </div>
       </div>
 
-      <div className={cn(col, 'pb-5')}>
+      <div data-tour="composer" className={cn(col, 'pb-5')}>
         {!empty && <ManulCompanion agent={agent} needsConsent={consents.length > 0} active={active} />}
         {box}
       </div>

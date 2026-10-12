@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "node scripts/run-electron.mjs dev",
     "build": "electron-vite build",
+    "brand": "electron-vite build && node scripts/brand.mjs",
     "account:dev": "node --env-file=gateway/.env account/local.mjs",
     "account:build": "node scripts/build-account.mjs",
     "start": "node scripts/run-electron.mjs preview",
@@ -18,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:mascot": "electron-vite build && node test/e2e/mascot.e2e.mjs",
+    "test:tour": "electron-vite build && node test/e2e/tour.e2e.mjs",
     "postinstall": "node scripts/fetch-ffmpeg.mjs && node scripts/fetch-bsk.mjs && node scripts/fetch-models.mjs && node scripts/copy-libs.mjs",
     "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "fetch:bsk": "node scripts/fetch-bsk.mjs",
@@ -65,6 +67,7 @@
     "@earendil-works/pi-ai": "^1.0.4",
     "@earendil-works/pi-durable": "^1.0.4",
     "@sentry/electron": "^8.1.0",
+    "driver.js": "^1.9.0",
     "electron-updater": "^6.8.9",
     "isomorphic-git": "^1.43.0",
     "js-yaml": "^4.3.2",

@@ -73,6 +73,15 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   useEffect(() => { if (!anchor) setInline(false) }, [anchor])
   // the agent opened or focused a browser window: show it (in the project on screen)
   useEffect(() => window.manul.browser.onReveal(() => { if (active) setBrowsing(true) }), [active])
+  useEffect(() => {
+    const prepare = () => {
+      if (!active) return
+      stage.current?.video?.pause()
+      setPreview(true); setChatShut(false); setBrowsing(false); setHistoryOpen(false)
+    }
+    window.addEventListener('manul:tour-prepare', prepare)
+    return () => window.removeEventListener('manul:tour-prepare', prepare)
+  }, [active])
 
   useEffect(() => window.manul.project.onChange(np => { if (np.dir === p.dir) setP(np) }), [p.dir])
   useEffect(() => window.manul.onSeek((dir, t) => { if (dir === p.dir && stage.current?.video) stage.current.video.currentTime = t }), [p.dir])
@@ -193,7 +202,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         snap={{ self: shut => setPreview(!shut), other: setChatShut, otherCollapsed: chatShut }} />
       <BrowserPanel visible={browsing && active} onClose={() => setBrowsing(false)} />
       {proposal && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber/30 bg-amber-soft px-3 py-1.5">
+        <div data-tour="proposal" className="flex flex-wrap items-center gap-2 rounded-lg border border-amber/30 bg-amber-soft px-3 py-1.5">
           <span className="font-medium text-amber">Proposed:</span>
           <span className="min-w-0 flex-1 truncate">{proposal.title}</span>
           <div className="inline-flex rounded-md border border-line bg-panel p-0.5">
@@ -206,7 +215,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         </div>
       )}
 
-      <div className="relative min-h-0 flex-1">
+      <div data-tour="picture" className="relative min-h-0 flex-1">
         {p.media[onScreen.path] && needsProxy(p.media[onScreen.path]) && !p.proxies?.[onScreen.path] && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-xl bg-black/80 text-center text-[#a39888]">
             <Loader2 className="size-5 animate-spin text-amber" />
@@ -281,7 +290,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
           <Button size="sm" variant="ghost" onClick={noteHere}><MessageSquarePlus />Note</Button>
         </Tip>
         <Tip label={<>Draw a box on the picture <Kbd>B</Kbd></>}>
-          <Button size="sm" variant={drawing ? 'secondary' : 'ghost'} onClick={() => { stage.current?.video?.pause(); setDrawing(d => !d) }}><SquareDashed />Box</Button>
+          <Button data-tour="box" size="sm" variant={drawing ? 'secondary' : 'ghost'} onClick={() => { stage.current?.video?.pause(); setDrawing(d => !d) }}><SquareDashed />Box</Button>
         </Tip>
       </div>
     </div>
@@ -305,6 +314,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         <Conversations project={p} />
         <span className="max-w-[200px] shrink-0 truncate rounded-md bg-hover/80 px-1.5 py-0.5 text-xs text-dim" data-project-title={p.title} title={p.dir}>{p.title}</span>
         <select
+          data-tour="versions"
           className="no-drag h-[22px] max-w-[200px] shrink-0 cursor-default appearance-none rounded-md bg-hover/80 px-1.5 text-xs text-dim outline-none hover:text-fg"
           value={p.current}
           onChange={async e => {
@@ -328,7 +338,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         <Tip label={preview ? 'Hide the film' : 'Show the film'} side="bottom">
           <Button className="no-drag" size="iconSm" variant={preview ? 'secondary' : 'ghost'} onClick={() => setPreview(x => !x)} aria-label="Film preview"><PanelRight /></Button>
         </Tip>
-        <Button className="no-drag" size="sm" variant="primary" onClick={() => setExporting(true)}><Upload />Export</Button>
+        <Button data-tour="export" className="no-drag" size="sm" variant="primary" onClick={() => setExporting(true)}><Upload />Export</Button>
       </div>
 
       <div ref={chatRow} className="flex min-h-0 flex-1">
