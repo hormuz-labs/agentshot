@@ -15,7 +15,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/macOS%20·%20Linux-1d1a17?style=for-the-badge&labelColor=0e0d0c" alt="macOS · Linux">
   <img src="https://img.shields.io/badge/early%20days-f2a541?style=for-the-badge&labelColor=0e0d0c" alt="Early days">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/FSL--1.1-1d1a17?style=for-the-badge&labelColor=0e0d0c" alt="FSL-1.1"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Apache--2.0-1d1a17?style=for-the-badge&labelColor=0e0d0c" alt="Apache-2.0"></a>
 </p>
 
 <p align="center">
@@ -210,9 +210,8 @@ sudo apt update && sudo apt install manul
 
 Other Linux: grab the AppImage from the [latest release](https://github.com/hormuz-labs/manul/releases/latest). More at **[manul.si](https://manul.si)**.
 
-It's free to use, and the source is open to read under the [Functional Source License](LICENSE): use it, change it, edit
-paid work with it — just don't build a competing product from it. Every release becomes Apache-2.0 two years after it
-ships. Bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain), or wait for the single **Manul key**, coming soon.
+It's free and open source under the [Apache License 2.0](LICENSE): use it, change it, ship it, edit paid work with it.
+Keep the [NOTICE](NOTICE) attribution when you redistribute it. Bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain), or wait for the single **Manul key**, coming soon.
 
 On first run Manul asks whether to send crash reports and usage statistics. Both boxes start unticked, and you can change them anytime in Settings → About. It never sends your footage, file or project names, prompts, transcripts or keys. [Exactly what is sent](telemetry/README.md).
 
@@ -259,5 +258,5 @@ Want to hack on it? Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)
 <p align="center">
   <img src="build/icons/64x64.png" width="28" alt=""><br>
   <sub>Named after the <b>manul</b>, the Pallas cat: small, patient, and unbothered by anything.</sub><br>
-  <sub><a href="LICENSE">FSL-1.1-ALv2</a> &nbsp;·&nbsp; <a href="THIRD_PARTY_NOTICES.md">Third-party notices</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">Contribute</a> &nbsp;·&nbsp; Made by <a href="https://github.com/hormuz-labs">Hormuz Labs</a></sub>
+  <sub><a href="LICENSE">Apache-2.0</a> &nbsp;·&nbsp; <a href="THIRD_PARTY_NOTICES.md">Third-party notices</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">Contribute</a> &nbsp;·&nbsp; Made by <a href="https://github.com/hormuz-labs">Hormuz Labs</a></sub>
 </p>

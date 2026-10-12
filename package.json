@@ -3,7 +3,7 @@
   "productName": "Manul",
   "version": "0.0.1",
   "private": true,
-  "license": "FSL-1.1-ALv2",
+  "license": "Apache-2.0",
   "description": "An agentic video editor. Drop in a video, say what you want, and it does it.",
   "type": "module",
   "main": "out/main/index.js",

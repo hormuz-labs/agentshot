@@ -250,9 +250,8 @@ Rules:
 
 ## 7. Open questions 💬
 
-- **Licence:** the editor is source-available under FSL-1.1-ALv2 since 2026-10-08 (was GPL-3.0; releases up to 0.1.1 and
-  the code published before stay GPL). Free to use and change for anything but a competing product; each release
-  becomes Apache-2.0 after two years. Contributors agree to the contributor agreement in CONTRIBUTING. The bundled GPL
+- **Licence:** the editor is open source under Apache-2.0 with attribution in NOTICE since 2026-10-12 (FSL-1.1-ALv2 from
+  2026-10-08; GPL-3.0 before that, and releases up to 0.1.1 and the code published before stay GPL). Contributors agree to the contributor agreement in CONTRIBUTING. The bundled GPL
   programs (ffmpeg, manul-beats, manul-speakers) stay separate programs with their source. The paid cloud parts (Manul
   key gateway, storage) stay closed as separate services.
 - **Windows:** when?
