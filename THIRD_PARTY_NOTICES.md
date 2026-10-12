@@ -1,7 +1,6 @@
 # Third-party software shipped with Manul
 
-Manul's own code is source-available under the Functional Source License 1.1 with an Apache-2.0 future license
-([LICENSE](LICENSE)). The programs below ship with it and keep their own licences. The GPL ones run as separate programs
+Manul's own code is open source under the Apache License 2.0 ([LICENSE](LICENSE), [NOTICE](NOTICE)). The programs below ship with it and keep their own licences. The GPL ones run as separate programs
 (Manul starts them; it doesn't link them): `ffmpeg`/`ffprobe`, and Manul's `manul-beats` and `manul-speakers`, which are
 themselves GPL-3.0-or-later because they are built together with GPL code — their sources are in this repository
 (`scripts/beats`, `scripts/ml`, `scripts/ffmpeg`) and the GPL text in [LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt).

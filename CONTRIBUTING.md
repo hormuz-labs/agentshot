@@ -96,8 +96,7 @@ Releases (signing, Homebrew, apt) are covered in [RELEASING.md](RELEASING.md).
 
 ## License
 
-Manul is source-available under the [Functional Source License 1.1, Apache-2.0 future license](LICENSE) (each release
-becomes Apache-2.0 two years after it ships). A few parts carry their own licence, marked at the top of the file:
+Manul is open source under the [Apache License 2.0](LICENSE); redistributions keep the attribution in [NOTICE](NOTICE). A few parts carry their own licence, marked at the top of the file:
 programs built together with GPL code (`scripts/beats/manul-beats.c`, `scripts/ml/manul-speakers.c`) are
 GPL-3.0-or-later, and the ffmpeg build modules are Apache-2.0 (texts in [LICENSES](LICENSES)).
 
