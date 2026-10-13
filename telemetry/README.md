@@ -24,6 +24,7 @@ anything else, and the proxy rebuilds each event from the same list and refuses 
 |---|---|
 | `app opened` | none |
 | `project created` | none |
+| `motion project created` | `example` (the public id of the gallery example it started from, or none), `aspect` (16:9, 9:16 or 1:1), `reference` (whether your own reference video came with it) |
 | `active time` | `seconds` of use while Manul is focused and you are not idle (sent in steps of at least a minute) |
 | `agent run` | `provider` and `model` used, `tools`: the names of Manul's tools it called, `toolCalls`, `ok`, `seconds` |
 | `version decided` | `accepted`: whether you kept the version the agent proposed |

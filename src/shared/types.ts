@@ -99,6 +99,35 @@ export type Project = {
   conversation?: string
   /** Every conversation in this project (newest last); titles come from the first message. */
   conversations?: { id: string; title: string; createdAt: number }[]
+  /** A motion video made from nothing (no footage): it starts on a blank canvas in this format, which the agent replaces
+   *  with its scenes. example: the gallery example it started from (its prompt is the brief, its video the reference);
+   *  reference: a video (in media/) whose style to take, never its content. */
+  motion?: { aspect: '16:9' | '9:16' | '1:1'; length?: number; example?: { id: string; title: string; handle: string; post?: string }; reference?: string; canvas: string }
+}
+
+/** A motion example in the gallery (from prompt-motion.com): the video, who made it, and the prompt or skill behind it.
+ *  Ids and tag slugs are the site's own. */
+export type GalleryExample = {
+  id: string
+  title: string
+  creator: { name: string; handle: string; url?: string }
+  /** The maker's post on X. */
+  post?: string
+  /** The example's page on prompt-motion.com. */
+  source: string
+  kind: 'prompt' | 'skill'
+  prompt?: string
+  skill?: string
+  tags: { name: string; slug: string }[]
+  width?: number
+  height?: number
+  date?: string
+  /** seconds */
+  duration?: number
+  sound?: boolean
+  /** manul://gallery URLs */
+  video: string
+  poster: string
 }
 
 export type RecentProject = { id: string; title: string; dir: string; openedAt: number; thumb?: string }

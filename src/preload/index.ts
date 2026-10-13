@@ -7,7 +7,7 @@ import type { Cue } from '../shared/subtitles'
 import type { Edit } from '../shared/timeline'
 import type { PreviewState } from '../shared/proxy'
 import type { DemoOptions } from '../main/demo'
-import type { SubtitleLink } from '../shared/types'
+import type { GalleryExample, SubtitleLink } from '../shared/types'
 import type { TelemetryState } from '../shared/telemetry'
 import type { SettingsOpened } from '../shared/onboarding'
 
@@ -154,14 +154,20 @@ const api = {
   },
   /** light, dark or the system's: the window and native menus follow it */
   theme: { set: (t: 'light' | 'dark' | 'system') => ipcRenderer.invoke('theme:set', t) },
+  /** Motion examples (with the prompt behind each) for the start screen. */
+  gallery: { list: () => ipcRenderer.invoke('gallery:list') as Promise<GalleryExample[]> },
   project: {
     recent: () => ipcRenderer.invoke('project:recent') as Promise<RecentProject[]>,
     pick: () => ipcRenderer.invoke('project:pick') as Promise<string[]>,
     create: (files: string | string[]) => ipcRenderer.invoke('project:create', files) as Promise<Project>,
+    /** A motion video from nothing: a blank canvas in that format, from a gallery example and/or a reference video. */
+    createMotion: (o: { title?: string; aspect: '16:9' | '9:16' | '1:1'; length?: number; example?: string; reference?: string; files?: string[] }) =>
+      ipcRenderer.invoke('project:createMotion', o) as Promise<Project>,
     open: (dir: string) => ipcRenderer.invoke('project:open', dir) as Promise<Project>,
     close: (dir: string) => ipcRenderer.invoke('project:close', dir),
+    /** Move the project folder and every render, file and conversation asset to the system Trash. */
+    delete: (dir: string) => ipcRenderer.invoke('project:delete', dir),
     reveal: (dir: string) => ipcRenderer.invoke('project:reveal', dir),
-    /** Any file, a folder or a .zip into the project; the new paths in media/. */
     import: (dir: string, file: string) => ipcRenderer.invoke('project:import', dir, file) as Promise<string[]>,
     pickFiles: () => ipcRenderer.invoke('project:pickFiles') as Promise<string[]>,
     /** Files out of the project, into the Trash; the ones the film uses are kept, with why. */

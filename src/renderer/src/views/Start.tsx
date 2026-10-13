@@ -1,47 +1,93 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { ArrowUp, Film, KeyRound, Loader2, Paperclip, X } from 'lucide-react'
+import { ArrowUp, Clapperboard, KeyRound, Loader2, Paperclip, X } from 'lucide-react'
 import { extOf, kindByName } from '../../../shared/file-kinds'
 import { FileIcon } from './FilesPanel'
 import { JobsTray } from '@/components/JobsTray'
 import { Button } from '@/components/ui/button'
+import { Tip } from '@/components/ui/tooltip'
 import { ManulMascot } from '@/components/mascot/ManulMascot'
+import { Gallery, inputsOf, useGallery } from '@/components/Gallery'
+import { ASPECTS, aspectOf, type Aspect } from '../../../shared/motion-formats'
 import { cn } from '@/lib/utils'
-import type { Project } from '../../../shared/types'
+import type { GalleryExample, Project } from '../../../shared/types'
 
 const IDEAS = ['Cut the ums and long pauses', 'Make a 60-second vertical for Shorts', 'Add a fade in and fade out', 'Trim to the best 30 seconds']
+const message = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
-/** The home screen: a greeting and one message box. All selected files come with the first message. */
+/** A motion project's name: the first words of what the user asked for, else the example's title. */
+const titleOf = (prompt: string, example: GalleryExample | null) =>
+  prompt.split(/\s+/).slice(0, 6).join(' ').replace(/[.,:;!?]+$/, '') || example?.title || 'Motion video'
+
+/** The home screen: one message box, and below it the motion gallery. Files with a video make an edit; no footage (a
+ *  brief, an example or a reference video) makes a motion video on a blank canvas. Selected files come with the first
+ *  message. */
 export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, prompt?: string, files?: string[]) => void; onKeys: () => void; onTools?: () => void; ready: boolean; lead?: ReactNode }) {
   const [files, setFiles] = useState<string[]>([])
   const [prompt, setPrompt] = useState('')
   const [over, setOver] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [example, setExample] = useState<GalleryExample | null>(null)
+  const [reference, setReference] = useState<string | null>(null)
+  const [aspect, setAspect] = useState<Aspect>('16:9')
+  const gallery = useGallery()
   const input = useRef<HTMLTextAreaElement>(null)
+  const top = useRef<HTMLDivElement>(null)
+  // footage in the box means an edit; otherwise a brief, an example or a reference makes a motion video
+  const footage = files.some(f => kindByName(f) === 'video')
+  const motion = !footage && !!(example || reference || prompt.trim())
+  const canGo = !busy && (footage || motion || files.length > 0)
+  const asks = inputsOf(example?.prompt)
 
+  const focus = () => setTimeout(() => input.current?.focus(), 0)
   const choose = (paths: string[]) => {
     if (busy || !paths.length) return
     setFiles(x => [...new Set([...x, ...paths.filter(Boolean)])])
     setError(null)
-    setTimeout(() => input.current?.focus(), 0)
+    focus()
+  }
+  const useExample = (e: GalleryExample) => {
+    setExample(e)
+    setAspect(aspectOf(e))
+    setError(null)
+    top.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
+    focus()
+  }
+  const pickReference = async () => {
+    if (busy) return
+    try {
+      const video = (await window.manul.project.pick()).find(f => kindByName(f) === 'video')
+      if (video) { setReference(video); setError(null); focus() } else setError('A reference has to be a video.')
+    } catch (e) { setError(message(e)) }
   }
   const go = async () => {
-    if (!files.length || busy) return
+    if (!canGo) return
     setBusy(true)
     setError(null)
     try {
+      if (motion) {
+        const p = await window.manul.project.createMotion({ title: titleOf(prompt, example), aspect, example: example?.id, reference: reference ?? undefined, files })
+        const ask = prompt.trim() || (example ? `Make a video like “${example.title}”.` : 'Make a motion video in the style of the reference.')
+        onOpen(p, ask, Object.keys(p.files || {}).filter(f => f !== p.motion?.canvas))
+        return
+      }
       const p = await window.manul.project.create(files)
       onOpen(p, prompt.trim() || undefined, Object.keys(p.files || {}))
     } catch (e) {
-      setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+      setError(message(e))
       setBusy(false)
     }
   }
-
   const pickFiles = async () => {
     if (busy) return
-    try { choose(await window.manul.project.pick()) } catch (e) { setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')) }
+    try { choose(await window.manul.project.pick()) } catch (e) { setError(message(e)) }
   }
+
+  const placeholder = footage || files.length ? 'Tell Manul what to do with it…'
+    : example ? 'What’s your video about?'
+      : reference ? 'What should it be about? Manul takes the look, not the content…'
+        : 'Describe a motion video, or drop footage to edit…'
+
   return (
     <div
       className="flex h-full flex-col"
@@ -55,75 +101,109 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
         <JobsTray />
       </div>
 
-      <div className="flex flex-1 flex-col items-center overflow-auto px-6 pb-16 pt-[7vh]">
-        <ManulMascot state={busy ? 'working' : prompt ? 'thinking' : 'idle'} size={156} className="mb-1 shrink-0" />
-        <div className="mb-8 flex items-center gap-3">
-          <h1 className="font-serif text-[34px] font-normal tracking-[-0.01em] text-fg">What are we making?</h1>
-        </div>
+      <div className="flex-1 overflow-auto">
+        <div ref={top} className="mx-auto flex w-full max-w-[680px] flex-col items-center px-6 pt-[5vh]">
+          <ManulMascot state={busy ? 'working' : prompt ? 'thinking' : 'idle'} size={120} className="shrink-0" />
+          <h1 className="mb-7 mt-1 font-serif text-[34px] font-normal tracking-[-0.01em] text-fg">What are we making?</h1>
 
-        <div className={cn('w-full max-w-[680px] rounded-2xl border bg-surface p-2.5 shadow-[0_1px_2px_var(--color-shade),0_6px_24px_-12px_var(--color-shade)] transition-colors',
-          over ? 'border-amber bg-amber-soft' : 'border-line')}>
-          {files.length > 0 ? (
-            <div data-tour="import" className="mb-1 rounded-xl bg-raised px-3 py-2">
-              <div className="mb-1 flex items-center justify-between gap-2 text-xs text-dim">
-                <span>{files.length} {files.length === 1 ? 'item selected' : 'items selected'}</span>
-                <button disabled={busy} onClick={pickFiles} className="text-amber hover:underline disabled:opacity-50">Add more files</button>
+          <div className={cn('w-full rounded-2xl border bg-surface p-2.5 shadow-[0_1px_2px_var(--color-shade),0_6px_24px_-12px_var(--color-shade)] transition-colors',
+            over ? 'border-amber bg-amber-soft' : 'border-line')}>
+            {files.length > 0 ? (
+              <div data-tour="import" className="mb-1 rounded-xl bg-raised px-3 py-2">
+                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-dim">
+                  <span>{files.length} {files.length === 1 ? 'item selected' : 'items selected'}</span>
+                  <button disabled={busy} onClick={pickFiles} className="text-amber hover:underline disabled:opacity-50">Add more files</button>
+                </div>
+                <div className="max-h-48 overflow-auto">
+                  {files.map(f => (
+                    <div key={f} data-selected-file className="flex items-center gap-2 py-1" title={f}>
+                      <FileIcon kind={extOf(f) ? kindByName(f) ?? 'other' : 'folder'} className="size-4 shrink-0 text-amber" />
+                      <span className="flex-1 truncate">{f.split('/').pop()}</span>
+                      <button disabled={busy} className="rounded p-0.5 text-faint hover:text-fg disabled:opacity-50" onClick={() => setFiles(x => x.filter(y => y !== f))} aria-label={`Remove ${f.split('/').pop()}`}><X className="size-3.5" /></button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="max-h-48 overflow-auto">
-                {files.map(f => (
-                  <div key={f} data-selected-file className="flex items-center gap-2 py-1" title={f}>
-                    <FileIcon kind={extOf(f) ? kindByName(f) ?? 'other' : 'folder'} className="size-4 shrink-0 text-amber" />
-                    <span className="flex-1 truncate">{f.split('/').pop()}</span>
-                    <button disabled={busy} className="rounded p-0.5 text-faint hover:text-fg disabled:opacity-50" onClick={() => setFiles(x => x.filter(y => y !== f))} aria-label={`Remove ${f.split('/').pop()}`}><X className="size-3.5" /></button>
+            ) : null}
+
+            {(example || reference) && (
+              <div className="mb-1 flex flex-col gap-1.5">
+                {example && (
+                  <div data-picked-example className="flex items-center gap-3 rounded-xl bg-raised p-1.5 pr-2.5">
+                    <img src={example.poster} alt="" className="h-11 w-[72px] shrink-0 rounded-lg object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] text-fg">{example.title}</div>
+                      <div className="truncate text-[11.5px] text-faint">Made like @{example.creator.handle}’s example · prompt included</div>
+                    </div>
+                    <button disabled={busy} onClick={() => setExample(null)} aria-label={`Remove the example ${example.title}`} className="rounded p-1 text-faint hover:bg-hover hover:text-fg"><X className="size-3.5" /></button>
                   </div>
-                ))}
+                )}
+                {reference && (
+                  <div className="flex items-center gap-3 rounded-xl bg-raised px-3 py-2">
+                    <Clapperboard className="size-4 shrink-0 text-amber" />
+                    <div className="min-w-0 flex-1 truncate text-[13px] text-fg" title={reference}>Look of {reference.split('/').pop()}</div>
+                    <button disabled={busy} onClick={() => setReference(null)} aria-label="Remove the reference" className="rounded p-1 text-faint hover:bg-hover hover:text-fg"><X className="size-3.5" /></button>
+                  </div>
+                )}
               </div>
+            )}
+
+            <textarea
+              data-tour="start-prompt"
+              ref={input}
+              rows={2}
+              value={prompt}
+              disabled={busy}
+              onChange={e => setPrompt(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go() } }}
+              placeholder={placeholder}
+              className="block max-h-40 min-h-[56px] w-full resize-none bg-transparent px-2 py-2 text-[15px] outline-none placeholder:text-faint"
+            />
+            <div className="flex items-center gap-1">
+              <Tip label="Choose files"><button data-tour={files.length ? undefined : 'import'} disabled={busy} onClick={pickFiles} aria-label="Choose files" className="flex size-8 items-center justify-center rounded-lg text-dim hover:bg-hover hover:text-fg disabled:opacity-50"><Paperclip className="size-4" /></button></Tip>
+              {!footage && !reference && (
+                <Tip label="Match the look of a video">
+                  <button disabled={busy} onClick={pickReference} aria-label="Match the look of a video" className="flex size-8 items-center justify-center rounded-lg text-dim hover:bg-hover hover:text-fg disabled:opacity-50"><Clapperboard className="size-4" /></button>
+                </Tip>
+              )}
+              {motion && (
+                <div role="radiogroup" aria-label="Format" className="ml-1 flex rounded-lg border border-line p-0.5">
+                  {(Object.keys(ASPECTS) as Aspect[]).map(a => (
+                    <button key={a} role="radio" aria-checked={aspect === a} disabled={busy} onClick={() => setAspect(a)}
+                      className={cn('rounded-md px-2 py-0.5 text-[11.5px] tabular-nums', aspect === a ? 'bg-raised text-fg' : 'text-dim hover:text-fg')}>{a}</button>
+                  ))}
+                </div>
+              )}
+              {busy && <span role="status" className="ml-1 text-xs text-dim">{motion ? 'Setting up…' : `Importing ${files.length} ${files.length === 1 ? 'item' : 'items'}…`}</span>}
+              <span className="flex-1" />
+              <Button data-tour="start" size="icon" variant="primary" className="rounded-lg" disabled={!canGo} onClick={go} aria-label="Start">
+                {busy ? <Loader2 className="animate-spin" /> : <ArrowUp />}
+              </Button>
             </div>
-          ) : (
-            <button
-              data-tour="import"
-              onClick={pickFiles}
-              className="mb-1 flex w-full flex-col items-center gap-1 rounded-xl border border-dashed border-line-strong py-7 text-dim transition-colors hover:border-amber/60 hover:bg-amber-soft hover:text-fg"
-            >
-              <Film className="mb-1 size-6" />
-              <span className="font-medium text-fg">Drop files here</span>
-              <span className="text-xs">or click to choose multiple files</span>
-              <span className="text-xs text-faint">include a video · photos, audio, folders and other files can come with it</span>
+          </div>
+
+          {asks && !footage && <p className="mt-2.5 w-full px-1 text-[12px] text-faint">Manul will ask you for {asks.charAt(0).toLowerCase() + asks.slice(1)}.</p>}
+          {error && <p className="mt-3 text-bad">{error}</p>}
+          {!ready && (
+            <button onClick={onKeys} className="mt-3 inline-flex items-center gap-1.5 text-xs text-amber hover:underline">
+              <KeyRound className="size-3.5" />Add an API key so Manul can edit (Gemini, Anthropic or OpenAI)
             </button>
           )}
-          <textarea
-            data-tour="start-prompt"
-            ref={input}
-            rows={2}
-            value={prompt}
-            disabled={busy}
-            onChange={e => setPrompt(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go() } }}
-            placeholder="Tell Manul what to do with it…"
-            className="block max-h-40 min-h-[56px] w-full resize-none bg-transparent px-2 py-2 text-[15px] outline-none placeholder:text-faint"
-          />
-          <div className="flex items-center gap-1">
-            <button disabled={busy} onClick={pickFiles} title="Choose files" aria-label="Choose files" className="flex size-8 items-center justify-center rounded-lg text-dim hover:bg-hover hover:text-fg disabled:opacity-50"><Paperclip className="size-4" /></button>
-            {busy && <span role="status" className="text-xs text-dim">Importing {files.length} {files.length === 1 ? 'item' : 'items'}…</span>}
-            <span className="flex-1" />
-            <Button data-tour="start" size="icon" variant="primary" className="rounded-lg" disabled={!files.length || busy} onClick={go} aria-label="Start">
-              {busy ? <Loader2 className="animate-spin" /> : <ArrowUp />}
-            </Button>
+
+          {!example && !reference && (
+            <div data-tour="ideas" className="mt-5 flex flex-wrap justify-center gap-2">
+              {IDEAS.map(i => (
+                <button key={i} onClick={() => { setPrompt(i); input.current?.focus() }} className="rounded-lg border border-line bg-panel px-3 py-1.5 text-[12.5px] text-dim hover:border-line-strong hover:bg-surface hover:text-fg">{i}</button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {!footage && (
+          <div className="mx-auto w-full max-w-[1180px] px-8 pb-16 pt-14">
+            <Gallery list={gallery} onUse={useExample} />
           </div>
-        </div>
-
-        {error && <p className="mt-3 text-bad">{error}</p>}
-        {!ready && (
-          <button onClick={onKeys} className="mt-3 inline-flex items-center gap-1.5 text-xs text-amber hover:underline">
-            <KeyRound className="size-3.5" />Add an API key so Manul can edit (Gemini, Anthropic or OpenAI)
-          </button>
         )}
-
-        <div data-tour="ideas" className="mt-5 flex max-w-[680px] flex-wrap justify-center gap-2">
-          {IDEAS.map(i => (
-            <button key={i} onClick={() => { setPrompt(i); input.current?.focus() }} className="rounded-lg border border-line bg-panel px-3 py-1.5 text-[12.5px] text-dim hover:border-line-strong hover:bg-surface hover:text-fg">{i}</button>
-          ))}
-        </div>
       </div>
     </div>
   )

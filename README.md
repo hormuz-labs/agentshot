@@ -89,7 +89,7 @@ The conversation fills the window, and your film plays beside it with each propo
   <img src="docs/inline.png" alt="A box drawn around the lower third on the frame, with a message box open just under it: “make the name bigger”" width="100%">
 </p>
 
-Your projects are in the sidebar, the one on screen opened up into its chats and its files: click a file to attach it to your next message, or drag footage onto the timeline to put it in the film. Drag a piece by its name to move it somewhere else; <kbd>⌘Z</kbd> takes any of it back. Drag a divider to give the film more room, or keep dragging to fold a pane away.
+Your projects are in the sidebar, the one on screen opened up into its chats and its files: click a file to attach it to your next message, or drag footage onto the timeline to put it in the film. Hover a project to close it or move its whole folder to the Trash. Drag a piece by its name to move it somewhere else; <kbd>⌘Z</kbd> takes any of it back. Drag a divider to give the film more room, or keep dragging to fold a pane away.
 
 <table>
 <tr>
@@ -103,6 +103,27 @@ Your projects are in the sidebar, the one on screen opened up into its chats and
 The little Manul beside your message follows your cursor, blinks, and reacts when you pet it. The three small icons under
 its status give you a high-five, a throaty growl, and a sound toggle; hover for a tooltip. It waves when an edit is finished,
 and takes a catnap when you leave it alone. The full-body 3D cat is also Manul’s app logo.
+
+## No footage? Start from an example
+
+Under the message box are 233 motion videos people made with Claude, each with the prompt that made it, collected by
+[prompt-motion.com](https://prompt-motion.com) and filed under the same tags. Hover one to watch it; open it for the
+whole video with sound, who made it and their prompt.
+
+<p align="center">
+  <img src="docs/gallery.png" alt="The gallery under the message box: tags to filter by, and a grid of motion videos, each credited to its maker" width="100%">
+</p>
+
+Pick **Use this example**, say what yours is about, and Manul makes your video the way that one was made: it reads the
+prompt, studies the video, asks for what it needs (your words, your logo, a track), and shows you a storyboard before it
+makes a frame. The scenes are real motion graphics, so a note like “the title lands late” changes one scene, not the film.
+Or skip the gallery: describe a motion video in the box, or give it a video of your own whose look to match.
+
+<p align="center">
+  <img src="docs/example.png" alt="An example opened: the whole video playing with sound, its maker and a link to their post, the prompt that made it, and Use this example" width="100%">
+</p>
+
+<sub>Every video and prompt belongs to the person credited on it; the app links to their post. The videos stream when you watch them, so they don’t add to the download.</sub>
 
 ## What a session feels like
 

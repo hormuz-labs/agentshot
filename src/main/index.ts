@@ -33,6 +33,7 @@ import { Browser } from './browser'
 import { agentEnv, browserPrompt, BskDaemon, BSK_BIN, chromeBsk, extensionStorage, findUserBsk, privateHome } from './bsk'
 import { homedir } from 'node:os'
 import * as Projects from './projects'
+import * as Gallery from './gallery'
 import * as Files from './files'
 import { addOverlay, applyEdit, composeArgs, describeEdit, duration as timelineDuration, insertAt, sameCut, type Edit, type Item } from '../shared/timeline'
 import { moveElement, prepareClipHtml } from '../shared/clip-html'
@@ -110,8 +111,9 @@ const CLIP_CSP = "default-src manul: data: blob: 'unsafe-inline' 'unsafe-eval'; 
 function serveMedia(req: Request): Response {
   const url = new URL(req.url)
   const path = decodeURIComponent(url.pathname)
-  const file = url.host === 'lib' ? join(LIB, path.replace(/^\/+/, '')) : resolve(path)
-  const roots = url.host === 'lib' ? [LIB] : [Projects.projectsRoot(), ...[...open.keys()]]
+  const fixed = url.host === 'lib' ? LIB : url.host === 'gallery' ? Gallery.GALLERY : null
+  const file = fixed ? join(fixed, path.replace(/^\/+/, '')) : resolve(path)
+  const roots = fixed ? [fixed] : [Projects.projectsRoot(), ...[...open.keys()]]
   if (!roots.some(root => file.startsWith(root + sep)) || !existsSync(file)) return new Response('not found', { status: 404 })
   const size = statSync(file).size
   const type = MIME[extname(file).toLowerCase()] || 'application/octet-stream'
@@ -601,6 +603,15 @@ function wire() {
     for (const rel of Object.keys(p.files || {})) { ensureProxy(p, rel); autoTranscribe(p, rel) }
     return p
   })
+  ipcMain.handle('project:createMotion', async (_e, o: Parameters<typeof Projects.createMotion>[0]) => {
+    const created = await asJob('Setting up the canvas', 'import', () => Projects.createMotion(o), { doneTitle: 'Canvas ready' })
+    const p = await openProject(created.dir)
+    telemetry.track('motion project created', { example: o.example || 'none', aspect: o.aspect, reference: !!o.reference })
+    await checkpoint(p, 'Started a motion video')
+    for (const rel of Object.keys(p.files || {})) if (rel !== p.motion?.canvas) { ensureProxy(p, rel); autoTranscribe(p, rel) }
+    return p
+  })
+  ipcMain.handle('gallery:list', () => Gallery.examples())
   ipcMain.handle('project:open', (_e, dir: string) => openProject(dir))
   ipcMain.handle('preview:prepare', (_e, dir: string, media: string, retry = false) => {
     const p = projectOf(dir)
@@ -609,6 +620,13 @@ function wire() {
     return previews.state(dir, media)
   })
   ipcMain.handle('project:close', (_e, dir: string) => { agent?.close(dir); open.delete(dir) })
+  ipcMain.handle('project:delete', async (_e, dir: string) => {
+    const p = open.get(dir) || await Projects.load(dir)
+    await agent?.stop(dir)
+    await Projects.deleteProject(p, abs => shell.trashItem(abs))
+    agent?.close(dir)
+    open.delete(dir)
+  })
   ipcMain.handle('project:reveal', (_e, dir: string) => shell.openPath(dir))
   // ---------------------------------------------------------------- the browser panel and which browser the agent drives
   ipcMain.handle('browser:state', () => browser?.state() ?? { tabs: [], active: null, bsk: { connected: false, status: 'starting' } })

@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { app } from 'electron'
 import { FFMPEG } from '../src/main/media'
 
 const root = mkdtempSync(join(tmpdir(), 'manul-proj-'))
@@ -55,11 +56,42 @@ describe('projects', () => {
     expect(p.timeline!.items.map(i => i.kind)).toEqual(['media', 'clip'])
   })
 
+  it('starts a motion video on a blank canvas in the chosen format, with a reference', async () => {
+    const p = await Projects.createMotion({ title: 'Launch film', aspect: '9:16', length: 15, reference: clip })
+    expect(p.dir).toBe(join(process.env.MANUL_PROJECTS!, 'launch-film'))
+    expect(p.motion).toEqual({ aspect: '9:16', length: 15, reference: 'media/My Clip.mp4', canvas: 'media/canvas.mp4' })
+    expect(p.versions).toMatchObject([{ path: 'media/canvas.mp4', title: 'Blank canvas' }])
+    expect(p.timeline).toMatchObject({ width: 1080, height: 1920, fps: 60, items: [{ kind: 'media', src: 'media/canvas.mp4' }] })
+    expect(p.media['media/canvas.mp4']).toMatchObject({ width: 1080, height: 1920, hasAudio: false })
+    expect(existsSync(join(p.dir, 'media', 'My Clip.mp4'))).toBe(true)
+  })
+
+  it('refuses a reference that is not a video, and leaves nothing behind', async () => {
+    const notes = join(root, 'notes.txt')
+    execFileSync('sh', ['-c', `echo hi > "${notes}"`])
+    await expect(Projects.createMotion({ title: 'Bad ref', aspect: '16:9', reference: notes })).rejects.toThrow('has to be a video')
+    expect(existsSync(join(process.env.MANUL_PROJECTS!, 'bad-ref'))).toBe(false)
+  })
+
+  it('refuses an example that is not in the gallery', async () => {
+    await expect(Projects.createMotion({ title: 'Gone', aspect: '16:9', example: 'no-such-example' })).rejects.toThrow('no longer in the gallery')
+  })
+
   it('never overwrites: a second project from the same file gets its own folder', async () => {
     const a = await Projects.createFromFile(clip)
     const b = await Projects.createFromFile(clip)
     expect(b.dir).not.toBe(a.dir)
     expect(b.dir).toMatch(/my-clip-\d+$/)
+  })
+
+  it('moves a project to the Trash and removes its recent-project record', async () => {
+    const p = await Projects.createFromFile(clip)
+    const trashed: string[] = []
+    await Projects.deleteProject(p, async dir => { trashed.push(dir); rmSync(dir, { recursive: true, force: true }) })
+    expect(trashed).toEqual([p.dir])
+    expect(existsSync(p.dir)).toBe(false)
+    const saved = JSON.parse(readFileSync(join(app.getPath('userData'), 'recent.json'), 'utf8')) as { dir: string }[]
+    expect(saved.some(r => r.dir === p.dir)).toBe(false)
   })
 
   it('imports media under a free name and remembers notes with stills', async () => {

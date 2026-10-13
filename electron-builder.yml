@@ -31,6 +31,10 @@ extraResources:
     filter: ["**/*", "!.sha256"]
   - from: resources/py
     to: py
+  # The motion gallery: catalogue and posters only (~4 MB); the videos stream from Manul's bucket (scripts/publish-motion-gallery.mjs)
+  - from: resources/motion-gallery
+    to: motion-gallery
+    filter: ["catalog.json", "posters/*.jpg"]
   - from: THIRD_PARTY_NOTICES.md
     to: THIRD_PARTY_NOTICES.md
   - from: LICENSES/three-MIT.txt
