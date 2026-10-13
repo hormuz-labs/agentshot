@@ -1,11 +1,22 @@
-# Push a tag like v0.2.0 → build, sign and notarize (macOS) on four runners, then publish ONE GitHub release
-# (the auto-update feed) with every build's files, and rebuild the apt repository (apt.yml).
+# A tag like v0.2.0 → build, sign and notarize (macOS) on four runners, then publish ONE GitHub release
+# (the auto-update feed) with every build's files and generated notes, and rebuild the apt repository (apt.yml).
+# Runs when a tag is pushed by hand, or when tag.yml tags a merge to main and calls it with that tag (a tag pushed by a
+# workflow doesn't start other workflows).
 # The Homebrew tap (hormuz-labs/homebrew-tap) picks up new releases on its own.
 # Builds don't publish themselves: parallel uploads made duplicate releases and one Mac feed overwrote the other.
 name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: the tag to release, e.g. v0.4.1 (already pushed)
+        required: true
+        type: string
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -23,6 +34,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -40,7 +53,7 @@ jobs:
       - name: Verify target-native tools and models before release
         run: npm run check:native
       - name: Version from the tag
-        run: npm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"
+        run: npm version --no-git-tag-version --allow-same-version "${TAG#v}"
       - run: npm test
       - name: Build, sign, notarize
         env:
@@ -89,6 +102,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/download-artifact@v4
         with:
           pattern: dist-*
@@ -102,12 +117,12 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" out/* --title "${GITHUB_REF_NAME#v}" --generate-notes --verify-tag
+        run: gh release create "$TAG" out/* --title "${TAG#v}" --generate-notes --verify-tag
 
   apt:
     needs: publish
     if: ${{ vars.APT_GPG_KEY_ID != '' }}
     uses: ./.github/workflows/apt.yml
     with:
-      tag: ${{ github.ref_name }}
+      tag: ${{ inputs.tag || github.ref_name }}
     secrets: inherit
