@@ -10,6 +10,8 @@ files:
   - package.json
   - "!**/*.map"
 asar: true
+beforePack: scripts/check-native.mjs
+afterPack: scripts/check-packaged-native.mjs
 # Manul's own tools and assets live next to the app, never inside the asar archive
 extraResources:
   - from: build/icon.png

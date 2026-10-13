@@ -37,6 +37,8 @@ jobs:
       - run: ./scripts/build-whisper.sh
       - run: ./scripts/build-beats.sh
       - run: ./scripts/build-ml.sh
+      - name: Verify target-native tools and models before release
+        run: npm run check:native
       - name: Version from the tag
         run: npm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"
       - run: npm test

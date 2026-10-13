@@ -23,11 +23,19 @@ import { buildProviders, listProviders } from './providers'
 import { manulProvider } from './gateway'
 import type { Memory } from './memory'
 import type { Skills } from './skills'
-import { BIN, FFMPEG, FONTS_DIR, probe } from './media'
+import { BIN, FFMPEG, FONTS_DIR, MODELS_DIR, VISION, probe } from './media'
 import { FencedEnv, fencedArgv, fenceFor, realish, type Fence } from './fence'
 import { homedir } from 'node:os'
 import { analyze, contactSheet, report, sheetFrames } from './analysis'
 import { analyzeMusic, musicReport } from './music'
+import { syncMedia } from './sync'
+import { analyzeScreen } from './screen-activity'
+import { asJob } from './jobs'
+import type { DemoOptions } from './demo'
+import { demoCleanup } from '../shared/demo'
+import { DemoBriefs } from './demo-brief'
+import { inspectionTimes, InspectionGuard } from './inspection'
+import type { DemoSummary } from '../shared/demo'
 import { generate } from './generate'
 import { VOICES } from '../../account/src/media.ts'
 import { cachedSpeakers, speakersReport, withSentences } from './speakers'
@@ -46,7 +54,9 @@ const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart
 
 /** What the agent needs from the rest of the app. */
 export type Bridge = {
+  composeDemo(dir: string, req: DemoOptions, signal?: AbortSignal): Promise<{ version: string; duration: number; removed: number; sync: unknown; warning?: string; summary?: DemoSummary }>
   project(dir: string): Project | undefined
+  decideVersion(dir: string, accept: boolean): Promise<Project>
   proposeVersion(dir: string, absPath: string, title: string): Promise<string>
   resolveNote(dir: string, id: string, reply: string): Promise<void>
   seek(dir: string, t: number): void
@@ -86,6 +96,15 @@ async function clipResult(p: Project, c: ClipInfo & { frames: number }) {
 }
 
 const Option = Type.Object({ label: Type.String(), description: Type.Optional(Type.String()) })
+const FramingSchema = Type.Object({ fit: Type.Optional(Type.Union([Type.Literal('contain'), Type.Literal('cover')])), zoom: Type.Optional(Type.Number({ minimum: 0.25, maximum: 4 })), x: Type.Optional(Type.Number({ minimum: -2, maximum: 2 })), y: Type.Optional(Type.Number({ minimum: -2, maximum: 2 })) })
+const CameraLayoutSchema = Type.Object({
+  shape: Type.Optional(Type.Union(['circle', 'square', 'rectangle', 'rounded'].map(s => Type.Literal(s)))),
+  x: Type.Optional(Type.Number({ minimum: 0 })), y: Type.Optional(Type.Number({ minimum: 0 })),
+  width: Type.Optional(Type.Number({ minimum: 2 })), height: Type.Optional(Type.Number({ minimum: 2 })),
+  border: Type.Optional(Type.Number({ minimum: 0, maximum: 12 })), hidden: Type.Optional(Type.Boolean()),
+  framing: Type.Optional(FramingSchema),
+  crop: Type.Optional(Type.Union([Type.Null(), Type.Object({ x: Type.Number({ minimum: 0, maximum: 1 }), y: Type.Number({ minimum: 0, maximum: 1 }), w: Type.Number({ minimum: 0.01, maximum: 1 }), h: Type.Number({ minimum: 0.01, maximum: 1 }) })])),
+})
 
 /** The edit's pieces, one line each: id, where it sits in the film, what it is. */
 export function piecesOf(tl: Timeline) {
@@ -114,7 +133,7 @@ async function imageResult(caption: string, path: string) {
 /** Where the agent may go, per project (src/main/fence.ts): Manul's resources read-only, plus extra folders. */
 export type FenceConfig = { resources: string; extraRw?: string[]; extraRo?: string[] }
 
-function editorExtension(bridge: Bridge, dirOf: (convId: string) => string, fenceConfig?: FenceConfig) {
+export function editorExtension(bridge: Bridge, dirOf: (convId: string) => string, fenceConfig?: FenceConfig, briefs = new DemoBriefs(), inspections = new InspectionGuard()) {
   const proj = (api: Any) => {
     const dir = dirOf(api.conversationId)
     const p = bridge.project(dir)
@@ -141,11 +160,17 @@ function editorExtension(bridge: Bridge, dirOf: (convId: string) => string, fenc
       `renders/ (your outputs), notes/ (frame stills).\n` +
       `How to work:\n` +
       `- Start with project_state to see the versions, the current one, open notes and media details.\n` +
+      `Use project_state rather than bash/Python to inspect project.json, current, proposal or media. Do not run ls .., ` +
+      `search parent folders, or investigate Manul's installation to recover from an edit error. Bash works inside the project; ` +
+      `"Operation not permitted" outside it is a sandbox refusal, not a broken shell.\n` +
       `- Know the footage before deciding anything about it. Measure first: analyze_video gives the shots (cut times), camera shake and motion, ` +
       `exposure, contrast, colour cast, black/frozen frames, loudness and silence, plus one frame per shot to see what each shot shows; ` +
       `the transcript tool gives speech; speakers gives who speaks when; find_subjects gives where faces and objects are per shot (and crops that follow them). Then look (frames at chosen times, a zoomed box, or an image file) only for what numbers can't tell: ` +
       `what is in a shot, where faces or text are, whether a render looks right. Never write scripts (Python or other) to analyse pixels or sound, ` +
       `and never use another ffmpeg: the bundled one has what you need (vidstabdetect/vidstabtransform for shake, rubberband for speed, scdet, signalstats, ebur128…).\n` +
+      `- Frame inspections have a finite information limit. Never inspect sub-frame windows repeatedly. For "trim tighter", read transcript ` +
+      `and measured silence/activity, plan word-safe cuts, and apply them; use at most a few look calls for uncertain action boundaries. ` +
+      `If look says no new information, stop inspecting and edit with the evidence already available.\n` +
       `- Open-ended requests (make it cinematic, clean it up, fix it, turn it into a promo/short): analyze_video first, then say in 2–4 short lines what you found ` +
       `and offer the fixes you'd make as ask_user with multiple: true — one option per fix, its description saying what changes and where ` +
       `(e.g. "Stabilise shots 2 and 4 — strong handheld shake"). Apply the chosen ones together in one render. Precise requests ("cut the first 5 s") need no questions.\n` +
@@ -166,12 +191,24 @@ function editorExtension(bridge: Bridge, dirOf: (convId: string) => string, fenc
       `can undo it. Prefer it to ffmpeg for plain cuts, trims, reordering and volume (cut ums or pauses with word times and src). ` +
       `When timeline.edited is set, the current version's file doesn't have those changes yet: work on the edit (edit_timeline, ` +
       `insert_clip, overlay_clip), or call rerender_timeline first before using ffmpeg on the film.\n` +
+      `If a proposal is pending, do not call edit_timeline/set_camera_layout yet. Use project_state; if the user explicitly asks ` +
+      `to revise the proposed result, call decide_version accept:true to use it as the starting point, then edit it. ` +
+      `If they reject it, accept:false. If their intent is unclear, ask whether to edit the preview or the current version.\n` +
       `- Notes arrive as "[note <id> @ start–end, box x,y,w,h]" plus a still of the frame with the box drawn on it. The box is in 0–1 fractions of the picture ` +
       `(x,y = top-left). Act on exactly that moment and region; when done, call resolve_note with a one-line reply. ` +
       `A note on "clip <id> element <name>" is about that element (data-manul-id) of clips/<id>/clip.html: edit only it (read + edit tools), ` +
       `then render_clip and rerender_timeline.\n` +
       `- Skills: read video-editing before any edit, and the skill for the kind of video (talking-head, short-form, promos-and-montages, ` +
-      `tutorials, cleanup-and-repair, motion-design, music-generation, voiceover) — see the skills list.\n` +
+      `tutorials, demo-editor, cleanup-and-repair, motion-design, music-generation, voiceover) — see the skills list.\n` +
+      `- Separate screen and face-camera recordings: read demo-editor, sync_media first, then compose_demo to keep linked source tracks editable. ` +
+      `Use edit_timeline for later cuts and set_camera_layout for layout changes. Static screen with speech, or silent meaningful screen action, is not dead time.\n` +
+      `Before first demo composition call demo_layout to ask all missing position, shape and size choices in one card. ` +
+      `Defaults only when the user explicitly says "You decide". End with measured summary.message from compose_demo, including seconds of stale footage removed, and short **Audio sync** / **Layout** bullets.\n` +
+      `Demo creation includes natural dead-time cleanup by default; "please sync it" does not disable cleanup. ` +
+      `Use cleanup:none only when the user explicitly chooses Keep everything, no trimming, or sync only. ` +
+      `When cleanup was skipped, say it was skipped rather than claiming there were no stale sections.\n` +
+      `After a demo output ask if the user wants to adjust face position, shape, size or framing. The chat displays an adjustment question ` +
+      `and inline toolbox with live controls; refer them to "Yes, adjust layout". Changes are on the linked timeline; rerender_timeline renders them.\n` +
       `- Voice and music: generate_voice and generate_music (they use the user's own key or their Manul key; never call voice or music APIs with curl).\n` +
       `- Fonts for text you draw with ffmpeg: ${FONTS_DIR} (Inter-Regular.ttf, Inter-Bold.ttf; drawtext fontfile=…, subtitles fontsdir=…). ` +
       `Fonts the user added are in the project's fonts/ folder with Inter: then use fontsdir=fonts (never fontsdir=media).\n` +
@@ -186,6 +223,82 @@ function editorExtension(bridge: Bridge, dirOf: (convId: string) => string, fenc
       `Write replies in short plain Markdown. Say what you did, not how.\n\n` + MOTION_POINTER, { tag: false })],
     tools: [
       defineTool({
+        name: 'decide_version',
+        description: 'Resolve a pending preview before changing its timeline. accept:true uses the proposed result as the editable starting point, when the user explicitly asks to revise/use it. accept:false discards the preview when requested. Check project_state first; never silently decide an ambiguous request.',
+        parameters: Type.Object({ accept: Type.Boolean() }),
+        execute: async (args: Any, api: Any) => {
+          const p = await bridge.decideVersion(proj(api).dir, args.accept)
+          return text({ current: p.current, proposal: p.proposal || null, message: args.accept ? 'Preview is now the editable starting point.' : 'Preview rejected; current edit retained.' })
+        },
+      }),
+      defineTool({
+        name: 'demo_layout',
+        description: 'Before composing a first demo, ask missing user choices for face position, shape and size in one card. User-specified choices are retained; You decide authorizes recommendations. Ends the turn when questions are needed. Call again after their answer, then compose_demo.',
+        parameters: Type.Object({ screen: Type.String() }),
+        execute: async (args: Any, api: Any) => {
+          const p = proj(api), info = p.media[args.screen]
+          if (!info?.width) throw new Error('Choose the screen recording first.')
+          const result = briefs.resolve(String(api.conversationId), info.width, info.height)
+          return result.questions ? { ...text(result), control: { terminate: true } } : text(result)
+        },
+      }),
+      defineTool({
+        name: 'sync_media',
+        description: 'Match separate screen and face-camera recordings using common audio. Returns measured offset, clock drift, overlap and confidence. Cached. Never guess alignment from file lengths. If unreliable, ask for the same word/clap time in both recordings.',
+        parameters: Type.Object({ screen: Type.String(), camera: Type.String() }),
+        execute: async (args: Any, api: Any) => {
+          const p = proj(api)
+          inProject(p, args.screen); inProject(p, args.camera)
+          return text(await asJob('Matching your recordings', 'render', () => syncMedia(p.dir, args.screen, args.camera, api.signal), { project: p.dir }))
+        },
+      }),
+      defineTool({
+        name: 'analyze_screen_activity',
+        description: 'Measure meaningful local changes across a complete screen recording (typing, scrolling, UI changes), rather than camera movement. Returns active intervals. Combine with narration: silence OR a static screen alone is not a reason to cut.',
+        parameters: Type.Object({ media: Type.String() }),
+        execute: async (args: Any, api: Any) => {
+          const p = proj(api); inProject(p, args.media)
+          const a = await analyzeScreen(p.dir, args.media, api.signal)
+          return text({ duration: a.duration, active: a.active, samplingFps: a.fps })
+        },
+      }),
+      defineTool({
+        name: 'compose_demo',
+        description: 'Create and propose a synced, editable screen + face-camera demo. Measures sync (cached), transcribes narration, removes only jointly idle intervals, applies one shared cut plan to all tracks, renders FFmpeg and checks duration. Ask for missing layout preferences once; default top-right circle 20% width, natural cleanup. Screen-only footage outside camera coverage is retained. manual_offset is only for an alignment explicitly supplied by the user: screen event time minus camera event time.',
+        parameters: Type.Object({ screen: Type.String(), camera: Type.String(), layout: Type.Optional(CameraLayoutSchema),
+          corner: Type.Optional(Type.Union(['top-right', 'top-left', 'bottom-right', 'bottom-left'].map(s => Type.Literal(s)))),
+          cleanup: Type.Optional(Type.String({ description: 'natural (default), tight, or none (keep everything). keep-all / keep-everything / off are aliases for none.' })),
+          audio: Type.Optional(Type.Union([Type.Literal('screen'), Type.Literal('camera')])),
+          overlap_only: Type.Optional(Type.Boolean()), manual_offset: Type.Optional(Type.Number()),
+        }),
+        execute: async (args: Any, api: Any) => {
+          const p = proj(api); inProject(p, args.screen); inProject(p, args.camera)
+          const chosen = p.timeline?.demo ? undefined : briefs.resolve(String(api.conversationId), p.media[args.screen]?.width || 1920, p.media[args.screen]?.height || 1080)
+          // Enforce the brief even if the model tries to skip demo_layout and supplies its own guessed defaults.
+          if (chosen?.questions) return { ...text(chosen), control: { terminate: true } }
+          const layout = chosen?.layout ? { ...args.layout, ...chosen.layout } : args.layout
+          const result = await bridge.composeDemo(p.dir, { screen: args.screen, camera: args.camera, layout, corner: chosen?.corner || args.corner,
+            cleanup: demoCleanup(args.cleanup), audio: args.audio, overlapOnly: args.overlap_only, manualOffset: args.manual_offset }, api.signal)
+          briefs.completed(String(api.conversationId))
+          return text({ ...result, instruction: 'Tell the user summary.message verbatim (measured stale footage removed), original → final duration, then concise **Audio sync** and **Layout** bullets. Do not invent removed time.' })
+        },
+      }),
+      defineTool({
+        name: 'set_video_framing',
+        description: 'Adjust a timeline video piece: fit/fill, zoom and x/y placement without changing source timing. x/y are fractions of the output viewport; positive y moves the picture downward. Live, undoable; rerender_timeline proposes the result. For a face inside its circle use set_camera_layout with framing instead.',
+        parameters: Type.Object({ ids: Type.Array(Type.String(), { minItems: 1 }), framing: FramingSchema }),
+        execute: async (args: Any, api: Any) => text((await bridge.editTimeline(proj(api).dir, [{ op: 'frame', ids: args.ids, framing: args.framing }])).timeline),
+      }),
+      defineTool({
+        name: 'set_camera_layout',
+        description: 'Change the linked face-camera shape, size, position, border, crop, source framing or visibility. layout x/y move the shape in output pixels; framing x/y move the source INSIDE the shape by fractions of its width/height, zoom resizes the source. Use framing to fix a cropped head. Keeps sync and cuts, live and undoable; rerender_timeline proposes it.',
+        parameters: CameraLayoutSchema,
+        execute: async (args: Any, api: Any) => {
+          const p = await bridge.editTimeline(proj(api).dir, [{ op: 'camera', layout: args }])
+          return text({ layout: p.timeline?.demo?.layout, message: 'Camera layout updated live. Sync and cuts preserved.' })
+        },
+      }),
+      defineTool({
         name: 'project_state',
         description: 'The project: versions (which one is current, which is proposed), notes with their anchors, the files the user added (what each is), and media details (duration, size, fps, audio).',
         parameters: Type.Object({}),
@@ -199,6 +312,7 @@ function editorExtension(bridge: Bridge, dirOf: (convId: string) => string, fenc
             timeline: p.timeline && { size: `${p.timeline.width}x${p.timeline.height}`, fps: p.timeline.fps, duration: timelineDuration(p.timeline),
               ...(editedOf(p) ? { edited: 'changed since the current version was rendered (by the user by hand, or edit_timeline): the version\'s file does not have these changes yet' } : {}),
               pieces: piecesOf(p.timeline),
+              demo: p.timeline.demo,
               overlays: (p.timeline.overlays || []).map(o => `overlay ${o.clip} at ${o.start}s for ${o.dur}s`) },
             clips: Object.values(p.clips || {}).map(c => ({ id: c.id, title: c.title, duration: c.duration })),
             versions: p.versions.map(v => ({ id: v.id, title: v.title, path: v.path, by: v.by })),
@@ -337,6 +451,14 @@ function editorExtension(bridge: Bridge, dirOf: (convId: string) => string, fenc
           const p = proj(api)
           const rel = args.media || p.versions.find(v => v.id === p.current)!.path
           const file = inProject(p, rel)
+          if (!existsSync(VISION) || !existsSync(join(MODELS_DIR, 'faces-yunet.onnx')) || !existsSync(join(MODELS_DIR, 'objects-yolox-tiny.onnx'))) {
+            const info = await probe(file), t0 = Math.max(0, args.t0 ?? 0), t1 = Math.min(info.duration, args.t1 ?? info.duration)
+            const times = Array.from({ length: 6 }, (_, i) => t0 + (t1 - t0) * (i + 0.5) / 6)
+            const out = join(p.dir, '.cache', 'look', `subjects-fallback-${Date.now()}.jpg`)
+            await mkdir(join(p.dir, '.cache', 'look'), { recursive: true })
+            await contactSheet(file, times.map(t => ({ t, label: fmt(t) })), out, { signal: api.signal })
+            return imageResult('Automatic face detection is unavailable in this installation. These sampled frames are provided instead; inspect them with look and choose a stable crop. Continue the demo with compose_demo; face detection is optional. Do not invent detection coordinates.', out)
+          }
           const found = await findSubjects(p.dir, file, { t0: args.t0, t1: args.t1, signal: api.signal })
           const shots = await analyze(p.dir, file, api.signal).then(a => a.shots.map(sh => ({ s: sh.s, e: sh.e })), () => [{ s: 0, e: found.info.duration }])
           const ranges = shots.map(sh => ({ s: Math.max(sh.s, found.t0), e: Math.min(sh.e, found.t1) })).filter(sh => sh.e - sh.s > 0.2)
@@ -371,16 +493,14 @@ function editorExtension(bridge: Bridge, dirOf: (convId: string) => string, fenc
           }
           const rel = args.media || p.versions.find(v => v.id === p.current)!.path
           const file = inProject(p, rel)
-          const dur = (await probe(file)).duration
-          let times: number[] = args.times?.length ? args.times : []
-          if (!times.length) {
-            const t0 = Math.max(0, args.t0 ?? 0), t1 = Math.min(dur, args.t1 ?? dur)
-            const n = Math.max(1, Math.min(16, Math.round(args.count ?? 6)))
-            times = Array.from({ length: n }, (_, k) => t0 + ((t1 - t0) * (k + 0.5)) / n)
-          }
-          times = times.slice(0, 16).map(t => Math.max(0, Math.min(t, dur - 0.04)))
-          await contactSheet(file, times.map(t => ({ t, label: fmt(t) })), out, { box: args.box, signal: api.signal })
-          return imageResult(`${rel}: frames at ${times.map(fmt).join(', ')}${args.box ? ' (zoomed into the box)' : ''}.`, out)
+          const info = await probe(file), sample = inspectionTimes(info, args)
+          if (!sample.times.length) throw new Error('Give finite frame times inside this video.')
+          const guard = inspections.inspect(String(api.conversationId), rel, sample.times, args.box)
+          if (guard.blocked) return { ...text('No new picture information: this moment has already been inspected repeatedly. Do not call look again for this region. For tighter trimming, use transcript word timings plus measured silence/activity and apply the planned cuts. If no safe cut is supported, keep the content and explain why.'),
+            ...(guard.stop ? { control: { terminate: true } } : {}) }
+          const label = (t: number) => `${t.toFixed(3)} s`
+          await contactSheet(file, sample.times.map(t => ({ t, label: label(t) })), out, { box: args.box, signal: api.signal })
+          return imageResult(`${rel}: ${sample.times.length} distinct frame-grid samples at ${sample.times.map(label).join(', ')}${args.box ? ' (zoomed into the box)' : ''}.${sample.note ? `\n${sample.note}` : ''}`, out)
         },
       }),
       defineTool({
@@ -675,9 +795,11 @@ export async function startAgent(opts: {
   loadCustom()
 
   const convDir = new Map<string, string>() // conversation id → project dir
+  const demoBriefs = new DemoBriefs()
+  const inspections = new InspectionGuard()
   const registry = createRegistry()
   const dirOf = (id: string) => convDir.get(String(id)) || ''
-  for (const ext of [CodingTools, editorExtension(opts.bridge, dirOf, opts.fence), memoryExtension(opts.memory), skillsExtension(opts.skills),
+  for (const ext of [CodingTools, editorExtension(opts.bridge, dirOf, opts.fence, demoBriefs, inspections), memoryExtension(opts.memory), skillsExtension(opts.skills),
     ...(opts.browserPrompt ? [browserExtension(opts.bridge, dirOf, opts.browserPrompt)] : [])]) registry.install(ext)
   const shellEnv = opts.shellEnv ? liveEnv(opts.shellEnv) : undefined
 
@@ -732,6 +854,9 @@ export async function startAgent(opts: {
       if (!l) throw new Error('This project is not open.')
       const model = await pickModel(dir)
       if (!model) throw new Error('Add an API key first (Settings → Keys).')
+      const inputText = typeof content === 'string' ? content : content.filter(c => c.type === 'text').map(c => c.text || '').join('\n')
+      demoBriefs.input(String(l.conv.id), inputText.split(ATTACHED)[0])
+      inspections.reset(String(l.conv.id))
       await l.conv.configure({ model, cwd: dir }, ctx)
       await l.conv.submit({ type: 'input', content, whenBusy: 'steer' }, ctx)
     },
@@ -740,4 +865,3 @@ export async function startAgent(opts: {
     async shutdown() { for (const d of [...live.keys()]) this.close(d); await harness.close(ctx) },
   }
 }
-

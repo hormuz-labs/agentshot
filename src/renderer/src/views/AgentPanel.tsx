@@ -9,6 +9,8 @@ import { resultsOf, type AgentState } from '@/lib/agui'
 import { ConsentCard, useConsents } from '@/components/ConsentStack'
 import { ModelPicker } from '@/components/ModelPicker'
 import { ManulCompanion } from '@/components/mascot/ManulCompanion'
+import { ChatMarkdown } from '@/components/ChatMarkdown'
+import { toolErrorHint } from '../../../shared/tool-errors'
 import type { Project } from '../../../shared/types'
 import { cn, timecode } from '@/lib/utils'
 import type { Anchor } from '../../../shared/types'
@@ -40,7 +42,13 @@ export function shellTitle(command: string) {
 // ---------------------------------------------------------------- tool cards: one renderer per tool, a generic fallback
 const code = (s: string) => <code className="block max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-[10.5px] text-faint" data-selectable>{s}</code>
 const TOOL: Record<string, { icon: ReactNode; title: (a: Record<string, any>) => string; body?: (a: Record<string, any>) => ReactNode; detail?: (a: Record<string, any>) => ReactNode }> = {
+  sync_media: { icon: <AudioLines />, title: () => 'Matching your screen and camera recordings' },
+  analyze_screen_activity: { icon: <ScanSearch />, title: () => 'Finding screen actions and idle stretches' },
+  compose_demo: { icon: <Clapperboard />, title: () => 'Syncing, cleaning and composing your demo' },
+  set_camera_layout: { icon: <ScanFace />, title: () => 'Adjusted your face-camera layout' },
+  set_video_framing: { icon: <Clapperboard />, title: () => 'Adjusted video placement and framing' },
   project_state: { icon: <Eye />, title: () => 'Looked at the project' },
+  decide_version: { icon: <Check />, title: a => a.accept ? 'Used the preview as the editable version' : 'Rejected the preview' },
   probe: { icon: <FileSearch />, title: a => `Read ${String(a.path || '').split('/').pop() || 'a file'}` },
   ffmpeg: {
     icon: <Clapperboard />,
@@ -76,6 +84,7 @@ function ToolCard({ call, state, result }: { call: Call; state: 'streaming' | 'r
         <span className="flex-1 truncate text-fg/90">{t.title(call.args)}</span>
         {state === 'error' && <TriangleAlert className="size-3.5 text-bad" />}
       </button>
+      {state === 'error' && result && <p className="px-2.5 pb-2 text-xs text-bad">{toolErrorHint(call.name, result)}</p>}
       {(t.body || (open && (result || t.detail))) && (
         <div className="space-y-1.5 px-2.5 pb-2">
           {t.body?.(call.args)}
@@ -230,9 +239,17 @@ function Item({ m, project, results, busy, onAnswer, laterUser }: { m: Message; 
           const call = { id: c.id, name: c.function.name, args: parse(c.function.arguments) }
           if (call.name === 'ask_user') return <AskCard key={c.id} call={call} answered={laterUser} onAnswer={onAnswer} />
           const r = results[c.id]
+          if (call.name === 'demo_layout' || call.name === 'compose_demo') {
+            const result = parse(r?.content || '{}')
+            if (result.questions?.length) return <AskCard key={c.id} call={{ ...call, args: { questions: result.questions } }} answered={laterUser} onAnswer={onAnswer} />
+            if (result.summary) return <div key={c.id} className="space-y-2 rounded-lg border border-ok/30 bg-ok/10 p-3" data-demo-summary>
+              <div className="flex items-center gap-2 font-medium"><Check className="size-4 text-ok" />Your synced demo is ready</div>
+              <ChatMarkdown text={`**Cleanup:** ${result.summary.message}\n\n**Duration:** ${timecode(result.summary.original)} → ${timecode(result.summary.final)}${result.layout ? `\n\n**Layout:** ${result.layout.shape} · ${result.layout.width} × ${result.layout.height} px. You can adjust it here in chat.` : ''}`} />
+            </div>
+          }
           return <ToolCard key={c.id} call={call} result={r?.content} state={r ? (r.error ? 'error' : 'done') : busy ? 'running' : 'error'} />
         })}
-        {m.content && <div className="whitespace-pre-wrap font-serif text-[16px] leading-7 text-fg" data-selectable>{m.content}</div>}
+        {m.content && <ChatMarkdown text={String(m.content)} />}
       </div>
     )
   }
@@ -276,7 +293,7 @@ function MentionList({ items, query, pick, onPick, onHover }: { items: Mention[]
   )
 }
 
-export function AgentPanel({ project, projectInfo, model, agent, anchor, onClearAnchor, attached = [], onAttach, onDetach, onAdd, onSend, onStop, ready, onKeys, inputRef, active = true }: {
+export function AgentPanel({ project, projectInfo, model, agent, anchor, onClearAnchor, attached = [], onAttach, onDetach, onAdd, onSend, onStop, ready, onKeys, inputRef, active = true, demoTools, demoToolsMessage, demoSetup, onAutoDemo }: {
   project: string
   projectInfo: Project
   model?: { provider: string; modelId: string }
@@ -295,6 +312,10 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
   ready: boolean
   onKeys(): void
   inputRef: React.RefObject<HTMLTextAreaElement | null>
+  demoTools?: ReactNode
+  demoToolsMessage?: string
+  demoSetup?: ReactNode
+  onAutoDemo?(): void
 }) {
   const [text, setText] = useState('')
   const consents = useConsents().filter(c => c.project === project)
@@ -302,7 +323,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
   const results = resultsOf(agent.messages)
   const shown = agent.messages.filter(m => m.role === 'user' || m.role === 'assistant')
 
-  useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }) }, [agent.messages.length, agent.streaming?.text.length, Object.keys(agent.pending).length, consents.length])
+  useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }) }, [agent.messages.length, agent.streaming?.text.length, Object.keys(agent.pending).length, consents.length, !!demoSetup])
 
   const submit = () => { const t = text.trim(); if (!t && !attached.length) return; onSend(t); setText('') }
   // @ in the message box: a list of the project's files, versions and clips; picking one attaches it
@@ -379,6 +400,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
       </div>
       <div className="flex items-center gap-1 px-1.5 pb-1.5">
         {onAdd && <button onClick={onAdd} title="Add files" aria-label="Add files" className="flex size-7 items-center justify-center rounded-lg text-dim hover:bg-hover hover:text-fg"><Plus className="size-4" /></button>}
+        {onAutoDemo && <Button size="sm" variant="ghost" disabled={agent.busy} onClick={onAutoDemo}>Auto Demo</Button>}
         <span className="flex-1" />
         {agent.cost > 0 && <span className="px-1 text-[11px] text-faint tabular" title="Spent on AI in this project">${agent.cost.toFixed(agent.cost < 1 ? 3 : 2)}</span>}
         <ModelPicker dir={project} picked={model} />
@@ -395,7 +417,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
     <div className="flex h-full flex-col">
       <div ref={scroller} className="flex-1 overflow-y-auto">
         <div className={cn(col, 'space-y-5 pb-8 pt-3')}>
-        {empty && (
+        {empty && !demoSetup && (
           <div className="pt-[14vh] text-center">
             <ManulCompanion agent={agent} needsConsent={consents.length > 0} active={active} hero />
             <h2 className="font-serif text-[30px] font-normal tracking-[-0.01em]">What should change?</h2>
@@ -404,17 +426,22 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
         )}
         {foldSteps(shown).map(b => b.kind === 'steps'
           ? <StepGroup key={b.ms[0].id} ms={b.ms} results={results} busy={agent.busy} />
-          : <Item key={b.m.id} m={b.m} project={projectInfo} results={results} busy={agent.busy} onAnswer={onSend} laterUser={shown.slice(b.i + 1).some(x => x.role === 'user')} />)}
+          : <div key={b.m.id} data-chat-message={b.m.id} className="space-y-3">
+              <Item m={b.m} project={projectInfo} results={results} busy={agent.busy} onAnswer={onSend} laterUser={shown.slice(b.i + 1).some(x => x.role === 'user')} />
+              {b.m.id === demoToolsMessage && demoTools && <div data-output-followup={b.m.id}>{demoTools}</div>}
+            </div>)}
         {Object.entries(agent.pending).map(([id, p]) => <ToolCard key={id} call={{ id, name: p.name, args: parse(p.args) }} state="streaming" />)}
-        {agent.streaming?.text && <div className="whitespace-pre-wrap font-serif text-[16px] leading-7 text-fg">{agent.streaming.text}</div>}
+        {agent.streaming?.text && <ChatMarkdown text={agent.streaming.text} />}
         {consents.map(c => <ConsentCard key={c.id} c={c} />)}
         {agent.error && (
           <div className="flex gap-2 rounded-lg border border-bad/30 bg-bad/10 p-2.5 text-xs text-bad"><TriangleAlert className="mt-px size-3.5 shrink-0" /><span data-selectable>{agent.error}</span></div>
         )}
+        {demoSetup}
         </div>
       </div>
 
       <div data-tour="composer" className={cn(col, 'pb-5')}>
+        {!ready && onAutoDemo && <Button size="sm" variant="ghost" onClick={onAutoDemo}>Auto Demo</Button>}
         {!empty && <ManulCompanion agent={agent} needsConsent={consents.length > 0} active={active} />}
         {box}
       </div>

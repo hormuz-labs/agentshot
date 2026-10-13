@@ -83,6 +83,14 @@ licence text in [LICENSES/driver-MIT.txt](LICENSES/driver-MIT.txt).
 - **yauzl 3.4.0** (unpacking .zip files): MIT, Copyright (c) 2014 Josh Wolfe, https://github.com/thejoshwolfe/yauzl;
   with pend (MIT).
 
+## GCC-PHAT audio synchronization reference
+
+The frequency-domain GCC-PHAT formulation in `src/main/sync.ts` is adapted into TypeScript from
+[xiongyihui/tdoa](https://github.com/xiongyihui/tdoa/blob/master/gcc_phat.py), Apache-2.0,
+Copyright (c) 2017 Yihui Xiong. Manul adds normalized-envelope matching, independent anchors,
+robust clock-drift fitting and confidence checks. The [syncstart](https://github.com/rpuntaie/syncstart)
+project (MIT) was also consulted for its FFmpeg extraction/correlation approach; no syncstart code is bundled.
+
 ## Tools downloaded on demand
 
 Downloaded only after the user agrees, into Manul's own folder: uv (Apache-2.0/MIT), faster-whisper (MIT),

@@ -19,10 +19,16 @@ import { BrowserPanel } from './BrowserPanel'
 import { EditStatus } from './EditStatus'
 import { ClipEditor } from './ClipEditor'
 import { ExportDialog } from './ExportDialog'
+import { DemoToolbox } from './DemoToolbox'
+import { DemoFollowup } from './DemoFollowup'
+import { CameraControls } from './CameraControls'
+import { VideoControls } from './VideoControls'
 import { useLiveMix, type MixSource } from '@/lib/liveMix'
 import { dbToGain, type Mix } from '../../../shared/mix'
-import { needsProxy } from '../../../shared/proxy'
-import { sameCut, timelineOfFile, type Edit } from '../../../shared/timeline'
+import { sameCut, sourceAt, timelineOfFile, type Edit } from '../../../shared/timeline'
+import { usePreview } from '@/lib/preview'
+import { demoOutputMessage } from '@/lib/demo-output'
+import { cameraAt, cameraRange } from '../../../shared/demo'
 import { Scrubber } from './Scrubber'
 import { Stage, type LiveEdit, type StageHandle } from './Stage'
 import type { Anchor, Box, Project } from '../../../shared/types'
@@ -40,18 +46,22 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const [anchor, setAnchor] = useState<Anchor | undefined>()
   // files attached to the next message: ones just added, or picked in the sidebar's tree
   const attached = useAttached(p.dir)
-  useEffect(() => { if (firstFiles?.length) attachFiles(p.dir, firstFiles) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [drawing, setDrawing] = useState(false)
   const [compare, setCompare] = useState<'after' | 'before'>('after')
   const [over, setOver] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [demoOpen, setDemoOpen] = useState(false)
+  const [demoAdjusting, setDemoAdjusting] = useState(false)
+  const openAdjustment = useRef(false)
+  const [cameraMode, setCameraMode] = useState<'move' | 'frame' | null>(null)
+  const [videoEditing, setVideoEditing] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [source, setSource] = useState<MixSource | null>(null)
   const [saving, setSaving] = useState(false)
   const [regions, setRegions] = useState<[number, number][]>([])
   // a motion clip open on the picture, to adjust or point at one of its elements
   const [editing, setEditing] = useState<{ itemId: string; clip: string; start: number } | null>(null)
-  const sentFirst = useRef(false)
+  const started = useRef(false)
   const [browsing, setBrowsing] = useState(false)
   // the film beside the chat: as wide as the row allows while the conversation keeps 320 px
   const chatRow = useRef<HTMLDivElement>(null)
@@ -87,20 +97,32 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   useEffect(() => window.manul.onSeek((dir, t) => { if (dir === p.dir && stage.current?.video) stage.current.video.currentTime = t }), [p.dir])
   useEffect(() => { if (p.proposal) setCompare('after') }, [p.proposal])
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, files = attached) => {
     const a = anchor
     const still = a ? stage.current?.still(a.box) : undefined
-    const files = attached
     setAnchor(undefined)
     setDrawing(false)
     clearAttached(p.dir)
     await window.manul.agent.send(p.dir, { text, anchor: a, still, files }).catch(e => alert((e as Error).message))
   }, [anchor, attached, p.dir])
+  const submitDemo = async (request: { text: string; files: string[] }) => {
+    setChatShut(false); setPreview(true); setBrowsing(false)
+    stage.current?.video?.pause()
+    if (!ready) throw new Error('Add an API key in Settings → Keys so Manul can generate this demo in chat.')
+    // This is a new whole-film brief, not a note on an old playhead selection. Unrelated draft attachments stay intact.
+    await window.manul.agent.send(p.dir, request)
+    detachFiles(p.dir, request.files)
+    setAnchor(undefined); setDrawing(false)
+  }
 
-  // the request typed on the start screen goes out once the project is open
+  // Startup files belong to the submitted request, or to the first draft when no request was typed.
+  // Handle that handoff once, including StrictMode's replay of mount effects.
   useEffect(() => {
-    if (firstPrompt && ready && !sentFirst.current) { sentFirst.current = true; send(firstPrompt) }
-  }, [firstPrompt, ready, send])
+    if (started.current || (firstPrompt && !ready)) return
+    started.current = true
+    if (firstPrompt) send(firstPrompt, firstFiles)
+    else if (firstFiles?.length) attachFiles(p.dir, firstFiles)
+  }, [firstPrompt, firstFiles, ready, send, p.dir])
 
   const seek = (t: number) => { const v = stage.current?.video; if (v) v.currentTime = t; setTime(t) }
   const noteHere = () => { stage.current?.video?.pause(); setAnchor(a => (a?.t1 != null ? a : { t0: time })); setInline(true) }
@@ -133,16 +155,18 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   // its pieces until it's saved as a version.
   const tl = p.timeline!
   const edited = useMemo(() => !sameCut(tl, current.timeline ?? (p.media[current.path] ? timelineOfFile(current.path, p.media[current.path]) : tl)), [tl, current, p.media])
-  const live = edited && onScreen === current
+  const live = (edited || (cameraMode && !!tl.demo) || videoEditing) && onScreen === current
   // what the timeline shows: the edit, or the proposal's pieces while it is on screen
-  const track = onScreen === current ? tl : onScreen.timeline ?? timelineOfFile(onScreen.path, p.media[onScreen.path])
+  // Fallback timelines generate piece ids: retain them across clock updates so thumbnails do not remount.
+  const track = useMemo(() => onScreen === current ? tl : onScreen.timeline ?? timelineOfFile(onScreen.path, p.media[onScreen.path]), [onScreen, current, tl, p.media])
   const liveEdit = useMemo<LiveEdit | null>(() => !live ? null : {
     pieces: tl.items.map(it => it.kind === 'media'
       ? { id: it.id, url: mediaUrl(`${p.dir}/${p.proxies?.[it.src] || it.src}`), in: it.in, out: it.out, gain: it.muted ? 0 : dbToGain(it.db || 0) }
       : { id: it.id, url: `${mediaUrl(`${p.dir}/${p.clips?.[it.clip]?.video}`)}?v=${p.clips?.[it.clip]?.updatedAt}`, in: 0, out: it.dur, gain: 0 }),
     fps: tl.fps, width: tl.width, height: tl.height,
     overlays: (tl.overlays || []).filter(o => p.clips?.[o.clip]).map(o => ({ id: o.id, url: `${mediaUrl(`${p.dir}/clips/${o.clip}/clip.html`)}?v=${p.clips![o.clip].updatedAt}`, start: o.start, dur: o.dur })),
-  }, [live, tl, p.dir, p.proxies, p.clips])
+    timeline: tl, cameraUrl: tl.demo ? mediaUrl(`${p.dir}/${cameraMode === 'frame' ? tl.demo.camera : p.proxies?.[tl.demo.camera] || tl.demo.camera}`) : undefined,
+  }, [live, tl, p.dir, p.proxies, p.clips, cameraMode])
   // the mix the version on screen was rendered with (or the edit's), heard live over its dry film
   const mix: Mix = (live ? tl.mix : onScreen.timeline?.mix) || { filmDb: 0 }
   const speechKey = live ? JSON.stringify(tl.items) : onScreen.id
@@ -184,7 +208,49 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     { id: 'timeline.render', title: 'Save the edit as a version', keywords: 'render timeline', run: () => { if (act.current.edited) act.current.saveVersion() } },
   ], [p.dir, active])
   const playable = onScreen.dry || onScreen.path
+  const liveItem = live ? sourceAt(tl, time)?.item : undefined
+  const previewMedia = liveItem?.kind === 'media' ? liveItem.src : liveItem?.kind === 'clip' ? p.clips?.[liveItem.clip]?.video || '' : playable
+  const previewCopy = usePreview(p.dir, previewMedia)
   const decide = async (accept: boolean) => setP(await window.manul.project.decide(p.dir, accept))
+  const selectedVideo = sourceAt(tl, time)?.item
+  useEffect(() => {
+    if (openAdjustment.current && tl.demo && !proposal) {
+      openAdjustment.current = false; setDemoAdjusting(true); setCameraMode('move'); setVideoEditing(false); revealCamera(tl)
+    } else { setCameraMode(null); setVideoEditing(false); setDemoAdjusting(false) }
+  }, [p.current, !!proposal])
+  const revealCamera = (timeline: typeof tl) => {
+    if (timeline.demo && !cameraAt(timeline, time)) {
+      let at = 0
+      for (const it of timeline.items) {
+        const range = it.kind === 'media' && it.src === timeline.demo.screen ? cameraRange(timeline.demo, it.in, it.out) : null
+        if (range && it.kind === 'media') { seek(at + range.s - it.in + Math.min(1, (range.e - range.s) / 2)); break }
+        at += it.kind === 'media' ? it.out - it.in : it.dur
+      }
+    }
+  }
+  const adjustDemo = async () => {
+    stage.current?.video?.pause()
+    if (proposal?.timeline?.demo) openAdjustment.current = true
+    let next = p
+    try { next = proposal?.timeline?.demo ? await window.manul.project.decide(p.dir, true) : p }
+    catch (e) { openAdjustment.current = false; throw e }
+    if (!next.timeline?.demo) throw new Error('Choose a demo version to adjust.')
+    setP(next); setChatShut(false); setPreview(true); setBrowsing(false)
+    if (!proposal) { setDemoAdjusting(true); setCameraMode('move'); setVideoEditing(false); revealCamera(next.timeline!) }
+  }
+  const openDemo = () => { setDemoOpen(true); setChatShut(false); setBrowsing(false); stage.current?.video?.pause() }
+  const shownDemo = proposal ? (proposal.timeline?.demo ? proposal : undefined) : current.timeline?.demo || tl.demo ? current : undefined
+  // Follow the producing turn, not whichever message happens to be newest. A hand-saved layout inherits its
+  // most recent agent output anchor until the agent actually produces another demo version.
+  const demoAnchor = shownDemo && (demoOutputMessage(agent.messages, shownDemo) || [...p.versions].reverse().filter(v => v.timeline?.demo).map(v => demoOutputMessage(agent.messages, v)).find(Boolean))
+  const demoSetup = demoOpen ? <DemoToolbox project={p} attached={attached} onClose={() => setDemoOpen(false)} onSubmit={submitDemo} /> : null
+  const demoTools = shownDemo ? <DemoFollowup key={demoAnchor || shownDemo.id} editing={demoAdjusting} busy={agent.busy} proposal={!!proposal} onAdjust={adjustDemo} onDone={() => { setDemoAdjusting(false); setCameraMode(null); setVideoEditing(false) }} onRender={async () => {
+      if (!ready) throw new Error('Add an API key to render the adjusted video in chat.')
+      await window.manul.agent.send(p.dir, { text: 'Render the face-layout and framing adjustments I made in the chat toolbox. They are already on the current timeline. Use rerender_timeline, preserve the existing sync and cuts, and show the updated video beside this chat.', files: [] })
+    }}>
+      <CameraControls timeline={tl} onEdit={doEdit} mode={cameraMode} sourceUrl={tl.demo ? mediaUrl(`${p.dir}/${tl.demo.camera}`) : undefined} sourceInfo={tl.demo ? p.media[tl.demo.camera] : undefined} sourceTime={cameraAt(tl, time)?.at || 0} onMode={v => { setCameraMode(v); if (v) { setVideoEditing(false); revealCamera(tl) } }} />
+      {selectedVideo?.kind === 'media' && <VideoControls item={selectedVideo} onEdit={doEdit} editing={videoEditing} onEditing={v => { stage.current?.video?.pause(); setVideoEditing(v); if (v) setCameraMode(null) }} />}
+    </DemoFollowup> : null
 
   const anchorLabel = anchor && `${timecode(anchor.t0)}${anchor.t1 != null ? `–${timecode(anchor.t1)}` : ''}${anchor.box ? ' · box' : ''}`
   const inlineAsk = inline && anchor ? (
@@ -214,15 +280,20 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
           <Button size="sm" variant="primary" onClick={() => decide(true)}><Check />Accept</Button>
         </div>
       )}
+      {onScreen.timeline?.demo?.warning && <p className="px-2 text-xs text-dim">{onScreen.timeline.demo.warning}</p>}
+      {onScreen.timeline?.demo?.summary && <p data-edit-summary className="rounded-lg bg-ok/10 px-3 py-2 text-xs text-fg"><strong>Cleanup:</strong> {onScreen.timeline.demo.summary.message}</p>}
 
       <div data-tour="picture" className="relative min-h-0 flex-1">
-        {p.media[onScreen.path] && needsProxy(p.media[onScreen.path]) && !p.proxies?.[onScreen.path] && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-xl bg-black/80 text-center text-[#a39888]">
-            <Loader2 className="size-5 animate-spin text-amber" />
-            <span>Making a preview copy for smooth playback…</span>
-            <span className="text-xs text-[#6f665b]">{needsProxy(p.media[onScreen.path]) && (needsProxy(p.media[onScreen.path]) as { why: string }).why} · exports use the original</span>
+        {previewCopy.state?.status === 'running' && (
+          <div data-preview-status className="pointer-events-none absolute bottom-3 left-3 right-3 z-10 flex items-center gap-2 rounded-lg bg-black/80 px-3 py-2 text-xs text-white">
+            <Loader2 className="size-4 shrink-0 animate-spin text-amber" />
+            <span>Making a preview copy for smooth playback… {Math.round((previewCopy.state.progress || 0) * 100)}%</span>
           </div>
         )}
+        {previewCopy.state?.status === 'failed' && <div data-preview-status className="absolute bottom-3 left-3 right-3 z-10 flex items-center gap-2 rounded-lg bg-black/80 px-3 py-2 text-xs text-white">
+          <span className="flex-1" title={previewCopy.state.error}>Preview copy failed. Playing the original where supported.</span>
+          <Button size="sm" variant="secondary" onClick={previewCopy.retry}>Retry preview</Button>
+        </div>}
         {editing && p.clips?.[editing.clip] && (
           <ClipEditor
             dir={p.dir}
@@ -239,6 +310,11 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
           ref={stage}
           src={mediaUrl(`${p.dir}/${p.proxies?.[playable] || playable}`)}
           edit={liveEdit}
+          cameraEditing={!!cameraMode}
+          cameraMode={cameraMode}
+          videoEditing={videoEditing}
+          onVideoFraming={framing => { if (selectedVideo?.kind === 'media') doEdit([{ op: 'frame', ids: [selectedVideo.id], framing }]) }}
+          onCameraLayout={layout => doEdit([{ op: 'camera', layout }])}
           onSource={setSource}
           notes={p.notes}
           time={time}
@@ -253,6 +329,9 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         />
       </div>
 
+      <div data-contextual-tools className="max-h-[34vh] shrink-0 space-y-2 overflow-auto">
+      {!tl.demo && selectedVideo?.kind === 'media' && !proposal && <VideoControls item={selectedVideo} onEdit={doEdit} editing={videoEditing} onEditing={v => { stage.current?.video?.pause(); setVideoEditing(v); if (v) setCameraMode(null) }} />}
+      </div>
       <Scrubber
         dir={p.dir}
         revision={onScreen.createdAt}
@@ -361,6 +440,10 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
               ready={ready}
               onKeys={onKeys}
               inputRef={input}
+              demoTools={demoTools}
+              demoToolsMessage={demoAnchor}
+              demoSetup={demoSetup}
+              onAutoDemo={Object.values(p.files || {}).filter(f => f.kind === 'video').length >= 2 && !proposal ? openDemo : undefined}
             />
           </div>
         )}

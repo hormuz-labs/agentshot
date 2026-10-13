@@ -150,7 +150,7 @@ const run = (args: string[], cwd: string, signal?: AbortSignal) =>
 /** Measure a video (cached in <project>/.cache/analysis by file size and time). */
 export async function analyze(projectDir: string, file: string, signal?: AbortSignal): Promise<Analysis> {
   const st = await stat(file)
-  const key = createHash('sha256').update(`${file}:${st.size}:${st.mtimeMs}:v2`).digest('hex').slice(0, 24)
+  const key = createHash('sha256').update(`${file}:${st.size}:${st.mtimeMs}:v3-audio-origin`).digest('hex').slice(0, 24)
   const cacheDir = join(projectDir, '.cache', 'analysis')
   const cached = join(cacheDir, `${key}.json`)
   try { return JSON.parse(await readFile(cached, 'utf8')) } catch { /* measure it */ }
@@ -166,7 +166,7 @@ export async function analyze(projectDir: string, file: string, signal?: AbortSi
         `[b]fps=${STATS_FPS},signalstats,metadata=mode=print:file=stats.txt,nullsink`,
         `[c]vidstabdetect=shakiness=6:accuracy=9:stepsize=6:fileformat=ascii:result=shake.trf[v]`,
       ] : []),
-      ...(info.hasAudio ? ['[0:a]ebur128=peak=true:framelog=verbose,silencedetect=n=-45dB:d=0.6[aud]'] : []),
+      ...(info.hasAudio ? ['[0:a]aresample=48000:async=1:first_pts=0,ebur128=peak=true:framelog=verbose,silencedetect=n=-45dB:d=0.6[aud]'] : []),
     ]
     if (!graph.length) throw new Error('This file has neither picture nor sound.')
     const log = await run(['-hide_banner', '-nostats', '-loglevel', 'info', '-i', file, '-filter_complex', graph.join(';'),

@@ -28,15 +28,25 @@ export function regionsOnTimeline(tl: Timeline, transcripts: Record<string, Tran
   const out: Region[] = []
   let at = 0
   for (const it of tl.items) {
-    if (it.kind === 'media' && transcripts[it.src]) {
-      for (const [a, b] of speechRegions(transcripts[it.src]!)) {
+    const camera = it.kind === 'media' && it.src === tl.demo?.screen && tl.demo.audio === 'camera' ? tl.demo : undefined
+    const src = camera ? camera.camera : it.kind === 'media' ? it.src : ''
+    if (it.kind === 'media' && transcripts[src]) {
+      for (const region of speechRegions(transcripts[src]!)) {
+        const [a, b] = camera ? region.map(t => camera.sync.offset + t * camera.sync.rate) : region
         const s = Math.max(a, it.in), e = Math.min(b, it.out)
         if (e > s) out.push([r3(at + s - it.in), r3(at + e - it.in)])
+      }
+      if (camera && transcripts[it.src]) {
+        const end = camera.sync.offset + camera.sync.rate * camera.cameraDuration
+        for (const [a, b] of speechRegions(transcripts[it.src]!)) for (const [lo, hi] of [[it.in, Math.min(it.out, camera.sync.offset)], [Math.max(it.in, end), it.out]]) {
+          const s = Math.max(a, lo), e = Math.min(b, hi)
+          if (e > s) out.push([r3(at + s - it.in), r3(at + e - it.in)])
+        }
       }
     }
     at += length(it)
   }
-  return out
+  return out.sort((a, b) => a[0] - b[0])
 }
 
 /** Keyframes: 0 dB away from speech, −duckDb during it, linear ramps of `ramp` seconds before and after. */

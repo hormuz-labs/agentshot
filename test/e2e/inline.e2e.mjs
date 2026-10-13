@@ -21,10 +21,10 @@ try {
   await win.waitForSelector('text=What are we making?')
   await dismissOnboarding(win)
   await app.evaluate(({ ipcMain }, f) => {
-    ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f)
+    ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f])
     ipcMain.removeHandler('agent:send'); ipcMain.handle('agent:send', (_e, dir, msg) => { (globalThis.__sent ||= []).push(msg) })
   }, join(tmp, 'clip.mp4'))
-  await win.click('text=Drop a video here'); await win.locator('button[aria-label="Start"]').click()
+  await win.click('[data-tour="import"]'); await win.locator('button[aria-label="Start"]').click()
   await win.waitForSelector('[data-project-title]')
   await win.waitForFunction(() => document.querySelector('video')?.readyState >= 2)
   await win.click('[aria-label="Conversation"]') // shut the conversation: the film takes the window

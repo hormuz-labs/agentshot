@@ -16,7 +16,7 @@
 ```bash
 git clone git@github.com:hormuz-labs/manul.git && cd manul
 npm install                  # also fetches the pinned ffmpeg/ffprobe and BrowserSkill for this machine
-./scripts/build-whisper.sh   # builds the bundled whisper-cli (needs cmake: brew install cmake)
+npm run setup:native        # builds whisper, beats, speakers and vision; checks tools/models (needs cmake + a C/C++ compiler)
 npm run dev                  # Manul, with hot reload
 ```
 
@@ -28,6 +28,8 @@ On macOS, `npm run dev` and `npm start` use a cached `Manul.app` development lau
 |---|---|
 | `npm run dev` | The app with hot reload |
 | `npm run typecheck` | TypeScript, no emit |
+| `npm run build:ml` | Builds the native speaker and face/object detection runners for this machine |
+| `npm run setup:native` | Completes and verifies all native tool/model setup for the host Mac/Linux architecture |
 | `npm run brand` | Regenerates the full-body 3D mascot logo and all app/account icon assets |
 | `npm run test:mascot` | Checks gaze tracking, touch response, paw/growl interactions, and compact controls in Electron |
 | `npm test` | Unit and integration tests (Vitest) |

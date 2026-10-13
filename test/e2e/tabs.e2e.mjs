@@ -28,8 +28,8 @@ try {
   await win.waitForSelector('text=What are we making?')
   await dismissOnboarding(win)
   const openFile = async name => {
-    await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, `${name}.mp4`))
-    await win.click('text=Drop a video here')
+    await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, `${name}.mp4`))
+    await win.click('[data-tour="import"]')
     await win.locator('button:has(svg.lucide-arrow-up)').click()
     await win.waitForSelector(`[data-project-title="${name}"]`)
   }

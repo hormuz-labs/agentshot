@@ -5,6 +5,8 @@ import type { AccountStatus, Anchor, BrowserMode, BrowserState, ChromeBsk, Conse
 import type { CustomProvider, CustomProviderInfo } from '../shared/providers'
 import type { Cue } from '../shared/subtitles'
 import type { Edit } from '../shared/timeline'
+import type { PreviewState } from '../shared/proxy'
+import type { DemoOptions } from '../main/demo'
 import type { SubtitleLink } from '../shared/types'
 import type { TelemetryState } from '../shared/telemetry'
 import type { SettingsOpened } from '../shared/onboarding'
@@ -68,6 +70,10 @@ const api = {
   },
   transcript: (dir: string, mediaRel: string, make = false) => ipcRenderer.invoke('transcript:get', dir, mediaRel, make) as Promise<Transcript | null>,
   thumbnails: (dir: string, src: string, count: number, start?: number, end?: number) => ipcRenderer.invoke('media:thumbnails', dir, src, count, start, end) as Promise<string[]>,
+  preview: {
+    prepare: (dir: string, media: string, retry = false) => ipcRenderer.invoke('preview:prepare', dir, media, retry) as Promise<PreviewState>,
+    onState: on<[string, string, PreviewState]>('preview:state'),
+  },
   /** The edit by hand: changes at once (no render) and can be undone; it renders on export or when saved as a version. */
   timeline: {
     edit: (dir: string, edits: Edit[]) => ipcRenderer.invoke('timeline:edit', dir, edits) as Promise<Project>,
@@ -75,6 +81,10 @@ const api = {
     /** Render the edit into a version and put it on screen; resolves to its id. */
     render: (dir: string) => ipcRenderer.invoke('timeline:render', dir) as Promise<string>,
     /** Put footage into the edit at t (seconds of the film). */
+  },
+  demo: {
+    cancel: (dir: string) => ipcRenderer.invoke('demo:cancel', dir) as Promise<void>,
+    create: (dir: string, options: DemoOptions) => ipcRenderer.invoke('demo:create', dir, options) as Promise<{ version: string; duration: number; removed: number; warning?: string }>,
   },
   /** Who speaks when in a media file (make: work it out as a background job if not done yet). */
   /** The subtitles that go with a media file, their lines, and the subtitle files there are to choose from. */
@@ -146,8 +156,8 @@ const api = {
   theme: { set: (t: 'light' | 'dark' | 'system') => ipcRenderer.invoke('theme:set', t) },
   project: {
     recent: () => ipcRenderer.invoke('project:recent') as Promise<RecentProject[]>,
-    pick: () => ipcRenderer.invoke('project:pick') as Promise<string | null>,
-    create: (file: string) => ipcRenderer.invoke('project:create', file) as Promise<Project>,
+    pick: () => ipcRenderer.invoke('project:pick') as Promise<string[]>,
+    create: (files: string | string[]) => ipcRenderer.invoke('project:create', files) as Promise<Project>,
     open: (dir: string) => ipcRenderer.invoke('project:open', dir) as Promise<Project>,
     close: (dir: string) => ipcRenderer.invoke('project:close', dir),
     reveal: (dir: string) => ipcRenderer.invoke('project:reveal', dir),

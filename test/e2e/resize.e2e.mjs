@@ -26,8 +26,8 @@ try {
   await size(win, 1800)
   await win.waitForSelector('text=What are we making?')
   await dismissOnboarding(win)
-  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'clip.mp4'))
-  await win.click('text=Drop a video here'); await win.locator('button[aria-label="Start"]').click()
+  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, 'clip.mp4'))
+  await win.click('[data-tour="import"]'); await win.locator('button[aria-label="Start"]').click()
   await win.waitForSelector('[data-project-title]')
   await win.waitForTimeout(300) // the project's first layout
   const side = '[aria-label="Sidebar"]'

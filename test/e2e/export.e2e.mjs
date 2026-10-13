@@ -18,18 +18,22 @@ execFileSync(join(BIN, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-
 const probe = f => JSON.parse(execFileSync(join(BIN, 'ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_streams', f], { encoding: 'utf8' })).streams.find(s => s.codec_type === 'video')
 
 const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'projects') } })
-try {
+const run = async () => {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
   await dismissOnboarding(win)
-  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'talk.mp4'))
-  await win.click('text=Drop a video here')
+  if (!(await win.evaluate(() => window.manul.whisper.status())).active) {
+    console.log('export e2e: skipped (no speech recognition in the test profile)')
+    return
+  }
+  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, 'talk.mp4'))
+  await win.click('[data-tour="import"]')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForSelector('video')
   // transcribed (the captions come from it), read from the project rather than the screen
   const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
   const heard = await win.waitForFunction(d => window.manul.project.open(d).then(p => Object.keys(p.transcripts || {}).length > 0), dir, { timeout: 60000, polling: 1000 }).then(() => true, () => false)
-  if (!heard) { console.log('export e2e: skipped (no speech recognition)'); process.exit(0) }
+  if (!heard) { console.log('export e2e: skipped (no speech recognition)'); return }
 
   const exportAs = async (label, captions, file) => {
     await app.evaluate(({ dialog }, f) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }) }, join(tmp, file))
@@ -37,7 +41,9 @@ try {
     await win.click(`button:has-text("${label}")`)
     await win.click(`button:has-text("${captions}")`)
     await win.locator('[role="dialog"] button:has-text("Export")').click()
-    await win.waitForSelector('text=Show', { timeout: 120000 })
+    await win.waitForSelector('text=Show', { timeout: 120000 }).catch(async e => {
+      throw new Error(`${e.message}\nExport dialog: ${await win.locator('[role="dialog"]').innerText()}`)
+    })
     await win.keyboard.press('Escape')
   }
 
@@ -53,6 +59,7 @@ try {
   assert.equal(l.width, 1920); assert.equal(l.height, 1080)
   assert.ok(!existsSync(join(tmp, 'landscape.srt')), 'burned captions leave no .srt behind')
   console.log('export e2e: ok')
-} finally {
+}
+try { await run() } finally {
   await app.close()
 }

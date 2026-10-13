@@ -27,8 +27,8 @@ try {
   await win.waitForSelector('[role="dialog"] h2:text-is("Keys")')
   await win.keyboard.press('Escape')
   // open a project, then the palette from the menu, search, run
-  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'm.mp4'))
-  await win.click('text=Drop a video here')
+  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, 'm.mp4'))
+  await win.click('[data-tour="import"]')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForSelector('video')
   await click('Command Palette…')
