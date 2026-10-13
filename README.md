@@ -89,7 +89,7 @@ The conversation fills the window, and your film plays beside it with each propo
   <img src="docs/inline.png" alt="A box drawn around the lower third on the frame, with a message box open just under it: “make the name bigger”" width="100%">
 </p>
 
-Your projects are in the sidebar, the one on screen opened up into its chats and its files: click a file to attach it to your next message, or drag footage onto the timeline to put it in the film. Drag a piece by its name to move it somewhere else; <kbd>⌘Z</kbd> takes any of it back. Drag a divider to give the film more room, or keep dragging to fold a pane away.
+Your projects are in the sidebar, the one on screen opened up into its chats and its files: click a file to attach it to your next message, or drag footage onto the timeline to put it in the film. Hover a project to close it or move its whole folder to the Trash. Drag a piece by its name to move it somewhere else; <kbd>⌘Z</kbd> takes any of it back. Drag a divider to give the film more room, or keep dragging to fold a pane away.
 
 <table>
 <tr>

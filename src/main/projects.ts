@@ -35,6 +35,12 @@ function touchRecent(p: Project) {
   writeFileSync(recentFile(), JSON.stringify(list, null, 1))
 }
 
+/** Move a whole project to the system Trash and remove it from the recent-project list. */
+export async function deleteProject(p: Project, trash: (abs: string) => Promise<void>) {
+  await trash(p.dir)
+  writeFileSync(recentFile(), JSON.stringify(recent().filter(r => r.dir !== p.dir), null, 1))
+}
+
 /** A timeline that is just this media file, in its own size and frame rate (even sizes, sane rate). */
 export const timelineOf = (src: string, info: MediaInfo) => timelineOfFile(src, info)
 

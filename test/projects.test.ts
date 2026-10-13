@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { app } from 'electron'
 import { FFMPEG } from '../src/main/media'
 
 const root = mkdtempSync(join(tmpdir(), 'manul-proj-'))
@@ -60,6 +61,16 @@ describe('projects', () => {
     const b = await Projects.createFromFile(clip)
     expect(b.dir).not.toBe(a.dir)
     expect(b.dir).toMatch(/my-clip-\d+$/)
+  })
+
+  it('moves a project to the Trash and removes its recent-project record', async () => {
+    const p = await Projects.createFromFile(clip)
+    const trashed: string[] = []
+    await Projects.deleteProject(p, async dir => { trashed.push(dir); rmSync(dir, { recursive: true, force: true }) })
+    expect(trashed).toEqual([p.dir])
+    expect(existsSync(p.dir)).toBe(false)
+    const saved = JSON.parse(readFileSync(join(app.getPath('userData'), 'recent.json'), 'utf8')) as { dir: string }[]
+    expect(saved.some(r => r.dir === p.dir)).toBe(false)
   })
 
   it('imports media under a free name and remembers notes with stills', async () => {

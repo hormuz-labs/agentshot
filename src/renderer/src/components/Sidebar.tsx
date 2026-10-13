@@ -1,7 +1,7 @@
 // The sidebar, as in Claude's app: search, a new project, every project, the one on screen opened up as a tree of its
 // chats and its files, and settings at the foot. Open projects keep working in the background.
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronRight, CircleHelp, Loader2, PanelLeft, Plus, Search, Settings, Sparkles, Brain, X } from 'lucide-react'
+import { ChevronRight, CircleHelp, Loader2, PanelLeft, Plus, Search, Settings, Sparkles, Brain, Trash2, X } from 'lucide-react'
 import { Tip } from '@/components/ui/tooltip'
 import { useAgent } from '@/lib/agui'
 import { cn } from '@/lib/utils'
@@ -48,8 +48,16 @@ function Branch({ label, count, add, addLabel, children }: { label: string; coun
   )
 }
 
-function ProjectRow({ dir, title, active, open, project, onSelect, onClose }: { dir: string; title: string; active: boolean; open: boolean; project?: Project; onSelect(): void; onClose(): void }) {
+function ProjectRow({ dir, title, active, open, project, onSelect, onClose, onDelete }: { dir: string; title: string; active: boolean; open: boolean; project?: Project; onSelect(): void; onClose(): void; onDelete(): Promise<void> }) {
   const busy = useAgent(dir).busy
+  const [sure, setSure] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  useEffect(() => { if (!sure) return; const t = setTimeout(() => setSure(false), 4000); return () => clearTimeout(t) }, [sure])
+  const remove = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setDeleting(true)
+    try { await onDelete() } catch { /* the parent shows the error */ } finally { setDeleting(false); setSure(false) }
+  }
   const convs = [...(project?.conversations || [])].reverse()
   return (
     <div>
@@ -60,6 +68,13 @@ function ProjectRow({ dir, title, active, open, project, onSelect, onClose }: { 
         {open && (
           <button onClick={e => { e.stopPropagation(); onClose() }} title="Close project"
             className="rounded p-0.5 text-faint opacity-0 hover:text-fg group-hover:opacity-100"><X className="size-3.5" /></button>
+        )}
+        {sure ? (
+          <button disabled={deleting} onClick={remove} title="Moves the project to the Trash"
+            className="rounded bg-bad/15 px-1.5 py-0.5 text-[11px] font-medium text-bad hover:bg-bad/25 disabled:opacity-60">{deleting ? <Loader2 className="size-3 animate-spin" /> : 'Delete'}</button>
+        ) : (
+          <button onClick={e => { e.stopPropagation(); setSure(true) }} aria-label={`Delete ${title}`} title="Delete project (moves to the Trash)"
+            className="rounded p-0.5 text-faint opacity-0 hover:bg-bad/15 hover:text-bad focus:opacity-100 group-hover:opacity-100"><Trash2 className="size-3.5" /></button>
         )}
       </div>
       {/* the project on screen, opened up: its chats and its files */}
@@ -82,9 +97,9 @@ function ProjectRow({ dir, title, active, open, project, onSelect, onClose }: { 
   )
 }
 
-export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onSettings, onCollapse }: {
+export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onDelete, onSettings, onCollapse }: {
   open: string[]; active: string | null; loaded: Record<string, Project>
-  onNew(): void; onSelect(dir: string): void; onClose(dir: string): void; onSettings(s: Section): void; onCollapse(): void
+  onNew(): void; onSelect(dir: string): void; onClose(dir: string): void; onDelete(dir: string): Promise<void>; onSettings(s: Section): void; onCollapse(): void
 }) {
   const [recent, setRecent] = useState<RecentProject[]>([])
   const [q, setQ] = useState('')
@@ -125,7 +140,7 @@ export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onSett
         <div className="space-y-px">
           {rows.map(r => (
             <ProjectRow key={r.dir} dir={r.dir} title={info(r.dir)?.title || r.title} active={r.dir === active} open={open.includes(r.dir)}
-              project={info(r.dir)} onSelect={() => onSelect(r.dir)} onClose={() => onClose(r.dir)} />
+              project={info(r.dir)} onSelect={() => onSelect(r.dir)} onClose={() => onClose(r.dir)} onDelete={async () => { await onDelete(r.dir); setRecent(x => x.filter(p => p.dir !== r.dir)) }} />
           ))}
         </div>
       </div>

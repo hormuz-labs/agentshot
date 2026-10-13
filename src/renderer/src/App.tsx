@@ -71,6 +71,14 @@ export function App() {
     setProjects(x => { const { [dir]: _, ...rest } = x; return rest })
     window.manul.project.close(dir)
   }, [])
+  const deleteProject = useCallback(async (dir: string) => {
+    try { await window.manul.project.delete(dir) } catch (e) {
+      setNotice((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+      throw e
+    }
+    setTabs(t => closeTab(t, dir))
+    setProjects(x => { const { [dir]: _, ...rest } = x; return rest })
+  }, [])
 
   const mod = navigator.platform.startsWith('Mac') ? '⌘' : 'Ctrl+'
   useCommands([
@@ -110,7 +118,7 @@ export function App() {
         {!collapsed && (
           <div className="relative h-full shrink-0" style={{ width: sidebar.width }}>
             <Sidebar open={tabs.open} active={tabs.active} loaded={loaded}
-              onNew={() => setTabs(t => ({ ...t, active: null }))} onSelect={selectDir} onClose={close}
+              onNew={() => setTabs(t => ({ ...t, active: null }))} onSelect={selectDir} onClose={close} onDelete={deleteProject}
               onSettings={setSettings} onCollapse={() => setCollapsed(true)} />
             <Resizer pane={sidebar} edge="right" label="Resize the sidebar" snap={{ self: setCollapsed }} />
           </div>

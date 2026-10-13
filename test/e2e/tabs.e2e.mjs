@@ -3,7 +3,7 @@ import { _electron as electron } from 'playwright-core'
 import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -56,14 +56,20 @@ try {
   await win.waitForTimeout(300)
   assert.equal(await openCount(), 2)
   assert.match(await shown(), /gamma$/)
-  await win.waitForTimeout(500) // the open projects are saved
+  // delete gamma → its project folder moves to the Trash and alpha is selected
+  await win.click('[data-project-row$="/gamma"] button[title="Delete project (moves to the Trash)"]')
+  await win.click('[data-project-row$="/gamma"] button:has-text("Delete")')
+  await win.waitForSelector('[data-project-row$="/alpha"][aria-current="true"]')
+  assert.equal(await openCount(), 1)
+  assert.equal(existsSync(join(tmp, 'p', 'gamma')), false)
+  await win.waitForTimeout(500) // the remaining open project is saved
   await app.close()
 
-  // relaunch: alpha and gamma come back, gamma on screen
+  // relaunch: only alpha comes back
   app = await launch()
   win = await app.firstWindow()
-  await win.waitForSelector('[data-project-row$="/gamma"][aria-current="true"]')
-  assert.equal(await openCount(), 2)
+  await win.waitForSelector('[data-project-row$="/alpha"][aria-current="true"]')
+  assert.equal(await openCount(), 1)
   console.log('tabs e2e: ok')
 } finally {
   await app.close()

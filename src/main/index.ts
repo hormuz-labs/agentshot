@@ -609,6 +609,13 @@ function wire() {
     return previews.state(dir, media)
   })
   ipcMain.handle('project:close', (_e, dir: string) => { agent?.close(dir); open.delete(dir) })
+  ipcMain.handle('project:delete', async (_e, dir: string) => {
+    const p = open.get(dir) || await Projects.load(dir)
+    await agent?.stop(dir)
+    await Projects.deleteProject(p, abs => shell.trashItem(abs))
+    agent?.close(dir)
+    open.delete(dir)
+  })
   ipcMain.handle('project:reveal', (_e, dir: string) => shell.openPath(dir))
   // ---------------------------------------------------------------- the browser panel and which browser the agent drives
   ipcMain.handle('browser:state', () => browser?.state() ?? { tabs: [], active: null, bsk: { connected: false, status: 'starting' } })
