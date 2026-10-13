@@ -128,8 +128,21 @@ try {
   assert.match(adjustmentRequests[1].text, /rerender_timeline/)
   assert.deepEqual(adjustmentRequests[1].files, [])
   await win.locator('[data-camera-controls]').waitFor({ state: 'detached' })
-  await win.evaluate(dir => window.manul.timeline.render(dir), dir)
+  // Save and Export while the same adjusted timeline is still rendering: one version, never two writers.
+  await app.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: file }) }, join(tmp, 'concurrent.mp4'))
+  const beforeRace = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
+  const [saved, savedAgain, concurrentExport] = await win.evaluate(dir => Promise.all([
+    window.manul.timeline.render(dir), window.manul.timeline.render(dir),
+    window.manul.export.run(dir, { preset: 'original', captions: 'none' }),
+  ]), dir)
+  assert.equal(saved, savedAgain, 'simultaneous saves share the same render')
+  assert.equal(concurrentExport.file, join(tmp, 'concurrent.mp4'))
   p = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
+  assert.equal(p.versions.length, beforeRace.versions.length + 1, 'Save/Export adds just one completed version')
+  assert.equal(new Set(p.versions.map(v => v.path)).size, p.versions.length, 'versions never share a writable render path')
+  assert.deepEqual(p.timeline.demo.sync, beforeRace.timeline.demo.sync, 'layout/export retains measured sync exactly')
+  assert.deepEqual(p.timeline.items, beforeRace.timeline.items, 'layout/export retains linked cuts and framing exactly')
+  ff('-xerror', '-i', join(tmp, 'concurrent.mp4'), '-f', 'null', '-')
   assert.equal(p.timeline.demo.camera, 'media/camera.mp4')
   assert.equal(p.timeline.demo.sync.reliable, true)
   assert.ok(p.timeline.demo.layout.framing.y < 0)

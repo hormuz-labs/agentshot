@@ -7,6 +7,7 @@ import { dirname, extname, join, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { startAgent, type AgentHandle } from './agent'
 import { renderCuts } from './cuts'
+import { renderOutput, TimelineRenders } from './timeline-renders'
 import { planDemo, type DemoOptions } from './demo'
 import { demoHint } from '../shared/demo'
 import { renderClip, setClipProtocol } from './clips'
@@ -300,12 +301,13 @@ async function mixInto(p: Project, tl: Timeline, dryRel: string, outRel: string)
   const mix = tl.mix!
   let commands: string | undefined
   if (mix.music && mix.music.duckDb > 0) {
-    commands = '.manul-duck.cmd'
+    commands = `${outRel}.duck.cmd`
     await writeFile(join(p.dir, commands), mixCommands(duckEnvelope(regionsOnTimeline(tl, await transcriptsFor(p, tl)), mix.music.duckDb)))
   }
   const args = mixArgs({ dry: dryRel, duration: timelineDuration(tl), mix, commands, out: outRel })
-  await new Promise<void>((ok, fail) => execFile(FFMPEG, ['-y', '-loglevel', 'error', ...args], { cwd: p.dir, maxBuffer: 1 << 24 }, (err, _o, stderr) => (err ? fail(new Error(stderr.slice(-1500) || err.message)) : ok())))
-  if (commands) await rm(join(p.dir, commands), { force: true })
+  try {
+    await new Promise<void>((ok, fail) => execFile(FFMPEG, ['-y', '-loglevel', 'error', ...args], { cwd: p.dir, maxBuffer: 1 << 24 }, (err, _o, stderr) => (err ? fail(new Error(stderr.slice(-1500) || err.message)) : ok())))
+  } finally { if (commands) await rm(join(p.dir, commands), { force: true }) }
 }
 
 /** The film's mix changed only: reuse the version on screen as the dry film and mix it (fast: audio only). */
@@ -313,9 +315,8 @@ async function applyMix(p: Project, mix: Mix) {
   const cur = p.versions.find(v => v.id === p.current)!
   const tl = { ...(cur.timeline || p.timeline!), mix }
   const dry = cur.dry || cur.path
-  const out = join('renders', `mix-${p.versions.length + 1}.mp4`)
-  await asJob('Mixing', 'render', () => mixInto(p, tl, dry, out), { project: p.dir, doneTitle: 'Mixed' })
-  const v = await Projects.addVersion(p, join(p.dir, out), describeMix(mix), 'user', tl, join(p.dir, dry))
+  const files = await renderOutput(p.dir, 'mix', false, o => asJob('Mixing', 'render', () => mixInto(p, tl, dry, o.final), { project: p.dir, doneTitle: 'Mixed' }))
+  const v = await Projects.addVersion(p, join(p.dir, files.final), describeMix(mix), 'user', tl, join(p.dir, dry))
   Projects.accept(p, v.id)
   await checkpoint(p, describeMix(mix))
   return v.id
@@ -334,42 +335,37 @@ async function decideVersion(p: Project, accept: boolean) {
 }
 
 /** Render a timeline into renders/ and propose it as a version (or, for the user's own edits, make it current). */
-async function proposeTimeline(p: Project, tl: Timeline, title: string, by: 'agent' | 'user' = 'agent', propose = by === 'agent', signal?: AbortSignal) {
-  const n = p.versions.length + 1
+const timelineRenders = new TimelineRenders({ render: renderTimeline, addVersion: Projects.addVersion, checkpoint, preview: ensureProxy })
+const proposeTimeline = (p: Project, tl: Timeline, title: string, by: 'agent' | 'user' = 'agent', propose = by === 'agent', signal?: AbortSignal) =>
+  timelineRenders.request(p, tl, title, by, propose, signal)
+
+async function renderTimeline(p: Project, tl: Timeline, title: string, signal?: AbortSignal) {
   const mixed = !!tl.mix && (!!tl.mix.music || tl.mix.filmDb !== 0)
-  const final = join('renders', `timeline-${n}.mp4`)
-  const out = mixed ? join('renders', `timeline-${n}.dry.mp4`) : final
   const rendered = (id: string) => p.clips?.[id]?.video && existsSync(join(p.dir, p.clips[id].video))
   for (const id of new Set([...tl.items.flatMap(it => (it.kind === 'clip' ? [it.clip] : [])), ...(tl.overlays || []).map(o => o.clip)])) if (!rendered(id)) await bakeClip(p, id)
-  const args = composeArgs(tl, {
-    inputOf: it => (it.kind === 'media' ? it.src : p.clips![it.clip].video),
-    hasAudio: it => it.kind === 'media' && !!p.media[it.src]?.hasAudio,
-    overlayOf: o => p.clips![o.clip].video,
-    out,
+  return renderOutput(p.dir, 'timeline', mixed, async ({ final, out }) => {
+    const args = composeArgs(tl, {
+      inputOf: it => (it.kind === 'media' ? it.src : p.clips![it.clip].video),
+      hasAudio: it => it.kind === 'media' && !!p.media[it.src]?.hasAudio,
+      overlayOf: o => p.clips![o.clip].video,
+      out,
+    })
+    await asJob(`Rendering “${title}”`, 'render', async j => {
+      j.progress(null, `${timelineDuration(tl).toFixed(1)} s`)
+      // only cuts of one file: most of the picture is copied as it is (fast); anything else, or if that fails, in full
+      const cut = await renderCuts({ ffmpeg: FFMPEG, ffprobe: FFPROBE, cwd: p.dir, tl, out, progress: f => j.progress(f) })
+        .catch(e => ({ ok: false as const, why: `it failed: ${e instanceof Error ? e.message : e}` }))
+      if (cut.ok) return cut.copied
+      console.info(`Rendering “${title}” in full: ${cut.why}`)
+      await new Promise<void>((ok, fail) => execFile(FFMPEG, ['-y', '-loglevel', 'error', ...args], { cwd: p.dir, maxBuffer: 1 << 24, signal }, (err, _o, stderr) => (err ? fail(new Error(stderr.slice(-1500) || err.message)) : ok())))
+    }, { project: p.dir, doneTitle: `Rendered “${title}”`, doneDetail: copied => (copied ? `Copied ${Math.round(copied * 100)}% of the picture as it was` : undefined) })
+    if (mixed) await asJob('Mixing', 'render', () => mixInto(p, tl, out, final), { project: p.dir, doneTitle: 'Mixed' })
+    signal?.throwIfAborted()
+    if (tl.demo) {
+      const info = await probe(join(p.dir, final))
+      if (Math.abs(info.duration - timelineDuration(tl)) > Math.max(0.15, 2 / tl.fps)) throw new Error(`Demo render timing check failed: expected ${timelineDuration(tl).toFixed(3)} s, got ${info.duration.toFixed(3)} s. Sync measurements are preserved; check source stream timestamps before retrying.`)
+    }
   })
-  await asJob(`Rendering “${title}”`, 'render', async j => {
-    j.progress(null, `${timelineDuration(tl).toFixed(1)} s`)
-    // only cuts of one file: most of the picture is copied as it is (fast); anything else, or if that fails, in full
-    const cut = await renderCuts({ ffmpeg: FFMPEG, ffprobe: FFPROBE, cwd: p.dir, tl, out, progress: f => j.progress(f) })
-      .catch(e => ({ ok: false as const, why: `it failed: ${e instanceof Error ? e.message : e}` }))
-    if (cut.ok) return cut.copied
-    console.info(`Rendering “${title}” in full: ${cut.why}`)
-    await new Promise<void>((ok, fail) => execFile(FFMPEG, ['-y', '-loglevel', 'error', ...args], { cwd: p.dir, maxBuffer: 1 << 24, signal }, (err, _o, stderr) => (err ? fail(new Error(stderr.slice(-1500) || err.message)) : ok())))
-  }, { project: p.dir, doneTitle: `Rendered “${title}”`, doneDetail: copied => (copied ? `Copied ${Math.round(copied * 100)}% of the picture as it was` : undefined) })
-  if (mixed) await asJob('Mixing', 'render', () => mixInto(p, tl, out, final), { project: p.dir, doneTitle: 'Mixed' })
-  signal?.throwIfAborted()
-  if (tl.demo) {
-    const info = await probe(join(p.dir, final))
-    if (Math.abs(info.duration - timelineDuration(tl)) > Math.max(0.15, 2 / tl.fps)) throw new Error(`Demo render timing check failed: expected ${timelineDuration(tl).toFixed(3)} s, got ${info.duration.toFixed(3)} s. Sync measurements are preserved; check source stream timestamps before retrying.`)
-  }
-  if (propose && p.proposal) p.versions = p.versions.filter(v => v.id !== p.proposal)
-  const v = await Projects.addVersion(p, join(p.dir, final), title, by, tl, mixed ? join(p.dir, out) : undefined)
-  if (propose) p.proposal = v.id
-  else Projects.accept(p, v.id)
-  await checkpoint(p, propose ? `Proposed “${title}”` : title)
-  ensureProxy(p, v.path)
-  if (v.dry) ensureProxy(p, v.dry)
-  return v.id
 }
 
 const demosRunning = new Map<string, AbortController>()
@@ -455,6 +451,12 @@ async function undoEdit(p: Project, redo: boolean) {
 /** Render the edit into a version and put it on screen (the user's own work: no before/after). */
 async function renderEdit(p: Project) {
   if (!Projects.edited(p)) return p.current
+  const proposed = p.versions.find(v => v.id === p.proposal)
+  if (proposed?.timeline && sameCut(proposed.timeline, p.timeline)) {
+    Projects.accept(p, proposed.id)
+    await checkpoint(p, `Saved “${proposed.title}”`)
+    return proposed.id
+  }
   const u = undoOf(p)
   const id = await proposeTimeline(p, p.timeline!, u.since.length ? summary(u.since) : 'Edited by hand', 'user', false)
   return id
@@ -464,10 +466,10 @@ async function renderEdit(p: Project) {
 export type ExportRequest = { preset: ExportOptions['preset']; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string }
 
 /** Export the version on screen to outAbs (and an .srt next to it when asked). */
-async function exportFilm(p: Project, req: ExportRequest, outAbs: string, by: 'user' | 'agent') {
+async function exportFilm(p: Project, req: ExportRequest, outAbs: string, by: 'user' | 'agent', version = p.current) {
   const started = Date.now()
   const done = (ok: boolean) => telemetry.track('export finished', { preset: req.preset, captions: req.captions, by, ok, seconds: (Date.now() - started) / 1000 })
-  const v = p.versions.find(x => x.id === p.current)!
+  const v = p.versions.find(x => x.id === version)!
   const info = p.media[v.path]
   return asJob(`Exporting ${outAbs.split('/').pop()}`, 'render', async j => {
     let srt: string | undefined
@@ -659,8 +661,8 @@ function wire() {
     const suffix = { original: '', landscape: '-16x9', vertical: '-9x16', square: '-1x1' }[req.preset]
     const r = await dialog.showSaveDialog(win!, { title: 'Export', defaultPath: join(app.getPath('videos'), `${p.title}${suffix}.mp4`), filters: [{ name: 'MP4 video', extensions: ['mp4'] }] })
     if (r.canceled || !r.filePath) return null
-    await renderEdit(p) // hand edits first become a version
-    return exportFilm(p, req, r.filePath, 'user')
+    const version = await renderEdit(p) // hand edits first become a version
+    return exportFilm(p, req, r.filePath, 'user', version)
   })
   ipcMain.handle('export:reveal', (_e, file: string) => shell.showItemInFolder(file))
   ipcMain.handle('mix:speech', async (_e, dir: string, versionId?: string) => {
@@ -877,8 +879,8 @@ app.whenReady().then(async () => {
           const p = projectOf(dir)
           await mkdir(join(p.dir, 'exports'), { recursive: true })
           const suffix = { original: '', landscape: '-16x9', vertical: '-9x16', square: '-1x1' }[req.preset]
-          await renderEdit(p) // an edit not rendered yet becomes a version first
-          return exportFilm(p, req, join(p.dir, 'exports', `${p.title}${suffix}.mp4`), 'agent')
+          const version = await renderEdit(p) // an edit not rendered yet becomes a version first
+          return exportFilm(p, req, join(p.dir, 'exports', `${p.title}${suffix}.mp4`), 'agent', version)
         },
         async setMix(dir, mix) {
           const p = projectOf(dir)
