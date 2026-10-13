@@ -7,6 +7,7 @@
 // in them. For cutting to the speaker, cropping to the speaker, lower thirds and clips.
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -18,6 +19,11 @@ import { nameOf, people, type SpeakerNames, type Speakers, type Turn } from '../
 const THRESHOLD = 0.75
 
 export type { SpeakerInfo, Speakers, Turn } from '../shared/speakers'
+
+/** Background callers skip unavailable native detection; explicit requests get an actionable setup error. */
+export function speakerDetectionReady(binary = SPEAKERS, models = MODELS_DIR) {
+  return existsSync(binary) && ['speaker-segmentation.onnx', 'speaker-embedding.onnx'].every(m => existsSync(join(models, m)))
+}
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 const label = (i: number) => (i < 26 ? String.fromCharCode(65 + i) : `S${i + 1}`)
@@ -229,6 +235,7 @@ export async function analyzeSpeakers(projectDir: string, file: string, o: { spe
   const out = await cachePath(projectDir, file, o.speakers)
   const dir = join(projectDir, '.cache', 'speakers')
   try { const r = JSON.parse(await readFile(out, 'utf8')); if (r.v === VERSION) return { result: r, file: out } } catch { /* run it */ }
+  if (!speakerDetectionReady()) throw new Error('Speaker detection is not installed completely. For a source checkout, run npm run build:ml and node scripts/fetch-models.mjs. Transcription, syncing and demo composition can continue without speaker detection.')
   const tmp = await mkdtemp(join(tmpdir(), 'manul-speakers-'))
   try {
     const wav = join(tmp, 'a.wav')

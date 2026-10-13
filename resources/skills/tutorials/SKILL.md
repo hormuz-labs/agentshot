@@ -46,6 +46,8 @@ talking-head for the voice; motion-design for callouts and titles.
   the user if you see something that may be private.
 
 ## 5. Webcam overlay (if there is a face recording)
+- Separate face-camera recording: read demo-editor and use sync_media + compose_demo. Keep the camera linked to the
+  screen source so later cuts and layout changes remain editable and synchronized.
 - A circle or rounded rectangle in a corner that doesn't cover the action (move it when the action is in that corner),
   15–25 % of the frame width. Full-screen face for the intro, the outro and personal moments; the screen for the steps.
 

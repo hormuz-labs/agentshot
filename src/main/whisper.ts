@@ -117,7 +117,7 @@ async function runTranscribe(file: string, outJson: string, j: JobHandle): Promi
   // 16 kHz mono WAV: what whisper.cpp reads, and what word boundaries are checked against
   const wav = join(dirname(outJson), `.${basename(outJson, '.json')}.wav`)
   j.progress(null, 'Extracting audio')
-  await run(FFMPEG, ['-y', '-loglevel', 'error', '-i', file, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav])
+  await run(FFMPEG, ['-y', '-loglevel', 'error', '-i', file, '-vn', '-af', 'aresample=16000:async=1:first_pts=0', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav])
   try {
     if (engine.engine === 'system' || engine.engine === 'bundled') {
       // one word per segment (-ml 1 -sow); DTW token times for word starts where the build and model support it
@@ -135,7 +135,7 @@ async function runTranscribe(file: string, outJson: string, j: JobHandle): Promi
       language = raw.result?.language || (english ? 'en' : 'auto')
     } else {
       const tmp = `${outJson}.tmp`
-      await proc(venvPython('whisper'), [scriptPath('transcribe.py'), file, '--out', tmp, '--model', WHISPER_MODEL], whisperEnv(), line => {
+      await proc(venvPython('whisper'), [scriptPath('transcribe.py'), wav, '--out', tmp, '--model', WHISPER_MODEL], whisperEnv(), line => {
         const m = /^PROGRESS ([\d.]+)/.exec(line)
         if (m) j.progress(Number(m[1]), engine.label)
       })

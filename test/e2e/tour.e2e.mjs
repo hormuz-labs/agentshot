@@ -113,8 +113,8 @@ try {
   await win.waitForSelector('.manul-tour', { state: 'detached' })
   assert.equal(await win.evaluate(() => JSON.parse(localStorage.getItem('manul.tour.v1')).home), 'completed')
 
-  await app.evaluate(({ ipcMain }, video) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => video) }, video)
-  await win.getByText('Drop a video here', { exact: true }).click()
+  await app.evaluate(({ ipcMain }, video) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [video]) }, video)
+  await win.locator('[data-tour="import"]').click()
   await win.getByRole('button', { name: 'Start', exact: true }).click()
   await title('Your film, with an editor beside it')
   await win.waitForSelector('video')

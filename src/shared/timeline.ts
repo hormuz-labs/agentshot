@@ -1,15 +1,17 @@
 // The timeline: what the film is made of, in order. Media segments (a range of an imported or rendered file) and
 // motion clips (agent-made HTML, rendered frame-exact). Pure functions, shared by the main process and the UI;
 // a render turns a timeline into one MP4 (composeArgs; an edit that only cuts one file is mostly copied, main/cuts.ts).
+import { cameraLayout, cameraRange, refreshDemoSummary, type CameraLayout, type Demo } from './demo'
+import { framing, framingGraph, type VideoFraming } from './framing'
 
 /** A range of a file. db: its sound louder or quieter (0 = as it is); muted: silent. */
-export type MediaItem = { id: string; kind: 'media'; src: string; in: number; out: number; db?: number; muted?: boolean }
+export type MediaItem = { id: string; kind: 'media'; src: string; in: number; out: number; db?: number; muted?: boolean; framing?: VideoFraming }
 export type ClipItem = { id: string; kind: 'clip'; clip: string; dur: number }
 export type Item = MediaItem | ClipItem
 export type Format = { width: number; height: number; fps: number }
 /** A clip laid over the film (transparent background) from start for dur seconds: lower thirds, captions, callouts. */
 export type Overlay = { id: string; clip: string; start: number; dur: number }
-export type Timeline = Format & { items: Item[]; overlays?: Overlay[]; /** film level, music and ducking (see mix.ts) */ mix?: { filmDb: number; music?: { src: string; db: number; duckDb: number } } }
+export type Timeline = Format & { items: Item[]; overlays?: Overlay[]; demo?: Demo; /** film level, music and ducking (see mix.ts) */ mix?: { filmDb: number; music?: { src: string; db: number; duckDb: number } } }
 
 let seq = 0
 const newId = () => `i${Date.now().toString(36)}${(seq++).toString(36)}`
@@ -78,6 +80,8 @@ export const removeItem = (tl: Timeline, id: string): Timeline => ({ ...tl, item
 // were laid over (see keepOverlays).
 
 export type Edit =
+  | { op: 'frame'; ids: string[]; framing: Partial<VideoFraming> | null }
+  | { op: 'camera'; layout: Partial<CameraLayout> }
   | { op: 'split'; at: number }
   /** take out from–to; clips are only taken out when entirely inside */
   | { op: 'cut'; from: number; to: number }
@@ -221,6 +225,19 @@ export function applyEdit(tl: Timeline, e: Edit, maxOf: (it: Item) => number | u
   const minLen = Math.max(1 / (tl.fps || 30), 0.04)
   let after: Timeline
   switch (e.op) {
+    case 'frame': return { ...tl, items: tl.items.map(it => {
+      if (it.kind !== 'media' || !e.ids.includes(it.id)) return it
+      const next = { ...it }
+      if (e.framing == null) delete next.framing
+      else next.framing = framing({ ...it.framing, ...e.framing })
+      return next
+    }) }
+    case 'camera': {
+      if (!tl.demo) throw new Error('This edit has no face-camera layer yet.')
+      const patch = { ...tl.demo.layout, ...e.layout }
+      if (e.layout.shape && e.layout.shape !== tl.demo.layout.shape && e.layout.height == null) delete (patch as Partial<CameraLayout>).height
+      return { ...tl, demo: { ...tl.demo, layout: cameraLayout(tl.width, tl.height, patch) } }
+    }
     case 'split': after = splitAt(tl, e.at); break
     case 'cut': after = cutRange(tl, e.from, e.to); break
     case 'delete': after = { ...tl, items: tl.items.filter(i => !e.ids.includes(i.id)) }; break
@@ -255,13 +272,15 @@ export function applyEdit(tl: Timeline, e: Edit, maxOf: (it: Item) => number | u
     case 'mix': return { ...tl, mix: e.mix }
   }
   if (!after.items.length) throw new Error('The film needs at least one piece: that would take out all of it.')
-  return { ...after, overlays: keepOverlays(tl, after) }
+  return { ...after, ...(after.demo ? { demo: refreshDemoSummary(after.demo, duration(after)) } : {}), overlays: keepOverlays(tl, after) }
 }
 
 const clock = (t: number) => { const s = Math.round(t); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 /** A few words for the history and the version's title. */
 export function describeEdit(e: Edit): string {
   switch (e.op) {
+    case 'frame': return 'Adjusted video framing'
+    case 'camera': return 'Adjusted face camera'
     case 'split': return `Split at ${clock(e.at)}`
     case 'cut': return `Cut ${clock(Math.min(e.from, e.to))}–${clock(Math.max(e.from, e.to))}`
     case 'delete': return e.ids.length === 1 ? 'Deleted a piece' : `Deleted ${e.ids.length} pieces`
@@ -276,8 +295,8 @@ export function describeEdit(e: Edit): string {
 /** Whether two timelines make the same film (ids aside): what it is made of, the overlays, the mix. */
 export function sameCut(a?: Timeline, b?: Timeline) {
   const key = (tl?: Timeline) => tl && JSON.stringify([
-    tl.width, tl.height, tl.fps,
-    tl.items.map(i => (i.kind === 'media' ? ['m', i.src, round(i.in), round(i.out), i.db || 0, !!i.muted] : ['c', i.clip, round(i.dur)])),
+    tl.width, tl.height, tl.fps, tl.demo,
+    tl.items.map(i => (i.kind === 'media' ? ['m', i.src, round(i.in), round(i.out), i.db || 0, !!i.muted, i.framing] : ['c', i.clip, round(i.dur)])),
     (tl.overlays || []).map(o => [o.clip, round(o.start), round(o.dur)]),
     tl.mix && (tl.mix.filmDb || tl.mix.music) ? tl.mix : null,
   ])
@@ -304,7 +323,9 @@ export function soundOf(k: number, it: Item, a: number, b: number, fades: boolea
   const len = round(b - a)
   const level = it.kind === 'media' && it.muted ? ',volume=0' : it.kind === 'media' && it.db ? `,volume=${it.db}dB` : ''
   const fade = fades ? `,afade=t=in:d=0.01,afade=t=out:st=${round(Math.max(0, len - 0.01))}:d=0.01` : ''
-  return `[${k}:a]atrim=start=${round(a)}:end=${round(b)},asetpts=PTS-STARTPTS,${A_NORM}${fade}${level}[${label}]`
+  // Preserve the source's audio/video start offset. STARTPTS would pull a late microphone earlier at each cut.
+  // Reset to the planned segment start, then synthesize only the missing leading/trailing samples.
+  return `[${k}:a]atrim=start=${round(a)}:end=${round(b)},asetpts=PTS-${round(a)}/TB,aresample=48000:async=1:first_pts=0,${A_NORM},apad,atrim=duration=${len}${fade}${level}[${label}]`
 }
 
 /**
@@ -322,8 +343,39 @@ export function composeArgs(tl: Timeline, o: { inputOf(i: Item): string; hasAudi
     const k = inputIndex(o.inputOf(it))
     const len = round(length(it))
     const [a, b] = it.kind === 'media' ? [it.in, it.out] : [0, it.dur]
-    parts.push(`[${k}:v]trim=start=${round(a)}:end=${round(b)},setpts=PTS-STARTPTS,${norm}[v${n}]`)
-    parts.push(o.hasAudio(it) ? soundOf(k, it, a, b, tl.items.length > 1, `a${n}`) : `anullsrc=r=48000:cl=stereo,atrim=0:${len},${A_NORM}[a${n}]`)
+    const demo = it.kind === 'media' && it.src === tl.demo?.screen ? tl.demo : undefined
+    const cam = demo && cameraRange(demo, a, b)
+    const showCamera = demo && cam && !demo.layout.hidden
+    const videoLabel = showCamera ? `screen${n}` : `v${n}`
+    const screenLabel = `${videoLabel}bounded`
+    if (it.kind === 'media' && it.framing) {
+      parts.push(`[${k}:v]trim=start=${round(a)}:end=${round(b)},setpts=PTS-STARTPTS,fps=${fps}[raw${n}]`)
+      parts.push(...framingGraph(`raw${n}`, screenLabel, W, H, fps, len, it.framing))
+    } else parts.push(`[${k}:v]trim=start=${round(a)}:end=${round(b)},setpts=PTS-STARTPTS,${norm}[${screenLabel}]`)
+    parts.push(`[${screenLabel}]trim=duration=${len},setpts=PTS-STARTPTS[${videoLabel}]`)
+    if (showCamera) {
+      const ck = inputIndex(demo.camera), l = demo.layout
+      const crop = l.crop ? `crop=iw*${l.crop.w}:ih*${l.crop.h}:iw*${l.crop.x}:ih*${l.crop.y},` : ''
+      const alpha = l.shape === 'circle' ? `,geq=r='if(gte(hypot(X-W/2,Y-H/2),min(W,H)/2-${l.border}),255,r(X,Y))':g='if(gte(hypot(X-W/2,Y-H/2),min(W,H)/2-${l.border}),255,g(X,Y))':b='if(gte(hypot(X-W/2,Y-H/2),min(W,H)/2-${l.border}),255,b(X,Y))':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(min(W,H)/2,2)),255,0)'`
+        : l.shape === 'rounded' ? `,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(max(abs(X-W/2)-(W/2-16),0),2)+pow(max(abs(Y-H/2)-(H/2-16),0),2),256),255,0)'` : ''
+      parts.push(`[${ck}:v]trim=start=${cam.in}:end=${cam.out},setpts=${demo.sync.rate}*(PTS-STARTPTS),${crop}setsar=1,fps=${fps}[craw${n}]`)
+      parts.push(...framingGraph(`craw${n}`, `cframed${n}`, l.width, l.height, fps, cam.e - cam.s, l.framing || framing({}, 'cover')))
+      parts.push(`[cframed${n}]setpts=PTS-STARTPTS+${cam.s - a}/TB,format=rgba${l.border && l.shape !== 'circle' ? `,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.85:t=${l.border}` : ''}${alpha}[cam${n}]`)
+      parts.push(`[screen${n}][cam${n}]overlay=x=${l.x}:y=${l.y}:eof_action=pass:repeatlast=0:enable='gte(t,${cam.s - a})*lt(t,${cam.e - a})',format=yuv420p[v${n}]`)
+    }
+    if (demo?.audio === 'camera' && cam) {
+      const ck = inputIndex(demo.camera), offset = cam.s - a
+      const level = it.kind === 'media' && it.muted ? ',volume=0' : it.kind === 'media' && it.db ? `,volume=${it.db}dB` : ''
+      const cameraLabel = o.hasAudio(it) && (cam.s > a || cam.e < b) ? `ca${n}` : `a${n}`
+      // adelay emits leading silence before it receives an input frame; its PTS can be unset depending on graph
+      // scheduling. Re-clock all emitted samples (including that silence) before mixing against the screen audio.
+      parts.push(`[${ck}:a]atrim=start=${cam.in}:end=${cam.out},asetpts=PTS-STARTPTS,atempo=${1 / demo.sync.rate},${A_NORM}${level},afade=t=in:d=0.01,afade=t=out:st=${Math.max(0, cam.e - cam.s - 0.01)}:d=0.01,adelay=${Math.round(offset * 1000)}:all=1,asetpts=N/SR/TB,apad,atrim=0:${len}[${cameraLabel}]`)
+      if (cameraLabel !== `a${n}`) {
+        parts.push(soundOf(k, it, a, b, true, `fallback${n}`))
+        parts.push(`[fallback${n}]volume=0:enable='gte(t,${offset})*lt(t,${cam.e - a})'[outside${n}]`)
+        parts.push(`[outside${n}][ca${n}]amix=inputs=2:duration=first:normalize=0[a${n}]`)
+      }
+    } else parts.push(o.hasAudio(it) ? soundOf(k, it, a, b, tl.items.length > 1, `a${n}`) : `anullsrc=r=48000:cl=stereo,atrim=0:${len},${A_NORM}[a${n}]`)
   })
   parts.push(`${tl.items.map((_, n) => `[v${n}][a${n}]`).join('')}concat=n=${tl.items.length}:v=1:a=1[v][a]`)
   // overlays on top, each shifted to its start and shown only during its time; the footage shows through transparency
@@ -339,7 +391,7 @@ export function composeArgs(tl: Timeline, o: { inputOf(i: Item): string; hasAudi
     ...inputs.flatMap(p => ['-i', p]),
     '-filter_complex', parts.join(';'),
     '-map', `[${video}]`, '-map', '[a]',
-    '-c:v', 'libx264', '-crf', '18', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
+    '-c:v', 'libx264', '-crf', tl.demo ? '16' : '18', '-preset', tl.demo ? 'medium' : 'veryfast', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart',
     o.out,
   ]

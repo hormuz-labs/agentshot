@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { memo, useEffect, useRef, useState, type RefObject } from 'react'
 import { Film } from 'lucide-react'
 import { mediaUrl } from '@/lib/utils'
 import { thumbnailCount } from '@/lib/timelineScale'
 
 /** A piece's frames (from–to of its file), sampling just the visible tiles (plus overscan), even on a heavily zoomed timeline. */
-export function Filmstrip({ dir, src, revision, from = 0, to, fps, viewport }: {
+export const Filmstrip = memo(function Filmstrip({ dir, src, revision, from = 0, to, fps, viewport }: {
   dir: string; src: string; revision: number; from?: number; to: number; fps: number; viewport: RefObject<HTMLDivElement | null>
 }) {
   const duration = Math.max(0, to - from)
@@ -57,4 +57,4 @@ export function Filmstrip({ dir, src, revision, from = 0, to, fps, viewport }: {
       ))}
     </div>
   )
-}
+})

@@ -99,7 +99,7 @@ export function planRuns(spans: [number, number][], splits: number[], n: number)
 
 /** The one file a timeline cuts, if that's all it does (no motion clips, no overlays). */
 export function cutSource(tl: Timeline): string | undefined {
-  if (tl.overlays?.length || !tl.items.length) return
+  if (tl.demo || tl.overlays?.length || !tl.items.length || tl.items.some(i => i.kind === 'media' && i.framing)) return
   const srcs = new Set(tl.items.map(i => (i.kind === 'media' ? i.src : '')))
   return srcs.size === 1 && !srcs.has('') ? [...srcs][0] : undefined
 }

@@ -12,6 +12,7 @@ import { basename, extname, join, relative } from 'node:path'
 import { promisify } from 'node:util'
 import { FFMPEG, FONTS_DIR, probe } from './media'
 import * as Files from './files'
+import { kindByName } from '../shared/file-kinds'
 import { sameCut, timelineOfFile } from '../shared/timeline'
 import type { MediaInfo, Note, Project, RecentProject, Version } from '../shared/types'
 
@@ -69,27 +70,48 @@ export async function save(p: Project) {
   await rename(tmp, join(p.dir, 'project.json'))
 }
 
-/** A new project from a dropped or picked file: copy it in, probe it, grab a thumbnail. */
-export async function createFromFile(file: string): Promise<Project> {
+/** A new project from picked or dropped files. Import the whole batch before opening it; the first playable video
+ *  starts the timeline, and every other asset is available to the user and agent. */
+export async function createFromFiles(files: string[], progress?: (done: number, total: number, file: string) => void): Promise<Project> {
+  const sources = [...new Set(files.filter(Boolean))]
+  if (!sources.length) throw new Error('Choose files to start a project.')
+  const file = sources.find(f => kindByName(f) === 'video') || sources[0]
   const title = basename(file, extname(file))
   let dir = join(projectsRoot(), slug(title))
   for (let n = 2; existsSync(dir); n++) dir = join(projectsRoot(), `${slug(title)}-${n}`)
-  for (const sub of ['media', 'renders', 'notes', 'clips']) await mkdir(join(dir, sub), { recursive: true })
-
-  const rel = join('media', basename(file))
-  await copyFile(file, join(dir, rel))
-  const { info: about, media: info } = await Files.inspect(dir, rel, probe)
-  if (!info) {
+  const p: Project = { id: id(), title, dir, createdAt: Date.now(), versions: [], current: '', notes: [], media: {}, files: {} }
+  try {
+    for (const sub of ['media', 'renders', 'notes', 'clips']) await mkdir(join(dir, sub), { recursive: true })
+    for (const [index, src] of sources.entries()) {
+      progress?.(index, sources.length, basename(src))
+      for (const rel of await Files.copyIn(dir, src)) await register(p, rel)
+      progress?.(index + 1, sources.length, basename(src))
+    }
+    const rel = Object.keys(p.files!).find(f => p.files![f].kind === 'video' && p.media[f]?.width > 0 && p.media[f]?.duration > 0)
+    if (!rel) {
+      const about = Object.values(p.files!)[0]
+      throw new Error(sources.length === 1
+        ? `${basename(file)} isn't a video Manul can play (${about?.summary || 'no playable video found'}). Include a video; other files can come with it.`
+        : 'Include at least one video Manul can play. Photos, audio and other files can come with it.')
+    }
+    const info = p.media[rel]
+    const v: Version = { id: id(), path: rel, title: 'Original', createdAt: Date.now(), by: 'import' }
+    p.title = basename(rel, extname(rel))
+    p.versions = [v]
+    p.current = v.id
+    p.timeline = timelineOf(rel, info)
+    await run(FFMPEG, ['-y', '-ss', String(Math.min(1, info.duration / 2)), '-i', join(dir, rel), '-frames:v', '1', '-vf', 'scale=480:-2', join(dir, 'thumb.jpg')]).catch(() => {})
+    await save(p)
+  } catch (e) {
     await rm(dir, { recursive: true, force: true })
-    throw new Error(`${basename(file)} isn't a video Manul can play (${about.summary}). Start from a video; other files can be added to it.`)
+    throw e
   }
-  const v: Version = { id: id(), path: rel, title: 'Original', createdAt: Date.now(), by: 'import' }
-  const p: Project = { id: id(), title, dir, createdAt: Date.now(), versions: [v], current: v.id, notes: [], media: { [rel]: info }, files: { [rel]: about }, timeline: timelineOf(rel, info) }
-  await run(FFMPEG, ['-y', '-ss', String(Math.min(1, info.duration / 2)), '-i', join(dir, rel), '-frames:v', '1', '-vf', 'scale=480:-2', join(dir, 'thumb.jpg')]).catch(() => {})
-  await save(p)
   touchRecent(p)
   return p
 }
+
+/** Start from one file (also used by existing import tools). */
+export const createFromFile = (file: string) => createFromFiles([file])
 
 /** Record what a file in media/ is (and its probe, for footage, audio and images). */
 async function register(p: Project, rel: string) {
@@ -153,7 +175,7 @@ export async function addNote(p: Project, note: Omit<Note, 'id' | 'createdAt' | 
 export function usedBy(p: Project, rel: string): string | null {
   const v = p.versions.find(x => x.path === rel)
   if (v) return `it is the version “${v.title}”`
-  const inEdit = (tl?: Project['timeline']) => !!tl && (tl.items.some(i => i.kind === 'media' && i.src === rel) || tl.mix?.music?.src === rel)
+  const inEdit = (tl?: Project['timeline']) => !!tl && (tl.items.some(i => i.kind === 'media' && i.src === rel) || tl.mix?.music?.src === rel || tl.demo?.camera === rel || tl.demo?.screen === rel)
   if (inEdit(p.timeline)) return 'the edit uses it'
   const ver = p.versions.find(x => inEdit(x.timeline))
   if (ver) return `the version “${ver.title}” uses it`

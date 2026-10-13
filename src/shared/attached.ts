@@ -10,6 +10,8 @@ const BLOCK = /(?:^|\n\n)\[attached files\]\n((?:- [^\n]*(?:\n|$))+)$/
 
 /** The text of a message, the files attached to it, and how many more there were than it lists. */
 export function splitAttached(message: string): { text: string; files: string[]; more: number } {
+  // Main-process routing context is for the agent; it is not user-authored chat text.
+  message = message.replace(/\n\n\[editor context\][^\n]*$/, '')
   const m = BLOCK.exec(message)
   if (!m) return { text: message, files: [], more: 0 }
   let more = 0

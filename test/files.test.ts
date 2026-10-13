@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -28,6 +28,9 @@ beforeAll(() => {
   writeFileSync(join(src, 'warm.cube'), 'TITLE "Warm look"\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n')
   writeFileSync(join(src, 'shots.csv'), 'shot,scene,description\n1,beach,wide of the bay\n2,beach,close on hands\n')
   writeFileSync(join(src, 'notes.xyz'), 'whatever')
+  mkdirSync(join(src, 'More Footage'))
+  copyFileSync(join(src, 'clip.mp4'), join(src, 'More Footage', 'clip.mp4'))
+  writeFileSync(join(src, 'broken.mp4'), 'not a video')
   // a brand kit folder (with Finder's litter) and the same kit zipped with one top folder
   mkdirSync(join(src, 'Brand Kit', 'fonts'), { recursive: true })
   writeFileSync(join(src, 'Brand Kit', '.DS_Store'), 'x')
@@ -87,6 +90,49 @@ describe('what a file is', () => {
 })
 
 describe('adding files to a project', () => {
+  it('starts with a mixed batch, preserving every asset before the project opens', async () => {
+    const sources = ['logo.png', 'song.mp3', 'clip.fr.srt', 'clip.mp4', 'More Footage/clip.mp4', 'brief.pdf', 'clip.mp4'].map(f => join(src, f))
+    const p = await Projects.createFromFiles(sources)
+    expect(p.versions[0].path).toBe('media/clip.mp4')
+    expect(p.timeline!.items).toEqual([expect.objectContaining({ src: 'media/clip.mp4' })])
+    expect(Object.fromEntries(Object.entries(p.files!).map(([rel, f]) => [rel, f.kind]))).toEqual({
+      'media/logo.png': 'image', 'media/song.mp3': 'audio', 'media/clip.fr.srt': 'subtitles',
+      'media/clip.mp4': 'video', 'media/clip-2.mp4': 'video', 'media/brief.pdf': 'other',
+    })
+    expect(Object.keys(p.media)).toHaveLength(4)
+    for (const rel of Object.keys(p.files!)) expect(existsSync(join(p.dir, rel))).toBe(true)
+    expect(readFileSync(join(p.dir, 'media/clip.fr.srt'), 'utf8')).toContain('Café crème')
+    expect((await Projects.load(p.dir)).files).toEqual(p.files)
+  })
+
+  it('starts from a folder or zip containing footage and registers bundled fonts', async () => {
+    const p = await Projects.createFromFiles([join(src, 'More Footage'), join(src, 'kit.zip')])
+    expect(p.versions[0].path).toBe('media/More Footage/clip.mp4')
+    expect(p.files!['media/kit/fonts/Brand-Bold.ttf'].font?.family).toBe('Inter')
+    expect(existsSync(join(p.dir, 'fonts/Brand-Bold.ttf'))).toBe(true)
+  })
+
+  it('uses the first playable video when an earlier video cannot be decoded', async () => {
+    const p = await Projects.createFromFiles([join(src, 'broken.mp4'), join(src, 'clip.mp4')])
+    expect(p.versions[0].path).toBe('media/clip.mp4')
+    expect(p.files!['media/broken.mp4'].summary).toContain("can't decode")
+  })
+
+  it('cleans up a failed batch so retrying cannot leave a partial project', async () => {
+    const before = readdirSync(process.env.MANUL_PROJECTS!)
+    const recent = Projects.recent()
+    await expect(Projects.createFromFiles([join(src, 'clip.mp4'), join(src, 'missing.png')])).rejects.toThrow()
+    expect(readdirSync(process.env.MANUL_PROJECTS!)).toEqual(before)
+    expect(Projects.recent()).toEqual(recent)
+  })
+
+  it('requires playable footage and cleans up batches containing only photos or audio', async () => {
+    const before = readdirSync(process.env.MANUL_PROJECTS!)
+    await expect(Projects.createFromFiles([join(src, 'song.mp3'), join(src, 'logo.png')])).rejects.toThrow(/at least one video/)
+    await expect(Projects.createFromFiles([])).rejects.toThrow(/Choose files/)
+    expect(readdirSync(process.env.MANUL_PROJECTS!)).toEqual(before)
+  })
+
   it('describes each kind and converts old subtitles to UTF-8', async () => {
     const p = await Projects.createFromFile(join(src, 'clip.mp4'))
     expect(p.files?.['media/clip.mp4']).toMatchObject({ kind: 'video', summary: expect.stringMatching(/^video 320×240, 25 fps, 0:02, with sound/) })

@@ -117,13 +117,13 @@ export function App() {
         )}
         <div className="relative min-w-0 flex-1 bg-panel">
           {tabs.open.map(d => projects[d] && (
-            <div key={d} className={cn('absolute inset-0', d !== tabs.active && 'invisible')}>
+            <div key={d} data-project-view={d} className="absolute inset-0" style={{ display: d === tabs.active ? 'block' : 'none' }}>
               <ProjectView initial={projects[d].p} firstPrompt={projects[d].prompt} firstFiles={projects[d].files} ready={ready} active={d === tabs.active} lead={lead}
                 onKeys={() => setSettings('keys')} />
             </div>
           ))}
           {tabs.active === null && (
-            <div className="absolute inset-0">
+            <div data-new-project className="absolute inset-0">
               <Start ready={ready} lead={lead} onKeys={() => setSettings('keys')} onTools={() => setSettings('tools')} onOpen={openProject} />
             </div>
           )}
