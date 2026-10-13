@@ -47,6 +47,9 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { batch, duration as timelineDuration, sameCut, starts, timelineOfFile, type Edit, type Timeline } from '../shared/timeline'
 import type { ClipInfo, Project, Transcript } from '../shared/types'
+import { ASPECTS } from '../shared/motion-formats'
+import { example as galleryExample } from './gallery'
+import type { GalleryExample } from '../shared/types'
 
 type Any = Record<string, any>
 const text = (t: unknown) => ({ content: [{ type: 'text' as const, text: typeof t === 'string' ? t : JSON.stringify(t, null, 1) }] })
@@ -83,6 +86,35 @@ export type Bridge = {
 const MOTION_POINTER = `Motion clips (title cards, lower thirds, kinetic text, charts…) are HTML + GSAP that Manul renders frame-exact: ` +
   `full-frame cards go between shots with insert_clip; lower thirds, captions, callouts and logos are made with overlay: true and laid over ` +
   `the footage with overlay_clip. Read the motion-design skill first when it is enabled.`
+
+/** For a motion video (no footage): what it is, the gallery example's prompt, the reference, and how to make it. */
+export function motionBrief(p?: Project, lookup: (id: string) => GalleryExample | undefined = galleryExample) {
+  const m = p?.motion
+  if (!m) return ''
+  const ex = m.example ? lookup(m.example.id) : undefined
+  const { width, height } = ASPECTS[m.aspect]
+  return `\n\nThis project is a MOTION VIDEO made from nothing: there is no footage. The film is ${m.aspect} (${width}x${height}, 60 fps)` +
+    `${m.length ? `, about ${m.length} s` : ''}, and it starts as one second of blank canvas (${m.canvas}) that your scenes replace.\n` +
+    (m.example ? `The user started from a gallery example, "${m.example.title}" by @${m.example.handle}${m.example.post ? ` (${m.example.post})` : ''}. ` +
+      `Make the user's video the way that one was made: its look, pacing, structure and taste, with the user's own content. ` +
+      (ex?.prompt ? `This is the prompt that made it:\n<example_prompt>\n${ex.prompt}\n</example_prompt>\n` +
+        `Follow its direction, structure, rules and gotchas. Where it asks the user for inputs, ask for the ones the user hasn't given (one ask_user). ` +
+        `Where it says how to build or render (one HTML file, seek(t), Playwright, ffmpeg, a framework), use Manul's motion clips instead: ` +
+        `the same ideas, made with create_clip.\n`
+        : ex?.skill ? `It was made with a skill (${ex.skill}); you don't have that skill, so work from the video.\n` : '')
+      : '') +
+    (m.reference ? `Reference video: ${m.reference}. Take its grammar (palette, type, pacing, shot lengths, transitions, camera moves, texture, ` +
+      `how text enters and leaves), never its content, logos or characters. Study it first: analyze_video, then look at frames every 0.5 s.\n` : '') +
+    `How to make it (read the motion-design skill first):\n` +
+    `1. If something essential is missing (what it's about, the words on screen, brand colour, logo), ask once with ask_user. ` +
+    `Otherwise don't ask; choose well.\n` +
+    `2. Storyboard before any code: a beat sheet (one line per scene: time, what's on screen, how it moves${m.reference ? ', and a short style guide from the reference' : ''}). ` +
+    `Send it and ask_user to approve it or change it, then stop. Write no clips before the user approves.\n` +
+    `3. Build one clip per scene (create_clip, full-frame, never overlay), check the frame each returns, fix what's off.\n` +
+    `4. Put the scenes in order with edit_timeline/insert_clip and cut the blank canvas piece out, so the film is only your scenes. ` +
+    `Add music or sound when it helps (music-generation skill), with scene changes on its beats.\n` +
+    `5. rerender_timeline to propose the film. Then the user directs with notes on the picture: change only the scene a note is on.`
+}
 
 /** A clip tool's answer: what was rendered, plus the middle frame so the model can see its design. */
 async function clipResult(p: Project, c: ClipInfo & { frames: number }) {
@@ -220,7 +252,8 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       `read-only); anything else is refused, so don't look elsewhere. Files the user adds are already copied into media/ (never look for the originals).\n` +
       `Stay inside the project folder. Never inspect, run or search Manul's own program files, other folders or system processes; ` +
       `if a tool fails, read its error and fix your input instead of investigating the app.\n` +
-      `Write replies in short plain Markdown. Say what you did, not how.\n\n` + MOTION_POINTER, { tag: false })],
+      `Write replies in short plain Markdown. Say what you did, not how.\n\n` + MOTION_POINTER +
+      motionBrief(input.env?.cwd ? bridge.project(input.env.cwd) : undefined), { tag: false })],
     tools: [
       defineTool({
         name: 'decide_version',

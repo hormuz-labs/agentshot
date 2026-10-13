@@ -7,6 +7,8 @@ export type UsageEvents = {
   'app opened': Record<string, never>
   /** a project was made from a video */
   'project created': Record<string, never>
+  /** a motion video was started from nothing: which gallery example (its public id, or none), the format, whether the user's own reference video came with it */
+  'motion project created': { example: string; aspect: string; reference: boolean }
   /** seconds of focused, non-idle use since the last report */
   'active time': { seconds: number }
   /** one agent turn: which model family, which of Manul's tools it called, how it ended */
@@ -24,6 +26,7 @@ export type UsageEvent = keyof UsageEvents
 export const USAGE_EVENTS: { [E in UsageEvent]: (keyof UsageEvents[E])[] } = {
   'app opened': [],
   'project created': [],
+  'motion project created': ['example', 'aspect', 'reference'],
   'active time': ['seconds'],
   'agent run': ['provider', 'model', 'tools', 'toolCalls', 'ok', 'seconds'],
   'version decided': ['accepted'],

@@ -36,6 +36,8 @@ On macOS, `npm run dev` and `npm start` use a cached `Manul.app` development lau
 | `npm run test:e2e` | The real app, end to end (Playwright) |
 | `npm run smoke` | Builds, launches, screenshots each screen (set `GEMINI_API_KEY` and pass a prompt to test the agent) |
 | `node scripts/screenshot.mjs` | Takes the README screenshots of a staged project (`docs/start.png`, `chat.png`, `inline.png`, `dark.png`) |
+| `node scripts/fetch-motion-gallery.mjs [--media]` | The motion gallery from prompt-motion.com: catalogue and posters (shipped), and with `--media` the videos from each creator's post (local only) |
+| `node scripts/publish-motion-gallery.mjs [--upload gs://manul-gallery/v1]` | Encodes the gallery videos for streaming and uploads them with the posters to the bucket the app streams from |
 | `node scripts/annotate.mjs <spec.json>` | Turns screenshots into the README's annotated images (arrows, labels, blurred areas) |
 | `npm run package` | `dist/`: macOS `.dmg` + `.zip`, or Linux `.deb` + AppImage |
 

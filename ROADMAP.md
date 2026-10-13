@@ -21,7 +21,7 @@
 | Phase | Progress | ✅ Done | 🚧 Doing | ⬜ Next |
 |---|---|:-:|:-:|:-:|
 | [**0 · Foundations**](#phase-0-foundations) | `██████░░░░` 55% | 5 | 1 | 4 |
-| [**1 · MVP (v0.1)**](#phase-1-mvp-v01) | `████████░░` 75% | 13 | 4 | 3 |
+| [**1 · MVP (v0.1)**](#phase-1-mvp-v01) | `████████░░` 76% | 14 | 4 | 3 |
 | [**2 · Generated shots, hand-off, publishing**](#phase-2-generated-shots-hand-off-publishing) | `░░░░░░░░░░` 0% | 0 | 0 | 9 |
 | [**3 · Manul key and Pro**](#phase-3-manul-key-and-pro) | `░░░░░░░░░░` 0% | 0 | 0 | 5 |
 | [**4 · Cloud, mobile, teams**](#phase-4-cloud-mobile-teams) | `░░░░░░░░░░` 0% | 0 | 0 | 7 |
@@ -171,6 +171,8 @@ pro editors can take a Manul rough cut into their own editor.
 - ✅ **HTML motion clips:** the agent builds `clip.html` (slides, title cards, charts, kinetic type, GSAP motion
       design) as timeline items next to MP4s and images. They are sandboxed, run on Manul's clock and render frame-exactly
 - ✅ Clip renderer: offscreen Chromium frame stepping → ffmpeg; "bake to MP4"; final export mixes clips with footage
+- ✅ **Motion videos from nothing:** no footage needed. Start from one of 233 gallery examples (with the prompt that made it,
+  credited to its maker), a video whose look to match, or a description; storyboard first, then one clip per scene
 - 🚧 Motion skill(s): house style, easing and layout rules so agent-made motion looks designed, not generic
 - ✅ Make room on the timeline: split at a point and open a gap so the agent can insert (or propose an insertion) in between
 - ✅ Slide editing by hand: drag, resize and edit text/images/shapes on the picture, written back to the HTML

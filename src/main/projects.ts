@@ -13,11 +13,15 @@ import { promisify } from 'node:util'
 import { FFMPEG, FONTS_DIR, probe } from './media'
 import * as Files from './files'
 import { kindByName } from '../shared/file-kinds'
+import { ASPECTS, type Aspect } from '../shared/motion-formats'
+import { example as galleryExample, exampleVideo } from './gallery'
 import { sameCut, timelineOfFile } from '../shared/timeline'
 import type { MediaInfo, Note, Project, RecentProject, Version } from '../shared/types'
 
 const run = promisify(execFile)
 const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+/** Motion videos run at 60 fps: smooth motion is the point, and they have no footage to match. */
+const MOTION_FPS = 60
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'project'
 
 export const projectsRoot = () => process.env.MANUL_PROJECTS || join(app.getPath('videos'), 'Manul')
@@ -118,6 +122,46 @@ export async function createFromFiles(files: string[], progress?: (done: number,
 
 /** Start from one file (also used by existing import tools). */
 export const createFromFile = (file: string) => createFromFiles([file])
+
+/** A motion video from nothing: the film starts as one second of blank canvas in the chosen format (so the player,
+ *  versions and tools work as for footage) and the agent replaces it with its scenes. A gallery example brings its
+ *  prompt (read from the gallery when the agent runs) and its video as the reference; a reference video of the user's own
+ *  is imported the same way. */
+export async function createMotion(o: { title?: string; aspect: Aspect; length?: number; example?: string; reference?: string; files?: string[] }): Promise<Project> {
+  const ex = o.example ? galleryExample(o.example) : undefined
+  if (o.example && !ex) throw new Error('That example is no longer in the gallery.')
+  const title = o.title?.trim() || ex?.title || 'Motion video'
+  let dir = join(projectsRoot(), slug(title))
+  for (let n = 2; existsSync(dir); n++) dir = join(projectsRoot(), `${slug(title)}-${n}`)
+  const { width, height } = ASPECTS[o.aspect]
+  const p: Project = { id: id(), title, dir, createdAt: Date.now(), versions: [], current: '', notes: [], media: {}, files: {} }
+  try {
+    for (const sub of ['media', 'renders', 'notes', 'clips']) await mkdir(join(dir, sub), { recursive: true })
+    const canvas = 'media/canvas.mp4'
+    await run(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=0x141312:s=${width}x${height}:r=${MOTION_FPS}:d=1`,
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(dir, canvas)])
+    await register(p, canvas)
+    let reference: string | undefined
+    const refSrc = o.reference || (ex ? await exampleVideo(ex.id) : undefined)
+    if (refSrc) {
+      if (kindByName(refSrc) !== 'video') throw new Error('A reference has to be a video.')
+      reference = (await Files.copyIn(dir, refSrc))[0]
+      await register(p, reference)
+    }
+    for (const f of o.files || []) for (const rel of await Files.copyIn(dir, f)) await register(p, rel)
+    const v: Version = { id: id(), path: canvas, title: 'Blank canvas', createdAt: Date.now(), by: 'import' }
+    p.versions = [v]
+    p.current = v.id
+    p.timeline = timelineOf(canvas, p.media[canvas])
+    p.motion = { aspect: o.aspect, canvas, ...(o.length ? { length: o.length } : {}), ...(ex ? { example: { id: ex.id, title: ex.title, handle: ex.creator.handle, ...(ex.post ? { post: ex.post } : {}) } } : {}), ...(reference ? { reference } : {}) }
+    await save(p)
+  } catch (e) {
+    await rm(dir, { recursive: true, force: true })
+    throw e
+  }
+  touchRecent(p)
+  return p
+}
 
 /** Record what a file in media/ is (and its probe, for footage, audio and images). */
 async function register(p: Project, rel: string) {

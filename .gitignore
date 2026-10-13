@@ -9,3 +9,7 @@ resources/lib/*.min.js
 resources/lib/fonts/
 resources/bsk-ext/
 .env
+
+# Motion gallery videos and posters (scripts/fetch-motion-gallery.mjs --media); the catalogue is tracked
+resources/motion-gallery/media/
+resources/motion-gallery/stream/
