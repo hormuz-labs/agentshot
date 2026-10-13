@@ -367,7 +367,9 @@ export function composeArgs(tl: Timeline, o: { inputOf(i: Item): string; hasAudi
       const ck = inputIndex(demo.camera), offset = cam.s - a
       const level = it.kind === 'media' && it.muted ? ',volume=0' : it.kind === 'media' && it.db ? `,volume=${it.db}dB` : ''
       const cameraLabel = o.hasAudio(it) && (cam.s > a || cam.e < b) ? `ca${n}` : `a${n}`
-      parts.push(`[${ck}:a]atrim=start=${cam.in}:end=${cam.out},asetpts=PTS-STARTPTS,atempo=${1 / demo.sync.rate},${A_NORM}${level},afade=t=in:d=0.01,afade=t=out:st=${Math.max(0, cam.e - cam.s - 0.01)}:d=0.01,adelay=${Math.round(offset * 1000)}:all=1,apad,atrim=0:${len}[${cameraLabel}]`)
+      // adelay emits leading silence before it receives an input frame; its PTS can be unset depending on graph
+      // scheduling. Re-clock all emitted samples (including that silence) before mixing against the screen audio.
+      parts.push(`[${ck}:a]atrim=start=${cam.in}:end=${cam.out},asetpts=PTS-STARTPTS,atempo=${1 / demo.sync.rate},${A_NORM}${level},afade=t=in:d=0.01,afade=t=out:st=${Math.max(0, cam.e - cam.s - 0.01)}:d=0.01,adelay=${Math.round(offset * 1000)}:all=1,asetpts=N/SR/TB,apad,atrim=0:${len}[${cameraLabel}]`)
       if (cameraLabel !== `a${n}`) {
         parts.push(soundOf(k, it, a, b, true, `fallback${n}`))
         parts.push(`[fallback${n}]volume=0:enable='gte(t,${offset})*lt(t,${cam.e - a})'[outside${n}]`)

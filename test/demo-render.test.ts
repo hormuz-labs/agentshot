@@ -56,7 +56,8 @@ describe('demo rendering with the real bundled FFmpeg', () => {
         sync: { offset: 1, rate: 1.001, confidence: 1, reliable: true, residual: 0, anchors: [], overlap: [1, 4.003] as [number, number], method: 'fixture' },
         layout: cameraLayout(320, 180, { shape, width: 80, height: 60, x: 220, y: 20, border: 0 }), audio: 'camera' as const } }
       const tl = applyEdit(base, { op: 'cut', from: 2, to: 3 })
-      ff(...composeArgs(tl, { inputOf: it => it.kind === 'media' ? join(dir, it.src) : '', hasAudio: () => true, out: join(dir, 'out.mp4') }).map(a => a === 'camera.mp4' ? join(dir, a) : a))
+      // Small runner CPU counts exposed invalid timestamps in adelay's generated leading silence.
+      ff('-cpucount', '2', ...composeArgs(tl, { inputOf: it => it.kind === 'media' ? join(dir, it.src) : '', hasAudio: () => true, out: join(dir, 'out.mp4') }).map(a => a === 'camera.mp4' ? join(dir, a) : a))
       const info = await probe(join(dir, 'out.mp4'))
       expect(info.duration).toBeCloseTo(5, 1)
       const px = (t: number, x: number, y: number) => [...ff('-ss', String(t), '-i', join(dir, 'out.mp4'), '-frames:v', '1', '-vf', `format=rgb24,crop=1:1:${x}:${y}`, '-f', 'rawvideo', '-')]
@@ -65,15 +66,27 @@ describe('demo rendering with the real bundled FFmpeg', () => {
       expect(px(2.5, 260, 50)[1]).toBeGreaterThan(180) // source time 2.5: later green camera frame after the shared cut
       expect(px(4, 260, 50)[2]).toBeGreaterThan(180)
       if (shape === 'circle' || shape === 'rounded') expect(px(1.5, 220, 20)[2]).toBeGreaterThan(180)
-      const tone = (t: number) => {
-        const raw = ff('-ss', String(t), '-t', '0.2', '-i', join(dir, 'out.mp4'), '-vn', '-ac', '1', '-ar', '8000', '-f', 'f32le', '-')
-        let last = 0, crossings = 0
-        for (let i = 0; i + 4 <= raw.length; i += 4) { const x = raw.readFloatLE(i); if (x > 0 && last <= 0) crossings++; last = x }
-        return crossings / 0.2
+      const pcm = ff('-i', join(dir, 'out.mp4'), '-vn', '-ac', '1', '-ar', '8000', '-f', 'f32le', '-')
+      const tone = (t: number, expected: number, unwanted: number) => {
+        const raw = pcm.subarray(Math.round(t * 8000) * 4, Math.round((t + 0.2) * 8000) * 4)
+        expect(raw.length).toBe(1600 * 4)
+        const crossings: number[] = []
+        let last = raw.readFloatLE(0)
+        for (let i = 1; i < raw.length / 4; i++) { const x = raw.readFloatLE(i * 4); if (x > 0 && last <= 0) crossings.push(i); last = x }
+        // Measure complete cycles, avoiding the extra crossing caused by the window's initial phase.
+        expect((crossings.length - 1) * 8000 / (crossings.at(-1)! - crossings[0])).toBeCloseTo(expected, -1)
+        const amplitude = (hz: number) => {
+          let re = 0, im = 0
+          for (let i = 0; i < raw.length / 4; i++) { const x = raw.readFloatLE(i * 4); re += x * Math.cos(2 * Math.PI * hz * i / 8000); im += x * Math.sin(2 * Math.PI * hz * i / 8000) }
+          return 2 * Math.hypot(re, im) / (raw.length / 4)
+        }
+        expect(amplitude(expected)).toBeGreaterThan(0.05)
+        expect(amplitude(unwanted)).toBeLessThan(amplitude(expected) * 0.05)
       }
-      expect(tone(0.5)).toBeCloseTo(440, -1) // uncovered: screen narration
-      expect(tone(1.5)).toBeCloseTo(880, -1) // covered: camera narration, never duplicate microphones
-      expect(tone(4)).toBeCloseTo(440, -1) // camera ended: screen narration resumes
+      tone(0.5, 440, 880) // uncovered: screen narration
+      tone(1.5, 880, 440) // covered: camera narration, never duplicate microphones
+      tone(2.5, 880, 440) // camera remains aligned after the shared ripple cut
+      tone(4, 440, 880) // camera ended: screen narration resumes
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   it('detects a local screen change but not a static screen', async () => {
