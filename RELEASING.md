@@ -1,12 +1,14 @@
 # Releasing Manul
 
-Push a tag and CI does the rest:
+Merge to `main` and CI does the rest. `.github/workflows/tag.yml` tags the next version, a patch release unless the merged
+pull request is labelled `release:minor` or `release:major` (or `release:skip` to merge without releasing), and the
+release notes are generated from the pull requests merged since the last release. To release by hand, push a tag:
 
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-`.github/workflows/release.yml` then:
+Either way, `.github/workflows/release.yml` then:
 1. builds on four runners (macOS arm64 + Intel, Linux x64 + arm64): bundled whisper.cpp, pinned ffmpeg, tests;
 2. packages, **signs and notarizes** the Mac app (when the Apple secrets exist); then one job merges the two Mac update feeds and publishes `.dmg`, `.zip`,
    `.deb`, AppImage and the `latest*.yml` update files to **GitHub Releases** — this is what installed apps update from;
