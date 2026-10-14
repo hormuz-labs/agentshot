@@ -7,15 +7,20 @@
 <h3 align="center">Direct your video. Manul edits it.</h3>
 
 <p align="center">
+  <img src="docs/point.webp" alt="A box drawn around the cat's face with the note “zoom in on this grumpy face”, then Manul's before / after of the zoom, ready to keep or send back" width="100%">
+</p>
+
+<p align="center">
   Drop in your footage, say what you want, and point at the frame when something's off.<br>
   Manul makes the cut on your own computer and shows you a before / after of every change.<br>
-  You never have to touch a timeline.
+  You never have to touch a timeline. <b>Free and open source.</b>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/macOS%20·%20Linux-1d1a17?style=for-the-badge&labelColor=0e0d0c" alt="macOS · Linux">
   <img src="https://img.shields.io/badge/early%20days-f2a541?style=for-the-badge&labelColor=0e0d0c" alt="Early days">
   <a href="LICENSE"><img src="https://img.shields.io/badge/Apache--2.0-1d1a17?style=for-the-badge&labelColor=0e0d0c" alt="Apache-2.0"></a>
+  <a href="https://github.com/hormuz-labs/manul/stargazers"><img src="https://img.shields.io/github/stars/hormuz-labs/manul?style=for-the-badge&color=1d1a17&labelColor=0e0d0c&label=stars" alt="GitHub stars"></a>
 </p>
 
 <p align="center">
@@ -23,6 +28,8 @@
   <a href="ROADMAP.md"><b>Roadmap</b></a> &nbsp;·&nbsp;
   <a href="CONTRIBUTING.md"><b>Contribute</b></a>
 </p>
+
+<p align="center"><sub>Manul is free, and stays free. If you like where it's going, a star (top right of this page) helps other people find it.</sub></p>
 
 <br>
 
@@ -215,6 +222,8 @@ Or skip the gallery: describe a motion video in the box, or give it a video of y
 brew install hormuz-labs/tap/manul     # macOS
 ```
 
+<sub>Never used Terminal? Press <kbd>⌘</kbd> <kbd>Space</kbd>, type <b>Terminal</b>, press <kbd>↵</kbd>, paste the line above and press <kbd>↵</kbd> again. If it says <code>brew: command not found</code>, install <a href="https://brew.sh">Homebrew</a> first (one line, same window), then paste it again.</sub>
+
 Or hand it to your coding agent (Claude Code, Cursor, Codex…) and let it do the install:
 
 ```text
@@ -232,7 +241,7 @@ sudo apt update && sudo apt install manul
 Other Linux: grab the AppImage from the [latest release](https://github.com/hormuz-labs/manul/releases/latest). More at **[manul.si](https://manul.si)**.
 
 It's free and open source under the [Apache License 2.0](LICENSE): use it, change it, ship it, edit paid work with it.
-Keep the [NOTICE](NOTICE) attribution when you redistribute it. Bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain), or wait for the single **Manul key**, coming soon.
+Keep the [NOTICE](NOTICE) attribution when you redistribute it. No AI key of your own? Sign in under **Settings → Keys → Manul key**: new accounts start with $2 of credit, enough to try plenty of edits. Or bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain); your own keys are used first.
 
 On first run Manul asks whether to send crash reports and usage statistics. Both boxes start unticked, and you can change them anytime in Settings → About. It never sends your footage, file or project names, prompts, transcripts or keys. [Exactly what is sent](telemetry/README.md).
 
@@ -262,7 +271,7 @@ Want to hack on it? Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)
 </tr>
 <tr>
 <td width="72"><b>Then</b></td>
-<td>One Manul key for every model · heavy tools in the cloud · your apps connected</td>
+<td>Heavy tools in the cloud · your apps connected</td>
 <td width="40" align="center"><img src="docs/icons/circle-dashed.svg" width="20" alt=""></td>
 </tr>
 <tr>
