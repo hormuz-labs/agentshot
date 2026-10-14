@@ -103,6 +103,9 @@ export type Project = {
    *  with its scenes. example: the gallery example it started from (its prompt is the brief, its video the reference);
    *  reference: a video (in media/) whose style to take, never its content. */
   motion?: { aspect: '16:9' | '9:16' | '1:1'; length?: number; example?: { id: string; title: string; handle: string; post?: string }; reference?: string; canvas: string }
+  /** A product walkthrough made from nothing: the agent films the product in a browser (walkthroughs/<take>/) and
+   *  narrates it; the film starts as a blank 16:9 canvas until the first walkthrough is proposed. */
+  walkthrough?: { canvas: string }
 }
 
 /** A motion example in the gallery (from prompt-motion.com): the video, who made it, and the prompt or skill behind it.
@@ -203,7 +206,8 @@ export type Segment = { s: number; e: number; text: string; words: Word[] }
 export type Transcript = { media: string; language: string; model: string; segments: Segment[]; createdAt: number }
 
 // ---------------------------------------------------------------- the agent's browser
-export type BrowserTab = { id: number; title: string; url: string; loading: boolean; agent: boolean; canBack: boolean; canForward: boolean }
+/** recording: a product walkthrough is filming this tab */
+export type BrowserTab = { id: number; title: string; url: string; loading: boolean; agent: boolean; recording?: boolean; canBack: boolean; canForward: boolean }
 export type BrowserState = { tabs: BrowserTab[]; active: number | null; bsk: { connected: boolean; status: string } }
 /** manul: Manul's own browser with its private bsk (default). chrome: the user's own Chrome through their bsk. */
 export type BrowserMode = 'manul' | 'chrome'

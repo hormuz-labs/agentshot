@@ -126,11 +126,12 @@ export const createFromFile = (file: string) => createFromFiles([file])
 /** A motion video from nothing: the film starts as one second of blank canvas in the chosen format (so the player,
  *  versions and tools work as for footage) and the agent replaces it with its scenes. A gallery example brings its
  *  prompt (read from the gallery when the agent runs) and its video as the reference; a reference video of the user's own
- *  is imported the same way. */
-export async function createMotion(o: { title?: string; aspect: Aspect; length?: number; example?: string; reference?: string; files?: string[] }): Promise<Project> {
+ *  is imported the same way.
+ *  A product walkthrough starts the same way (16:9, 30 fps) until the agent proposes the first one it filmed. */
+export async function createMotion(o: { title?: string; aspect: Aspect; length?: number; example?: string; reference?: string; files?: string[]; walkthrough?: boolean }): Promise<Project> {
   const ex = o.example ? galleryExample(o.example) : undefined
   if (o.example && !ex) throw new Error('That example is no longer in the gallery.')
-  const title = o.title?.trim() || ex?.title || 'Motion video'
+  const title = o.title?.trim() || ex?.title || (o.walkthrough ? 'Product walkthrough' : 'Motion video')
   let dir = join(projectsRoot(), slug(title))
   for (let n = 2; existsSync(dir); n++) dir = join(projectsRoot(), `${slug(title)}-${n}`)
   const { width, height } = ASPECTS[o.aspect]
@@ -138,7 +139,7 @@ export async function createMotion(o: { title?: string; aspect: Aspect; length?:
   try {
     for (const sub of ['media', 'renders', 'notes', 'clips']) await mkdir(join(dir, sub), { recursive: true })
     const canvas = 'media/canvas.mp4'
-    await run(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=0x141312:s=${width}x${height}:r=${MOTION_FPS}:d=1`,
+    await run(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=0x141312:s=${width}x${height}:r=${o.walkthrough ? 30 : MOTION_FPS}:d=1`,
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(dir, canvas)])
     await register(p, canvas)
     let reference: string | undefined
@@ -153,7 +154,8 @@ export async function createMotion(o: { title?: string; aspect: Aspect; length?:
     p.versions = [v]
     p.current = v.id
     p.timeline = timelineOf(canvas, p.media[canvas])
-    p.motion = { aspect: o.aspect, canvas, ...(o.length ? { length: o.length } : {}), ...(ex ? { example: { id: ex.id, title: ex.title, handle: ex.creator.handle, ...(ex.post ? { post: ex.post } : {}) } } : {}), ...(reference ? { reference } : {}) }
+    if (o.walkthrough) p.walkthrough = { canvas }
+    else p.motion = { aspect: o.aspect, canvas, ...(o.length ? { length: o.length } : {}), ...(ex ? { example: { id: ex.id, title: ex.title, handle: ex.creator.handle, ...(ex.post ? { post: ex.post } : {}) } } : {}), ...(reference ? { reference } : {}) }
     await save(p)
   } catch (e) {
     await rm(dir, { recursive: true, force: true })

@@ -24,6 +24,7 @@
     "test:mascot": "electron-vite build && node test/e2e/mascot.e2e.mjs",
     "test:tour": "electron-vite build && node test/e2e/tour.e2e.mjs",
     "test:demo": "electron-vite build && node test/e2e/demo.e2e.mjs",
+    "test:walkthrough": "electron-vite build && node test/e2e/walkthrough.e2e.mjs && node test/e2e/walkthrough.e2e.mjs --chrome",
     "test:motion": "electron-vite build && node test/e2e/motion.e2e.mjs",
     "test:imports": "electron-vite build && node test/e2e/start.e2e.mjs && node test/e2e/proxy.e2e.mjs",
     "test:playback": "electron-vite build && node test/e2e/playback.e2e.mjs && node test/e2e/filmstrip.e2e.mjs",

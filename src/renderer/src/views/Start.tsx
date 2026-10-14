@@ -8,19 +8,21 @@ import { Tip } from '@/components/ui/tooltip'
 import { ManulMascot } from '@/components/mascot/ManulMascot'
 import { Gallery, inputsOf, useGallery } from '@/components/Gallery'
 import { ASPECTS, aspectOf, type Aspect } from '../../../shared/motion-formats'
+import { wantsWalkthrough } from '../../../shared/walkthrough'
 import { cn } from '@/lib/utils'
 import type { GalleryExample, Project } from '../../../shared/types'
 
-const IDEAS = ['Cut the ums and long pauses', 'Make a 60-second vertical for Shorts', 'Add a fade in and fade out', 'Trim to the best 30 seconds']
+const IDEAS = ['Cut the ums and long pauses', 'Make a 60-second vertical for Shorts', 'Add a fade in and fade out', 'Trim to the best 30 seconds', 'Make a product walkthrough of my web app']
 const message = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
-/** A motion project's name: the first words of what the user asked for, else the example's title. */
+/** A motion or walkthrough project's name: the first words of what the user asked for (a link as its site), else the
+ *  example's title. */
 const titleOf = (prompt: string, example: GalleryExample | null) =>
-  prompt.split(/\s+/).slice(0, 6).join(' ').replace(/[.,:;!?]+$/, '') || example?.title || 'Motion video'
+  prompt.replace(/https?:\/\/(?:www\.)?([^/\s:]+)\S*/g, '$1').split(/\s+/).slice(0, 6).join(' ').replace(/[.,:;!?]+$/, '') || example?.title || 'Motion video'
 
 /** The home screen: one message box, and below it the motion gallery. Files with a video make an edit; no footage (a
- *  brief, an example or a reference video) makes a motion video on a blank canvas. Selected files come with the first
- *  message. */
+ *  brief, an example or a reference video) makes a motion video on a blank canvas, or, when the brief asks for a
+ *  walkthrough of a product, a walkthrough Manul films in the browser. Selected files come with the first message. */
 export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, prompt?: string, files?: string[]) => void; onKeys: () => void; onTools?: () => void; ready: boolean; lead?: ReactNode }) {
   const [files, setFiles] = useState<string[]>([])
   const [prompt, setPrompt] = useState('')
@@ -35,8 +37,9 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
   const top = useRef<HTMLDivElement>(null)
   // footage in the box means an edit; otherwise a brief, an example or a reference makes a motion video
   const footage = files.some(f => kindByName(f) === 'video')
-  const motion = !footage && !!(example || reference || prompt.trim())
-  const canGo = !busy && (footage || motion || files.length > 0)
+  const walkthrough = !footage && !example && !reference && wantsWalkthrough(prompt)
+  const motion = !footage && !walkthrough && !!(example || reference || prompt.trim())
+  const canGo = !busy && (footage || motion || walkthrough || files.length > 0)
   const asks = inputsOf(example?.prompt)
 
   const focus = () => setTimeout(() => input.current?.focus(), 0)
@@ -65,6 +68,11 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
     setBusy(true)
     setError(null)
     try {
+      if (walkthrough) {
+        const p = await window.manul.project.createMotion({ title: titleOf(prompt, null), aspect: '16:9', walkthrough: true, files })
+        onOpen(p, prompt.trim(), Object.keys(p.files || {}).filter(f => f !== p.walkthrough?.canvas))
+        return
+      }
       if (motion) {
         const p = await window.manul.project.createMotion({ title: titleOf(prompt, example), aspect, example: example?.id, reference: reference ?? undefined, files })
         const ask = prompt.trim() || (example ? `Make a video like “${example.title}”.` : 'Make a motion video in the style of the reference.')
@@ -86,7 +94,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
   const placeholder = footage || files.length ? 'Tell Manul what to do with it…'
     : example ? 'What’s your video about?'
       : reference ? 'What should it be about? Manul takes the look, not the content…'
-        : 'Describe a motion video, or drop footage to edit…'
+        : 'Describe a motion video or a product walkthrough, or drop footage to edit…'
 
   return (
     <div
@@ -174,7 +182,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
                   ))}
                 </div>
               )}
-              {busy && <span role="status" className="ml-1 text-xs text-dim">{motion ? 'Setting up…' : `Importing ${files.length} ${files.length === 1 ? 'item' : 'items'}…`}</span>}
+              {busy && <span role="status" className="ml-1 text-xs text-dim">{motion || walkthrough ? 'Setting up…' : `Importing ${files.length} ${files.length === 1 ? 'item' : 'items'}…`}</span>}
               <span className="flex-1" />
               <Button data-tour="start" size="icon" variant="primary" className="rounded-lg" disabled={!canGo} onClick={go} aria-label="Start">
                 {busy ? <Loader2 className="animate-spin" /> : <ArrowUp />}
@@ -182,6 +190,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
             </div>
           </div>
 
+          {walkthrough && <p data-walkthrough className="mt-2.5 w-full px-1 text-[12px] text-faint">Manul will try the product in its browser, show you the plan, then film it and narrate it.</p>}
           {asks && !footage && <p className="mt-2.5 w-full px-1 text-[12px] text-faint">Manul will ask you for {asks.charAt(0).toLowerCase() + asks.slice(1)}.</p>}
           {error && <p className="mt-3 text-bad">{error}</p>}
           {!ready && (

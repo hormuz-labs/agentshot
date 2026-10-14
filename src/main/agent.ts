@@ -50,6 +50,9 @@ import type { ClipInfo, Project, Transcript } from '../shared/types'
 import { ASPECTS } from '../shared/motion-formats'
 import { example as galleryExample } from './gallery'
 import type { GalleryExample } from '../shared/types'
+import type { Recorder } from './take'
+import type { ComposeRequest } from './walkthrough'
+import type { Take } from '../shared/walkthrough'
 
 type Any = Record<string, any>
 const text = (t: unknown) => ({ content: [{ type: 'text' as const, text: typeof t === 'string' ? t : JSON.stringify(t, null, 1) }] })
@@ -81,6 +84,15 @@ export type Bridge = {
   /** Copy a file, folder or .zip (e.g. a download) into media/ and add it to the project; a line per new file. */
   importFiles(dir: string, absPath: string): Promise<string[]>
   exportFilm(dir: string, req: { preset: 'original' | 'landscape' | 'vertical' | 'square'; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string }): Promise<{ file: string; srt?: string }>
+  /** Start filming the tab the agent's bsk session drives (Manul's browser or the user's Chrome, per the setting). */
+  startTake(dir: string, o: { session: string }): Promise<Recorder>
+  /** The take recording in this project, if any. */
+  take(dir: string): Recorder | undefined
+  stopTake(dir: string): Promise<Take>
+  /** Why the browser is off limits until the user replies (they pressed Interrupt in it), or null. */
+  browserHalted(): string | null
+  /** Voice, condense and draw a take, and propose the film. */
+  composeWalkthrough(dir: string, req: ComposeRequest, title: string, signal?: AbortSignal): Promise<{ version: string; duration: number; outline: string[]; cut: number; spedUp: number; held: number; voiced: number }>
 }
 
 const MOTION_POINTER = `Motion clips (title cards, lower thirds, kinetic text, charts…) are HTML + GSAP that Manul renders frame-exact: ` +
@@ -105,6 +117,8 @@ export function motionBrief(p?: Project, lookup: (id: string) => GalleryExample 
       : '') +
     (m.reference ? `Reference video: ${m.reference}. Take its grammar (palette, type, pacing, shot lengths, transitions, camera moves, texture, ` +
       `how text enters and leaves), never its content, logos or characters. Study it first: analyze_video, then look at frames every 0.5 s.\n` : '') +
+    `If what the user asks for is really a walkthrough or demo of a real website or web app (filmed, not animated), ` +
+    `make that instead: read the product-walkthrough skill.\n` +
     `How to make it (read the motion-design skill first):\n` +
     `1. If something essential is missing (what it's about, the words on screen, brand colour, logo), ask once with ask_user. ` +
     `Otherwise don't ask; choose well.\n` +
@@ -114,6 +128,15 @@ export function motionBrief(p?: Project, lookup: (id: string) => GalleryExample 
     `4. Put the scenes in order with edit_timeline/insert_clip and cut the blank canvas piece out, so the film is only your scenes. ` +
     `Add music or sound when it helps (music-generation skill), with scene changes on its beats.\n` +
     `5. rerender_timeline to propose the film. Then the user directs with notes on the picture: change only the scene a note is on.`
+}
+
+/** For a product walkthrough made from nothing: the product is filmed in the browser, then narrated. */
+export function walkthroughBrief(p?: Project) {
+  if (!p?.walkthrough) return ''
+  return `\n\nThis project is a PRODUCT WALKTHROUGH made from nothing: there is no footage yet. The film is a blank 16:9 canvas ` +
+    `(${p.walkthrough.canvas}) until you propose the walkthrough you filmed. Read the product-walkthrough skill first and follow it: ` +
+    `explore the product with bsk (not filmed), send a storyboard (one line per step: what is shown and what is said) and ask_user to approve it, ` +
+    `then film it in one take with walkthrough_record and make the film with compose_walkthrough.`
 }
 
 /** A clip tool's answer: what was rendered, plus the middle frame so the model can see its design. */
@@ -241,6 +264,10 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       `When cleanup was skipped, say it was skipped rather than claiming there were no stale sections.\n` +
       `After a demo output ask if the user wants to adjust face position, shape, size or framing. The chat displays an adjustment question ` +
       `and inline toolbox with live controls; refer them to "Yes, adjust layout". Changes are on the linked timeline; rerender_timeline renders them.\n` +
+      `- Product walkthroughs and demos of a website or web app (filmed in the browser, narrated): read the product-walkthrough skill first. ` +
+      `They are filmed in the user's own Chrome: drive it with chrome-bsk (bsk's commands, on their Chrome and logins). ` +
+      `walkthrough_record films the tab your session drives in one continuous take; compose_walkthrough cuts the idle time, voices one line per step ` +
+      `and adds the zoom and a cursor. Never record the screen any other way.\n` +
       `- Voice and music: generate_voice and generate_music (they use the user's own key or their Manul key; never call voice or music APIs with curl).\n` +
       `- Fonts for text you draw with ffmpeg: ${FONTS_DIR} (Inter-Regular.ttf, Inter-Bold.ttf; drawtext fontfile=…, subtitles fontsdir=…). ` +
       `Fonts the user added are in the project's fonts/ folder with Inter: then use fontsdir=fonts (never fontsdir=media).\n` +
@@ -253,7 +280,8 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       `Stay inside the project folder. Never inspect, run or search Manul's own program files, other folders or system processes; ` +
       `if a tool fails, read its error and fix your input instead of investigating the app.\n` +
       `Write replies in short plain Markdown. Say what you did, not how.\n\n` + MOTION_POINTER +
-      motionBrief(input.env?.cwd ? bridge.project(input.env.cwd) : undefined), { tag: false })],
+      motionBrief(input.env?.cwd ? bridge.project(input.env.cwd) : undefined) +
+      walkthroughBrief(input.env?.cwd ? bridge.project(input.env.cwd) : undefined), { tag: false })],
     tools: [
       defineTool({
         name: 'decide_version',
@@ -790,6 +818,93 @@ export function browserExtension(bridge: Bridge, dirOf: (convId: string) => stri
           if (!abs.startsWith(dir + '/')) throw new Error('The file must be inside the project folder (download it to downloads/ first).')
           if (!existsSync(abs)) throw new Error(`No file at ${args.path}.`)
           return text(`Added:\n${(await bridge.importFiles(dir, abs)).join('\n')}`)
+        },
+      }),
+      defineTool({
+        name: 'walkthrough_record',
+        description: 'Film the page your bsk session drives, for a product walkthrough (read the product-walkthrough skill first). ' +
+          'start (with session): one continuous take of that tab (its viewport becomes 1280×720). ' +
+          'step: the next step begins now (title = what it shows; it gets one narration line later). ' +
+          'type: type into the focused field a key at a time, as a person does (focus it with bsk click first; bsk fill would make the text appear at once). ' +
+          'scroll: scroll smoothly (dy in CSS px, positive is down; x,y to scroll a panel under that point). move: glide the pointer to x,y (shows hover states). ' +
+          'pause / resume: stop filming around sign-ins, passwords and private pages. stop: end the take; returns its steps. ' +
+          'Do everything else with bsk as usual. Time spent thinking between actions is cut later, so take the time you need.',
+        parameters: Type.Object({
+          action: Type.Union(['start', 'step', 'type', 'scroll', 'move', 'pause', 'resume', 'stop'].map(s => Type.Literal(s))),
+          session: Type.Optional(Type.String({ description: 'start: your bsk session id' })),
+          title: Type.Optional(Type.String({ description: 'step: what this step shows, e.g. "Create a project"' })),
+          text: Type.Optional(Type.String({ description: 'type: the text; \\n presses Enter' })),
+          enter: Type.Optional(Type.Boolean({ description: 'type: press Enter after the text' })),
+          dy: Type.Optional(Type.Number({ description: 'scroll: CSS px, positive is down' })),
+          x: Type.Optional(Type.Number({ description: 'move/scroll: viewport CSS px' })),
+          y: Type.Optional(Type.Number()),
+        }),
+        execute: async (args: Any, api: Any) => {
+          const dir = dirOf(api.conversationId)
+          if (!dir || !bridge.project(dir)) throw new Error('This project is not open.')
+          if (args.action === 'start') {
+            if (!args.session) throw new Error('start needs your bsk session id (bsk session start --json).')
+            const r = await bridge.startTake(dir, { session: args.session })
+            return text(`Recording take ${r.id}${r.capture === 'screenshots' ? ' (through bsk screenshots, about 10 frames a second)' : ''}: the tab's viewport is ${r.viewport.width}×${r.viewport.height}. ` +
+              `Observe again (the viewport changed), then mark the first step with action step before acting.`)
+          }
+          if (args.action === 'stop') {
+            const t = await bridge.stopTake(dir)
+            const counts = (a: number, b: number) => t.events.filter(e => e.t >= a && e.t < b && e.k !== 'move' && e.k !== 'scroll').length
+            const steps = t.steps.length ? t.steps.map((s, i) => `${i + 1}. ${s.t.toFixed(1)} s · ${s.title} (${counts(s.t, t.steps[i + 1]?.t ?? t.duration)} actions)`)
+              : ['(no steps were marked: the whole take is one step)']
+            return text(`Take ${t.id}: ${t.duration.toFixed(1)} s recorded${t.paused.length ? `, ${t.paused.length} paused stretch(es) left out` : ''}.\n${steps.join('\n')}\n` +
+              `Next: one narration line per step, in this order (what the viewer sees and why it matters; "" for a step said nothing over), then compose_walkthrough.`)
+          }
+          const halted = bridge.browserHalted()
+          if (halted) throw new Error(halted)
+          const r = bridge.take(dir)
+          if (!r) throw new Error('No take is recording in this project: start one first.')
+          switch (args.action) {
+            case 'step': return text(`Step ${r.step(String(args.title || ''))} begins at ${r.now().toFixed(1)} s of the take.`)
+            case 'pause': await r.pause(); return text('Paused: nothing is filmed until resume.')
+            case 'resume': await r.resume(); return text('Filming again.')
+            case 'type':
+              if (!args.text) throw new Error('type needs text.')
+              await r.type(String(args.text), { enter: args.enter })
+              return text(`Typed ${String(args.text).length} characters.`)
+            case 'scroll':
+              if (!args.dy) throw new Error('scroll needs dy.')
+              await r.scroll(Number(args.dy), { x: args.x, y: args.y })
+              return text('Scrolled. Observe again before the next action.')
+            case 'move':
+              if (args.x == null || args.y == null) throw new Error('move needs x and y.')
+              await r.move(Number(args.x), Number(args.y))
+              return text('Moved the pointer.')
+          }
+          throw new Error(`Unknown action ${args.action}.`)
+        },
+      }),
+      defineTool({
+        name: 'compose_walkthrough',
+        description: 'Make the walkthrough film from a take and propose it: voices one narration line per step (lines said the same way before keep their voice; ' +
+          'new lines cost the user money as generate_voice does), cuts the idle time, speeds through long loads, holds a step until its line is said, ' +
+          'zooms in on what is being done, and draws a cursor gliding into each click with a ripple. The defaults are the good ones: pass pace or zoom only ' +
+          'when the user asks for a change ("too slow" → tight, "less zoom" → subtle). Call again to change it; nothing is filmed again.',
+        parameters: Type.Object({
+          take: Type.String({ description: 'the take id from walkthrough_record stop' }),
+          narration: Type.Array(Type.String(), { description: 'one line per step, in the take\'s step order; "" for a step with nothing said' }),
+          title: Type.String({ description: 'the proposal title, e.g. "Walkthrough: creating your first board"' }),
+          voice: Type.Optional(Type.String({ description: `one of: ${Object.keys(VOICES).join(', ')} (default guide)` })),
+          style: Type.Optional(Type.String({ description: 'only when the user asks for a delivery, e.g. "excited"' })),
+          pace: Type.Optional(Type.Union([Type.Literal('natural'), Type.Literal('tight')], { description: 'natural (default)' })),
+          zoom: Type.Optional(Type.Union([Type.Literal('on'), Type.Literal('subtle'), Type.Literal('off')], { description: 'on (default)' })),
+          skip: Type.Optional(Type.Array(Type.Number(), { description: 'step numbers (1-based) to leave out, e.g. one that went wrong and was done again' })),
+        }),
+        execute: async (args: Any, api: Any) => {
+          const dir = dirOf(api.conversationId)
+          if (!dir || !bridge.project(dir)) throw new Error('This project is not open.')
+          const r = await bridge.composeWalkthrough(dir, {
+            take: args.take, narration: args.narration, voice: args.voice || 'guide', style: args.style, pace: args.pace, zoom: args.zoom, skip: args.skip,
+          }, args.title, api.signal)
+          return text({ ...r, instruction: 'Proposed. look at two or three moments (a click, some typing, a step change) and fix a real problem only. ' +
+            'Then tell the user in two or three short lines: its length and what it shows. No list of settings or options: ' +
+            'they will say what they want changed, in their own words.' })
         },
       }),
     ],

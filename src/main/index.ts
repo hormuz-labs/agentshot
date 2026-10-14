@@ -1,7 +1,7 @@
 // Manul's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
 import { CRASH_DSN } from './crash' // first: crash reports must start before anything else
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
-import { createReadStream, existsSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
@@ -30,7 +30,12 @@ import { Memory } from './memory'
 import { History } from './history'
 import { Skills } from './skills'
 import { Browser } from './browser'
-import { agentEnv, browserPrompt, BskDaemon, BSK_BIN, chromeBsk, extensionStorage, findUserBsk, privateHome } from './bsk'
+import { chromeCdp, devToolsPortFiles, probeExpression } from './cdp'
+import { BskCapture, ScreencastCapture, type Capture } from './take'
+import { composeWalkthrough, takeDir, Takes, type ComposeRequest } from './walkthrough'
+import { generate } from './generate'
+import { randomUUID } from 'node:crypto'
+import { agentEnv, browserPrompt, BskDaemon, BSK_BIN, bskScript, chromeBsk, extensionStorage, HALTED, findUserBsk, privateHome, userBskEnv, userBskHome } from './bsk'
 import { homedir } from 'node:os'
 import * as Projects from './projects'
 import * as Gallery from './gallery'
@@ -48,6 +53,7 @@ import { duckEnvelope, mixArgs, mixCommands, regionsOnTimeline, type Mix } from 
 import { spawn } from 'node:child_process'
 import { FFMPEG, FFPROBE, probe } from './media'
 import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import type { Anchor, BrowserMode, ClipInfo, ConsentRequest, Project, Transcript } from '../shared/types'
 import type { Timeline } from '../shared/timeline'
@@ -370,6 +376,79 @@ async function renderTimeline(p: Project, tl: Timeline, title: string, signal?: 
   })
 }
 
+// ---------------------------------------------------------------- product walkthroughs
+const takes = new Takes()
+/** The agent's bsk wrappers' state (see bskScript): yield/ (commands running, for a take filming through bsk) and halted
+ *  (the user interrupted the agent in the browser; cleared by their next message). */
+const takeState = () => join(app.getPath('userData'), 'takes')
+const yieldDir = () => join(takeState(), 'yield')
+const haltFile = () => join(takeState(), 'halted')
+const run = promisify(execFile)
+
+/** The bsks a walkthrough's session can be on: the user's own Chrome (their bsk; walkthroughs film there by default), then
+ *  Manul's browser. Each with the CLI and environment that reach its daemon. */
+function takeBsks() {
+  const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
+  return [
+    { browser: 'chrome' as const, bin: userBsk || BSK_BIN, env: { ...process.env, ...userBskEnv(homedir()) } },
+    { browser: 'manul' as const, bin: BSK_BIN, env: { ...process.env, BSK_HOME: bskd!.home, BSK_AUTO_START: '0', BSK_BROWSER_WAIT_MS: '0' } },
+  ]
+}
+
+/** Mark the page the agent's bsk session drives, so the take films that tab and no other; says which bsk has it. */
+async function markTab(session: string, nonce: string) {
+  let why = ''
+  for (const b of takeBsks()) {
+    try {
+      await run(b.bin, ['evaluate', probeExpression(nonce), '--session', session, '--json'], { env: b.env, timeout: 30_000 })
+      return b
+    } catch (e) { why ||= String((e as { stderr?: string }).stderr || (e as Error).message).trim().slice(-300) }
+  }
+  throw new Error(`No browser has a bsk session ${session}${why ? ` (${why})` : ''}. Start one (chrome-bsk session start --json) and pass its id.`)
+}
+
+/** Film the session's tab the best way available, with nothing for the user to set up: CDP screencast in Manul's browser,
+ *  or in the user's Chrome when its remote debugging is on; otherwise through their bsk's screenshots. */
+async function startTake(p: Project, o: { session: string }) {
+  if (takes.get(p.dir)) throw new Error('A take is already recording in this project. Stop it first (stopping keeps what it recorded).')
+  if (existsSync(haltFile())) throw new Error(HALTED)
+  const nonce = randomUUID()
+  const b = await markTab(o.session, nonce)
+  let capture: Capture
+  const viaBsk = () => new BskCapture({ bin: b.bin, env: b.env, session: o.session, yieldDir: yieldDir(), haltFile: haltFile() })
+  if (b.browser === 'manul') {
+    if (!browser) throw new Error('Manul\'s browser is not running.')
+    capture = new ScreencastCapture((await browser.film(nonce)).cdp)
+  } else if (!process.env.MANUL_CHROME_BSK_HOME && devToolsPortFiles().some(f => existsSync(f))) { // (tests stand Manul's browser in for Chrome)
+    capture = await chromeCdp(nonce, { timeoutMs: 30_000 }).then(cdp => new ScreencastCapture(cdp) as Capture)
+      .catch(e => { console.info(`walkthrough: filming through bsk (${(e as Error).message.slice(0, 120)})`); return viaBsk() })
+  } else capture = viaBsk()
+  const id = `w${Date.now().toString(36)}`, rel = takeDir(id)
+  await mkdir(join(p.dir, rel), { recursive: true })
+  // screencast frames are 2× the viewport; bsk's are at the screen's own scale (it sizes the window, see BskCapture)
+  return takes.start(p.dir, { capture, dir: join(p.dir, rel), rel, id, browser: b.browser, scale: 2, log: s => console.info(s) })
+}
+
+async function composeWalk(p: Project, req: ComposeRequest, title: string, signal?: AbortSignal) {
+  let voiced = 0
+  const r = await asJob('Making the walkthrough', 'render', j => composeWalkthrough(p.dir, req, {
+    speak: async (text, voice, style, name) => { voiced++; return (await generate('voice', { text, voice, style }, p.dir, name, undefined, signal)).rel },
+    progress: (f, d) => j.progress(f, d), signal,
+  }), { project: p.dir, doneTitle: 'Walkthrough ready' })
+  const version = await proposeFile(p, join(p.dir, r.file), title)
+  return { version, duration: r.plan.duration, outline: r.outline, cut: r.plan.cut, spedUp: r.plan.spedUp, held: r.plan.held, voiced }
+}
+
+/** A file in renders/ becomes the proposal (replacing one not decided yet). */
+async function proposeFile(p: Project, abs: string, title: string) {
+  if (p.proposal) p.versions = p.versions.filter(v => v.id !== p.proposal)
+  const v = await Projects.addVersion(p, abs, title, 'agent')
+  p.proposal = v.id
+  await checkpoint(p, `Proposed “${title}”`)
+  ensureProxy(p, v.path)
+  return v.id
+}
+
 const demosRunning = new Map<string, AbortController>()
 async function composeDemo(p: Project, req: DemoOptions, signal?: AbortSignal) {
   if (demosRunning.has(p.dir)) throw new Error('A demo is already being prepared for this project.')
@@ -606,9 +685,9 @@ function wire() {
   ipcMain.handle('project:createMotion', async (_e, o: Parameters<typeof Projects.createMotion>[0]) => {
     const created = await asJob('Setting up the canvas', 'import', () => Projects.createMotion(o), { doneTitle: 'Canvas ready' })
     const p = await openProject(created.dir)
-    telemetry.track('motion project created', { example: o.example || 'none', aspect: o.aspect, reference: !!o.reference })
-    await checkpoint(p, 'Started a motion video')
-    for (const rel of Object.keys(p.files || {})) if (rel !== p.motion?.canvas) { ensureProxy(p, rel); autoTranscribe(p, rel) }
+    if (!o.walkthrough) telemetry.track('motion project created', { example: o.example || 'none', aspect: o.aspect, reference: !!o.reference })
+    await checkpoint(p, o.walkthrough ? 'Started a product walkthrough' : 'Started a motion video')
+    for (const rel of Object.keys(p.files || {})) if (rel !== p.motion?.canvas && rel !== p.walkthrough?.canvas) { ensureProxy(p, rel); autoTranscribe(p, rel) }
     return p
   })
   ipcMain.handle('gallery:list', () => Gallery.examples())
@@ -716,6 +795,7 @@ function wire() {
     // a new conversation is named after its first message
     const rec = p.conversations?.find(c => c.id === p.conversation)
     if (rec && rec.title === 'New conversation') { rec.title = (msg.text || (msg.files || []).map(f => f.split('/').pop()).join(', ')).replace(/\s+/g, ' ').trim().slice(0, 48) || rec.title; await publish(p) }
+    rmSync(haltFile(), { force: true }) // the user replied: the browser is the agent's again
     await agent!.send(dir, content)
   })
   ipcMain.handle('clip:save', (_e, dir: string, id: string, title: string, html: string, dur: number, overlay?: boolean) => saveClip(projectOf(dir), id, title, html, dur, !!overlay))
@@ -836,15 +916,27 @@ app.whenReady().then(async () => {
   onJobs(jobs => send('jobs', jobs))
   createWindow()
   startBrowser(resources)
+  // the agent's bsk (its browser setting's) and chrome-bsk (the user's own Chrome, where product walkthroughs are filmed)
+  const agentBin = join(app.getPath('userData'), 'bin')
+  mkdirSync(agentBin, { recursive: true })
+  writeFileSync(join(agentBin, 'bsk'), bskScript({ name: 'bsk', stateDir: takeState() }), { mode: 0o755 })
+  writeFileSync(join(agentBin, 'chrome-bsk'), bskScript({ name: 'chrome-bsk', bin: findUserBsk({ home: homedir(), bundled: BSK_BIN }) || BSK_BIN, bskHome: userBskHome(homedir()), stateDir: takeState() }), { mode: 0o755 })
+  rmSync(takeState(), { recursive: true, force: true }) // marks and a halt a quit left
+  mkdirSync(yieldDir(), { recursive: true })
   try {
     agent = await startAgent({
       // which browser the agent's bsk reaches: Manul's own (private daemon) unless the user chose their Chrome
-      shellEnv: () => agentEnv(browserMode(), { bundledDir: dirname(BSK_BIN), privateHome: bskd!.home, userHome: homedir(), userBsk: findUserBsk({ home: homedir(), bundled: BSK_BIN }), path: process.env.PATH || '' }),
+      shellEnv: () => {
+        const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
+        const env = agentEnv(browserMode(), { bundledDir: dirname(BSK_BIN), privateHome: bskd!.home, userHome: homedir(), userBsk, path: process.env.PATH || '' })
+        // bsk and chrome-bsk are Manul's wrappers (bskScript); the bsk wrapper runs the setting's real one
+        return { ...env, PATH: `${agentBin}:${env.PATH}`, MANUL_BSK_BIN: browserMode() === 'chrome' ? userBsk || BSK_BIN : BSK_BIN }
+      },
       browserPrompt: () => browserPrompt(browserMode()),
       // the agent's files and shell stay in the project: Manul's resources read-only, and the browser CLI's own state
       fence: (() => {
         const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
-        return { resources, extraRw: [privateHome(app.getPath('userData'), homedir()), join(homedir(), '.bsk')], extraRo: userBsk ? [dirname(userBsk)] : [] }
+        return { resources, extraRw: [privateHome(app.getPath('userData'), homedir()), userBskHome(homedir()), takeState()], extraRo: [agentBin, ...(userBsk ? [dirname(userBsk)] : [])] }
       })(),
       dbPath: join(app.getPath('userData'), 'agent.sqlite'),
       memory,
@@ -854,15 +946,12 @@ app.whenReady().then(async () => {
         project: dir => open.get(dir),
         decideVersion: (dir, accept) => decideVersion(projectOf(dir), accept),
         composeDemo: (dir, req, signal) => composeDemo(projectOf(dir), req, signal),
-        async proposeVersion(dir, abs, title) {
-          const p = projectOf(dir)
-          if (p.proposal) p.versions = p.versions.filter(v => v.id !== p.proposal) // a new proposal replaces an undecided one
-          const v = await Projects.addVersion(p, abs, title, 'agent')
-          p.proposal = v.id
-          await checkpoint(p, `Proposed “${title}”`)
-          ensureProxy(p, v.path)
-          return v.id
-        },
+        proposeVersion: (dir, abs, title) => proposeFile(projectOf(dir), abs, title),
+        startTake: (dir, o) => startTake(projectOf(dir), o),
+        take: dir => takes.get(dir),
+        stopTake: dir => takes.stop(dir),
+        browserHalted: () => (existsSync(haltFile()) ? HALTED : null),
+        composeWalkthrough: (dir, req, title, signal) => composeWalk(projectOf(dir), req, title, signal),
         async resolveNote(dir, id, reply) {
           const p = projectOf(dir)
           const n = p.notes.find(x => x.id === id)
@@ -940,6 +1029,7 @@ async function startBrowser(resources: string) {
 }
 
 app.on('window-all-closed', async () => {
+  await takes.stopAll()
   browser?.destroy()
   await Promise.all([agent?.shutdown().catch(() => {}), bskd?.stop()])
   app.quit()

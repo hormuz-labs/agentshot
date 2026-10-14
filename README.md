@@ -132,6 +132,21 @@ Or skip the gallery: describe a motion video in the box, or give it a video of y
 
 <sub>Every video and prompt belongs to the person credited on it; the app links to their post. The videos stream when you watch them, so they don’t add to the download.</sub>
 
+## No video yet? Have it filmed
+
+Ask for a walkthrough of your product in the message box (“a walkthrough of app.example.com: sign up and make a first
+project”). There's nothing to set up. Manul tries the product in its browser first, without filming, then shows you a
+storyboard, one line per step: what it will do and what the voice will say. Say “film it” and it films the whole thing
+in one take: real clicks, typing you can watch, smooth scrolling. Then it cuts the time it spent thinking, speeds
+through slow loads, holds each step until its line is said, zooms in on what's being done, and draws a cursor gliding
+into each click. Ask for changes in your own words (“tighter”, “less zoom”, “say it differently in step 3”): nothing is
+filmed again, and lines you kept keep their voice.
+
+<sub>Filmed in your own Chrome, where you're already signed in, through <a href="https://github.com/Tencent/BrowserSkill">BrowserSkill</a>
+(without it, in Manul's own browser). Nothing to set up; if you turn on Chrome's remote debugging
+(chrome://inspect/#remote-debugging), the motion gets smoother: up to 60 frames a second instead of about 10. The agent's
+“controlling” overlay never shows on film, and filming stops while you sign in.</sub>
+
 ## What a session feels like
 
 
@@ -204,7 +219,7 @@ Or skip the gallery: describe a motion video in the box, or give it a video of y
 <td width="50%" valign="top" align="center">
 <img src="docs/settings-browser.png" alt="Settings, Browser: Manul's own browser by default, your Chrome only if you choose it" width="100%">
 <br><b>Which browser it uses</b><br>
-<sub>Its own, by default. Yours only if you say so.</sub>
+<sub>Its own, by default. Yours only if you say so, or to film a product walkthrough where you're signed in.</sub>
 </td>
 <td width="50%" valign="top" align="center">
 <img src="docs/settings-tools.png" alt="Settings, Tools: built-in tools, speech recognition found on this computer, heavier tools downloaded only when needed" width="100%">

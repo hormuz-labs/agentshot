@@ -2,7 +2,7 @@
 // (rendered by tool), question cards, and the input, anchored to whatever is selected on the film.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Message } from '@ag-ui/core'
-import { ArrowUp, AudioLines, Plus, Check, ChevronRight, Sparkles, Clapperboard, Crosshair, Eye, FileSearch, Images, Loader2, MessageSquareText, ScanFace, ScanSearch, Users, Square, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
+import { ArrowUp, AudioLines, Plus, Check, ChevronRight, Sparkles, Clapperboard, Crosshair, Eye, FileSearch, Images, Loader2, MessageSquareText, MousePointerClick, ScanFace, ScanSearch, Users, Square, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { resultsOf, type AgentState } from '@/lib/agui'
@@ -39,12 +39,29 @@ export function shellTitle(command: string) {
   return lines[0].length > 64 ? `${lines[0].slice(0, 63)}…` : lines[0]
 }
 
+/** What a walkthrough_record call did, as a sentence. */
+export function walkthroughTitle(a: Record<string, any>) {
+  switch (a.action) {
+    case 'start': return 'Started filming the walkthrough'
+    case 'step': return a.title ? `Step: ${a.title}` : 'Next step'
+    case 'type': return `Typed “${String(a.text || '').slice(0, 40)}${String(a.text || '').length > 40 ? '…' : ''}”`
+    case 'scroll': return 'Scrolled'
+    case 'move': return 'Moved the pointer'
+    case 'pause': return 'Paused filming'
+    case 'resume': return 'Filming again'
+    case 'stop': return 'Stopped filming'
+    default: return 'Filming the walkthrough'
+  }
+}
+
 // ---------------------------------------------------------------- tool cards: one renderer per tool, a generic fallback
 const code = (s: string) => <code className="block max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-[10.5px] text-faint" data-selectable>{s}</code>
 const TOOL: Record<string, { icon: ReactNode; title: (a: Record<string, any>) => string; body?: (a: Record<string, any>) => ReactNode; detail?: (a: Record<string, any>) => ReactNode }> = {
   sync_media: { icon: <AudioLines />, title: () => 'Matching your screen and camera recordings' },
   analyze_screen_activity: { icon: <ScanSearch />, title: () => 'Finding screen actions and idle stretches' },
   compose_demo: { icon: <Clapperboard />, title: () => 'Syncing, cleaning and composing your demo' },
+  walkthrough_record: { icon: <MousePointerClick />, title: a => walkthroughTitle(a) },
+  compose_walkthrough: { icon: <Clapperboard />, title: a => `Made the walkthrough${a.narration?.some((l: string) => l?.trim()) ? ', with its voice' : ''}` },
   set_camera_layout: { icon: <ScanFace />, title: () => 'Adjusted your face-camera layout' },
   set_video_framing: { icon: <Clapperboard />, title: () => 'Adjusted video placement and framing' },
   project_state: { icon: <Eye />, title: () => 'Looked at the project' },

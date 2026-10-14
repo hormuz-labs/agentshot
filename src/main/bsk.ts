@@ -53,6 +53,51 @@ export function findUserBsk({ home, bundled, path = process.env.PATH || '' }: { 
   return cands.find(c => c !== bundled && dirname(c) !== dirname(bundled) && existsSync(c)) ?? null
 }
 
+/** The user's own bsk home (the daemon their Chrome extension pairs with). MANUL_CHROME_BSK_HOME: tests point it at Manul's. */
+export const userBskHome = (userHome: string) => process.env.MANUL_CHROME_BSK_HOME || join(userHome, '.bsk')
+/** The environment that reaches the user's own bsk daemon, never starting it. */
+export const userBskEnv = (userHome: string) => ({ BSK_HOME: userBskHome(userHome), BSK_AUTO_START: '0', BSK_BROWSER_WAIT_MS: '0' })
+
+/** Said to the agent for every browser command after the user interrupted it in the browser, until they reply. */
+export const HALTED = 'error: the user stopped you in their browser (the Interrupt button). Do not use the browser again until they reply: ' +
+  'tell them in one line where you were, and ask what they want (ask_user). Never start another session to carry on.'
+
+/**
+ * The agent's \`bsk\` and \`chrome-bsk\` (bsk on the user's own Chrome, whichever browser plain bsk reaches; product
+ * walkthroughs film there). Both are bsk itself, with three things around each command:
+ * - The user's Interrupt holds: once bsk says the user interrupted, every later command but \`session stop\` is refused
+ *   (stateDir/halted) until the user's next message, so the agent cannot carry on or start over in another window.
+ * - A take filming through bsk shares the session, which runs one command at a time: each command leaves a mark in
+ *   stateDir/yield while it runs (the take's screenshots wait), and one bsk turned away as busy (never sent) is sent again.
+ * bin: the bsk to run (else $MANUL_BSK_BIN, set per browser mode); bskHome: fixed for chrome-bsk.
+ */
+export const bskScript = (o: { bin?: string; bskHome?: string; stateDir: string; name: string }) => {
+  const q = JSON.stringify, state = q(o.stateDir)
+  return `#!/bin/sh
+# Manul: ${o.name === 'chrome-bsk' ? 'bsk on your own Chrome (your bsk daemon and extension), for product walkthroughs' : 'the browser bsk of the agent\'s setting'}.
+${o.bskHome ? `export BSK_HOME=${q(o.bskHome)} BSK_AUTO_START=0\n` : ''}real=${o.bin ? q(o.bin) : '"$MANUL_BSK_BIN"'}
+case "$1 $2" in
+  "session stop"|"session list"|"--help "|"help "*) ;;
+  *) if [ -e ${state}/halted ]; then echo ${q(HALTED)} >&2; exit 5; fi ;;
+esac
+mkdir -p ${state}/yield && mark=${state}/yield/$$ && : > "$mark"
+err=$(mktemp)
+trap 'rm -f "$mark" "$err"' EXIT
+n=0
+while :; do
+  out=$("$real" "$@" 2>"$err"); code=$?
+  if [ $code -eq 4 ] && [ $n -lt 200 ] && { printf '%s' "$out" | grep -q session_busy || grep -q 'unfinished command' "$err"; }; then
+    n=$((n + 1)); sleep 0.05; continue
+  fi
+  if printf '%s' "$out" | grep -qi 'interrupted by user' || grep -qi 'interrupted by user' "$err"; then : > ${state}/halted; fi
+  [ -n "$out" ] && printf '%s\n' "$out"
+  cat "$err" >&2
+  [ -e ${state}/halted ] && [ $code -ne 0 ] && echo ${q(HALTED)} >&2
+  exit $code
+done
+`
+}
+
 /** Environment for every process the agent starts: which bsk CLI and which daemon its `bsk` commands reach. */
 export function agentEnv(mode: BrowserMode, o: { bundledDir: string; privateHome: string; userHome: string; userBsk: string | null; path: string }) {
   if (mode === 'chrome') return { BSK_HOME: join(o.userHome, '.bsk'), BSK_AUTO_START: '1', PATH: `${o.userBsk ? dirname(o.userBsk) : o.bundledDir}:${o.path}` }
@@ -133,6 +178,9 @@ export class BskDaemon {
 }
 
 /** The browser part of the agent's instructions, for the current setting. */
+const STOPPED = `If a bsk command says the user stopped you (their Interrupt button), stop using the browser: say where you were, ` +
+  `ask what they want (ask_user) and end your turn; never start another session to carry on. Sign-in pages: request-help once, never retry it.`
+
 export function browserPrompt(mode: BrowserMode): string {
   const files = `For files from the web, run \`bsk download <ref> --out downloads/<name> --session <id>\` (a path in the project folder), ` +
     `then call import_media to add it to the project. Ask the user (ask_user) before downloading anything large or paid, and before ` +
@@ -141,12 +189,12 @@ export function browserPrompt(mode: BrowserMode): string {
     return `Browser: the user chose to let you use their own Chrome. Your \`bsk\` commands drive the user's own Chrome through their bsk ` +
       `(their real, logged-in profile), so act only within what they asked. Several browsers can be online: run \`bsk browsers\` and pass ` +
       `\`--browser <id>\` to \`bsk session start\`; if it is unclear which one, ask_user. Never start, stop or restart their bsk daemon. ` +
-      `For how to use bsk, read the browser-skill skill first. ${files}`
+      `For how to use bsk, read the browser-skill skill first. ${files} ${STOPPED}`
   }
   return `Browser: your \`bsk\` commands drive Manul's own browser (the Browser panel the user sees inside Manul), never the user's personal ` +
-    `Chrome. It is the only browser bsk sees here: never pass \`--browser\`, and never change BSK_HOME or BSK_AUTO_START or start, stop or ` +
+    `Chrome (only product walkthroughs use their Chrome, with chrome-bsk: see the product-walkthrough skill). It is the only browser bsk sees here: never pass \`--browser\`, and never change BSK_HOME or BSK_AUTO_START or start, stop or ` +
     `restart the bsk daemon (Manul runs it). Sign-ins the user made in Manul's browser are kept between sessions; when a page needs a sign-in, ` +
-    `CAPTCHA or confirmation, use \`bsk request-help\` so the user does it in the panel. For how to use bsk, read the browser-skill skill first. ${files}`
+    `CAPTCHA or confirmation, use \`bsk request-help\` so the user does it in the panel. For how to use bsk, read the browser-skill skill first. ${files} ${STOPPED}`
 }
 
 /** An environment object whose values are read at each use (spread), so the agent's shell follows the setting live. */
