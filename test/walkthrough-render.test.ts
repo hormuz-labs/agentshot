@@ -13,17 +13,18 @@ describe('walkthrough rendering with the real bundled FFmpeg', () => {
   it('condenses a take, paces it to its voices and draws zoom, cursor and ripples', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'manul-walk-'))
     try {
-      // a 24 s take at 2560x1440: a page that changes only when something is done (a click at 3 s, typing at 10 s)
+      // a 24 s take at 1280x720 (a 640x360 page at 2x; small, so it stays quick on slow CI machines): a page that changes
+      // only when something is done (a click at 3 s, typing at 10 s)
       mkdirSync(join(dir, 'walkthroughs', 'w1'), { recursive: true })
-      ff('-f', 'lavfi', '-i', 'color=c=white:s=2560x1440:r=30:d=24',
-        '-vf', "drawbox=x=200:y=200:w=400:h=120:color=0x2266ff:t=fill:enable='gte(t,3)',drawbox=x=200:y=400:w=900:h=80:color=0x333333:t=4,drawtext=text='hello':x=220:y=415:fontsize=48:enable='gte(t,10)'",
+      ff('-f', 'lavfi', '-i', 'color=c=white:s=1280x720:r=30:d=24',
+        '-vf', "drawbox=x=100:y=100:w=200:h=60:color=0x2266ff:t=fill:enable='gte(t,3)',drawbox=x=100:y=200:w=450:h=40:color=0x333333:t=2,drawtext=text='hello':x=110:y=207:fontsize=24:enable='gte(t,10)'",
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '60', join(dir, 'walkthroughs', 'w1', 'take.mp4'))
       const take: Take = {
-        id: 'w1', video: 'walkthroughs/w1/take.mp4', duration: 24, width: 2560, height: 1440, fps: 30, viewport: { width: 1280, height: 720 },
+        id: 'w1', video: 'walkthroughs/w1/take.mp4', duration: 24, width: 1280, height: 720, fps: 30, viewport: { width: 640, height: 360 },
         steps: [{ t: 0.5, title: 'Open it' }, { t: 8, title: 'Type a name' }],
         events: [
-          { t: 3, k: 'down', x: 200, y: 130, r: [100, 100, 200, 60] }, { t: 3.08, k: 'click', x: 200, y: 130, r: [100, 100, 200, 60] },
-          { t: 9.6, k: 'focus', r: [100, 200, 450, 40] }, ...[10, 10.2, 10.4, 10.6, 10.8].map(t => ({ t, k: 'input' as const, r: [100, 200, 450, 40] as [number, number, number, number] })),
+          { t: 3, k: 'down', x: 100, y: 65, r: [50, 50, 100, 30] }, { t: 3.08, k: 'click', x: 100, y: 65, r: [50, 50, 100, 30] },
+          { t: 9.6, k: 'focus', r: [50, 100, 225, 20] }, ...[10, 10.2, 10.4, 10.6, 10.8].map(t => ({ t, k: 'input' as const, r: [50, 100, 225, 20] as [number, number, number, number] })),
         ],
         paused: [], browser: 'manul', startedAt: 0,
       }
@@ -40,8 +41,8 @@ describe('walkthrough rendering with the real bundled FFmpeg', () => {
       const r = await composeWalkthrough(dir, { take: 'w1', narration: lines }, { speak })
       expect(spoken).toEqual(lines)
       const info = await probe(join(dir, r.file))
-      expect(info.width).toBe(1920)
-      expect(info.height).toBe(1080)
+      expect(info.width).toBe(1280) // the take's own size: films are at most 1920 on their long side
+      expect(info.height).toBe(720)
       expect(info.hasAudio).toBe(true)
       expect(info.duration).toBeCloseTo(r.plan.duration, 1)
       expect(r.plan.duration).toBeLessThan(take.duration) // the idle time between the steps is gone
@@ -52,7 +53,7 @@ describe('walkthrough rendering with the real bundled FFmpeg', () => {
       const px = execFileSync('cat', [join(dir, 'frame.rgb')])
       let blue = 0
       for (let i = 0; i < px.length; i += 3) if (px[i + 2] > 200 && px[i] < 80) blue++
-      expect(blue / (96 * 54)).toBeGreaterThan((400 * 120) / (2560 * 1440) * 1.5)
+      expect(blue / (96 * 54)).toBeGreaterThan((200 * 60) / (1280 * 720) * 1.5)
       if (process.env.MANUL_KEEP) for (const t of [at - 0.4, at, at + 0.1, outTime(r.plan.segments, 10.4)!]) ff('-ss', t.toFixed(2), '-i', join(dir, r.file), '-frames:v', '1', join(process.env.MANUL_KEEP, `walk-${t.toFixed(2)}.png`))
       // composing again with the same words does not voice them again
       await composeWalkthrough(dir, { take: 'w1', narration: lines, zoom: false }, { speak })
