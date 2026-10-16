@@ -24,7 +24,7 @@
 | [**1 · MVP (v0.1)**](#phase-1-mvp-v01) | `████████░░` 77% | 15 | 4 | 3 |
 | [**2 · Generated shots, hand-off, publishing**](#phase-2-generated-shots-hand-off-publishing) | `░░░░░░░░░░` 0% | 0 | 0 | 9 |
 | [**3 · Manul key and Pro**](#phase-3-manul-key-and-pro) | `░░░░░░░░░░` 0% | 0 | 0 | 5 |
-| [**4 · Cloud, mobile, teams**](#phase-4-cloud-mobile-teams) | `░░░░░░░░░░` 0% | 0 | 0 | 7 |
+| [**4 · Cloud, mobile, teams**](#phase-4-cloud-mobile-teams) | `█░░░░░░░░░` 7% | 0 | 1 | 6 |
 
 <sub>✅ done &nbsp;·&nbsp; 🚧 in progress &nbsp;·&nbsp; ⬜ not started &nbsp;·&nbsp; 💬 open question &nbsp;·&nbsp; progress counts 🚧 as half</sub>
 
@@ -235,8 +235,11 @@ pro editors can take a Manul rough cut into their own editor.
 
 ### Phase 4: Cloud, mobile, teams
 - ⬜ **Manul Cloud storage** (Cloudflare R2): base amount included in Pro, add-on blocks, pooled for teams
-- ⬜ **Mobile app** (React Native/Expo): record → footage lands in the project; "Send to Manul" share option; talk
-      to the agent over AG-UI
+- 🚧 **Mobile app** (React Native/Expo): record → footage lands in the project; "Send to Manul" share option; talk
+      to the agent over AG-UI. Talking is in ([mobile/](mobile/README.md)): pair with a QR code from Settings → Phone
+      (development builds for now), pick a project and chat with its agent live over the local Wi-Fi, every message
+      sealed with the phone's key. Next: recording and "Send to Manul", previews, notes on the frame, and a relay for
+      away from home
 - ⬜ **Team plan:** shared projects, **review links** where clients comment on the frame, shared brand kits and skills
 - ⬜ Recording integrations: Zoom, Riverside, Loom, Google Meet → auto-import
 - ⬜ Stock media: Pexels, Pixabay, Unsplash, Giphy; licensed music (Epidemic Sound, Artlist)
