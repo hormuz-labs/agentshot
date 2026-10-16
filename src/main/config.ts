@@ -18,6 +18,8 @@ export type Config = {
   gateway?: string
   /** who is signed in to Manul (account.ts); their key is in the keychain */
   account?: { email?: string; keyId?: string }
+  /** paired phones may reach the agent over the local network (remote.ts); off unless turned on */
+  phone?: { enabled: boolean }
 }
 
 const file = () => join(app.getPath('userData'), 'config.json')

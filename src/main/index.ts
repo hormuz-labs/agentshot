@@ -1,6 +1,6 @@
 // Manul's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
 import { CRASH_DSN } from './crash' // first: crash reports must start before anything else
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, powerSaveBlocker, protocol, shell } from 'electron'
 import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, resolve, sep } from 'node:path'
@@ -22,6 +22,9 @@ import { thumbnails } from './thumbnails'
 import * as Tools from './tools'
 import * as Whisper from './whisper'
 import { getConfig, setConfig } from './config'
+import { PhoneServer } from './remote'
+import { Phones } from './phones'
+import { pairingUrl } from '../shared/remote'
 import { OnboardingStore } from './onboarding'
 import { UsageTelemetry } from './telemetry'
 import type { TelemetryState } from '../shared/telemetry'
@@ -36,7 +39,7 @@ import { composeWalkthrough, takeDir, Takes, type ComposeRequest } from './walkt
 import { generate } from './generate'
 import { randomUUID } from 'node:crypto'
 import { agentEnv, browserPrompt, BskDaemon, BSK_BIN, bskScript, chromeBsk, extensionStorage, HALTED, findUserBsk, privateHome, userBskEnv, userBskHome } from './bsk'
-import { homedir } from 'node:os'
+import { homedir, hostname } from 'node:os'
 import * as Projects from './projects'
 import * as Gallery from './gallery'
 import * as Files from './files'
@@ -55,7 +58,7 @@ import { FFMPEG, FFPROBE, probe } from './media'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
-import type { Anchor, BrowserMode, ClipInfo, ConsentRequest, Project, Transcript } from '../shared/types'
+import type { Anchor, BrowserMode, ClipInfo, ConsentRequest, PhonePairing, PhoneState, Project, Transcript } from '../shared/types'
 import type { Timeline } from '../shared/timeline'
 
 declare const __MANUL_TELEMETRY_URL__: string
@@ -605,6 +608,42 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
   await agent!.send(dir, content)
 }
 
+// ---------------------------------------------------------------- phone
+// The phone companion app (remote.ts): off unless turned on in Settings → Phone, and in development builds only until
+// the app is in the stores. While a phone follows a conversation the Mac stays awake.
+let phones: Phones | null = null
+let phoneServer: PhoneServer | null = null
+let phoneError: string | undefined
+let keepAwake: number | null = null
+const phonesAvailable = () => !app.isPackaged
+
+function phoneState(): PhoneState {
+  return { available: phonesAvailable(), enabled: !!getConfig().phone?.enabled, error: phoneError, phones: phones?.list() || [], connected: phoneServer?.connected || 0 }
+}
+
+function phoneChanged() {
+  const awake = (phoneServer?.connected || 0) > 0
+  if (awake && keepAwake == null) keepAwake = powerSaveBlocker.start('prevent-app-suspension')
+  if (!awake && keepAwake != null) { powerSaveBlocker.stop(keepAwake); keepAwake = null }
+  send('phone:state', phoneState())
+}
+
+async function startPhones() {
+  if (!phones || !agent || !getConfig().phone?.enabled || phoneServer?.listening) return
+  phoneServer ??= new PhoneServer({
+    store: phones,
+    projects: () => Projects.recent().map(({ id, title, dir, openedAt }) => ({ id, title, dir, openedAt })),
+    // opened only if it isn't: opening again would replay the conversation to the window
+    open: async dir => { if (!open.has(dir)) await openProject(dir) },
+    send: (dir, msg) => sendToAgent(dir, msg),
+    stop: async dir => { await agent?.stop(dir) },
+    subscribe: (dir, emit) => agent!.subscribe(dir, emit),
+    changed: phoneChanged,
+  })
+  try { await phoneServer.start(); phoneError = undefined } catch (e) { phoneError = `Phone access could not start: ${(e as Error).message}` }
+  phoneChanged()
+}
+
 // ---------------------------------------------------------------- IPC
 function wire() {
   const onboarding = new OnboardingStore()
@@ -682,6 +721,20 @@ function wire() {
   ipcMain.handle('project:recent', () => Projects.recent())
   ipcMain.handle('tabs:get', () => getConfig().tabs || { open: [], active: null })
   ipcMain.handle('tabs:set', (_e, tabs: { open: string[]; active: string | null }) => { setConfig({ tabs }) })
+  ipcMain.handle('phone:state', () => phoneState())
+  ipcMain.handle('phone:enable', async (_e, on: boolean) => {
+    if (!phonesAvailable()) return phoneState()
+    setConfig({ phone: { enabled: on } })
+    if (on) await startPhones()
+    else { await phoneServer?.stop(); phoneError = undefined; phoneChanged() }
+    return phoneState()
+  })
+  ipcMain.handle('phone:pair', (): PhonePairing => {
+    if (!phoneServer?.listening) throw new Error('Turn on phone access first.')
+    const c = phoneServer.pairingCode()
+    return { url: pairingUrl(c), expires: c.expires, name: c.name, hosts: c.hosts, port: c.port }
+  })
+  ipcMain.handle('phone:forget', (_e, id: string) => { phones?.forget(id); phoneServer?.drop(id); phoneChanged(); return phoneState() })
   ipcMain.handle('theme:set', (_e, theme: 'light' | 'dark' | 'system') => {
     setConfig({ theme })
     nativeTheme.themeSource = theme
@@ -1010,6 +1063,12 @@ app.whenReady().then(async () => {
       },
     })
     send('agent:ready')
+    if (phonesAvailable()) {
+      // the name the person knows the Mac by ("Ana's MacBook Pro"), shown on the phone
+      const name = await run('scutil', ['--get', 'ComputerName']).then(r => r.stdout.trim()).catch(() => '')
+      phones = new Phones(name || hostname().replace(/\.local$/, ''))
+      void startPhones()
+    }
   } catch (err) {
     console.error('agent failed to start', err)
     send('notice', `The agent could not start: ${(err as Error).message}`)
@@ -1035,7 +1094,7 @@ async function startBrowser(resources: string) {
 app.on('window-all-closed', async () => {
   await takes.stopAll()
   browser?.destroy()
-  await Promise.all([agent?.shutdown().catch(() => {}), bskd?.stop()])
+  await Promise.all([agent?.shutdown().catch(() => {}), bskd?.stop(), phoneServer?.stop()])
   app.quit()
 })
 app.on('will-quit', () => { telemetry?.stop(); bskd?.killNow() })

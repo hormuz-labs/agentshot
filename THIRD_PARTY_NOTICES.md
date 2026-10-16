@@ -78,6 +78,13 @@ MIT licence, Copyright (c) Kamran Ahmed, https://driverjs.com, https://github.co
 Bundled into the renderer for spotlight positioning and walkthrough navigation, with Manul's own visual theme;
 licence text in [LICENSES/driver-MIT.txt](LICENSES/driver-MIT.txt).
 
+## The phone companion app's pairing and encryption
+
+- **@noble/ciphers 2.4.0** (XChaCha20-Poly1305 between the phone and the Mac): MIT, Copyright (c) 2022 Paul Miller,
+  https://github.com/paulmillr/noble-ciphers. An npm package in the app.
+- **node-qrcode 1.5.4** (the pairing QR code in Settings → Phone): MIT, Copyright (c) 2012 Ryan Day,
+  https://github.com/soldair/node-qrcode. Bundled into the renderer.
+
 ## Unpacking the files users add (npm package in the app)
 
 - **yauzl 3.4.0** (unpacking .zip files): MIT, Copyright (c) 2014 Josh Wolfe, https://github.com/thejoshwolfe/yauzl;
