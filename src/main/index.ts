@@ -582,6 +582,29 @@ const describe = (a: Anchor) =>
   `@ ${fmt(a.t0)}${a.t1 != null ? `–${fmt(a.t1)}` : ''}${a.box ? `, box ${[a.box.x, a.box.y, a.box.w, a.box.h].map(n => n.toFixed(3)).join(',')}` : ''}` +
   (a.clip ? `, clip ${a.clip.id}${a.clip.element ? ` element ${a.clip.element}` : ''}` : '')
 
+type AgentMessage = { text: string; anchor?: Anchor; still?: string; files?: string[] }
+
+// A message to the agent, optionally anchored (time / range / box) with a frame still (JPEG data URL).
+// What the user attached (files in media/, versions of the film, motion clips) follows the text, each with what it is.
+async function sendToAgent(dir: string, msg: AgentMessage) {
+  const p = projectOf(dir)
+  const videos = Object.fromEntries(Object.keys(p.files || {}).filter(f => p.files![f].kind === 'video' && p.media[f]).map(f => [f, p.media[f]]))
+  const body = joinAttached(msg.text, Files.refLines(msg.files || [], p)) + demoHint(msg.files || [], videos, skills.enabled().some(s => s.id === 'demo-editor'))
+  let content: string | Record<string, unknown>[] = body
+  if (msg.anchor) {
+    const jpeg = msg.still ? Buffer.from(msg.still.split(',')[1], 'base64') : undefined
+    const n = await Projects.addNote(p, { anchor: msg.anchor, text: msg.text }, jpeg)
+    await checkpoint(p, `Note: ${msg.text.slice(0, 60)}`)
+    content = [{ type: 'text', text: `[note ${n.id} ${describe(msg.anchor)}] ${body}` }]
+    if (jpeg) content.push({ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' })
+  }
+  // a new conversation is named after its first message
+  const rec = p.conversations?.find(c => c.id === p.conversation)
+  if (rec && rec.title === 'New conversation') { rec.title = (msg.text || (msg.files || []).map(f => f.split('/').pop()).join(', ')).replace(/\s+/g, ' ').trim().slice(0, 48) || rec.title; await publish(p) }
+  rmSync(haltFile(), { force: true }) // the user replied: the browser is the agent's again
+  await agent!.send(dir, content)
+}
+
 // ---------------------------------------------------------------- IPC
 function wire() {
   const onboarding = new OnboardingStore()
@@ -778,26 +801,7 @@ function wire() {
     return p
   })
 
-  // A message to the agent, optionally anchored (time / range / box) with a frame still (JPEG data URL).
-  // What the user attached (files in media/, versions of the film, motion clips) follows the text, each with what it is.
-  ipcMain.handle('agent:send', async (_e, dir: string, msg: { text: string; anchor?: Anchor; still?: string; files?: string[] }) => {
-    const p = projectOf(dir)
-    const videos = Object.fromEntries(Object.keys(p.files || {}).filter(f => p.files![f].kind === 'video' && p.media[f]).map(f => [f, p.media[f]]))
-    const body = joinAttached(msg.text, Files.refLines(msg.files || [], p)) + demoHint(msg.files || [], videos, skills.enabled().some(s => s.id === 'demo-editor'))
-    let content: string | Record<string, unknown>[] = body
-    if (msg.anchor) {
-      const jpeg = msg.still ? Buffer.from(msg.still.split(',')[1], 'base64') : undefined
-      const n = await Projects.addNote(p, { anchor: msg.anchor, text: msg.text }, jpeg)
-      await checkpoint(p, `Note: ${msg.text.slice(0, 60)}`)
-      content = [{ type: 'text', text: `[note ${n.id} ${describe(msg.anchor)}] ${body}` }]
-      if (jpeg) content.push({ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' })
-    }
-    // a new conversation is named after its first message
-    const rec = p.conversations?.find(c => c.id === p.conversation)
-    if (rec && rec.title === 'New conversation') { rec.title = (msg.text || (msg.files || []).map(f => f.split('/').pop()).join(', ')).replace(/\s+/g, ' ').trim().slice(0, 48) || rec.title; await publish(p) }
-    rmSync(haltFile(), { force: true }) // the user replied: the browser is the agent's again
-    await agent!.send(dir, content)
-  })
+  ipcMain.handle('agent:send', (_e, dir: string, msg: AgentMessage) => sendToAgent(dir, msg))
   ipcMain.handle('clip:save', (_e, dir: string, id: string, title: string, html: string, dur: number, overlay?: boolean) => saveClip(projectOf(dir), id, title, html, dur, !!overlay))
   ipcMain.handle('clip:overlay', (_e, dir: string, id: string, at: number, title: string) => {
     const p = projectOf(dir)

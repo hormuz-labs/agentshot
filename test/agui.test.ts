@@ -1,7 +1,7 @@
 import { EventType, type BaseEvent } from '@ag-ui/core'
 import { describe, expect, it } from 'vitest'
 import { AguiAdapter } from '../src/main/agui'
-import { reduce, resultsOf, type AgentState } from '../src/renderer/src/lib/agui'
+import { reduce, resultsOf, type AgentState } from '../src/shared/agui-state'
 
 const empty = (): AgentState => ({ messages: [], streaming: null, pending: {}, running: [], busy: false, error: null, cost: 0 })
 const view = (o: { entries?: unknown[]; live?: Record<string, unknown>; cost?: number }) => ({

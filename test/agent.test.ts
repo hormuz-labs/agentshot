@@ -33,3 +33,32 @@ describe('conversations', () => {
     await agent.shutdown()
   })
 })
+
+describe('viewers (the phone)', () => {
+  it('replay to themselves only, follow conversation switches, and stop when unsubscribed', async () => {
+    const main: string[] = []
+    const agent = await startAgent({ ...deps(), dbPath: join(root, 'viewers.sqlite'), onEvent: (_d, e) => main.push(e.type) })
+    const a: string[] = [], b: string[] = []
+    const offA = agent.subscribe(dir, e => a.push(e.type))
+    expect(a).toEqual([]) // not open yet
+
+    await agent.open(dir)
+    expect(a).toContain('MESSAGES_SNAPSHOT') // replayed once it opened
+    const mainAfterOpen = main.length, aAfterOpen = a.length
+
+    const offB = agent.subscribe(dir, e => b.push(e.type))
+    expect(b).toContain('MESSAGES_SNAPSHOT') // already open: replayed at once
+    expect(a.length).toBe(aAfterOpen) // …to the new viewer only
+    expect(main.length).toBe(mainAfterOpen) // and not to the window
+
+    await agent.newConversation(dir)
+    expect(a.length).toBeGreaterThan(aAfterOpen) // followed the switch
+    const bAfterSwitch = b.length
+
+    offB()
+    await agent.newConversation(dir)
+    expect(b.length).toBe(bAfterSwitch)
+    offA()
+    await agent.shutdown()
+  })
+})

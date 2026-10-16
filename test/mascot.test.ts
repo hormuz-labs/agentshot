@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EventType } from '@ag-ui/core'
-import { reduce, type AgentState } from '../src/renderer/src/lib/agui'
+import { reduce, type AgentState } from '../src/shared/agui-state'
 import { mascotActivity } from '../src/renderer/src/lib/mascot'
 
 const empty = (): AgentState => ({ messages: [], streaming: null, pending: {}, running: [], busy: false, error: null, cost: 0 })
