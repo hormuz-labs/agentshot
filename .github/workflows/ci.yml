@@ -41,3 +41,22 @@ jobs:
       - name: End-to-end (Linux, virtual display)
         if: runner.os == 'Linux'
         run: npx electron-vite build && xvfb-run -a node test/e2e/filmstrip.e2e.mjs && xvfb-run -a node test/e2e/clips.e2e.mjs && xvfb-run -a node test/e2e/menu.e2e.mjs
+
+  # The phone app (mobile/): its types, and that Metro bundles it, ../src/shared included
+  mobile:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx expo export --platform ios --output-dir "$RUNNER_TEMP/mobile-export"
+        env:
+          CI: 1

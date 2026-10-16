@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Manul",
+    "slug": "manul",
+    "scheme": "manul",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Manul talks to the Manul app on your Mac over your Wi-Fi.",
+        "NSAppTransportSecurity": { "NSAllowsLocalNetworking": true }
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#fbfbf9",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      ["expo-camera", { "cameraPermission": "Manul uses the camera to scan the pairing code on your Mac.", "recordAudioAndroid": false }]
+    ]
+  }
+}
