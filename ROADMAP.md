@@ -233,8 +233,9 @@ pro editors can take a Manul rough cut into their own editor.
       to the agent over AG-UI. Talking is in ([mobile/](mobile/README.md)): pair with a QR code from Settings → Phone
       (development builds for now), pick a project and chat with its agent live over the local Wi-Fi, every message
       sealed with the phone's key. Footage is in too: record or pick from the library in a project's chat, or "Send to
-      Manul" from Photos or Files; it lands in the project's files and goes with the next message. Next: previews,
-      notes on the frame, and a relay for away from home
+      Manul" from Photos or Files; it lands in the project's files and goes with the next message. Away from home
+      works over Tailscale when the Mac and the phone are both on it. Next: previews, notes on the frame, and a relay
+      for away from home without Tailscale
 - ⬜ **Team plan:** shared projects, **review links** where clients comment on the frame, shared brand kits and skills
 - ⬜ Recording integrations: Zoom, Riverside, Loom, Google Meet → auto-import
 - ⬜ Stock media: Pexels, Pixabay, Unsplash, Giphy; licensed music (Epidemic Sound, Artlist)

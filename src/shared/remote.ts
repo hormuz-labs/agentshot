@@ -26,6 +26,8 @@ export const CHUNK_OVERHEAD = 24 + 8 + 16
 
 export const routes = {
   pair: '/v1/pair',
+  /** the Mac's name and where it can be reached now, so a paired phone keeps up (GET) */
+  hello: '/v1/hello',
   projects: '/v1/projects',
   events: (project: string) => `/v1/projects/${encodeURIComponent(project)}/events`,
   messages: (project: string) => `/v1/projects/${encodeURIComponent(project)}/messages`,
@@ -59,6 +61,11 @@ export type PairRequest = { name: string }
 export type PairReply = { device: string; key: string; mac: string; name: string }
 
 export type RemoteProject = { id: string; title: string; openedAt: number }
+/** What the Mac says to a paired phone that asks (routes.hello). */
+export type Hello = { mac: string; name: string; hosts: string[]; port: number }
+
+/** A Tailscale address (100.64.0.0/10, its CGNAT range): the Mac on the person's tailnet, reachable away from home. */
+export const isTailscale = (host: string) => /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(host)
 /** A message to the agent, with files in the project's media/ attached (what the phone just uploaded). */
 export type RemoteMessage = { text: string; files?: string[] }
 /** A file the phone is about to send. */

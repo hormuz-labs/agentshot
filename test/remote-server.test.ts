@@ -5,9 +5,9 @@ import { request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PhoneServer, safeName, type Device, type PhoneDeps } from '../src/main/remote'
+import { PhoneServer, reachableHosts, safeName, type Device, type PhoneDeps } from '../src/main/remote'
 import {
-  aad, b64url, CHUNK, CHUNK_OVERHEAD, DEVICE_HEADER, newKey, routes, seal, SEAL_HEADER, sealBytes, unseal, type PairReply, type UploadState,
+  aad, b64url, CHUNK, CHUNK_OVERHEAD, DEVICE_HEADER, type Hello, newKey, routes, seal, SEAL_HEADER, sealBytes, unseal, type PairReply, type UploadState,
 } from '../src/shared/remote'
 
 function setup(over: Partial<PhoneDeps> = {}) {
@@ -333,5 +333,22 @@ describe('uploads from the phone', () => {
     expect(safeName('')).toBe('clip.mov')
     expect(safeName('x'.repeat(200) + '.mov')).toHaveLength(120)
     expect(safeName('x'.repeat(200) + '.mov').endsWith('.mov')).toBe(true)
+  })
+})
+
+describe('where the phone can reach the Mac', () => {
+  const iface = (address: string, internal = false) => ({ address, family: 'IPv4', internal, netmask: '', mac: '', cidr: null })
+  it('offers the home network first, then the Bonjour name, then Tailscale', () => {
+    const ifaces = { lo0: [iface('127.0.0.1', true)], en0: [iface('192.168.1.20')], utun4: [iface('100.101.102.103')], bridge0: [iface('169.254.3.4')] }
+    expect(reachableHosts(ifaces as never, 'Studio')).toEqual(['192.168.1.20', 'Studio.local', '100.101.102.103'])
+    expect(reachableHosts({ en0: [iface('10.0.0.5')] } as never, 'studio.local')).toEqual(['10.0.0.5', 'studio.local'])
+  })
+
+  it('tells a paired phone its name and current addresses', async () => {
+    const s = setup()
+    const base = await start(s)
+    const d = await pair(base, s)
+    expect(await call(base, d, 'GET', routes.hello)).toEqual({ status: 200, value: { mac: 'mac1', name: 'Studio Mac', hosts: ['127.0.0.1'], port: s.server.port } satisfies Hello })
+    expect((await fetch(base + routes.hello)).status).toBe(401) // and a stranger nothing
   })
 })

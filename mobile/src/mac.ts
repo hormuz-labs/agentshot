@@ -3,8 +3,8 @@
 // real desktop app (test/e2e/phone-client.e2e.mjs in the desktop app).
 import type { BaseEvent } from '@ag-ui/core'
 import {
-  aad, b64url, CHUNK, DEVICE_HEADER, routes, seal, SEAL_HEADER, sealBytes, unseal,
-  type PairingCode, type PairReply, type RemoteProject, type UploadState,
+  aad, b64url, CHUNK, DEVICE_HEADER, isTailscale, routes, seal, SEAL_HEADER, sealBytes, unseal,
+  type Hello, type PairingCode, type PairReply, type RemoteProject, type UploadState,
 } from '../../src/shared/remote'
 
 /** A paired Mac, as this phone keeps it (in the keychain). */
@@ -17,8 +17,11 @@ export class MacError extends Error {
   constructor(message: string, public status = 0) { super(message) }
 }
 
-const unreachable = (name: string) =>
-  `Can't reach ${name}. Check this phone is on the same Wi-Fi, and that Manul is open with phone access on.`
+/** Why the Mac can't be reached, in the person's words: Tailscale is a way in when the Mac is on it. */
+const unreachable = (name: string, hosts: string[]) =>
+  hosts.some(isTailscale)
+    ? `Can't reach ${name}. Check this phone is on the same Wi-Fi or has Tailscale on, and that Manul is open with phone access on.`
+    : `Can't reach ${name}. Check this phone is on the same Wi-Fi, and that Manul is open with phone access on.`
 
 /** The first of the Mac's addresses that answers at all (to a stranger it answers 401). */
 export async function reach(hosts: string[], port: number, name: string, fetchImpl: Fetch, ms = 3000): Promise<string> {
@@ -27,7 +30,7 @@ export async function reach(hosts: string[], port: number, name: string, fetchIm
   try {
     return await Promise.any(hosts.map(h => fetchImpl(`http://${h}:${port}${routes.projects}`, { signal: ctl.signal }).then(() => h)))
   } catch {
-    throw new MacError(unreachable(name))
+    throw new MacError(unreachable(name, hosts))
   } finally {
     clearTimeout(timer)
     ctl.abort() // the slower addresses
@@ -41,7 +44,7 @@ export async function pair(code: PairingCode, phoneName: string, fetchImpl: Fetc
   try {
     res = await fetchImpl(`http://${host}:${code.port}${routes.pair}`, { method: 'POST', body: seal(code.secret, aad.pair, { name: phoneName }) })
   } catch {
-    throw new MacError(unreachable(code.name))
+    throw new MacError(unreachable(code.name, code.hosts))
   }
   if (res.status === 410) throw new MacError('This code has expired or was already used. Make a new one on your Mac.', 410)
   if (!res.ok) throw new MacError("This code didn't work. Make a new one on your Mac and scan it again.", res.status)
@@ -83,8 +86,21 @@ export class MacClient {
 
   private fetchImpl: Fetch
 
-  constructor(public mac: Mac, fetchImpl: Fetch) {
+  /** onChange: the Mac's name or addresses changed (it joined Tailscale, say): keep the new ones */
+  constructor(public mac: Mac, fetchImpl: Fetch, private o: { onChange?(m: Mac): void } = {}) {
     this.fetchImpl = (url, init) => fetchImpl(url, init) // a browser's fetch refuses to be called as another object's method
+  }
+
+  /** Ask the Mac where it can be reached now and keep that, so a phone paired at home finds it over Tailscale later. */
+  async refresh() {
+    const h = await this.call<Hello>('GET', routes.hello)
+    if (!h?.hosts?.length || h.mac !== this.mac.id) return this.mac
+    const next = { ...this.mac, name: h.name, hosts: h.hosts, port: h.port }
+    if (JSON.stringify([next.name, next.hosts, next.port]) !== JSON.stringify([this.mac.name, this.mac.hosts, this.mac.port])) {
+      this.mac = next
+      this.o.onChange?.(next)
+    }
+    return this.mac
   }
 
   private async base() {
@@ -105,7 +121,7 @@ export class MacClient {
     } catch (e) {
       if (signal?.aborted) throw e
       this.host = null // its address may have changed: look again next time
-      throw new MacError(unreachable(this.mac.name))
+      throw new MacError(unreachable(this.mac.name, this.mac.hosts))
     }
     if (res.status === 401) throw new MacError("Your Mac doesn't know this phone any more. Pair again.", 401)
     return { res, nonce: typeof s === 'string' ? s.split('.')[0] : b64url(s.subarray(0, 24)) }
@@ -117,7 +133,7 @@ export class MacClient {
     let text
     try { text = await res.text() } catch (e) {
       if (o.signal?.aborted) throw e
-      throw new MacError(unreachable(this.mac.name)) // dropped halfway through the answer
+      throw new MacError(unreachable(this.mac.name, this.mac.hosts)) // dropped halfway through the answer
     }
     const value = text ? unseal<T & { error?: string }>(this.mac.key, aad.reply(nonce), text).value : undefined
     if (!res.ok && !o.also?.includes(res.status)) throw new MacError(value?.error || `Your Mac answered ${res.status}.`, res.status)
@@ -165,7 +181,7 @@ export class MacClient {
         if (o.signal?.aborted) throw e
         // a drop (no answer, or none in time): find out where the Mac got to and carry on; anything the Mac said, stands
         const dropped = (e instanceof MacError && e.status === 0) || (piece.signal.aborted && !(e instanceof MacError))
-        if (!dropped || ++failures > retries) throw dropped ? new MacError(unreachable(this.mac.name)) : e
+        if (!dropped || ++failures > retries) throw dropped ? new MacError(unreachable(this.mac.name, this.mac.hosts)) : e
         if (st) resume = st.upload
         await new Promise(r => setTimeout(r, Math.min((o.wait ?? 1000) * 2 ** (failures - 1), 15_000)))
       } finally {
