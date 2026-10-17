@@ -929,6 +929,22 @@ function skillsExtension(skills: Skills) {
 
 export type AgentHandle = Awaited<ReturnType<typeof startAgent>>
 
+type UserInput = string | Any[]
+const STRANDED_MS = 250
+
+/** Inputs queued in an idle conversation: left behind by a run that failed. */
+export function stranded(view: Any): { id: Any; content: UserInput }[] {
+  const lv = view?.docs?.['pi.live'] || {}
+  if (lv.run || lv.generation || (lv.tools || []).length) return []
+  return ((view?.docs?.['pi.inbox']?.items || []) as Any[]).filter(i => i.mode === 'steer' || i.mode === 'followUp') as { id: Any; content: UserInput }[]
+}
+
+/** Several messages as one, in order: text joined by blank lines, images and the rest kept as they were. */
+export function joinInputs(inputs: UserInput[]): UserInput {
+  if (inputs.every(c => typeof c === 'string')) return (inputs as string[]).join('\n\n')
+  return inputs.flatMap(c => (typeof c === 'string' ? [{ type: 'text', text: c }] : c))
+}
+
 export async function startAgent(opts: {
   dbPath: string; bridge: Bridge; memory: Memory; skills: Skills; onEvent: (dir: string, e: BaseEvent) => void
   /** Extra environment for the agent's shell, read at each command (which bsk / daemon it reaches). */
@@ -1000,11 +1016,36 @@ export async function startAgent(opts: {
     convDir.set(String(conv.id), dir)
     const view = await conv.viewState(ctx)
     const adapter = new AguiAdapter(String(conv.id), e => opts.onEvent(dir, e))
-    const off = view.subscribe((v: Any) => adapter.update(v))
+    const off = view.subscribe((v: Any) => { adapter.update(v); rescue(dir) })
     live.set(dir, { conv, off, view, adapter })
     adapter.replay(view.value)
     for (const v of viewers.get(dir) || []) watch(dir, v)
     return String(conv.id)
+  }
+
+  // A message that arrives while a run is going (from the phone right after an upload, say) is queued as a steer and
+  // joins that run. If the run fails instead, pi-durable leaves it queued until something else is submitted, so it
+  // would reach the agent one message late. Once the conversation is idle with inputs still queued, they are taken
+  // back and sent again as one message: a failed run costs the user nothing they said.
+  const rescuing = new Set<string>()
+  function rescue(dir: string) {
+    const l = live.get(dir)
+    if (!l || rescuing.has(dir) || !stranded(l.view.value).length) return
+    rescuing.add(dir)
+    setTimeout(async () => {
+      try {
+        if (live.get(dir) !== l) return
+        const taken: UserInput[] = []
+        for (const item of stranded(l.view.value)) { // still there a moment later: nothing else is about to place them
+          if ((await harness.abortSubmission(item.id as never, ctx, l.conv.id)) === 'aborted') taken.push(item.content)
+        }
+        if (taken.length) await l.conv.submit({ type: 'input', content: joinInputs(taken), whenBusy: 'steer' }, ctx)
+      } catch (e) {
+        console.warn('agent: queued message', e)
+      } finally {
+        rescuing.delete(dir)
+      }
+    }, STRANDED_MS)
   }
 
   function detach(dir: string) {
