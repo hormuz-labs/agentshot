@@ -1,49 +1,41 @@
+<h1 align="center">Manul: the video editor you talk to</h1>
+
 <p align="center">
-  <img src="build/icons/256x256.png" width="112" alt="Manul">
+  <img src="docs/readme-hero.webp" alt="Manul, give notes, get cuts: the conversation with the agent's steps and reply, and the film beside it with a lower third boxed on the frame and a before / after proposal to keep or reject" width="100%">
 </p>
 
-<h1 align="center">Manul</h1>
+<p align="center">
+  <a href="https://manul.si">Website</a> ·
+  <a href="#get-manul">Download</a> ·
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a> ·
+  <a href="https://github.com/hormuz-labs/manul/releases">Releases</a>
+</p>
 
-<h3 align="center">Direct your video. Manul edits it.</h3>
+<p align="center">
+  <a href="https://github.com/hormuz-labs/manul/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/hormuz-labs/manul?style=flat&color=262626&label=release"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-262626?style=flat"></a>
+  <img alt="macOS · Linux" src="https://img.shields.io/badge/macOS%20·%20Linux-262626?style=flat">
+  <a href="https://github.com/hormuz-labs/manul/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/hormuz-labs/manul?style=flat&color=f2a541&label=stars"></a>
+</p>
+
+---
+
+## What is Manul
+
+Manul is **a video editor you direct by talking**. Drop in your footage, say what you want, and point at the frame when something's off. It makes the cut on your own computer and shows you a before / after of every change, to keep or send back. You never have to touch a timeline.
+
+It's **free and open source** under Apache-2.0, and stays free. If you like where it's going, a star (top right of this page) helps other people find it.
 
 <p align="center">
   <img src="docs/point.webp" alt="A box drawn around the cat's face with the note “zoom in on this grumpy face”, then Manul's before / after of the zoom, ready to keep or send back" width="100%">
 </p>
 
-<p align="center">
-  Drop in your footage, say what you want, and point at the frame when something's off.<br>
-  Manul makes the cut on your own computer and shows you a before / after of every change.<br>
-  You never have to touch a timeline. <b>Free and open source.</b>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/macOS%20·%20Linux-1d1a17?style=for-the-badge&labelColor=0e0d0c" alt="macOS · Linux">
-  <img src="https://img.shields.io/badge/early%20days-f2a541?style=for-the-badge&labelColor=0e0d0c" alt="Early days">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/Apache--2.0-1d1a17?style=for-the-badge&labelColor=0e0d0c" alt="Apache-2.0"></a>
-  <a href="https://github.com/hormuz-labs/manul/stargazers"><img src="https://img.shields.io/github/stars/hormuz-labs/manul?style=for-the-badge&color=1d1a17&labelColor=0e0d0c&label=stars" alt="GitHub stars"></a>
-</p>
-
-<p align="center">
-  <a href="#get-manul"><b>Get Manul</b></a> &nbsp;·&nbsp;
-  <a href="ROADMAP.md"><b>Roadmap</b></a> &nbsp;·&nbsp;
-  <a href="CONTRIBUTING.md"><b>Contribute</b></a>
-</p>
-
-<p align="center"><sub>Manul is free, and stays free. If you like where it's going, a star (top right of this page) helps other people find it.</sub></p>
-
-<br>
-
 https://github.com/user-attachments/assets/084276fb-6129-47e2-9cba-4724c1432990
 
 <p align="center"><sub>90 seconds with Manul, starring the grumpiest cat on Earth. Pallas's cat footage: BBC, <i>Frozen Planet II</i>.</sub></p>
 
-<br>
-
-<p align="center">
-  <img src="docs/chat.png" alt="Manul: your projects in the sidebar, the conversation with the agent's steps and reply, and the film beside it with a note boxed on the frame and a before/after proposal to keep or reject" width="100%">
-</p>
-
-<br>
+---
 
 ## Why it's different
 
@@ -88,6 +80,8 @@ No upload queue, no cloud project, no waiting for a render farm. The editing and
 </tr>
 </table>
 
+---
+
 ## Point, then say it
 
 The conversation fills the window, and your film plays beside it with each proposal ready to compare. To point at something, draw a box on the picture (<kbd>B</kbd>), drag across the timeline, or press <kbd>N</kbd> at a moment, and a message box opens right there: say what should change and press <kbd>↵</kbd>. It goes to Manul with what you pointed at, and shows in the conversation like anything else you send.
@@ -111,6 +105,8 @@ The little Manul beside your message follows your cursor, blinks, and reacts whe
 its status give you a high-five, a throaty growl, and a sound toggle; hover for a tooltip. It waves when an edit is finished,
 and takes a catnap when you leave it alone. The full-body 3D cat is also Manul’s app logo.
 
+---
+
 ## No footage? Start from an example
 
 Under the message box are 233 motion videos people made with Claude, each with the prompt that made it, collected by
@@ -132,6 +128,8 @@ Or skip the gallery: describe a motion video in the box, or give it a video of y
 
 <sub>Every video and prompt belongs to the person credited on it; the app links to their post. The videos stream when you watch them, so they don’t add to the download.</sub>
 
+---
+
 ## No video yet? Have it filmed
 
 Ask for a walkthrough of your product in the message box (“a walkthrough of app.example.com: sign up and make a first
@@ -147,9 +145,9 @@ filmed again, and lines you kept keep their voice.
 (chrome://inspect/#remote-debugging), the motion gets smoother: up to 60 frames a second instead of about 10. The agent's
 “controlling” overlay never shows on film, and filming stops while you sign in.</sub>
 
+---
+
 ## What a session feels like
-
-
 
 > **You:** cut the ums, and the bit where I lose my train of thought
 >
@@ -166,6 +164,8 @@ filmed again, and lines you kept keep their voice.
 > **You:** now a vertical one for Shorts, captions burned in
 
 <sub>An example of the kind of conversation Manul is built for. Every reply comes with a before / after you can scrub.</sub>
+
+---
 
 ## What's in the box
 
@@ -212,6 +212,8 @@ filmed again, and lines you kept keep their voice.
 </tr>
 </table>
 
+---
+
 ## You stay in charge
 
 <table>
@@ -228,6 +230,8 @@ filmed again, and lines you kept keep their voice.
 </td>
 </tr>
 </table>
+
+---
 
 ## Get Manul
 
@@ -270,6 +274,8 @@ The first time you open Settings, a short Keys and Browser tour explains **Manul
 its local onboarding database.
 
 Want to hack on it? Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+---
 
 ## Where it's going
 
