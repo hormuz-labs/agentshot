@@ -75,7 +75,7 @@ export function PhonePanel() {
                   <img src={pairing.qr} alt="Pairing code" data-testid="phone-qr" className="size-44 rounded-md bg-white p-1.5" />
                   <div className="min-w-0 space-y-2 text-[13px]">
                     <p>Open the Manul app on your phone and scan this code.</p>
-                    <p className="text-xs text-dim">It works once, for {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} more. Your phone needs to be on the same Wi-Fi as {pairing.name}.</p>
+                    <p className="text-xs text-dim">It works once, for {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} more. Your phone needs to be on the same Wi-Fi as {pairing.name}{st.tailscale ? ', or on Tailscale' : ''}.</p>
                     <Button size="sm" variant="ghost" onClick={newCode}><RefreshCw />New code</Button>
                   </div>
                 </div>
@@ -86,6 +86,19 @@ export function PhonePanel() {
                 </div>
               )}
               {error && <p className="mt-2 text-xs text-bad">{error}</p>}
+            </div>
+          )}
+
+          {st.enabled && !st.error && (
+            <div className="rounded-lg border border-line bg-raised/60 px-3 py-2.5" data-testid="phone-away">
+              <div className="flex items-center gap-2 font-medium">
+                <span className={cn('size-1.5 rounded-full', st.tailscale ? 'bg-ok' : 'bg-line-strong')} />Away from home
+              </div>
+              <p className="mt-0.5 text-xs leading-relaxed text-dim">
+                {st.tailscale
+                  ? <>This Mac is on Tailscale ({st.tailscale}). A paired phone with Tailscale on reaches it from anywhere, still encrypted end to end.</>
+                  : <>Put this Mac and your phone on the same <a href="https://tailscale.com/download" target="_blank" rel="noreferrer" className="text-amber hover:underline">Tailscale</a> network and a paired phone reaches it from anywhere. Nothing else to set up.</>}
+              </p>
             </div>
           )}
 

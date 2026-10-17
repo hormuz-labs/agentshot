@@ -15,8 +15,12 @@ What's in so far:
   carries on from where the Mac got to.
 - **Send to Manul:** the iOS share sheet's "Send to Manul" (Photos, Files, …) hands the files to the app, which asks
   which project they go into.
+- **Away from home:** if the Mac and the phone are both on [Tailscale](https://tailscale.com), the phone reaches the
+  Mac over the tailnet from anywhere, with nothing to set up. The Mac puts its Tailscale address in the pairing code,
+  and a paired phone asks the Mac for its current addresses each time it opens. So a phone paired at home finds the
+  Mac over Tailscale later, even if the Mac joined after pairing. Settings → Phone shows whether the Mac is on Tailscale.
 
-Next: previews of the cut, notes on the frame, and a relay for when you're away from home
+Next: previews of the cut, notes on the frame, and a relay for when you're away from home without Tailscale
 ([ROADMAP.md](../ROADMAP.md), phase 4).
 
 ## Try it

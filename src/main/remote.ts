@@ -10,9 +10,9 @@ import { hostname, networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import type { BaseEvent } from '@ag-ui/core'
 import {
-  aad, CHUNK, CHUNK_OVERHEAD, DEVICE_HEADER, newId, newKey, PAIR_TTL_MS, PROTOCOL, ReplayGuard, routes, seal, SEAL_HEADER, SealError,
+  aad, CHUNK, CHUNK_OVERHEAD, DEVICE_HEADER, isTailscale, newId, newKey, PAIR_TTL_MS, PROTOCOL, ReplayGuard, routes, seal, SEAL_HEADER, SealError,
   unseal, unsealBytes,
-  type PairingCode, type PairReply, type PairRequest, type RemoteMessage, type RemoteProject, type UploadStart, type UploadState,
+  type Hello, type PairingCode, type PairReply, type PairRequest, type RemoteMessage, type RemoteProject, type UploadStart, type UploadState,
 } from '../shared/remote'
 
 export const DEFAULT_PORT = 47821
@@ -51,13 +51,16 @@ export type PhoneDeps = {
   changed?(): void
 }
 
-/** Where the phone can reach this Mac: its IPv4 addresses on the local network, then its Bonjour name. */
-export function lanHosts() {
-  const ips = Object.values(networkInterfaces()).flat()
+/**
+ * Where the phone can reach this Mac: its IPv4 addresses on the local network, its Bonjour name, then its Tailscale
+ * address (100.x, on the person's tailnet), which also works away from home. An IP rather than the tailnet's
+ * *.ts.net name, because iOS lets an app speak plain HTTP to an IP address but not to a full domain name.
+ */
+export function reachableHosts(ifaces = networkInterfaces(), name = hostname()) {
+  const ips = Object.values(ifaces).flat()
     .filter(i => i && i.family === 'IPv4' && !i.internal && !i.address.startsWith('169.254.'))
     .map(i => i!.address)
-  const name = hostname()
-  return [...new Set([...ips, name.includes('.') ? name : `${name}.local`])]
+  return [...new Set([...ips.filter(ip => !isTailscale(ip)), name.includes('.') ? name : `${name}.local`, ...ips.filter(isTailscale)])]
 }
 
 class HttpError extends Error { constructor(public status: number, message = '') { super(message) } }
@@ -80,7 +83,7 @@ export class PhoneServer {
   private locks = new Map<string, Promise<unknown>>() // upload id → its chunk being written
   port = 0
 
-  constructor(private deps: PhoneDeps, private hosts: () => string[] = lanHosts) {}
+  constructor(private deps: PhoneDeps, private hosts: () => string[] = reachableHosts) {}
 
   get listening() { return !!this.server }
   /** phones following a conversation right now */
@@ -149,6 +152,10 @@ export class PhoneServer {
     }
 
     try {
+      if (method === 'GET' && path === routes.hello) {
+        const { id, name } = this.deps.store.mac
+        return reply(200, { mac: id, name, hosts: this.hosts(), port: this.port } satisfies Hello)
+      }
       if (method === 'GET' && path === routes.projects) {
         return reply(200, this.deps.projects().map(({ id, title, openedAt }) => ({ id, title, openedAt })))
       }

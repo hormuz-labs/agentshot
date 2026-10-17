@@ -23,8 +23,17 @@ export default function App() {
   const [project, setProject] = useState<RemoteProject | null>(null)
   const [shared, setShared] = useState<Kept[]>([])
   useEffect(() => { loadMac().then(setMac) }, [])
-  const client = useMemo(() => (mac ? new MacClient(mac, fetch as never) : null), [mac])
+  // a Mac whose addresses changed (it joined Tailscale) is saved, not set: a new client would start everything over
+  const client = useMemo(() => (mac ? new MacClient(mac, fetch as never, { onChange: m => { void saveMac(m) } }) : null), [mac])
   useEffect(() => { outbox.use(client) }, [client])
+  // where the Mac can be reached now, on launch and on coming back to the app
+  useEffect(() => {
+    if (!client) return
+    const refresh = () => { client.refresh().catch(() => {}) }
+    refresh()
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') refresh() })
+    return () => sub.remove()
+  }, [client])
 
   // what the share extension left: on launch, when it opens the app (manul://share), and coming back to the app
   const link = Linking.useLinkingURL()

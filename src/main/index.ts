@@ -22,9 +22,9 @@ import { thumbnails } from './thumbnails'
 import * as Tools from './tools'
 import * as Whisper from './whisper'
 import { getConfig, setConfig } from './config'
-import { PhoneServer } from './remote'
+import { PhoneServer, reachableHosts } from './remote'
 import { Phones } from './phones'
-import { pairingUrl } from '../shared/remote'
+import { isTailscale, pairingUrl } from '../shared/remote'
 import { OnboardingStore } from './onboarding'
 import { UsageTelemetry } from './telemetry'
 import type { TelemetryState } from '../shared/telemetry'
@@ -623,7 +623,10 @@ let keepAwake: number | null = null
 const phonesAvailable = () => !app.isPackaged
 
 function phoneState(): PhoneState {
-  return { available: phonesAvailable(), enabled: !!getConfig().phone?.enabled, error: phoneError, phones: phones?.list() || [], connected: phoneServer?.connected || 0 }
+  return {
+    available: phonesAvailable(), enabled: !!getConfig().phone?.enabled, error: phoneError, phones: phones?.list() || [], connected: phoneServer?.connected || 0,
+    tailscale: reachableHosts().find(isTailscale),
+  }
 }
 
 function phoneChanged() {
