@@ -1,6 +1,6 @@
-// Settings: one place for the look, keys, models, skills, memory, the agent's browser and tools.
+// Settings: one place for the look, keys, models, skills, memory, the agent's browser, tools and the phone app.
 import * as D from '@radix-ui/react-dialog'
-import { Brain, Globe, Info, KeyRound, Package, Palette, Sparkles, X } from 'lucide-react'
+import { Brain, Globe, Info, KeyRound, Package, Palette, Smartphone, Sparkles, X } from 'lucide-react'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { KeysPanel } from './KeysPanel'
@@ -10,10 +10,11 @@ import { SkillsPanel } from './SkillsPanel'
 import { ToolsPanel } from './ToolsPanel'
 import { BrowserSettingsPanel } from './BrowserSettingsPanel'
 import { AppearancePanel } from './AppearancePanel'
+import { PhonePanel } from './PhonePanel'
 import { SettingsTour } from '@/components/SettingsTour'
 import { SETTINGS_TOUR_STEPS } from '@/lib/settings-tour'
 
-export type Section = 'appearance' | 'keys' | 'skills' | 'memory' | 'browser' | 'tools' | 'about'
+export type Section = 'appearance' | 'keys' | 'skills' | 'memory' | 'browser' | 'tools' | 'phone' | 'about'
 const SECTIONS: { id: Section; label: string; icon: ReactNode; panel: () => ReactNode }[] = [
   { id: 'appearance', label: 'Appearance', icon: <Palette />, panel: () => <AppearancePanel /> },
   { id: 'keys', label: 'Keys', icon: <KeyRound />, panel: () => <KeysPanel /> },
@@ -21,11 +22,15 @@ const SECTIONS: { id: Section; label: string; icon: ReactNode; panel: () => Reac
   { id: 'memory', label: 'Memory', icon: <Brain />, panel: () => <MemoryPanel /> },
   { id: 'browser', label: 'Browser', icon: <Globe />, panel: () => <BrowserSettingsPanel /> },
   { id: 'tools', label: 'Tools', icon: <Package />, panel: () => <ToolsPanel /> },
+  { id: 'phone', label: 'Phone', icon: <Smartphone />, panel: () => <PhonePanel /> },
   { id: 'about', label: 'About', icon: <Info />, panel: () => <AboutPanel /> },
 ]
 
 export function SettingsDialog({ section, onSection, onClose }: { section: Section | null; onSection(s: Section): void; onClose(): void }) {
   const [tourIndex, setTourIndex] = useState<number | null>(null)
+  // Phone shows in development builds only, until the phone app is in the stores
+  const [phone, setPhone] = useState(false)
+  useEffect(() => { window.manul.phone.state().then(s => setPhone(s.available)).catch(() => {}) }, [])
   const open = !!section
   useEffect(() => {
     if (!open) { setTourIndex(null); return }
@@ -56,7 +61,7 @@ export function SettingsDialog({ section, onSection, onClose }: { section: Secti
           <D.Title className="sr-only">Settings</D.Title>
           <nav className="w-44 shrink-0 space-y-0.5 bg-bg/50 p-2">
             <div className="px-2 pb-2 pt-1 text-xs font-medium uppercase tracking-wider text-faint">Settings</div>
-            {SECTIONS.map(s => (
+            {SECTIONS.filter(s => s.id !== 'phone' || phone).map(s => (
               <button key={s.id} data-tour={`settings-${s.id}-tab`} onClick={() => onSection(s.id)}
                 className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left [&_svg]:size-4', section === s.id ? 'bg-raised text-fg' : 'text-dim hover:bg-hover hover:text-fg')}>
                 {s.icon}{s.label}

@@ -135,6 +135,21 @@ export type GalleryExample = {
 
 export type RecentProject = { id: string; title: string; dir: string; openedAt: number; thumb?: string }
 
+/** Settings → Phone: the phone companion app (src/main/remote.ts). Never a phone's key. */
+export type PairedPhone = { id: string; name: string; pairedAt: number; lastSeen?: number }
+export type PhoneState = {
+  /** development builds only, until the phone app is in the stores */
+  available: boolean
+  enabled: boolean
+  /** why it could not start listening, if it couldn't */
+  error?: string
+  phones: PairedPhone[]
+  /** phones following a conversation right now */
+  connected: number
+}
+/** What the QR code shows: the pairing link, good until expires. */
+export type PhonePairing = { url: string; expires: number; name: string; hosts: string[]; port: number }
+
 export type KeyInfo = { env: string; label: string; unlocks: string[]; hint: string; set: boolean }
 /** Who is signed in to Manul (never their key), and whether this build can sign in at all. */
 export type AccountStatus = { email?: string; available: boolean }

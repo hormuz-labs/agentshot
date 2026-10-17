@@ -7,7 +7,7 @@ import type { Cue } from '../shared/subtitles'
 import type { Edit } from '../shared/timeline'
 import type { PreviewState } from '../shared/proxy'
 import type { DemoOptions } from '../main/demo'
-import type { GalleryExample, SubtitleLink } from '../shared/types'
+import type { GalleryExample, PhonePairing, PhoneState, SubtitleLink } from '../shared/types'
 import type { TelemetryState } from '../shared/telemetry'
 import type { SettingsOpened } from '../shared/onboarding'
 
@@ -151,6 +151,14 @@ const api = {
   tabs: {
     get: () => ipcRenderer.invoke('tabs:get') as Promise<{ open: string[]; active: string | null }>,
     set: (t: { open: string[]; active: string | null }) => ipcRenderer.invoke('tabs:set', t),
+  },
+  /** The phone companion app: phone access on or off, a pairing QR, and the paired phones (names only). */
+  phone: {
+    state: () => ipcRenderer.invoke('phone:state') as Promise<PhoneState>,
+    enable: (on: boolean) => ipcRenderer.invoke('phone:enable', on) as Promise<PhoneState>,
+    pair: () => ipcRenderer.invoke('phone:pair') as Promise<PhonePairing>,
+    forget: (id: string) => ipcRenderer.invoke('phone:forget', id) as Promise<PhoneState>,
+    onState: on<[PhoneState]>('phone:state'),
   },
   /** light, dark or the system's: the window and native menus follow it */
   theme: { set: (t: 'light' | 'dark' | 'system') => ipcRenderer.invoke('theme:set', t) },
