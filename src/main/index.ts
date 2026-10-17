@@ -643,6 +643,15 @@ async function startPhones() {
     send: (dir, msg) => sendToAgent(dir, msg),
     stop: async dir => { await agent?.stop(dir) },
     subscribe: (dir, emit) => agent!.subscribe(dir, emit),
+    uploads: join(app.getPath('userData'), 'phone-uploads'),
+    // footage from the phone lands like any file added to the project: in media/, in its history, to the agent
+    addFile: async (dir, abs, from) => {
+      const p = projectOf(dir)
+      const rels = await Projects.addFiles(p, abs)
+      await checkpoint(p, `Added ${rels.length === 1 ? rels[0] : `${rels.length} files`} from ${from}`)
+      for (const rel of rels) { ensureProxy(p, rel); autoTranscribe(p, rel) }
+      return rels
+    },
     changed: phoneChanged,
   })
   try { await phoneServer.start(); phoneError = undefined } catch (e) { phoneError = `Phone access could not start: ${(e as Error).message}` }

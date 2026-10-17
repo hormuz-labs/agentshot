@@ -231,15 +231,18 @@ pro editors can take a Manul rough cut into their own editor.
 - 🚧 **Cloud tools on Manul's worker** (`worker.trypitch.co`): Upscale (Real-ESRGAN) has its place in Tools as *Coming soon*; only the shot being processed is sent
 - ⬜ Integrations through **Composio**: Google Drive, Dropbox, OneDrive, Slack, Notion, Gmail, TikTok,
       Instagram, LinkedIn, X. Large files go by direct signed upload/download links, never through tool calls
-- ⬜ Phone capture over **local Wi-Fi** (QR pairing, free)
+- 🚧 Phone capture over **local Wi-Fi** (QR pairing, free): film or pick footage in the phone app, or "Send to Manul"
+      from the share sheet, and it goes straight to the Mac in sealed pieces that resume after a drop
+      ([mobile/](mobile/README.md))
 
 ### Phase 4: Cloud, mobile, teams
 - ⬜ **Manul Cloud storage** (Cloudflare R2): base amount included in Pro, add-on blocks, pooled for teams
 - 🚧 **Mobile app** (React Native/Expo): record → footage lands in the project; "Send to Manul" share option; talk
       to the agent over AG-UI. Talking is in ([mobile/](mobile/README.md)): pair with a QR code from Settings → Phone
       (development builds for now), pick a project and chat with its agent live over the local Wi-Fi, every message
-      sealed with the phone's key. Next: recording and "Send to Manul", previews, notes on the frame, and a relay for
-      away from home
+      sealed with the phone's key. Footage is in too: record or pick from the library in a project's chat, or "Send to
+      Manul" from Photos or Files; it lands in the project's files and goes with the next message. Next: previews,
+      notes on the frame, and a relay for away from home
 - ⬜ **Team plan:** shared projects, **review links** where clients comment on the frame, shared brand kits and skills
 - ⬜ Recording integrations: Zoom, Riverside, Loom, Google Meet → auto-import
 - ⬜ Stock media: Pexels, Pixabay, Unsplash, Giphy; licensed music (Epidemic Sound, Artlist)
