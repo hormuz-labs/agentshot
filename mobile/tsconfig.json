@@ -1,0 +1,12 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    // ../src/shared's imports resolve from this app's packages, as Metro does (metro.config.js)
+    "paths": {
+      "@ag-ui/core": ["./node_modules/@ag-ui/core"],
+      "@noble/ciphers/*": ["./node_modules/@noble/ciphers/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "../src/shared/remote.ts", "../src/shared/agui-state.ts", "../src/shared/attached.ts"]
+}
