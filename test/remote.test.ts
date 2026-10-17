@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  aad, b64url, CHUNK_OVERHEAD, fromB64url, newKey, pairingUrl, readPairingUrl, ReplayGuard, seal, sealBytes, SealError, SKEW_MS, unseal,
+  aad, b64url, CHUNK_OVERHEAD, fromB64url, isTailscale, newKey, pairingUrl, readPairingUrl, ReplayGuard, seal, sealBytes, SealError, SKEW_MS, unseal,
   unsealBytes, type PairingCode,
 } from '../src/shared/remote'
 
@@ -104,5 +104,12 @@ describe('ReplayGuard', () => {
     expect(g.accept('a', t + 1)).toBe(false)
     expect(g.accept('b', t + 2 * SKEW_MS + 1)).toBe(true)
     expect(g.accept('a', t + 2 * SKEW_MS + 2)).toBe(true)
+  })
+})
+
+describe('isTailscale', () => {
+  it('knows a tailnet address (100.64.0.0/10) from a home network’s and everything else', () => {
+    for (const h of ['100.64.0.1', '100.101.102.103', '100.127.255.254']) expect(isTailscale(h)).toBe(true)
+    for (const h of ['100.63.255.255', '100.128.0.1', '10.0.0.5', '192.168.1.20', 'studio.local', '100.64.0.1.example.com']) expect(isTailscale(h)).toBe(false)
   })
 })

@@ -146,6 +146,8 @@ export type PhoneState = {
   phones: PairedPhone[]
   /** phones following a conversation right now */
   connected: number
+  /** this Mac's Tailscale address, when it is on a tailnet: phones on it reach the Mac away from home */
+  tailscale?: string
 }
 /** What the QR code shows: the pairing link, good until expires. */
 export type PhonePairing = { url: string; expires: number; name: string; hosts: string[]; port: number }

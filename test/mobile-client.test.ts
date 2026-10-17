@@ -20,6 +20,7 @@ function mac() {
   const attached: string[][] = []
   const added: { name: string; bytes: Buffer }[] = []
   const subs = new Set<(e: BaseEvent) => void>()
+  const hosts = { now: ['192.0.2.1', '127.0.0.1'] } // the first never answers (TEST-NET), as a stale address wouldn't
   const server = new PhoneServer({
     store: { mac: { id: 'mac1', name: 'Studio Mac' }, get: id => devices.get(id), add: d => { devices.set(d.id, d) }, seen: () => {} },
     projects: () => [{ id: 'p1', title: 'Launch film', dir: '/films/launch', openedAt: 1 }],
@@ -33,8 +34,8 @@ function mac() {
     subscribe: (_dir, emit) => { subs.add(emit); emit({ type: 'MESSAGES_SNAPSHOT', messages: [] } as BaseEvent); return () => subs.delete(emit) },
     uploads: mkdtempSync(join(tmpdir(), 'manul-uploads-')),
     addFile: async (_dir, abs) => { const name = abs.split('/').pop()!; added.push({ name, bytes: readFileSync(abs) }); return [`media/${name}`] },
-  }, () => ['192.0.2.1', '127.0.0.1']) // the first never answers (TEST-NET), as a stale address wouldn't
-  return { server, devices, sent, attached, added, subs, emit: (e: BaseEvent) => subs.forEach(s => s(e)) }
+  }, () => hosts.now)
+  return { server, devices, sent, attached, added, subs, hosts, emit: (e: BaseEvent) => subs.forEach(s => s(e)) }
 }
 
 let running: PhoneServer | null = null
@@ -115,6 +116,31 @@ function wire(hook: (piece: { offset: number; n: number; body: Uint8Array }) => 
     return what === 'drop-after' ? res.then(r => r.text()).then(() => { throw new TypeError('Network request failed') }) : res
   } as never
 }
+
+describe('the Mac’s addresses, and Tailscale', () => {
+  it('keeps up when the Mac joins a tailnet after pairing', async () => {
+    const m = mac()
+    running = m.server
+    await m.server.start(0, '127.0.0.1')
+    const paired = await pair(m.server.pairingCode(), 'phone', f)
+    const changes: string[][] = []
+    const c = new MacClient(paired, f, { onChange: x => changes.push(x.hosts) })
+    await c.refresh()
+    expect(changes).toEqual([['192.0.2.1', '127.0.0.1']]) // the Mac's own order, not the order the phone found them in
+    await c.refresh()
+    expect(changes.length).toBe(1) // nothing new, nothing saved
+
+    m.hosts.now = ['127.0.0.1', '100.101.102.103']
+    expect((await c.refresh()).hosts).toEqual(['127.0.0.1', '100.101.102.103'])
+    expect(changes.at(-1)).toEqual(['127.0.0.1', '100.101.102.103'])
+    expect(c.mac.hosts).toEqual(['127.0.0.1', '100.101.102.103'])
+  })
+
+  it('says Tailscale is a way in when the Mac is on it', async () => {
+    await expect(reach(['192.0.2.1'], 1, 'Studio Mac', f, 200)).rejects.toThrow(/same Wi-Fi, and that Manul/)
+    await expect(reach(['192.0.2.1', '100.101.102.103'], 1, 'Studio Mac', f, 200)).rejects.toThrow(/same Wi-Fi or has Tailscale on/)
+  })
+})
 
 describe('sending footage from the phone', () => {
   it('sends a file in pieces into the project, and attaches it to a message', async () => {
