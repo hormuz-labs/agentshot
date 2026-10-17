@@ -1,4 +1,4 @@
-import type { AgentState } from './agui'
+import type { AgentState } from '../../../shared/agui-state'
 
 export type MascotState = 'idle' | 'thinking' | 'working' | 'speaking' | 'waiting' | 'success' | 'error' | 'sleeping'
 export type MascotActivity = { state: MascotState; label: string; detail: string }

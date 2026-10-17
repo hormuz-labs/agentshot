@@ -966,6 +966,19 @@ export async function startAgent(opts: {
   const pickModel = async (dir?: string) => chooseModel(await available(), dir ? opts.bridge.project(dir)?.model : undefined)
 
   const live = new Map<string, { conv: Any; off: () => void; view: Any; adapter: AguiAdapter }>()
+  // Other viewers of a project's conversation (the phone): each gets its own adapter, so one (re)connecting replays
+  // only to itself. They outlive the conversation and follow the project to whichever one it opens next.
+  type Viewer = { emit: (e: BaseEvent) => void; off?: () => void }
+  const viewers = new Map<string, Set<Viewer>>()
+
+  function watch(dir: string, v: Viewer) {
+    v.off?.()
+    const l = live.get(dir)
+    if (!l) { v.off = undefined; return }
+    const adapter = new AguiAdapter(String(l.conv.id), v.emit)
+    v.off = l.view.subscribe((s: Any) => adapter.update(s))
+    adapter.replay(l.view.value)
+  }
 
   /** Show a project's conversation (the given one, the open one, or a new one); the renderer gets a full replay. */
   async function open(dir: string, convId?: string, fresh = false) {
@@ -982,16 +995,38 @@ export async function startAgent(opts: {
     const off = view.subscribe((v: Any) => adapter.update(v))
     live.set(dir, { conv, off, view, adapter })
     adapter.replay(view.value)
+    for (const v of viewers.get(dir) || []) watch(dir, v)
     return String(conv.id)
   }
 
-  function detach(dir: string) { const l = live.get(dir); if (l) { l.off(); l.view.dispose?.(); live.delete(dir) } }
+  function detach(dir: string) {
+    const l = live.get(dir)
+    if (!l) return
+    for (const v of viewers.get(dir) || []) { v.off?.(); v.off = undefined }
+    l.off(); l.view.dispose?.(); live.delete(dir)
+  }
 
   return {
     open,
     /** Start a new conversation in a project (the old ones stay, durable). */
     newConversation: (dir: string) => open(dir, undefined, true),
     current: (dir: string) => (live.has(dir) ? String(live.get(dir)!.conv.id) : undefined),
+    /**
+     * Follow a project's conversation as AG-UI events, with a full replay now if it is open (else once it opens) and
+     * again whenever it switches conversation. Independent of onEvent and of every other viewer. Returns unsubscribe.
+     */
+    subscribe(dir: string, emit: (e: BaseEvent) => void) {
+      const v: Viewer = { emit }
+      if (!viewers.has(dir)) viewers.set(dir, new Set())
+      viewers.get(dir)!.add(v)
+      watch(dir, v)
+      return () => {
+        v.off?.()
+        const set = viewers.get(dir)
+        set?.delete(v)
+        if (set?.size === 0) viewers.delete(dir)
+      }
+    },
     hasModel: async () => !!(await pickModel()),
     model: (dir?: string) => pickModel(dir),
     models: async () => describeModels(await available(), Object.fromEntries(listProviders().map(p => [p.id, p.name]))),

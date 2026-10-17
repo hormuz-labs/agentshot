@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AgentState } from '@/lib/agui'
+import type { AgentState } from '../../../../shared/agui-state'
 import { mascotActivity, type MascotState } from '@/lib/mascot'
 import { ManulMascot, MascotControls, type MascotHandle } from './ManulMascot'
 
