@@ -11,7 +11,15 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Manul talks to the Manul app on your Mac over your Wi-Fi.",
-        "NSAppTransportSecurity": { "NSAllowsLocalNetworking": true }
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      },
+      "bundleIdentifier": "com.hormuzlabs.manul.mobile",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.hormuzlabs.manul.mobile"
+        ]
       }
     },
     "android": {
@@ -28,7 +36,21 @@
     },
     "plugins": [
       "expo-secure-store",
-      ["expo-camera", { "cameraPermission": "Manul uses the camera to scan the pairing code on your Mac.", "recordAudioAndroid": false }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Manul uses the camera to scan the pairing code on your Mac and to film for your projects.",
+          "microphonePermission": "Manul records sound with the videos you film for your projects.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Manul sends the videos and photos you choose to a project on your Mac."
+        }
+      ],
+      "@bacons/apple-targets"
     ]
   }
 }
