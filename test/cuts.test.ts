@@ -1,9 +1,10 @@
 // Saving a cut-only edit fast: the plan (what is copied, what encoded), and real renders checked frame by frame,
 // for sync and against the full render's time.
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { composeArgs, type Item, type Timeline } from '../src/shared/timeline'
 import { badJoin, cutSource, framesIn, indexFrames, nalLengthSize, planRuns, renderCuts, unfit, type Packet } from '../src/main/cuts'
@@ -107,18 +108,22 @@ describe('what can be cut by copying', () => {
 
 // ---------------------------------------------------------------- real renders
 const dir = mkdtempSync(join(tmpdir(), 'manul-cuts-'))
-const ff = (args: string[]) => execFileSync(FFMPEG, ['-y', '-loglevel', 'error', ...args], { cwd: dir, maxBuffer: 1 << 30 })
-const probeOut = (file: string, entries: string) => execFileSync(FFPROBE, ['-v', 'error', '-show_entries', entries, '-of', 'json', file], { cwd: dir }).toString()
-const md5s = (file: string) => ff(['-i', file, '-map', '0:v:0', '-f', 'framemd5', '-']).toString().split('\n').filter(l => l && !l.startsWith('#')).map(l => l.split(',').pop()!.trim())
+// ffmpeg runs beside the test, never blocking it: a render that holds the worker for a minute (the full render, on a
+// slow Intel Mac) leaves Vitest's worker unable to answer, and the run fails with "Timeout calling onTaskUpdate"
+const run = promisify(execFile)
+const ff = async (args: string[]) => (await run(FFMPEG, ['-y', '-loglevel', 'error', ...args], { cwd: dir, maxBuffer: 1 << 30, encoding: 'buffer' })).stdout
+const probeOut = async (file: string, entries: string) => (await run(FFPROBE, ['-v', 'error', '-show_entries', entries, '-of', 'json', file], { cwd: dir })).stdout
+const md5s = async (file: string) => (await ff(['-i', file, '-map', '0:v:0', '-f', 'framemd5', '-'])).toString().split('\n').filter(l => l && !l.startsWith('#')).map(l => l.split(',').pop()!.trim())
 const W = 320, H = 180
-const thumbs = (file: string) => { const b = ff(['-i', file, '-map', '0:v:0', '-vf', `scale=${W}:${H},format=gray`, '-f', 'rawvideo', '-']); return Array.from({ length: b.length / (W * H) }, (_, i) => b.subarray(i * W * H, (i + 1) * W * H)) }
+const thumbs = async (file: string) => { const b = await ff(['-i', file, '-map', '0:v:0', '-vf', `scale=${W}:${H},format=gray`, '-f', 'rawvideo', '-']); return Array.from({ length: b.length / (W * H) }, (_, i) => b.subarray(i * W * H, (i + 1) * W * H)) }
 const mse = (a: Uint8Array, b: Uint8Array) => { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return s / a.length }
-const pcm = (file: string) => { const b = Buffer.from(ff(['-i', file, '-map', '0:a:0', '-ac', '1', '-ar', '48000', '-f', 'f32le', '-'])); return new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)) }
+const pcm = async (file: string) => { const b = Buffer.from(await ff(['-i', file, '-map', '0:a:0', '-ac', '1', '-ar', '48000', '-f', 'f32le', '-'])); return new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)) }
 const frame30 = (t: number) => Math.ceil(t * 30 - 1e-6)
 
 /** Every frame of out is the right frame of src: copied ones bit for bit, encoded ones nearer it than its neighbours. */
-function checkFrames(src: string, out: string, items: Item[], copiedAtLeast: number) {
-  const sm = md5s(src), om = md5s(out), st = thumbs(src), ot = thumbs(out)
+async function checkFrames(src: string, out: string, items: Item[], copiedAtLeast: number) {
+  // one at a time, as before: ffmpeg processes in parallel would crowd the other test files' timings
+  const sm = await md5s(src), om = await md5s(out), st = await thumbs(src), ot = await thumbs(out)
   const want = items.flatMap(it => (it.kind === 'media' ? Array.from({ length: frame30(it.out) - frame30(it.in) }, (_, k) => frame30(it.in) + k) : []))
   expect(om.length).toBe(want.length)
   let exact = 0
@@ -132,8 +137,8 @@ function checkFrames(src: string, out: string, items: Item[], copiedAtLeast: num
 }
 
 /** The sound in the middle of each piece is the source's from the same moment (to a millisecond). */
-function checkSync(src: string, out: string, items: Item[]) {
-  const s = pcm(src), o = pcm(out), R = 48000, win = 2400, reach = 2400
+async function checkSync(src: string, out: string, items: Item[]) {
+  const s = await pcm(src), o = await pcm(out), R = 48000, win = 2400, reach = 2400
   let at = 0
   for (const it of items) {
     if (it.kind !== 'media') continue
@@ -152,9 +157,9 @@ function checkSync(src: string, out: string, items: Item[]) {
 }
 
 describe('a cut, rendered', () => {
-  beforeAll(() => {
+  beforeAll(async () => {
     // a minute of 1080p30 with B-frames and a keyframe every second, over a rising tone (each moment sounds different)
-    ff(['-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:r=30:d=60', '-f', 'lavfi', '-i', 'aevalsrc=sin(2*PI*(200*t+50*t*t)):s=48000:d=60',
+    await ff(['-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:r=30:d=60', '-f', 'lavfi', '-i', 'aevalsrc=sin(2*PI*(200*t+50*t*t)):s=48000:d=60',
       '-c:v', 'libx264', '-preset', 'veryfast', '-g', '30', '-c:a', 'aac', '-b:a', '160k', '-shortest', 'src.mp4'])
   }, 120_000)
 
@@ -167,17 +172,17 @@ describe('a cut, rendered', () => {
     const fast = performance.now() - t
     expect(r).toMatchObject({ ok: true })
     expect(r.ok && r.copied).toBeGreaterThan(0.8)
-    const frames = checkFrames('src.mp4', 'cut.mp4', items, 0.8)
-    const s = JSON.parse(probeOut('cut.mp4', 'stream=codec_type,duration'))
+    const frames = await checkFrames('src.mp4', 'cut.mp4', items, 0.8)
+    const s = JSON.parse(await probeOut('cut.mp4', 'stream=codec_type,duration'))
     expect(Number(s.streams[0].duration)).toBeCloseTo(frames / 30, 3)
     expect(Math.abs(Number(s.streams[1].duration) - frames / 30)).toBeLessThan(0.05)
-    checkSync('src.mp4', 'cut.mp4', items)
+    await checkSync('src.mp4', 'cut.mp4', items)
     // the -6 dB piece is half as loud (its middle second, against the same second of the file)
     const rms = (x: Float32Array, at: number) => Math.sqrt(x.subarray(at * 48000, (at + 1) * 48000).reduce((s, v) => s + v * v, 0) / 48000)
     const before = (frame30(7.3) + frame30(20) - frame30(12.2) + frame30(31) - frame30(30.4)) / 30
-    expect(rms(pcm('cut.mp4'), before + 6) / rms(pcm('src.mp4'), 46)).toBeCloseTo(0.5, 1)
+    expect(rms(await pcm('cut.mp4'), before + 6) / rms(await pcm('src.mp4'), 46)).toBeCloseTo(0.5, 1)
     t = performance.now()
-    ff(composeArgs(tl, { inputOf: () => 'src.mp4', hasAudio: () => true, out: 'full.mp4' }))
+    await ff(composeArgs(tl, { inputOf: () => 'src.mp4', hasAudio: () => true, out: 'full.mp4' }))
     const full = performance.now() - t
     console.log(`cut: ${Math.round(fast)} ms, full render: ${Math.round(full)} ms`)
     expect(fast).toBeLessThan(full / 2)
@@ -198,28 +203,28 @@ describe('a cut, rendered', () => {
   }, 60_000)
 
   it('cuts files without B-frames, in Matroska, or without sound', async () => {
-    ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:r=30:d=12', '-f', 'lavfi', '-i', 'aevalsrc=sin(2*PI*(200*t+50*t*t)):s=48000:d=12',
+    await ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:r=30:d=12', '-f', 'lavfi', '-i', 'aevalsrc=sin(2*PI*(200*t+50*t*t)):s=48000:d=12',
       '-c:v', 'libx264', '-preset', 'ultrafast', '-g', '15', '-c:a', 'aac', '-shortest', 'flat.mp4'])
-    ff(['-i', 'src.mp4', '-t', '12', '-c', 'copy', 'src.mkv'])
-    ff(['-i', 'src.mp4', '-t', '12', '-an', '-c', 'copy', 'silent.mp4'])
+    await ff(['-i', 'src.mp4', '-t', '12', '-c', 'copy', 'src.mkv'])
+    await ff(['-i', 'src.mp4', '-t', '12', '-an', '-c', 'copy', 'silent.mp4'])
     const cut = [media(0.5, 4.2), media(6, 11.5)]
     for (const [file, size] of [['flat.mp4', [640, 360]], ['src.mkv', [1920, 1080]], ['silent.mp4', [1920, 1080]]] as const) {
       const its = cut.map(i => ({ ...i, src: file }))
       const r = await renderCuts({ ffmpeg: FFMPEG, ffprobe: FFPROBE, cwd: dir, tl: tlOf(its, { width: size[0], height: size[1], fps: 30 }), out: `cut-${file}.mp4` })
       expect(r, file).toMatchObject({ ok: true })
-      checkFrames(file, `cut-${file}.mp4`, its, 0.5)
-      const s = JSON.parse(probeOut(`cut-${file}.mp4`, 'stream=codec_type,duration'))
+      await checkFrames(file, `cut-${file}.mp4`, its, 0.5)
+      const s = JSON.parse(await probeOut(`cut-${file}.mp4`, 'stream=codec_type,duration'))
       expect(s.streams.map((x: { codec_type: string }) => x.codec_type)).toEqual(['video', 'audio'])
-      if (file !== 'silent.mp4') checkSync(file, `cut-${file}.mp4`, its)
+      if (file !== 'silent.mp4') await checkSync(file, `cut-${file}.mp4`, its)
     }
   }, 120_000)
 
   it('won\'t copy from an open GOP\'s keyframes', async () => {
-    ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:r=30:d=12', '-c:v', 'libx264', '-preset', 'veryfast', '-g', '30', '-x264-params', 'open-gop=1', 'open.mp4'])
+    await ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:r=30:d=12', '-c:v', 'libx264', '-preset', 'veryfast', '-g', '30', '-x264-params', 'open-gop=1', 'open.mp4'])
     const its = [media(0.5, 4.2), media(6, 11.5)].map(i => ({ ...i, src: 'open.mp4' }))
     const r = await renderCuts({ ffmpeg: FFMPEG, ffprobe: FFPROBE, cwd: dir, tl: tlOf(its, { width: 640, height: 360, fps: 30 }), out: 'cut-open.mp4' })
     // either nothing to copy, or what it copied is right
-    if (r.ok) checkFrames('open.mp4', 'cut-open.mp4', its, 0)
+    if (r.ok) await checkFrames('open.mp4', 'cut-open.mp4', its, 0)
     else expect(r.why).toMatch(/little to copy/)
   }, 60_000)
 })
