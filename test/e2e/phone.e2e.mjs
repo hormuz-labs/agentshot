@@ -81,6 +81,11 @@ const events = []
 })()
 const until = async (what, ok, ms = 30000) => { const t = Date.now(); while (!ok()) { if (Date.now() - t > ms) throw new Error(`timed out waiting for ${what}: ${events.map(e => e.type).join(', ')}`); await new Promise(r => setTimeout(r, 100)) } }
 await until('the replay', () => events.some(e => e.type === 'MESSAGES_SNAPSHOT'))
+// the start screen's message is still being answered (and fails: the key is fake): talk once it is done, since a message
+// that arrives while a run is ending in an error may not make it into the conversation
+// (a replay can start a run again without ending the one before, so: whatever was said last about runs)
+const idle = () => events.filter(e => e.type === 'RUN_STARTED' || e.type === 'RUN_FINISHED').at(-1)?.type !== 'RUN_STARTED'
+await until('the first run to end', idle, 60000)
 
 assert.deepEqual(await call('POST', routes.messages(project), { text: 'Hello from the phone' }), { status: 200, value: { ok: true } })
 await until('the message in the conversation', () => events.some(e => e.type === 'MESSAGES_SNAPSHOT' && e.messages.some(m => m.role === 'user' && m.content.includes('Hello from the phone'))))
@@ -89,7 +94,8 @@ await win.keyboard.press('Escape')
 await win.waitForSelector('text=Hello from the phone') // the window shows what the phone said
 await until('the run to end', () => events.some(e => e.type === 'RUN_FINISHED'), 60000)
 
-// a clip from the phone, in pieces of 8 KB
+// a clip from the phone, in pieces of 8 KB. The agent may still be answering "Hello" (and failing: the key is fake), so
+// the message that says so can arrive mid-run; it has to reach the agent all the same (agent.ts, rescue)
 const take = readFileSync(join(out, 'take.mov'))
 const name = 'Phone 17 Oct 14.32.mov'
 const started = await call('POST', routes.uploads(project), { name, size: take.length })
@@ -127,7 +133,7 @@ await win.screenshot({ path: join(out, 'phone-upload-files.png') })
 // and attached to the next message, for the agent
 assert.deepEqual(await call('POST', routes.messages(project), { text: 'Open with this', files: landed }), { status: 200, value: { ok: true } })
 await until('the clip in the conversation', () => events.some(e => e.type === 'MESSAGES_SNAPSHOT' && e.messages.some(m => m.role === 'user' && m.content.includes('Open with this') && m.content.includes(landed[0]))))
-await until('that run to end', () => events.filter(e => e.type === 'RUN_FINISHED').length >= 2, 60000)
+await until('that run to end', idle, 60000)
 
 // removing the phone ends its stream and its access
 await win.click('[aria-label="Settings"]')
