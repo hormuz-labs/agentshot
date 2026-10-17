@@ -1,16 +1,16 @@
 // This phone's side of the phone ↔ Mac protocol (src/shared/remote.ts): pair with a Mac from its QR code, find it on
-// the network, and talk to its agent. Plain TypeScript with fetch passed in, so it also runs under Node against the
+// the network, talk to its agent, and send it footage. Plain TypeScript with fetch passed in, so it also runs under Node against the
 // real desktop app (test/e2e/phone-client.e2e.mjs in the desktop app).
 import type { BaseEvent } from '@ag-ui/core'
 import {
-  aad, DEVICE_HEADER, routes, seal, SEAL_HEADER, unseal,
-  type PairingCode, type PairReply, type RemoteProject,
+  aad, b64url, CHUNK, DEVICE_HEADER, routes, seal, SEAL_HEADER, sealBytes, unseal,
+  type PairingCode, type PairReply, type RemoteProject, type UploadState,
 } from '../../src/shared/remote'
 
 /** A paired Mac, as this phone keeps it (in the keychain). */
 export type Mac = { id: string; name: string; hosts: string[]; port: number; device: string; key: string }
 
-type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }) =>
+type Fetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string | Uint8Array; signal?: AbortSignal }) =>
   Promise<{ status: number; ok: boolean; text(): Promise<string>; body: ReadableStream<Uint8Array> | null }>
 
 export class MacError extends Error {
@@ -49,6 +49,28 @@ export async function pair(code: PairingCode, phoneName: string, fetchImpl: Fetc
   return { id: r.mac, name: r.name, hosts: [host, ...code.hosts.filter(h => h !== host)], port: code.port, device: r.device, key: r.key }
 }
 
+/** A file to send, read a piece at a time: expo-file-system on the phone, a Blob in a browser, the disk in tests. */
+export type Source = { name: string; size: number; read(offset: number, length: number): Promise<Uint8Array> }
+
+export type UploadOptions = {
+  /** an upload started earlier (the app was closed, say): carry on with it if the Mac still has it */
+  upload?: string
+  /** the Mac made the upload: keep its id to resume after a restart */
+  onStart?(upload: string): void
+  onProgress?(received: number, size: number): void
+  signal?: AbortSignal
+  /** bytes per piece (CHUNK) */
+  chunk?: number
+  /** tries after a drop before giving up, and the first wait between them (it doubles, up to 15 s) */
+  retries?: number
+  wait?: number
+}
+
+/** An upload that landed: its paths in the project's media/. */
+export type Uploaded = UploadState & { files: string[] }
+
+const PIECE_TIMEOUT_MS = 60_000
+
 export type Follow = {
   /** a (re)connection: the conversation is replayed from the start next */
   open(): void
@@ -70,10 +92,13 @@ export class MacClient {
     return `http://${this.host}:${this.mac.port}`
   }
 
-  /** A sealed request; returns the opened reply. GETs carry their seal in a header, POSTs as the body. */
-  private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown, signal?: AbortSignal) {
-    const s = seal(this.mac.key, aad.request(method, path), body ?? null)
-    const headers: Record<string, string> = { [DEVICE_HEADER]: this.mac.device, ...(method === 'GET' ? { [SEAL_HEADER]: s } : {}) }
+  /** A sealed request; returns the opened reply. GETs carry their seal in a header, POSTs as the body; a piece of an
+   *  upload is sealed bytes, bound to its upload and offset (`bytes.ad`). */
+  private async request(method: 'GET' | 'POST', path: string, body?: unknown, signal?: AbortSignal, bytes?: { ad: string; data: Uint8Array }) {
+    const s = bytes ? sealBytes(this.mac.key, bytes.ad, bytes.data) : seal(this.mac.key, aad.request(method, path), body ?? null)
+    const headers: Record<string, string> = { [DEVICE_HEADER]: this.mac.device }
+    if (typeof s === 'string' && method === 'GET') headers[SEAL_HEADER] = s
+    if (bytes) headers['content-type'] = 'application/octet-stream'
     let res
     try {
       res = await this.fetchImpl((await this.base()) + path, { method, headers, body: method === 'POST' ? s : undefined, signal })
@@ -83,20 +108,72 @@ export class MacClient {
       throw new MacError(unreachable(this.mac.name))
     }
     if (res.status === 401) throw new MacError("Your Mac doesn't know this phone any more. Pair again.", 401)
-    return { res, nonce: s.split('.')[0] }
+    return { res, nonce: typeof s === 'string' ? s.split('.')[0] : b64url(s.subarray(0, 24)) }
   }
 
-  private async call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-    const { res, nonce } = await this.request(method, path, body)
-    const text = await res.text()
+  /** A request and its opened reply. Statuses in `also` answer like a 200 (an upload's 409: where the Mac is). */
+  private async call<T>(method: 'GET' | 'POST', path: string, body?: unknown, o: { signal?: AbortSignal; bytes?: { ad: string; data: Uint8Array }; also?: number[] } = {}): Promise<T> {
+    const { res, nonce } = await this.request(method, path, body, o.signal, o.bytes)
+    let text
+    try { text = await res.text() } catch (e) {
+      if (o.signal?.aborted) throw e
+      throw new MacError(unreachable(this.mac.name)) // dropped halfway through the answer
+    }
     const value = text ? unseal<T & { error?: string }>(this.mac.key, aad.reply(nonce), text).value : undefined
-    if (!res.ok) throw new MacError(value?.error || `Your Mac answered ${res.status}.`, res.status)
+    if (!res.ok && !o.also?.includes(res.status)) throw new MacError(value?.error || `Your Mac answered ${res.status}.`, res.status)
     return value as T
   }
 
   projects() { return this.call<RemoteProject[]>('GET', routes.projects) }
-  send(project: string, text: string) { return this.call<{ ok: true }>('POST', routes.messages(project), { text }) }
+  /** A message to the project's agent, with files the phone sent into its media/ attached. */
+  send(project: string, text: string, files?: string[]) { return this.call<{ ok: true }>('POST', routes.messages(project), files?.length ? { text, files } : { text }) }
   stop(project: string) { return this.call<{ ok: true }>('POST', routes.stop(project)) }
+  uploadState(upload: string) { return this.call<UploadState>('GET', routes.upload(upload)) }
+  cancelUpload(upload: string) { return this.call<{ ok: true }>('POST', routes.cancel(upload)) }
+
+  /** Send a file into a project in sealed pieces. After a drop it asks the Mac how much it has and carries on from
+   *  there; pass `upload` to carry on with one started before. Returns where the file landed in the project. */
+  async upload(project: string, src: Source, o: UploadOptions = {}): Promise<Uploaded> {
+    const size = o.chunk ?? CHUNK, retries = o.retries ?? 8
+    let st: UploadState | null = null
+    let resume = o.upload ?? null
+    for (let failures = 0; ;) {
+      const piece = new AbortController()
+      const abort = () => piece.abort()
+      o.signal?.addEventListener('abort', abort)
+      const timer = setTimeout(abort, PIECE_TIMEOUT_MS) // a Wi-Fi that vanished without a word
+      try {
+        if (o.signal?.aborted) throw new MacError('Stopped.')
+        if (resume) {
+          st = await this.uploadState(resume).catch(e => { if (e instanceof MacError && e.status === 404) return null; throw e })
+          resume = null
+        }
+        if (!st) {
+          st = await this.call<UploadState>('POST', routes.uploads(project), { name: src.name, size: src.size })
+          if (st.size !== src.size) throw new MacError('Your Mac has a different file under this upload.')
+          o.onStart?.(st.upload)
+        }
+        o.onProgress?.(st.received, st.size)
+        if (st.files) return st as Uploaded
+        const data = await src.read(st.received, Math.min(size, st.size - st.received))
+        if (!data.length) throw new MacError(`${src.name} is shorter than it was. Send it again.`)
+        st = await this.call<UploadState>('POST', routes.chunk(st.upload, st.received), undefined, {
+          signal: piece.signal, bytes: { ad: aad.chunk(st.upload, st.received), data }, also: [409],
+        })
+        failures = 0
+      } catch (e) {
+        if (o.signal?.aborted) throw e
+        // a drop (no answer, or none in time): find out where the Mac got to and carry on; anything the Mac said, stands
+        const dropped = (e instanceof MacError && e.status === 0) || (piece.signal.aborted && !(e instanceof MacError))
+        if (!dropped || ++failures > retries) throw dropped ? new MacError(unreachable(this.mac.name)) : e
+        if (st) resume = st.upload
+        await new Promise(r => setTimeout(r, Math.min((o.wait ?? 1000) * 2 ** (failures - 1), 15_000)))
+      } finally {
+        clearTimeout(timer)
+        o.signal?.removeEventListener('abort', abort)
+      }
+    }
+  }
 
   /** Follow a project's conversation until closed, reconnecting (and so replaying) after a drop. Returns close. */
   follow(project: string, on: Follow): () => void {

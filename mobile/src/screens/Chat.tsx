@@ -1,12 +1,16 @@
-// Talk to the agent about one project: the same conversation the Mac's agent panel shows, live, both ways.
+// Talk to the agent about one project: the same conversation the Mac's agent panel shows, live, both ways. Footage
+// filmed here or picked from the library goes into the project, and rides along with the next message.
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
 import type { Message } from '@ag-ui/core'
 import { emptyAgentState, reduce, resultsOf, type AgentState } from '../../../src/shared/agui-state'
 import { splitAttached } from '../../../src/shared/attached'
 import type { RemoteProject } from '../../../src/shared/remote'
 import type { MacClient } from '../mac'
+import { outbox, useOutbox, type Item as Outgoing } from '../outbox'
 import { useTheme, type Theme } from '../theme'
+import { Record } from './Record'
 
 type Item =
   | { key: string; kind: 'user'; text: string; files: string[]; note?: string }
@@ -52,6 +56,10 @@ export function Chat({ client, project, onBack }: { client: MacClient; project: 
   const [text, setText] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [filming, setFilming] = useState(false)
+  const uploads = useOutbox(project.id)
+  const ready = uploads.filter(u => u.state === 'done')
 
   useEffect(() => client.follow(project.id, {
     open: () => setSt(emptyAgentState()), // the Mac replays the whole conversation next
@@ -63,11 +71,28 @@ export function Chat({ client, project, onBack }: { client: MacClient; project: 
 
   const send = async () => {
     const msg = text.trim()
-    if (!msg || sending) return
+    if ((!msg && !ready.length) || sending) return
     setSending(true)
     setSendError(null)
-    try { await client.send(project.id, msg); setText('') } catch (e) { setSendError((e as Error).message) } finally { setSending(false) }
+    try {
+      await client.send(project.id, msg, ready.flatMap(u => u.files || []))
+      outbox.sent(ready.map(u => u.id))
+      setText('')
+    } catch (e) { setSendError((e as Error).message) } finally { setSending(false) }
   }
+
+  const pick = async () => {
+    setAdding(false)
+    const r = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['videos', 'images'],
+      allowsMultipleSelection: true,
+      // the original, as filmed (HEVC and all): the Mac's ffmpeg reads it, and transcoding on the phone takes ages
+      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+    })
+    if (r.canceled) return
+    outbox.add(project, r.assets.map(a => ({ uri: a.uri, name: a.fileName || a.uri.split('/').pop() || 'clip.mov', file: a.file })))
+  }
+  const canSend = (!!text.trim() || ready.length > 0) && !sending
 
   return (
     <KeyboardAvoidingView style={[s.wrap, { backgroundColor: t.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -91,19 +116,65 @@ export function Chat({ client, project, onBack }: { client: MacClient; project: 
         renderItem={({ item }) => <Row item={item} t={t} />}
       />
       {(st.error || sendError) && <Text style={[s.banner, { color: t.bad, backgroundColor: t.raised }]}>{sendError || st.error}</Text>}
+      {uploads.length > 0 && <View style={s.uploads}>{uploads.map(u => <Upload key={u.id} u={u} t={t} />)}</View>}
+      {adding && (
+        <View style={s.adding}>
+          {Platform.OS !== 'web' && (
+            <Pressable onPress={() => { setAdding(false); setFilming(true) }} style={[s.choice, { backgroundColor: t.surface, borderColor: t.line }]}>
+              <Text style={[s.buttonText, { color: t.fg }]}>Record video</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={pick} style={[s.choice, { backgroundColor: t.surface, borderColor: t.line }]}>
+            <Text style={[s.buttonText, { color: t.fg }]}>From your library</Text>
+          </Pressable>
+        </View>
+      )}
       <View style={[s.composer, { borderColor: t.line, backgroundColor: t.surface }]}>
-        <TextInput value={text} onChangeText={setText} placeholder="Ask for an edit…" placeholderTextColor={t.faint} multiline
+        <Pressable onPress={() => setAdding(a => !a)} accessibilityLabel="Add footage" style={[s.button, s.plus, { backgroundColor: adding ? t.amberSoft : t.raised }]}>
+          <Text style={[s.plusText, { color: adding ? t.amber : t.fg }]}>+</Text>
+        </Pressable>
+        <TextInput value={text} onChangeText={setText} placeholder={ready.length ? 'What should it do with this?' : 'Ask for an edit…'} placeholderTextColor={t.faint} multiline
           style={[s.input, { color: t.fg }]} />
         {st.busy && (
           <Pressable onPress={() => client.stop(project.id).catch(e => setSendError((e as Error).message))} style={[s.button, { backgroundColor: t.raised }]}>
             <Text style={[s.buttonText, { color: t.fg }]}>Stop</Text>
           </Pressable>
         )}
-        <Pressable onPress={send} disabled={!text.trim() || sending} style={[s.button, { backgroundColor: t.amber, opacity: !text.trim() || sending ? 0.4 : 1 }]}>
+        <Pressable onPress={send} disabled={!canSend} style={[s.button, { backgroundColor: t.amber, opacity: canSend ? 1 : 0.4 }]}>
           <Text style={[s.buttonText, { color: t.onAmber }]}>Send</Text>
         </Pressable>
       </View>
+      <Modal visible={filming} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setFilming(false)}>
+        <Record onClose={() => setFilming(false)} onRecorded={(uri, name) => { setFilming(false); outbox.add(project, [{ uri, name }]) }} />
+      </Modal>
     </KeyboardAvoidingView>
+  )
+}
+
+const mb = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.max(0.1, n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`)
+
+/** A file on its way to the Mac, or in the project and waiting to go with the next message. */
+function Upload({ u, t }: { u: Outgoing; t: Theme }) {
+  const part = u.size ? u.received / u.size : 0
+  const status =
+    u.state === 'done' ? 'In the project · goes with your next message'
+      : u.state === 'failed' ? u.error || 'Didn’t send.'
+        : u.state === 'waiting' ? 'Waiting…'
+          : `${mb(u.received)} of ${mb(u.size)}`
+  return (
+    <View style={[s.upload, { backgroundColor: t.surface, borderColor: t.line }]}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[s.small, { color: t.fg }]} numberOfLines={1}>{u.name}</Text>
+        <Text style={[s.tiny, { color: u.state === 'failed' ? t.bad : t.faint }]} numberOfLines={2}>{status}</Text>
+        {u.state !== 'done' && u.state !== 'failed' && (
+          <View style={[s.bar, { backgroundColor: t.raised }]}><View style={[s.fill, { backgroundColor: t.amber, width: `${Math.round(part * 100)}%` }]} /></View>
+        )}
+      </View>
+      {u.state === 'failed' && <Pressable onPress={() => outbox.retry(u.id)} hitSlop={8}><Text style={[s.small, { color: t.amber }]}>Retry</Text></Pressable>}
+      <Pressable onPress={() => outbox.remove(u.id)} hitSlop={8} accessibilityLabel={u.state === 'done' ? 'Don’t attach' : 'Stop sending'}>
+        <Text style={[s.small, { color: t.faint }]}>✕</Text>
+      </Pressable>
+    </View>
   )
 }
 
@@ -146,4 +217,13 @@ const s = StyleSheet.create({
   input: { flex: 1, fontSize: 16, maxHeight: 140, paddingHorizontal: 6, paddingVertical: 8 },
   button: { height: 36, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   buttonText: { fontSize: 15, fontWeight: '600' },
+  plus: { width: 36, paddingHorizontal: 0 },
+  plusText: { fontSize: 22, lineHeight: 24, fontWeight: '400' },
+  adding: { flexDirection: 'row', gap: 8, marginHorizontal: 12, marginTop: 8 },
+  choice: { flex: 1, height: 44, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  uploads: { gap: 6, marginHorizontal: 12, marginTop: 8 },
+  upload: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  tiny: { fontSize: 12, lineHeight: 16 },
+  bar: { height: 3, borderRadius: 2, marginTop: 4, overflow: 'hidden' },
+  fill: { height: 3 },
 })

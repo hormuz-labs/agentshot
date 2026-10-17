@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  aad, b64url, fromB64url, newKey, pairingUrl, readPairingUrl, ReplayGuard, seal, SealError, SKEW_MS, unseal, type PairingCode,
+  aad, b64url, CHUNK_OVERHEAD, fromB64url, newKey, pairingUrl, readPairingUrl, ReplayGuard, seal, sealBytes, SealError, SKEW_MS, unseal,
+  unsealBytes, type PairingCode,
 } from '../src/shared/remote'
 
 const code = (o: Partial<PairingCode> = {}): PairingCode =>
@@ -68,6 +69,30 @@ describe('seals', () => {
     expect(unseal(key, aad.event(nonce, 3), ev).value).toEqual({ type: 'RUN_STARTED' })
     expect(() => unseal(key, aad.event(nonce, 4), ev)).toThrow(SealError)
     expect(() => unseal(key, aad.reply(nonce), ev)).toThrow(SealError)
+  })
+})
+
+describe('byte seals (upload pieces)', () => {
+  const key = newKey()
+  const ad = aad.chunk('u1', 4096)
+  const bytes = Uint8Array.from({ length: 300 }, (_, i) => i & 255)
+
+  it('open with the same key, upload and offset, at CHUNK_OVERHEAD more than the bytes', () => {
+    const s = sealBytes(key, ad, bytes)
+    expect(s.length).toBe(bytes.length + CHUNK_OVERHEAD)
+    const r = unsealBytes(key, ad, s)
+    expect([...r.value]).toEqual([...bytes])
+    expect(r.nonce).toBe(b64url(s.subarray(0, 24)))
+  })
+  it('refuse another upload, offset or key, a changed byte, a short seal, or a stale one', () => {
+    const s = sealBytes(key, ad, bytes)
+    expect(() => unsealBytes(key, aad.chunk('u1', 0), s)).toThrow(SealError)
+    expect(() => unsealBytes(key, aad.chunk('u2', 4096), s)).toThrow(SealError)
+    expect(() => unsealBytes(newKey(), ad, s)).toThrow(SealError)
+    for (const at of [0, 30, s.length - 1]) { const t = s.slice(); t[at] ^= 1; expect(() => unsealBytes(key, ad, t)).toThrow(SealError) }
+    expect(() => unsealBytes(key, ad, s.subarray(0, 40))).toThrow(SealError)
+    const now = Date.now()
+    expect(() => unsealBytes(key, ad, sealBytes(key, ad, bytes, now - SKEW_MS - 1), now)).toThrow(/too old/)
   })
 })
 
