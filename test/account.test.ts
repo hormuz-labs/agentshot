@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { accountStatus, addCredit, balance, signIn, signOut } from '../src/main/account'
+import { accountStatus, balance, checkout, manageBilling, signIn, signOut } from '../src/main/account'
 import { getConfig } from '../src/main/config'
 import { friendly } from '../src/main/agui'
 
@@ -20,9 +20,9 @@ const server = createServer((req, res) => {
       seen.keyAuth = req.headers.authorization
       return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ key: 'sk-bf-ada', key_id: 'vk_1', email: 'ada@example.com' }))
     }
-    if (req.url === '/v1/balance' || req.url === '/v1/checkout') {
+    if (req.url === '/v1/balance' || req.url === '/v1/checkout' || req.url === '/v1/portal') {
       seen[req.url] = { auth: req.headers.authorization, keyId: req.headers['x-manul-key-id'], body }
-      const out = req.url === '/v1/balance' ? { credit: 2, used: 0.5, left: 1.5 } : { url: 'https://checkout.dodo.test/cks_1' }
+      const out = req.url === '/v1/balance' ? { credits: 1000, plan: null } : { url: `https://dodo.test${req.url}` }
       return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(out))
     }
     res.writeHead(404).end()
@@ -58,17 +58,19 @@ describe('signing in to Manul', () => {
     expect(getConfig().account).toEqual({ email: 'ada@example.com', keyId: 'vk_1' })
   })
 
-  it('asks for the credit left and opens a checkout to add more, as the key', async () => {
-    expect(await balance()).toEqual({ credit: 2, used: 0.5, left: 1.5 })
+  it('asks for credits and plan, opens a plan’s checkout and the billing page, as the key', async () => {
+    expect(await balance()).toEqual({ credits: 1000, plan: null })
     expect(seen['/v1/balance']).toMatchObject({ auth: 'Bearer sk-bf-ada', keyId: 'vk_1' })
     let opened = ''
-    await addCredit(url => { opened = url }, 10)
-    expect(opened).toBe('https://checkout.dodo.test/cks_1')
-    expect(JSON.parse(seen['/v1/checkout'].body)).toEqual({ amount: 10 })
+    await checkout(url => { opened = url }, { plan: 'pro' })
+    expect(opened).toBe('https://dodo.test/v1/checkout')
+    expect(JSON.parse(seen['/v1/checkout'].body)).toEqual({ plan: 'pro' })
+    await manageBilling(url => { opened = url })
+    expect(opened).toBe('https://dodo.test/v1/portal')
   })
 
   it('says what to do when the gateway refuses', () => {
-    expect(friendly('manul API error (402): {"type":"budget_exceeded","error":{"message":"Budget exceeded: …"}}')).toMatch(/out of Manul credit/)
+    expect(friendly('manul API error (402): {"type":"budget_exceeded","error":{"message":"Budget exceeded: …"}}')).toMatch(/out of Manul credits/)
     expect(friendly('401 {"error":{"message":"access not found. The provided credential does not exist"}}')).toMatch(/Sign in again/)
     expect(friendly('something else')).toBe('something else')
   })

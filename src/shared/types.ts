@@ -138,6 +138,16 @@ export type RecentProject = { id: string; title: string; dir: string; openedAt: 
 export type KeyInfo = { env: string; label: string; unlocks: string[]; hint: string; set: boolean }
 /** Who is signed in to Manul (never their key), and whether this build can sign in at all. */
 export type AccountStatus = { email?: string; available: boolean }
+/** The signed-in person's credits and plan (shared with Pitch), from the account service. */
+export type AccountPlan = { key: string; name: string; every: 'month' | 'year'; credits: number; renews: boolean; until: string }
+export type Offer = { key: string; name: string; price: number; credits: number; every?: 'month' | 'year'; buyable: boolean }
+export type Balance = {
+  credits: number
+  plan: AccountPlan | null
+  tiers: { tier: string; name: string; paid: boolean; available: boolean }[]
+  plans: Offer[]
+  topups: Offer[]
+}
 
 export type ToolStatus = { name: string; version?: string; path?: string; bundled: boolean; ok: boolean }
 

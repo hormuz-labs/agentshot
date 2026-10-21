@@ -391,7 +391,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       await wallet.post(userId, -cost, 'usage', `Manul: ${kind}`, operation)
       return true
     })
-    if (taken !== true) return fail(402, `You're out of Manul credits: this needs ${cost} and ${Math.max(0, taken)} are left. Get more in Settings → Plan.`)
+    if (taken !== true) return fail(402, `You're out of Manul credits: this needs ${cost} and ${Math.max(0, taken)} are left. Get more in Settings → Keys → Manul key.`)
     let audio
     try {
       audio = kind === 'voice' ? await speak(choice, key, body, { voices }) : await compose(choice, key, body)

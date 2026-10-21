@@ -16,14 +16,16 @@ afterAll(() => server.close())
 const env = (vars: Record<string, string>) => createModels({ authContext: { env: async (n: string) => vars[n], fileExists: async () => false } })
 
 describe('the Manul key', () => {
-  it('offers one model, "Manul", only when the key is set: no vendor, no price', async () => {
+  it('offers "Manul" and its tiers, Low to Ultra, only when the key is set: no vendor, no price', async () => {
     const models = env({})
     models.setProvider(manulProvider('https://gw.test') as any)
     expect(await models.getAvailable()).toEqual([])
     const keyed = env({ MANUL_KEY: 'vk-1' })
     keyed.setProvider(manulProvider('https://gw.test') as any)
     const avail = (await keyed.getAvailable()) as any[]
-    expect(describeModels(avail)).toEqual([expect.objectContaining({ provider: 'manul', providerLabel: 'Manul', modelId: 'manul', name: 'Manul', price: undefined, images: true })])
+    const described = describeModels(avail)
+    expect(described[0]).toEqual(expect.objectContaining({ provider: 'manul', providerLabel: 'Manul', modelId: 'manul', name: 'Manul', price: undefined, images: true }))
+    expect(described.map(m => m.modelId)).toEqual(['manul', 'manul-low', 'manul-medium', 'manul-high', 'manul-max', 'manul-ultra'])
     expect(chooseModel(avail)).toEqual({ provider: 'manul', modelId: 'manul' })
   })
 
