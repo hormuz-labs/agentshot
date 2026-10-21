@@ -16,7 +16,7 @@ const textOf = (c: unknown): string =>
 /** Manul's gateway's refusals, said so the person knows what to do. */
 export function friendly(error: string) {
   if (/budget exceeded/i.test(error)) return 'You’re out of Manul credits. Get a plan or more credits in Settings → Keys → Manul key.'
-  if (/manul-(max|ultra)/i.test(error) && /not allowed|not permitted|blocked|denied/i.test(error)) return 'Manul Max and Ultra come with a Pro or Max plan. Get one in Settings → Keys → Manul key, or pick Manul High.'
+  if (/model_blocked|is not allowed for virtual key/i.test(error)) return 'Manul Max and Ultra come with a Pro or Max plan. Get one in Settings → Keys → Manul key, or pick Manul High.'
   if (/access not found|virtual key is required/i.test(error)) return 'Your Manul key isn’t valid any more. Sign in again in Settings → Keys → Manul key.'
   return error
 }

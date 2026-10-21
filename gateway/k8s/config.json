@@ -91,7 +91,7 @@
         ],
         "scope": "global",
         "enabled": true,
-        "priority": 0
+        "priority": 1
       },
       {
         "id": "manul-medium",
@@ -106,7 +106,7 @@
         ],
         "scope": "global",
         "enabled": true,
-        "priority": 0
+        "priority": 2
       },
       {
         "id": "manul-high",
@@ -121,7 +121,7 @@
         ],
         "scope": "global",
         "enabled": true,
-        "priority": 0
+        "priority": 3
       },
       {
         "id": "manul-max",
@@ -136,7 +136,7 @@
         ],
         "scope": "global",
         "enabled": true,
-        "priority": 0
+        "priority": 4
       },
       {
         "id": "manul-ultra",
@@ -151,7 +151,7 @@
         ],
         "scope": "global",
         "enabled": true,
-        "priority": 0
+        "priority": 5
       }
     ],
     "auth_config": {

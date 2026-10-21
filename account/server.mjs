@@ -5,7 +5,7 @@ import { handle, syncAll } from './src/index.ts'
 import { postgresWallet } from './src/wallet.ts'
 
 const database = process.env.ACCOUNT_DATABASE_URL || (process.env.PG_HOST
-  ? `postgresql://${encodeURIComponent(process.env.PG_USER || '')}:${encodeURIComponent(process.env.PG_PASSWORD || '')}@${process.env.PG_HOST}:5432/bifrost?sslmode=require`
+  ? `postgresql://${encodeURIComponent(process.env.PG_USER || '')}:${encodeURIComponent(process.env.PG_PASSWORD || '')}@${process.env.PG_HOST}:5432/bifrost?sslmode=require&uselibpqcompat=true`
   : '')
 if (!database) throw new Error('Set ACCOUNT_DATABASE_URL for what each key was charged (see gateway/.env.example).')
 if (!process.env.WALLET_DATABASE_URL) throw new Error('Set WALLET_DATABASE_URL to the wallet (Pitch’s database; see gateway/.env.example).')

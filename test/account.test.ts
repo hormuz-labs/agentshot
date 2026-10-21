@@ -72,6 +72,7 @@ describe('signing in to Manul', () => {
   it('says what to do when the gateway refuses', () => {
     expect(friendly('manul API error (402): {"type":"budget_exceeded","error":{"message":"Budget exceeded: …"}}')).toMatch(/out of Manul credits/)
     expect(friendly('401 {"error":{"message":"access not found. The provided credential does not exist"}}')).toMatch(/Sign in again/)
+    expect(friendly('403 {"type":"model_blocked","error":{"message":"Model \'gpt-6-astra\' is not allowed for virtual key \'user_1\'"}}')).toMatch(/Pro or Max plan/)
     expect(friendly('something else')).toBe('something else')
   })
 
