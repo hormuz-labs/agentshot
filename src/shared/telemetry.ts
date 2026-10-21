@@ -83,5 +83,57 @@ export function scrubEvent<T extends CrashEvent>(event: T): T {
   return event
 }
 
+/**
+ * Crash reports as PostHog error tracking events ($exception): the exception's type, message and stack frames, already
+ * scrubbed (scrubEvent), and nothing else from Sentry's event. Built here, and rebuilt by the proxy with cleanException.
+ */
+type SentryFrame = { filename?: string; abs_path?: string; function?: string; lineno?: number; colno?: number; in_app?: boolean }
+type SentryException = { type?: string; value?: string; mechanism?: { type?: string; handled?: boolean }; stacktrace?: { frames?: SentryFrame[] } }
+export type ExceptionEvent = { message?: string; level?: string; exception?: { values?: SentryException[] }; contexts?: Record<string, unknown> }
+
+const MAX_EXCEPTIONS = 5
+const MAX_FRAMES = 60
+const cut = (v: unknown, n: number) => (typeof v === 'string' ? scrubPaths(v).slice(0, n) : undefined)
+const int = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined)
+const LEVELS = ['fatal', 'error', 'warning', 'info']
+
+export function exceptionProperties(event: ExceptionEvent): Record<string, unknown> {
+  const values = event.exception?.values?.length
+    ? event.exception.values
+    // a native crash (a minidump) has no JavaScript exception: say what crashed, without the dump
+    : [{ type: 'Native crash', value: event.message || 'The app or one of its windows crashed', mechanism: { type: 'minidump', handled: false } }]
+  return cleanException({
+    $exception_level: event.level || 'error',
+    $exception_list: values.map(e => ({
+      type: e.type, value: e.value, mechanism: e.mechanism,
+      // Sentry lists frames oldest first; so does PostHog's raw stack trace
+      stacktrace: { type: 'raw', frames: (e.stacktrace?.frames || []).map(f => ({ ...f, filename: f.filename || f.abs_path })) },
+    })),
+  })!
+}
+
+/** The $exception properties PostHog gets, rebuilt from scratch: short strings, scrubbed paths, nothing else. */
+export function cleanException(p: Record<string, unknown>): Record<string, unknown> | null {
+  const list = p.$exception_list
+  if (!Array.isArray(list) || !list.length || list.length > MAX_EXCEPTIONS) return null
+  const level = LEVELS.includes(p.$exception_level as string) ? p.$exception_level : 'error'
+  return {
+    $exception_level: level,
+    $exception_list: list.map((e: any) => ({
+      type: cut(e?.type, 100) || 'Error',
+      value: cut(e?.value, 1000) || '',
+      mechanism: { type: cut(e?.mechanism?.type, 32) || 'generic', handled: e?.mechanism?.handled !== false },
+      stacktrace: {
+        type: 'raw',
+        frames: (Array.isArray(e?.stacktrace?.frames) ? e.stacktrace.frames : []).slice(-MAX_FRAMES).map((f: any) => ({
+          platform: 'node:javascript',
+          filename: cut(f?.filename, 300), function: cut(f?.function, 200),
+          lineno: int(f?.lineno), colno: int(f?.colno), in_app: f?.in_app !== false,
+        })),
+      },
+    })),
+  }
+}
+
 /** The user's answers, and what this build can report at all (development builds: neither). */
 export type TelemetryState = { usage: boolean; crashes: boolean; asked: boolean; available: { usage: boolean; crashes: boolean } }

@@ -2,7 +2,8 @@
 
 Manul asks once, on first run, with two boxes that start **unticked**:
 
-- **Send crash reports**: crashes and errors go to [Sentry](https://sentry.io).
+- **Send crash reports**: crashes and errors go to [PostHog](https://posthog.com)'s error tracking through Manul's
+  proxy.
 - **Share usage statistics**: a short, fixed list of events goes to [PostHog](https://posthog.com) through Manul's
   proxy.
 
@@ -13,7 +14,7 @@ in release builds.
 ## What is never sent
 
 Your footage, file or folder names, paths, project titles, prompts, agent replies, transcripts, API keys, or URLs.
-Users' IP addresses are not passed on to PostHog. Sentry is told not to keep them.
+Users' IP addresses are not passed on to PostHog.
 
 ## Usage statistics
 
@@ -37,12 +38,15 @@ deletes anything unsent and the ID, and saying yes again starts a new one. Event
 
 ## Crash reports
 
-Sentry's Electron SDK reports native crashes of the app and its windows, and uncaught errors in the main process
-and the interface. To keep your data out of reports:
+Sentry's Electron SDK, running only inside the app, catches native crashes of the app and its windows and uncaught
+errors in the main process and the interface. Nothing goes to Sentry: each report becomes a PostHog `$exception`
+event (its type, message and stack frames) and goes through the proxy, which rebuilds it field by field. To keep your
+data out of reports:
 
 - local variable values, console output, network requests and screenshots are switched off;
 - file paths in error messages are replaced with `<path>`;
-- the computer's name and user details are removed.
+- the computer's name and user details are removed;
+- a native crash says only that it crashed: its minidump stays on the computer.
 
 The SDK runs in release builds either way, but nothing is sent unless crash reports are ticked. A crash from before
 you said yes is never sent later. See [`src/main/crash.ts`](../src/main/crash.ts).
@@ -50,12 +54,14 @@ you said yes is never sent later. See [`src/main/crash.ts`](../src/main/crash.ts
 ## How the pieces fit
 
 ```
-Manul ── usage batches ──▶ analytics.manul.si (Cloudflare Worker, telemetry/proxy) ──▶ PostHog
-Manul ── crash reports ──────────────────────────────────────────────────────────────▶ Sentry
+Manul ── usage batches, crash reports ──▶ telemetry.manul.si (Cloudflare Worker, telemetry/proxy) ──▶ PostHog
 GitHub Actions, daily (telemetry/github-stats.mjs) ── downloads, stars, forks, clones ──▶ PostHog
 ```
 
-- **Proxy** ([`proxy/worker.ts`](proxy/worker.ts)). It accepts only `POST /batch/` for Manul's PostHog project,
+- **PostHog** is the same project as Pitch's (one place for both apps), on its free tier: usage events, error
+  tracking and the account service's events all fit well inside the free monthly allowances for now. Keep billing
+  limits at $0 in PostHog (Billing → each product) so nothing is ever charged.
+- **Proxy** ([`proxy/worker.ts`](proxy/worker.ts)), on Cloudflare Workers' free plan. It accepts only `POST /batch/` for Manul's PostHog project,
   limits each IP to 30 batches a minute, and passes on nothing from the request but the cleaned events.
 - **Dashboards** are made in PostHog. There is no server of ours to run.
 - **GitHub numbers** come from [`.github/workflows/github-stats.yml`](../.github/workflows/github-stats.yml) as one
@@ -68,15 +74,12 @@ GitHub Actions, daily (telemetry/github-stats.mjs) ── downloads, stars, fork
 1. **PostHog.** Create a project. Note its project token (`phc_…`, public by design: it can only send events) and its
    region's capture host (`https://us.i.posthog.com` or `https://eu.i.posthog.com`).
 2. **Proxy.** Put the token and host in [`proxy/wrangler.toml`](proxy/wrangler.toml). Then, from `telemetry/proxy`,
-   run `npx wrangler deploy`. It serves `analytics.manul.si`, so remove that name's old tunnel route first.
-3. **Sentry.** Create an Electron project and note its DSN. For readable stack traces, also create an auth token
-   that can upload source maps.
-4. **GitHub repository settings.**
-   - Variables: `MANUL_TELEMETRY_URL=https://analytics.manul.si`, `MANUL_POSTHOG_TOKEN`, `MANUL_SENTRY_DSN`,
-     `SENTRY_ORG`, `SENTRY_PROJECT`, and for the daily snapshot `POSTHOG_TOKEN` and `POSTHOG_HOST`.
-   - Secrets: `SENTRY_AUTH_TOKEN`, and optionally `GH_TRAFFIC_TOKEN` for clone counts.
+   run `npx wrangler deploy`. It serves `telemetry.manul.si` (`analytics.manul.si` is the separate Manul analytics dashboard).
+3. **GitHub repository settings.**
+   - Variables: `MANUL_TELEMETRY_URL=https://telemetry.manul.si`, `MANUL_POSTHOG_TOKEN`, and for the daily snapshot
+     `POSTHOG_TOKEN` and `POSTHOG_HOST`.
+   - Secret, optional: `GH_TRAFFIC_TOKEN` for clone counts.
 
-   The release workflow builds them in. Hidden source maps are uploaded to Sentry and then deleted, so they never
-   ship in the app.
+   The release workflow builds them in.
 
 Tests: `npm test -- test/telemetry.test.ts`.

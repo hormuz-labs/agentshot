@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { UsageTelemetry } from '../src/main/telemetry'
-import { sanitize, scrubEvent, scrubPaths } from '../src/shared/telemetry'
+import { exceptionProperties, sanitize, scrubEvent, scrubPaths } from '../src/shared/telemetry'
 import proxy, { clean } from '../telemetry/proxy/worker'
 // @ts-expect-error plain .mjs script
 import { githubStats, send } from '../telemetry/github-stats.mjs'
@@ -133,6 +133,36 @@ describe('what may be sent', () => {
     const e = scrubEvent({ message: 'no /home/ana/x.mp4', server_name: 'anas-laptop', user: { ip_address: '1.2.3.4' },
       breadcrumbs: [{ category: 'console', message: 'prompt' }, { category: 'electron', message: 'ready', data: { url: 'x' } }] })
     expect(e).toEqual({ message: 'no <path>', breadcrumbs: [{ category: 'electron', message: 'ready', data: undefined }] })
+  })
+})
+
+describe('crash reports as PostHog error tracking', () => {
+  const crash = {
+    level: 'fatal', message: 'ignored when there is an exception', user: { ip_address: '1.2.3.4' },
+    exception: { values: [{ type: 'TypeError', value: "Cannot read 'x' of '/Users/ada/Clients/Acme/cut.mp4'", mechanism: { type: 'onerror', handled: false },
+      stacktrace: { frames: [{ filename: 'app:///out/main/index.js', function: 'render', lineno: 12, colno: 4, in_app: true, vars: { secret: 1 } }] } }] },
+  }
+
+  it('sends the type, the scrubbed message and the frames, and nothing else of the report', () => {
+    expect(exceptionProperties(scrubEvent(structuredClone(crash)))).toEqual({
+      $exception_level: 'fatal',
+      $exception_list: [{ type: 'TypeError', value: "Cannot read 'x' of '<path>'", mechanism: { type: 'onerror', handled: false },
+        stacktrace: { type: 'raw', frames: [{ platform: 'node:javascript', filename: 'app:///out/main/index.js', function: 'render', lineno: 12, colno: 4, in_app: true }] } }],
+    })
+  })
+
+  it('a native crash says only that it crashed: the minidump stays on the machine', () => {
+    expect(exceptionProperties({ level: 'fatal' }).$exception_list).toEqual([expect.objectContaining({ type: 'Native crash', mechanism: { type: 'minidump', handled: false } })])
+  })
+
+  it('the proxy rebuilds it, and refuses a crash with no exception', () => {
+    const id = '6f1c2a54-8e43-4b8e-9d0e-1c2b3a4d5e6f'
+    const props = { ...exceptionProperties(crash), distinct_id: id, os: 'darwin', $ip: '1.2.3.4' }
+    props.$exception_list[0].value = 'at /home/ada/secret.mov'   // a client that didn't scrub
+    const out = clean({ uuid: id, event: '$exception', timestamp: '2026-10-21T10:00:00Z', properties: props })!
+    expect(out.properties).toMatchObject({ distinct_id: id, os: 'darwin', $process_person_profile: false, $exception_level: 'fatal' })
+    expect(JSON.stringify(out)).not.toMatch(/1\.2\.3\.4|secret|\/home/)
+    expect(clean({ uuid: id, event: '$exception', timestamp: '2026-10-21T10:00:00Z', properties: { distinct_id: id } })).toBeNull()
   })
 })
 

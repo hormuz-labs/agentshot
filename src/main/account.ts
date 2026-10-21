@@ -1,14 +1,14 @@
 // Signing in to Manul (Settings → Keys → Manul key): Clerk in the system browser (OAuth with PKCE, Manul being a public
 // client), back to a one-shot server on 127.0.0.1, then Manul's account service swaps the sign-in for the person's
 // Manul key (account/src/index.ts), kept in the keychain like any key. Who's signed in (their email, and the key's id
-// for asking about credit) is in config.json. Credit: what's left of the key's budget; adding credit is a Dodo Payments
-// checkout in the browser.
+// for asking about credits) is in config.json. Credits and plans are Pitch's (one wallet for both apps): a plan or a
+// top-up is a Dodo Payments checkout in the browser, managing it is Dodo's billing page.
 import { createServer, type Server } from 'node:http'
 import { createHash, randomBytes } from 'node:crypto'
 import { getConfig, setConfig } from './config'
 import { MANUL_KEY } from './gateway'
 import { setKey } from './keys'
-import type { AccountStatus } from '../shared/types'
+import type { AccountStatus, Balance } from '../shared/types'
 import { brandPage } from '../shared/brand-page'
 
 /** Clerk's Frontend API (the OAuth issuer, production), the "Manul desktop" OAuth app's client id (public, PKCE), and the
@@ -88,19 +88,25 @@ async function asKeyRaw(path: string, init: RequestInit = {}) {
 }
 const asKey = async (path: string, init: RequestInit = {}) => await (await asKeyRaw(path, init)).json().catch(() => ({})) as Record<string, unknown>
 
-/** Voice or music made by Manul (it picks the vendor), paid with the signed-in person's credit. */
+/** Voice or music made by Manul (it picks the vendor), paid with the signed-in person's credits. */
 export async function manulMedia(kind: 'voice' | 'music', body: unknown, signal?: AbortSignal) {
   const r = await asKeyRaw(`/v1/${kind}`, { method: 'POST', body: JSON.stringify(body), signal })
   const type = r.headers.get('content-type') || ''
   return { data: new Uint8Array(await r.arrayBuffer()), ext: /wav/.test(type) ? 'wav' : 'mp3', cost: Number(r.headers.get('x-manul-cost')) || 0 }
 }
 
-/** What's left of the signed-in person's credit, in USD. */
-export const balance = async () => (await asKey('/v1/balance')) as { credit: number; used: number; left: number }
+/** The signed-in person's credits, plan, model tiers, and the plans and top-ups on sale. */
+export const balance = async () => (await asKey('/v1/balance')) as unknown as Balance
 
-/** Add credit: a Dodo Payments checkout in the browser (amount in USD, or chosen there). */
-export async function addCredit(open: (url: string) => Promise<void> | void, amount?: number) {
-  const { url } = await asKey('/v1/checkout', { method: 'POST', body: JSON.stringify(amount != null ? { amount } : {}) }) as { url: string }
+/** A plan (pro, max, pro_annual, max_annual) or a top-up (flex): a Dodo Payments checkout in the browser. */
+export async function checkout(open: (url: string) => Promise<void> | void, what: { plan: string } | { topup: string }) {
+  const { url } = await asKey('/v1/checkout', { method: 'POST', body: JSON.stringify(what) }) as { url: string }
+  await open(url)
+}
+
+/** Change the card, see invoices or cancel: Dodo's billing page in the browser. */
+export async function manageBilling(open: (url: string) => Promise<void> | void) {
+  const { url } = await asKey('/v1/portal', { method: 'POST' }) as { url: string }
   await open(url)
 }
 

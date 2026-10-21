@@ -90,16 +90,23 @@ spec:
             - { name: BIFROST_PROVIDERS, value: "anthropic,gemini,openai,azure" }
             - { name: CLERK_SECRET_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: CLERK_SECRET_KEY } } }
             - { name: BIFROST_AUTH, valueFrom: { secretKeyRef: { name: manul-secrets, key: BIFROST_AUTH } } }
-            # Account journal shares the existing Postgres database, using its own table.
+            # What each key was charged shares the gateway's Postgres database, in its own table.
             - { name: PG_HOST, valueFrom: { secretKeyRef: { name: manul-secrets, key: PG_HOST } } }
             - { name: PG_USER, valueFrom: { secretKeyRef: { name: manul-secrets, key: PG_USER } } }
             - { name: PG_PASSWORD, valueFrom: { secretKeyRef: { name: manul-secrets, key: PG_PASSWORD } } }
-            # credit: $2 to start, then Dodo Payments (test mode until going live)
-            - { name: FREE_CREDIT, value: "2" }
-            - { name: DODO_API, value: https://test.dodopayments.com }
-            - { name: DODO_PRODUCT_ID, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_ID, optional: true } } }
+            # The wallet and the plans are Pitch's: its database, its Dodo Payments business (live) and products, all
+            # copied from Pitch's secret by link-pitch.sh. Plans are granted by Pitch's Dodo webhook.
+            - { name: WALLET_DATABASE_URL, valueFrom: { secretKeyRef: { name: manul-secrets, key: WALLET_DATABASE_URL } } }
+            - { name: DODO_API, value: https://live.dodopayments.com }
             - { name: DODO_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_API_KEY, optional: true } } }
-            - { name: DODO_WEBHOOK_SECRET, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_WEBHOOK_SECRET, optional: true } } }
+            - { name: DODO_PRODUCT_PRO_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_PRO_LIVE, optional: true } } }
+            - { name: DODO_PRODUCT_MAX_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_MAX_LIVE, optional: true } } }
+            - { name: DODO_PRODUCT_PRO_ANNUAL_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_PRO_ANNUAL_LIVE, optional: true } } }
+            - { name: DODO_PRODUCT_MAX_ANNUAL_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_MAX_ANNUAL_LIVE, optional: true } } }
+            - { name: DODO_PRODUCT_FLEX_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_FLEX_LIVE, optional: true } } }
+            # account events (signed in, checkout started) in Pitch's PostHog project
+            - { name: POSTHOG_KEY, value: phc_mw5p4LNJDGfSdwSAaWdmRWTRXEqQVxiEpLEJNQ6CwJpR }   # the project token: public, it can only send events
+            - { name: POSTHOG_HOST, valueFrom: { secretKeyRef: { name: manul-secrets, key: POSTHOG_HOST, optional: true } } }
             # voice and music for Manul keys: which vendor and model, the voices and the prices (re-read every 30 s,
             # so `kubectl -n manul edit configmap manul-media` applies within about a minute, no restart)
             - { name: MEDIA_CONFIG, value: /config/media.json }

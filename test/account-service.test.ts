@@ -1,30 +1,25 @@
-import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { handle, NEW_KEY, verify, type Env } from '../account/src/index'
-import { memoryCreditStore, type CreditStore } from '../account/src/credit'
+import { handle, NEW_KEY, sync, syncAll, type Env } from '../account/src/index'
+import { costForCredits, creditsForCost, STARTER_CREDITS } from '../account/src/plans'
+import { memoryWallet } from '../account/src/wallet'
 
-// The account service against fake Clerk (userinfo, users, metadata), fake Bifrost (customers, virtual keys) and fake
-// Dodo Payments (checkouts).
-const SECRET = 'whsec_' + Buffer.from('dodo-signing-key').toString('base64')
+// The account service against fake Clerk (userinfo, users, metadata), fake Bifrost (customers, virtual keys), fake
+// Dodo Payments (checkouts, customers, portal) and the wallet in memory (Pitch's ledger, in production).
 const env: Env = {
   CLERK_ISSUER: 'https://clerk.test', CLERK_SECRET_KEY: 'sk_clerk', BIFROST_URL: 'https://gw.test', BIFROST_AUTH: 'Basic YWRtaW46cHc=',
-  DODO_API: 'https://dodo.test', DODO_API_KEY: 'dodo_key', DODO_PRODUCT_ID: 'pdt_credit', DODO_WEBHOOK_SECRET: SECRET,
+  DODO_API: 'https://dodo.test', DODO_API_KEY: 'dodo_key', DODO_PRODUCT_PRO_TEST: 'pdt_pro', DODO_PRODUCT_MAX_TEST: 'pdt_max', DODO_PRODUCT_FLEX_TEST: 'pdt_flex',
 }
 let metadata: any
 let keys: Record<string, any>
 let calls: { method: string; url: string; auth?: string; body?: any }[]
-let credits: CreditStore
-let recordFailures = 0
-let lostBudgetReplies = 0
+let wallet: ReturnType<typeof memoryWallet>
 
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 beforeEach(() => {
   metadata = {}
   keys = {}
   calls = []
-  credits = memoryCreditStore()
-  recordFailures = 0
-  lostBudgetReplies = 0
+  wallet = memoryWallet()
   vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
     const url = String(input)
     const method = init.method || 'GET'
@@ -33,39 +28,36 @@ beforeEach(() => {
     calls.push({ method, url, auth, body })
     if (url === 'https://clerk.test/oauth/userinfo') return auth === 'Bearer good' ? reply({ sub: 'user_1', email: 'ada@example.com' }) : reply({}, 401)
     if (url === 'https://api.clerk.com/v1/users/user_1' && method === 'GET') return reply({ id: 'user_1', private_metadata: metadata })
-    if (url === 'https://api.clerk.com/v1/users/user_1/metadata' && method === 'PATCH') {
-      if (body.private_metadata.payments && recordFailures-- > 0) return reply({}, 503)
-      metadata = { ...metadata, ...body.private_metadata }; return reply({})
-    }
+    if (url === 'https://api.clerk.com/v1/users/user_1/metadata' && method === 'PATCH') { metadata = { ...metadata, ...body.private_metadata }; return reply({}) }
     if (url === 'https://gw.test/api/governance/customers' && method === 'POST') return reply({ customer: { id: 'cus_1', name: body.name } })
     if (url === 'https://gw.test/api/governance/virtual-keys' && method === 'POST') {
       const id = `vk_${Object.keys(keys).length + 1}`
-      keys[id] = { id, name: body.name, description: body.description, value: `sk-bf-${id}`, is_active: true, budgets: body.budgets.map((b: any, i: number) => ({ ...b, id: `b${i}`, current_usage: 0 })) }
+      keys[id] = { id, name: body.name, description: body.description, value: `sk-bf-${id}`, is_active: true, provider_configs: body.provider_configs, budgets: body.budgets.map((b: any, i: number) => ({ ...b, id: `b${i}`, current_usage: 0 })) }
       return reply({ virtual_key: keys[id] })
     }
     const vk = /^https:\/\/gw\.test\/api\/governance\/virtual-keys\/(.+)$/.exec(url)?.[1]
     if (vk && method === 'PUT') {
       for (const b of body.budgets) Object.assign(keys[vk].budgets.find((x: any) => x.id === b.id), b)   // in place: usage kept
-      if (lostBudgetReplies-- > 0) throw new Error('connection lost after budget update')
+      if (body.provider_configs) keys[vk].provider_configs = body.provider_configs
       return reply({ virtual_key: keys[vk] })
     }
     if (vk) return keys[vk] ? reply({ virtual_key: keys[vk] }) : reply({ error: 'not found' }, 404)
+    if (url === 'https://ph.test/i/v0/e/') return reply({ status: 1 })
     if (url === 'https://dodo.test/checkouts' && method === 'POST') return auth === 'Bearer dodo_key' ? reply({ session_id: 'cks_1', checkout_url: 'https://checkout.dodo.test/cks_1' }) : reply({}, 401)
+    if (url === 'https://dodo.test/customers?email=ada%40example.com') return reply({ items: [{ customer_id: 'cus_dodo' }] })
+    if (url === 'https://dodo.test/customers/cus_dodo/customer-portal/session' && method === 'POST') return reply({ link: 'https://portal.dodo.test/x' })
     return reply({ error: `unexpected ${method} ${url}` }, 500)
   })
 })
 afterEach(() => vi.unstubAllGlobals())
 
-const call = (path: string, init: RequestInit = {}) => handle(new Request(`https://account.test${path}`, init), env, credits)
+const call = (path: string, init: RequestInit = {}) => handle(new Request(`https://account.test${path}`, init), env, wallet)
 const ask = (token?: string) => call('/v1/key', { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {} })
-const asKey = (key: string, id: string) => ({ authorization: `Bearer ${key}`, 'x-manul-key-id': id })
-const signed = (body: object, at = Math.floor(Date.now() / 1000), secret = SECRET) => {
-  const raw = JSON.stringify(body)
-  const sig = createHmac('sha256', Buffer.from(secret.replace(/^whsec_/, ''), 'base64')).update(`msg_1.${at}.${raw}`).digest('base64')
-  return { method: 'POST', body: raw, headers: { 'webhook-id': 'msg_1', 'webhook-timestamp': String(at), 'webhook-signature': `v1,${sig}` } }
-}
-const paid = (payment_id: string, total_amount: number, tax = 0, meta: object = { virtual_key_id: 'vk_1', user_id: 'user_1' }) =>
-  ({ business_id: 'bus_1', type: 'payment.succeeded', timestamp: new Date().toISOString(), data: { payment_id, total_amount, tax, currency: 'USD', metadata: meta } })
+const asKey = (key = 'sk-bf-vk_1', id = 'vk_1') => ({ authorization: `Bearer ${key}`, 'x-manul-key-id': id })
+const balance = async () => (await call('/v1/balance', { headers: asKey() })).json()
+const subscribe = (userId: string, plan = 'pro', status = 'active') =>
+  wallet.subscriptions.set(userId, { plan, status, credits_per_cycle: 10_000, period_end: '2026-11-21T00:00:00.000Z', cancelled: status !== 'active' })
+const models = (vk: any) => vk.provider_configs.flatMap((p: any) => p.allowed_models).sort()
 
 describe('the account service: signing in', () => {
   it('turns away anyone Clerk does not vouch for', async () => {
@@ -74,19 +66,34 @@ describe('the account service: signing in', () => {
     expect(calls.some(c => c.url.startsWith('https://gw.test'))).toBe(false)
   })
 
-  it('first sign-in: their own customer and key with $2 of credit that never resets, linked to the Clerk user', async () => {
+  it('first sign-in: a wallet with the starter credits, and a key whose budget is what those credits buy', async () => {
     expect(await (await ask('good')).json()).toEqual({ key: 'sk-bf-vk_1', key_id: 'vk_1', email: 'ada@example.com' })
     const created = calls.find(c => c.url.endsWith('/virtual-keys') && c.method === 'POST')!
     expect(created.auth).toBe('Basic YWRtaW46cHc=')
-    expect(created.body).toMatchObject({ ...NEW_KEY, budgets: [{ max_limit: 2, reset_duration: '100Y' }], name: 'user_1', description: 'ada@example.com', customer_id: 'cus_1', is_active: true })
-    expect(metadata.bifrost).toEqual({ customer_id: 'cus_1', virtual_key_id: 'vk_1' })
+    expect(created.body).toMatchObject({ ...NEW_KEY, name: 'user_1', description: 'ada@example.com', customer_id: 'cus_1', is_active: true })
+    expect(metadata).toEqual({ bifrost: { customer_id: 'cus_1', virtual_key_id: 'vk_1' }, wallet: 'manul_user_1' })
+    expect(wallet.ledger).toEqual([expect.objectContaining({ userId: 'manul_user_1', delta: STARTER_CREDITS, type: 'promo' })])
+    expect(keys.vk_1.budgets[0]).toMatchObject({ max_limit: costForCredits(STARTER_CREDITS), reset_duration: '100Y' })
+    expect(models(keys.vk_1)).toEqual(['gemini-3.8-flash', 'gemini-4-argon', 'gpt-5.6-luna'])
   })
 
-  it('later sign-ins (any device) get the same key: no second free credit', async () => {
+  it('a Pitch subscriber (same email) gets their own wallet: their plan, their credits, every tier', async () => {
+    wallet.profiles.set('user_pitch', { email: 'Ada@Example.com' })
+    await wallet.post('user_pitch', 7_000, 'promo', 'left from Pitch', 'sub_grant:x:initial')
+    subscribe('user_pitch', 'max')
+    await ask('good')
+    expect(metadata.wallet).toBe('user_pitch')
+    expect(wallet.profiles.size).toBe(1)
+    expect(keys.vk_1.budgets[0].max_limit).toBeCloseTo(costForCredits(7_000 + STARTER_CREDITS))
+    expect(models(keys.vk_1)).toEqual(['gemini-3.8-flash', 'gemini-4-argon', 'gpt-5.6-luna', 'gpt-6-astra', 'gpt-6.1-sol'])
+  })
+
+  it('later sign-ins (any device) get the same key: no second starter credit', async () => {
     await ask('good')
     calls = []
     expect(await (await ask('good')).json()).toEqual({ key: 'sk-bf-vk_1', key_id: 'vk_1', email: 'ada@example.com' })
     expect(calls.some(c => c.method === 'POST' && c.url.startsWith('https://gw.test'))).toBe(false)
+    expect(wallet.ledger).toHaveLength(1)
   })
 
   it('a key turned off in the gateway stays off', async () => {
@@ -95,133 +102,118 @@ describe('the account service: signing in', () => {
     expect((await ask('good')).status).toBe(403)
   })
 
-  it('a key deleted in the gateway is replaced with what they paid, not a new free credit', async () => {
+  it('a key deleted in the gateway is replaced, and the wallet is still theirs', async () => {
     await ask('good')
-    metadata.payments = { pay_1: 10 }
     delete keys.vk_1
     await ask('good')
-    expect(keys.vk_1.budgets[0].max_limit).toBe(10)
+    expect(Object.values(keys)[0].budgets[0].max_limit).toBeCloseTo(costForCredits(STARTER_CREDITS))
+    expect(wallet.ledger).toHaveLength(1)
   })
 })
 
-describe('the account service: credit and payments', () => {
-  it('shows what is left, only to the key itself', async () => {
+describe('the account service: credits and plans', () => {
+  it('what the key spends in the gateway comes off the wallet once, and the budget follows the wallet', async () => {
     await ask('good')
     keys.vk_1.budgets[0].current_usage = 0.5
-    expect(await (await call('/v1/balance', { headers: asKey('sk-bf-vk_1', 'vk_1') })).json()).toEqual({ credit: 2, used: 0.5, left: 1.5 })
-    expect((await call('/v1/balance', { headers: asKey('sk-bf-wrong', 'vk_1') })).status).toBe(401)
+    await sync(env, wallet, 'vk_1')
+    await sync(env, wallet, 'vk_1')   // again: nothing more to charge
+    const spent = creditsForCost(0.5)
+    expect(wallet.ledger.filter(r => r.type === 'usage')).toEqual([expect.objectContaining({ delta: -spent, key: `manul:gateway:vk_1:${spent}` })])
+    expect(keys.vk_1.budgets[0].max_limit).toBeCloseTo(0.5 + costForCredits(STARTER_CREDITS - spent))
+    // spending in Pitch (or a grant from Pitch's webhook) reaches the key on the next sync
+    await wallet.post('manul_user_1', 10_000, 'promo', 'pro plan', 'sub_grant:sub_1:initial')
+    await syncAll(env, wallet)
+    expect(keys.vk_1.budgets[0].max_limit).toBeCloseTo(0.5 + costForCredits(STARTER_CREDITS - spent + 10_000))
+  })
+
+  it('a key from before wallets is linked by its email when it asks, and its old spend isn’t charged', async () => {
+    keys.vk_1 = { id: 'vk_1', name: 'user_1', description: 'ada@example.com', value: 'sk-bf-vk_1', is_active: true, budgets: [{ id: 'b0', max_limit: 2, current_usage: 1.78, reset_duration: '100Y' }], provider_configs: [] }
+    const b = await balance()
+    expect(b.credits).toBe(STARTER_CREDITS)
+    expect(wallet.ledger.filter(r => r.type === 'usage')).toEqual([])
+    expect(keys.vk_1.budgets[0].max_limit).toBeCloseTo(1.78 + costForCredits(STARTER_CREDITS))
+    expect(metadata.wallet).toBe('manul_user_1')
+  })
+
+  it('shows credits, the plan, the tiers and what can be bought, only to the key itself', async () => {
+    await ask('good')
+    subscribe('manul_user_1')
+    const b = await balance()
+    expect(b.discount).toEqual({ percent: 50, on: 'model usage' })
+    expect(b).toMatchObject({ credits: STARTER_CREDITS, plan: { key: 'pro', name: 'Pro', every: 'month', renews: true, until: '2026-11-21T00:00:00.000Z' } })
+    expect(b.tiers.filter((t: any) => t.available).map((t: any) => t.tier)).toEqual(['low', 'medium', 'high', 'max', 'ultra'])
+    expect(b.plans.map((p: any) => [p.key, p.price, p.credits, p.buyable])).toEqual([['pro', 45, 10_000, true], ['max', 80, 30_000, true], ['pro_annual', 432, 120_000, false], ['max_annual', 768, 360_000, false]])
+    expect((await call('/v1/balance', { headers: asKey('sk-bf-wrong') })).status).toBe(401)
     expect((await call('/v1/balance')).status).toBe(401)
   })
 
-  it('starts a Dodo checkout for the Manul credit product, tagged with whose key it tops up', async () => {
+  it('a cancelled plan keeps its tiers to the end of what was paid for; an ended one does not', async () => {
     await ask('good')
-    const res = await call('/v1/checkout', { method: 'POST', headers: asKey('sk-bf-vk_1', 'vk_1'), body: JSON.stringify({ amount: 10 }) })
+    subscribe('manul_user_1', 'max', 'cancelled')
+    expect((await balance()).plan).toMatchObject({ key: 'max', renews: false })
+    expect(models(keys.vk_1)).toContain('gpt-6-astra')
+    wallet.subscriptions.delete('manul_user_1')
+    expect((await balance()).plan).toBeNull()
+    expect(models(keys.vk_1)).not.toContain('gpt-6-astra')
+  })
+
+  it('starts a Dodo checkout for a plan, tagged the way Pitch’s webhook grants it', async () => {
+    await ask('good')
+    const res = await call('/v1/checkout', { method: 'POST', headers: asKey(), body: JSON.stringify({ plan: 'pro' }) })
     expect(await res.json()).toEqual({ url: 'https://checkout.dodo.test/cks_1' })
     expect(calls.find(c => c.url === 'https://dodo.test/checkouts')!.body).toEqual({
-      product_cart: [{ product_id: 'pdt_credit', quantity: 1, amount: 1000 }],
+      product_cart: [{ product_id: 'pdt_pro', quantity: 1 }],
       customer: { email: 'ada@example.com' },
       return_url: 'https://account.manul.si/paid',
-      metadata: { virtual_key_id: 'vk_1', user_id: 'user_1' },
+      metadata: { clerk_user_id: 'manul_user_1', credits: '10000', pack: 'pro', type: 'subscription', affiliate_cookie: '', source: 'manul' },
       billing_currency: 'USD',
       feature_flags: { allow_currency_selection: false },
     })
-    expect((await call('/v1/checkout', { method: 'POST', headers: asKey('sk-bf-vk_1', 'vk_1'), body: JSON.stringify({ amount: 0.2 }) })).status).toBe(400)
   })
 
-  it('a paid checkout raises the budget by the price before tax, keeping what was used, once per payment', async () => {
+  it('one plan at a time, top-ups only on a plan, and nothing unknown or unsold', async () => {
     await ask('good')
-    keys.vk_1.budgets[0].current_usage = 1.75
-    const hook = (body: object) => call('/v1/dodo/webhook', signed(body))
-    expect(await (await hook(paid('pay_1', 1080, 80))).json()).toEqual({ ok: true, credited: 10 })
-    expect(keys.vk_1.budgets[0]).toMatchObject({ id: 'b0', max_limit: 12, current_usage: 1.75, reset_duration: '100Y' })
-    expect(metadata.payments).toEqual({ pay_1: 10 })
-    expect(await (await hook(paid('pay_1', 1080, 80))).json()).toEqual({ ok: true, already: true })   // Dodo retried
-    expect(keys.vk_1.budgets[0].max_limit).toBe(12)
-    await hook(paid('pay_2', 500))
-    expect(keys.vk_1.budgets[0].max_limit).toBe(17)
+    const buy = async (body: object) => (await call('/v1/checkout', { method: 'POST', headers: asKey(), body: JSON.stringify(body) })).status
+    calls = []
+    expect(await buy({ topup: 'flex' })).toBe(403)
+    expect(await buy({ plan: 'enterprise' })).toBe(400)
+    expect(await buy({})).toBe(400)
+    expect(await buy({ plan: 'pro_annual' })).toBe(503)      // no product set for it
+    subscribe('manul_user_1')
+    expect(await buy({ plan: 'max' })).toBe(409)
+    expect(calls.some(c => c.url.startsWith('https://dodo.test'))).toBe(false)
+    expect(await buy({ topup: 'flex' })).toBe(200)
+    expect(calls.find(c => c.url === 'https://dodo.test/checkouts')!.body.metadata).toMatchObject({ pack: 'flex', type: 'topup', credits: '5000' })
   })
 
-  it('ignores forged, stale and unrelated webhooks', async () => {
+  it('opens Dodo’s billing page for the account’s email', async () => {
     await ask('good')
-    expect((await call('/v1/dodo/webhook', signed(paid('pay_x', 99900), undefined, 'whsec_' + Buffer.from('not-ours').toString('base64')))).status).toBe(401)
-    expect((await call('/v1/dodo/webhook', signed(paid('pay_x', 99900), Math.floor(Date.now() / 1000) - 3600))).status).toBe(401)
-    expect(await (await call('/v1/dodo/webhook', signed(paid('pay_y', 500, 0, {})))).json()).toMatchObject({ skipped: expect.any(String) })
-    expect(keys.vk_1.budgets[0].max_limit).toBe(2)
-  })
-
-  it('repairs payment metadata after a failure without adding the credit a second time', async () => {
-    await ask('good')
-    recordFailures = 1
-    const hook = () => call('/v1/dodo/webhook', signed(paid('pay_retry', 1000)))
-    expect((await hook()).status).toBe(502)
-    expect(keys.vk_1.budgets[0].max_limit).toBe(12)
-    expect(metadata.payments).toBeUndefined()
-    expect(await (await hook()).json()).toEqual({ ok: true, already: true })
-    expect(metadata.payments).toEqual({ pay_retry: 10 })
-    expect(keys.vk_1.budgets[0].max_limit).toBe(12)
-  })
-
-  it('retries an ambiguous gateway update as the same absolute budget', async () => {
-    await ask('good')
-    lostBudgetReplies = 1
-    const hook = () => call('/v1/dodo/webhook', signed(paid('pay_lost', 1000)))
-    await expect(hook()).rejects.toThrow('connection lost')
-    expect(keys.vk_1.budgets[0].max_limit).toBe(12)
-    expect((await hook()).status).toBe(200)
-    expect(keys.vk_1.budgets[0].max_limit).toBe(12)
-    expect(metadata.payments).toEqual({ pay_lost: 10 })
-  })
-
-  it('serializes duplicate and distinct concurrent payments on one key', async () => {
-    await ask('good')
-    keys.vk_1.budgets[0].current_usage = 0.25
-    const events = [paid('pay_a', 1000), paid('pay_a', 1000), paid('pay_b', 500)]
-    const results = await Promise.all(events.map(e => call('/v1/dodo/webhook', signed(e))))
-    expect(results.every(r => r.status === 200)).toBe(true)
-    expect(keys.vk_1.budgets[0]).toMatchObject({ max_limit: 17, current_usage: 0.25 })
-    expect(metadata.payments).toEqual({ pay_a: 10, pay_b: 5 })
+    expect(await (await call('/v1/portal', { method: 'POST', headers: asKey() })).json()).toEqual({ url: 'https://portal.dodo.test/x' })
   })
 
   it('blocks disabled keys on every account endpoint', async () => {
     await ask('good')
     keys.vk_1.is_active = false
-    for (const path of ['/v1/balance', '/v1/voices', '/v1/checkout', '/v1/voice', '/v1/music']) {
-      expect((await call(path, { method: ['/v1/balance', '/v1/voices'].includes(path) ? 'GET' : 'POST', headers: asKey('sk-bf-vk_1', 'vk_1'), body: ['/v1/balance', '/v1/voices'].includes(path) ? undefined : '{}' })).status).toBe(403)
+    for (const path of ['/v1/balance', '/v1/voices', '/v1/checkout', '/v1/portal', '/v1/voice', '/v1/music']) {
+      const get = ['/v1/balance', '/v1/voices'].includes(path)
+      expect((await call(path, { method: get ? 'GET' : 'POST', headers: asKey(), body: get ? undefined : '{}' })).status).toBe(403)
     }
     expect(calls.some(c => c.url.startsWith('https://dodo.test'))).toBe(false)
-  })
-
-  it('rejects amounts below $5 before creating checkout', async () => {
-    await ask('good')
-    calls = []
-    for (const amount of [1, 4.99, 1001, 'NaN']) {
-      const r = await call('/v1/checkout', { method: 'POST', headers: asKey('sk-bf-vk_1', 'vk_1'), body: JSON.stringify({ amount }) })
-      expect(r.status).toBe(400)
-      expect((await r.json()).error).toContain('$5')
-    }
-    expect(calls.some(c => c.url.startsWith('https://dodo.test'))).toBe(false)
-    expect((await call('/v1/checkout', { method: 'POST', headers: asKey('sk-bf-vk_1', 'vk_1'), body: '{"amount":5}' })).status).toBe(200)
   })
 
   it('grants only configured gateway providers', async () => {
-    const r = await handle(new Request('https://account.test/v1/key', { method: 'POST', headers: { authorization: 'Bearer good' } }), { ...env, BIFROST_PROVIDERS: 'gemini,openai,anthropic' }, credits)
+    const r = await handle(new Request('https://account.test/v1/key', { method: 'POST', headers: { authorization: 'Bearer good' } }), { ...env, BIFROST_PROVIDERS: 'gemini,openai,anthropic' }, wallet)
     expect(r.status).toBe(200)
     const created = calls.find(c => c.url.endsWith('/virtual-keys') && c.method === 'POST')!
-    expect(created.body.provider_configs.map((p: any) => p.provider)).toEqual(['anthropic', 'gemini', 'openai'])
+    expect(created.body.provider_configs.map((p: any) => p.provider)).toEqual(['gemini'])
   })
-
-  it('refuses payments addressed to another account key and invalid payment amounts', async () => {
-    await ask('good')
-    keys.vk_1.name = 'different-user'
-    expect((await call('/v1/dodo/webhook', signed(paid('pay_other', 1000)))).status).toBe(422)
-    expect((await call('/v1/dodo/webhook', signed(paid('pay_negative', -100)))).status).toBe(422)
-    expect(keys.vk_1.budgets[0].max_limit).toBe(2)
-  })
-
-  it('verifies Standard Webhooks signatures with several signatures in the header', async () => {
-    const { headers, body } = signed({ a: 1 })
-    const h = new Headers(headers as Record<string, string>)
-    h.set('webhook-signature', `v1,bm90LWl0 ${h.get('webhook-signature')}`)
-    expect(await verify(SECRET, h, body as string)).toBe(true)
+  it('tells PostHog about sign-ins and checkouts as the wallet’s user, never with an email', async () => {
+    const tracked = { ...env, POSTHOG_KEY: 'phc_1', POSTHOG_HOST: 'https://ph.test' }
+    await handle(new Request('https://account.test/v1/key', { method: 'POST', headers: { authorization: 'Bearer good' } }), tracked, wallet)
+    await handle(new Request('https://account.test/v1/checkout', { method: 'POST', headers: asKey(), body: '{"plan":"max"}' }), tracked, wallet)
+    await new Promise(r => setTimeout(r, 0))
+    const events = calls.filter(c => c.url === 'https://ph.test/i/v0/e/').map(c => c.body)
+    expect(events.map(e => [e.event, e.distinct_id, e.api_key])).toEqual([['manul signed in', 'manul_user_1', 'phc_1'], ['manul checkout started', 'manul_user_1', 'phc_1']])
+    expect(JSON.stringify(events)).not.toContain('ada@example.com')
   })
 })

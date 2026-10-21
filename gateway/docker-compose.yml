@@ -31,6 +31,8 @@ services:
     environment:
       PORT: "8080"
       ACCOUNT_DATABASE_URL: postgresql://manul:local-manul@account-db:5432/manul_account
+      WALLET_DATABASE_URL: postgresql://manul:local-manul@account-db:5432/manul_account
+      WALLET_CREATE_TABLES: "1"
       BIFROST_URL: http://bifrost:8080
       BIFROST_PROVIDERS: anthropic,gemini,openai
       CLERK_ISSUER: ${CLERK_ISSUER:-https://clerk.manul.si}

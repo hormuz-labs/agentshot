@@ -1,7 +1,7 @@
 // The renderer's only door to the main process. Keys never come back through here: only whether they are set.
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BaseEvent } from '@ag-ui/core'
-import type { AccountStatus, Anchor, BrowserMode, BrowserState, ChromeBsk, ConsentRequest, Job, KeyInfo, OnDemandTool, Project, RecentProject, ToolStatus, Transcript, WhisperConfig, WhisperStatus } from '../shared/types'
+import type { AccountStatus, Anchor, Balance, BrowserMode, BrowserState, ChromeBsk, ConsentRequest, Job, KeyInfo, OnDemandTool, Project, RecentProject, ToolStatus, Transcript, WhisperConfig, WhisperStatus } from '../shared/types'
 import type { CustomProvider, CustomProviderInfo } from '../shared/providers'
 import type { Cue } from '../shared/subtitles'
 import type { Edit } from '../shared/timeline'
@@ -117,10 +117,12 @@ const api = {
     signIn: () => ipcRenderer.invoke('account:signIn') as Promise<AccountStatus>,
     cancel: () => ipcRenderer.invoke('account:cancel'),
     signOut: () => ipcRenderer.invoke('account:signOut') as Promise<AccountStatus>,
-    /** USD: the credit, what's used, what's left */
-    balance: () => ipcRenderer.invoke('account:balance') as Promise<{ credit: number; used: number; left: number }>,
-    /** opens a Dodo Payments checkout in the browser */
-    addCredit: (amount?: number) => ipcRenderer.invoke('account:addCredit', amount) as Promise<void>,
+    /** credits, plan and model tiers (shared with Pitch), and what's on sale */
+    balance: () => ipcRenderer.invoke('account:balance') as Promise<Balance>,
+    /** opens a Dodo Payments checkout in the browser, for a plan or a top-up */
+    checkout: (what: { plan: string } | { topup: string }) => ipcRenderer.invoke('account:checkout', what) as Promise<void>,
+    /** opens Dodo's billing page: card, invoices, cancelling */
+    billing: () => ipcRenderer.invoke('account:billing') as Promise<void>,
   },
   /** Custom model providers (OpenAI/Anthropic-compatible endpoints); keys go in, only "set or not" comes back. */
   providers: {

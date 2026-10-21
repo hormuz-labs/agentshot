@@ -4,7 +4,7 @@ import { PanelHeader } from '@/components/ui/panel-header'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
-import type { AccountStatus, KeyInfo } from '../../../shared/types'
+import type { AccountStatus, Balance, KeyInfo } from '../../../shared/types'
 import { ProvidersSection } from './ProvidersSection'
 
 const MANUL = 'MANUL_KEY'
@@ -115,7 +115,7 @@ function ManulKey({ manul, onKeys }: { manul?: KeyInfo; onKeys(k: KeyInfo[]): vo
       <div className="text-center">
         <div className="orb mx-auto mb-3 size-10 rounded-full" />
         <div className="text-[15px] font-semibold">One key for everything</div>
-        <p className="mx-auto mt-1 max-w-sm text-dim">Manul picks the best model for the job and keeps it current. New accounts start with $2 of credit; add more any time. Your own keys, when set, are used first.</p>
+        <p className="mx-auto mt-1 max-w-sm text-dim">Manul picks the best model for the job and keeps it current. New accounts start with 1,000 credits; Pro and Max plans add more every month and unlock the Max and Ultra models. Your own keys, when set, are used first. On Pitch? Sign in with the same email: your plan and credits are here.</p>
       </div>
       {account.email && manul.set ? (
         <>
@@ -159,32 +159,71 @@ function ManulKey({ manul, onKeys }: { manul?: KeyInfo; onKeys(k: KeyInfo[]): vo
   )
 }
 
-/** What's left of the Manul credit, and adding more (a Dodo Payments checkout in the browser). */
+/** Credits and plan (one wallet with Pitch): a plan or a top-up is a Dodo Payments checkout in the browser. */
 function Credit() {
-  const [b, setB] = useState<{ credit: number; used: number; left: number } | null>(null)
+  const [b, setB] = useState<Balance | null>(null)
   const [error, setError] = useState('')
-  const [opening, setOpening] = useState(false)
+  const [opening, setOpening] = useState('')
+  const [yearly, setYearly] = useState(false)
   const load = () => window.manul.account.balance().then(x => { setB(x); setError('') }, e => setError(message(e)))
   useEffect(() => {
     load()
     window.addEventListener('focus', load) // back from paying in the browser
     return () => window.removeEventListener('focus', load)
   }, [])
-  const add = async () => {
-    setOpening(true); setError('')
-    try { await window.manul.account.addCredit() } catch (e) { setError(message(e)) } finally { setOpening(false) }
+  const open = async (what: string, run: () => Promise<void>) => {
+    setOpening(what); setError('')
+    try { await run() } catch (e) { setError(message(e)) } finally { setOpening('') }
   }
-  const usd = (n: number) => `$${n.toFixed(n < 10 ? 2 : 0)}`
+  const n = (x: number) => x.toLocaleString('en-US')
+  const until = b?.plan && new Date(b.plan.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const plans = (b?.plans || []).filter(p => (p.every === 'year') === yearly)
+  const flex = b?.topups.find(t => t.key === 'flex')
   return (
-    <div className="mx-auto mt-2 max-w-md rounded-lg border border-line bg-bg px-3 py-2" data-credit>
+    <div className="mx-auto mt-2 max-w-md rounded-lg border border-line bg-bg px-3 py-2.5" data-credit>
       <div className="flex items-center gap-3">
         <span className="flex-1 text-[13px]">
-          {b ? <><span className="font-medium tabular">{usd(b.left)}</span> <span className="text-dim">credit left</span></> : <span className="text-faint">Credit…</span>}
+          {b ? <><span className="font-medium tabular">{n(b.credits)}</span> <span className="text-dim">credits</span></> : <span className="text-faint">Credits…</span>}
         </span>
-        <Button size="sm" variant="primary" disabled={opening} onClick={add}>{opening ? 'Opening…' : 'Add credit'}</Button>
+        {b?.plan && <span className="rounded-full bg-amber/15 px-2 py-0.5 text-[11px] font-medium text-amber">{b.plan.name}</span>}
       </div>
-      {b && b.credit > 0 && (
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-hover"><div className="h-full rounded-full bg-amber" style={{ width: `${Math.min(100, (b.left / b.credit) * 100)}%` }} /></div>
+      {b?.discount && <p className="mt-1 text-[11px] font-medium text-ok">Launch offer: {b.discount.on} at {b.discount.percent}% off</p>}
+      {b?.plan ? (
+        <>
+          <p className="mt-1 text-xs text-dim">
+            {n(b.plan.credits)} credits a {b.plan.every}{b.plan.renews ? `, renews ${until}` : `, ends ${until}`}. Every model tier is yours.
+          </p>
+          <div className="mt-2 flex gap-2">
+            {flex?.buyable && (
+              <Button size="sm" variant="primary" disabled={!!opening} onClick={() => open('flex', () => window.manul.account.checkout({ topup: 'flex' }))}>
+                {opening === 'flex' ? 'Opening…' : `${n(flex.credits)} more credits · $${flex.price}`}
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" disabled={!!opening} onClick={() => open('billing', () => window.manul.account.billing())}>
+              {opening === 'billing' ? 'Opening…' : 'Manage billing'}
+            </Button>
+          </div>
+        </>
+      ) : b && (
+        <>
+          <div className="mt-2 flex items-center gap-2 text-xs text-dim">
+            <span className="flex-1">Plans add credits every month and unlock Manul Max and Ultra.</span>
+            <button className="underline-offset-2 hover:text-fg hover:underline" onClick={() => setYearly(!yearly)}>{yearly ? 'Monthly' : 'Yearly'}</button>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {plans.map(p => (
+              <button key={p.key} disabled={!p.buyable || !!opening} onClick={() => open(p.key, () => window.manul.account.checkout({ plan: p.key }))}
+                className="rounded-lg border border-line px-3 py-2 text-left transition-colors hover:border-amber/60 disabled:opacity-50">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-[13px] font-semibold">{p.name}</span>
+                  <span className="ml-auto text-[13px] tabular">${p.price}</span>
+                  <span className="text-[11px] text-faint">/{p.every === 'year' ? 'yr' : 'mo'}</span>
+                </div>
+                <div className="text-[11px] text-dim">{opening === p.key ? 'Opening…' : `${n(p.credits)} credits a ${p.every}`}</div>
+              </button>
+            ))}
+          </div>
+        </>
       )}
       {error && <p className="mt-1.5 text-xs text-bad">{error}</p>}
     </div>

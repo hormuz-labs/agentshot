@@ -10,7 +10,7 @@ kubectl -n manul get secret manul-secrets >/dev/null
 patch=$(python3 - "$env_file" <<'PY'
 import json, re, sys
 PRODUCTION = {'GEMINI_API_KEY', 'ELEVENLABS_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'AZURE_ENDPOINT', 'AZURE_API_KEY',
-              'CLERK_SECRET_KEY', 'DODO_API_KEY', 'DODO_WEBHOOK_SECRET', 'DODO_PRODUCT_ID'}
+              'CLERK_SECRET_KEY'}   # Dodo and the wallet come from Pitch's secret: link-pitch.sh
 PLACEHOLDER = re.compile(r'^(<.*>|…|\.\.\.|fake|test|dummy|change-?me|x+)$', re.I)
 data = {}
 for line in open(sys.argv[1]):

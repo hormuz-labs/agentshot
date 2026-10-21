@@ -3,15 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handle, MEDIA, price, type Env, type MediaConfig } from '../account/src/index'
-import { memoryCreditStore, type CreditStore } from '../account/src/credit'
+import { memoryWallet } from '../account/src/wallet'
+import { creditsForCost } from '../account/src/plans'
 
 // Voice and music for Manul keys: the account service picks the vendor from media.json, makes it with Manul's key,
-// takes the price off the caller's credit, and never says who made it. Fake Bifrost and fake vendors.
+// takes the price (in credits) off the caller's wallet, and never says who made it. Fake Bifrost and fake vendors.
 const env: Env = { CLERK_ISSUER: 'https://clerk.test', CLERK_SECRET_KEY: 'sk', BIFROST_URL: 'https://gw.test', BIFROST_AUTH: 'Basic x', GEMINI_API_KEY: 'g-server', ELEVENLABS_API_KEY: 'el-server' }
 let vk: any
 let vendor: string[]
 let vendorAnswer: () => Response
-let credits: CreditStore
+let wallet: ReturnType<typeof memoryWallet>
+const left = async () => (await wallet.account('p_1'))!.available
 const reply = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } })
 const mp3 = () => new Response(new Uint8Array([0xff, 0xfb, 9]), { headers: { 'content-type': 'audio/mpeg' } })
 
@@ -19,11 +21,14 @@ beforeEach(() => {
   vk = { id: 'vk_1', name: 'user_1', value: 'sk-bf-1', is_active: true, budgets: [{ id: 'b0', max_limit: 2, current_usage: 0.5, reset_duration: '100Y' }] }
   vendor = []
   vendorAnswer = mp3
-  credits = memoryCreditStore()
+  wallet = memoryWallet()
+  wallet.profiles.set('p_1', { email: 'ada@example.com' })
+  void wallet.post('p_1', 1000, 'promo', 'starter', 'starter')
+  void wallet.setCharged('vk_1', 'p_1', creditsForCost(0.5))
   vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
     const url = String(input), method = init.method || 'GET'
     if (url === 'https://gw.test/api/governance/virtual-keys/vk_1') {
-      if (method === 'PUT') { for (const b of JSON.parse(String(init.body)).budgets) Object.assign(vk.budgets.find((x: any) => x.id === b.id), b); return reply({ virtual_key: vk }) }
+      if (method === 'PUT') { const body = JSON.parse(String(init.body)); for (const b of body.budgets) Object.assign(vk.budgets.find((x: any) => x.id === b.id), b); if (body.provider_configs) vk.provider_configs = body.provider_configs; return reply({ virtual_key: vk }) }
       return reply({ virtual_key: vk })
     }
     vendor.push(`${url} ${new Headers(init.headers).get('xi-api-key') || new Headers(init.headers).get('x-goog-api-key')}`)
@@ -33,7 +38,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 const as = { authorization: 'Bearer sk-bf-1', 'x-manul-key-id': 'vk_1', 'content-type': 'application/json' }
-const post = (path: string, body: object, e: Env = env) => handle(new Request(`https://account.test${path}`, { method: 'POST', headers: as, body: JSON.stringify(body) }), e, credits)
+const post = (path: string, body: object, e: Env = env) => handle(new Request(`https://account.test${path}`, { method: 'POST', headers: as, body: JSON.stringify(body) }), e, wallet)
 const withConfig = (c: MediaConfig): Env => {
   const f = join(mkdtempSync(join(tmpdir(), 'manul-media-')), 'media.json')
   writeFileSync(f, JSON.stringify(c))
@@ -53,11 +58,12 @@ describe('voice and music with a Manul key', () => {
     const r = await post('/v1/music', { prompt: 'Lo-fi bed', seconds: 30 })
     expect(r.status).toBe(200)
     expect(r.headers.get('content-type')).toBe('audio/mpeg')
-    expect(r.headers.get('x-manul-cost')).toBe('0.0800')
+    expect(r.headers.get('x-manul-cost')).toBe('32')
     expect([...new Uint8Array(await r.arrayBuffer())]).toEqual([0xff, 0xfb, 9])
     expect(vendor).toEqual(['https://generativelanguage.googleapis.com/v1beta/models/lyria-3.5:generateContent g-server'])
     expect([...r.headers.keys()].join(' ')).not.toMatch(/gemini|lyria|google/i)
-    expect(vk.budgets[0]).toMatchObject({ max_limit: 1.92, current_usage: 0.5 })
+    expect(await left()).toBe(1000 - 32)
+    expect(vk.budgets[0].current_usage).toBe(0.5)
   })
 
   it('switching vendor is a change to media.json: ElevenLabs, priced per minute', async () => {
@@ -65,7 +71,7 @@ describe('voice and music with a Manul key', () => {
     const r = await post('/v1/music', { prompt: 'Lo-fi bed', seconds: 60 }, e)
     expect(r.status).toBe(200)
     expect(vendor).toEqual(['https://api.elevenlabs.io/v1/music el-server'])
-    expect(vk.budgets[0].max_limit).toBe(1.7)
+    expect(await left()).toBe(1000 - 120)
   })
 
   it('voice: the Manul voice name becomes the vendor’s voice', async () => {
@@ -73,14 +79,14 @@ describe('voice and music with a Manul key', () => {
     const r = await post('/v1/voice', { text: 'Hello.', voice: 'anchor' })
     expect(r.status).toBe(200)
     expect(r.headers.get('content-type')).toBe('audio/wav')
-    expect(vk.budgets[0].max_limit).toBeCloseTo(2 - 0.0001)
+    expect(await left()).toBe(1000 - 1)
   })
 
   it('out of credit: nothing is made', async () => {
-    vk.budgets[0].current_usage = 1.95
+    await wallet.post('p_1', -980, 'usage', 'spent', 'spent')
     const r = await post('/v1/music', { prompt: 'x', seconds: 30 })
     expect(r.status).toBe(402)
-    expect((await r.json()).error).toMatch(/out of Manul credit.*\$0\.08.*\$0\.05 is left/)
+    expect((await r.json()).error).toMatch(/out of Manul credits.*needs 32 and 20 are left/)
     expect(vendor).toEqual([])
   })
 
@@ -94,7 +100,7 @@ describe('voice and music with a Manul key', () => {
     vendorAnswer = () => reply({}, 503)
     const down = await post('/v1/music', { prompt: 'x', seconds: 30 })
     expect(down.status).toBe(502)
-    expect(vk.budgets[0].max_limit).toBe(2)
+    expect(await left()).toBe(1000)
   })
 
   it('a vendor with no key or a model with no price isn’t offered', async () => {
@@ -106,7 +112,7 @@ describe('voice and music with a Manul key', () => {
   })
 
   it('only for the key’s owner, and bad requests are turned away', async () => {
-    const r = await handle(new Request('https://account.test/v1/voice', { method: 'POST', headers: { ...as, authorization: 'Bearer stolen' }, body: '{"text":"x"}' }), env, credits)
+    const r = await handle(new Request('https://account.test/v1/voice', { method: 'POST', headers: { ...as, authorization: 'Bearer stolen' }, body: '{"text":"x"}' }), env, wallet)
     expect(r.status).toBe(401)
     expect((await post('/v1/voice', { text: '' })).status).toBe(400)
     expect((await post('/v1/music', { prompt: 'x', seconds: 30, sections: [{ name: 'A', seconds: 10 }] })).status).toBe(400)
@@ -121,12 +127,12 @@ describe('voice and music with a Manul key', () => {
   })
 
   it('serializes media reservations so two calls cannot spend the same balance', async () => {
-    vk.budgets[0].current_usage = 1.9
+    await wallet.post('p_1', -950, 'usage', 'spent', 'spent')
     vendorAnswer = () => reply({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/mpeg', data: 'AAAA' } }] } }] })
     const results = await Promise.all([post('/v1/music', { prompt: 'x', seconds: 30 }), post('/v1/music', { prompt: 'x', seconds: 30 })])
     expect(results.map(r => r.status)).toEqual([200, 402])
     expect(vendor).toHaveLength(1)
-    expect(vk.budgets[0].max_limit).toBe(1.92)
+    expect(await left()).toBe(50 - 32)
   })
 
   it('never calls the vendor with a disabled key', async () => {
@@ -134,6 +140,6 @@ describe('voice and music with a Manul key', () => {
     expect((await post('/v1/voice', { text: 'Hello.' })).status).toBe(403)
     expect((await post('/v1/music', { prompt: 'x', seconds: 30 })).status).toBe(403)
     expect(vendor).toEqual([])
-    expect(vk.budgets[0].max_limit).toBe(2)
+    expect(await left()).toBe(1000)
   })
 })

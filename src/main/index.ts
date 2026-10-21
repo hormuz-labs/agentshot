@@ -1,5 +1,5 @@
 // Manul's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
-import { CRASH_DSN } from './crash' // first: crash reports must start before anything else
+import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
 import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -14,7 +14,7 @@ import { renderClip, setClipProtocol } from './clips'
 import { buildMenu } from './menu'
 import { startUpdates } from './updates'
 import { keyStatus, loadKeys, setKey } from './keys'
-import { accountStatus, addCredit, balance, cancelSignIn, signIn, signOut } from './account'
+import { accountStatus, balance, cancelSignIn, checkout, manageBilling, signIn, signOut } from './account'
 import { importOmp, ompAvailable, providerInfo, removeProvider, saveProvider } from './providers'
 import { asJob, listJobs, onJobs } from './jobs'
 import { toolPath, toolStatus } from './media'
@@ -618,7 +618,7 @@ function wire() {
   ipcMain.handle('telemetry:state', () => telemetryState())
   ipcMain.handle('telemetry:set', (_e, choice: { usage: boolean; crashes: boolean }) => {
     const usage = choice?.usage === true && telemetry.available
-    setConfig({ telemetry: { usage, crashes: choice?.crashes === true && !!CRASH_DSN, asked: true } })
+    setConfig({ telemetry: { usage, crashes: choice?.crashes === true && CRASHES_AVAILABLE, asked: true } })
     telemetry.setEnabled(usage)
     return telemetryState()
   })
@@ -670,7 +670,8 @@ function wire() {
   ipcMain.handle('account:cancel', () => cancelSignIn())
   ipcMain.handle('account:signOut', () => { const s = signOut(); agent?.keysChanged(); return s })
   ipcMain.handle('account:balance', () => balance())
-  ipcMain.handle('account:addCredit', (_e, amount?: number) => addCredit(url => shell.openExternal(url), amount))
+  ipcMain.handle('account:checkout', (_e, what: { plan: string } | { topup: string }) => checkout(url => shell.openExternal(url), what))
+  ipcMain.handle('account:billing', () => manageBilling(url => shell.openExternal(url)))
   // custom model providers (any OpenAI/Anthropic-compatible endpoint), and importing the ones omp already has
   const providersState = () => ({ providers: providerInfo(), omp: ompAvailable() })
   ipcMain.handle('providers:list', () => providersState())
@@ -852,7 +853,7 @@ function wire() {
 // ---------------------------------------------------------------- crash reports and usage statistics (both opt-in)
 function telemetryState(): TelemetryState {
   const c = getConfig().telemetry
-  return { usage: !!c?.usage, crashes: !!c?.crashes, asked: !!c?.asked, available: { usage: telemetry.available, crashes: !!CRASH_DSN } }
+  return { usage: !!c?.usage, crashes: !!c?.crashes, asked: !!c?.asked, available: { usage: telemetry.available, crashes: CRASHES_AVAILABLE } }
 }
 
 /** One 'agent run' per agent turn: the model, which of Manul's tools it called, how it ended. Never what was said. */

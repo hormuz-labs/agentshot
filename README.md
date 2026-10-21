@@ -260,7 +260,7 @@ sudo apt update && sudo apt install manul
 Other Linux: grab the AppImage from the [latest release](https://github.com/hormuz-labs/manul/releases/latest). More at **[manul.si](https://manul.si)**.
 
 It's free and open source under the [Apache License 2.0](LICENSE): use it, change it, ship it, edit paid work with it.
-Keep the [NOTICE](NOTICE) attribution when you redistribute it. No AI key of your own? Sign in under **Settings → Keys → Manul key**: new accounts start with $2 of credit, enough to try plenty of edits. Or bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain); your own keys are used first.
+Keep the [NOTICE](NOTICE) attribution when you redistribute it. No AI key of your own? Sign in under **Settings → Keys → Manul key**: new accounts start with 1,000 credits, and Pro and Max plans (shared with Pitch: same email, same plan) add more every month. Or bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain); your own keys are used first.
 
 On first run Manul asks whether to send crash reports and usage statistics. Both boxes start unticked, and you can change them anytime in Settings → About. It never sends your footage, file or project names, prompts, transcripts or keys. [Exactly what is sent](telemetry/README.md).
 
