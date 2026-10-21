@@ -20,10 +20,6 @@ function extensionPreloads(): Plugin {
   }
 }
 
-// Hidden source maps for crash reports when the release can upload them to Sentry; the .map files are deleted
-// before packaging (release.yml).
-const sourcemaps = process.env.SENTRY_AUTH_TOKEN ? 'hidden' as const : false
-
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
@@ -31,9 +27,7 @@ export default defineConfig({
     define: {
       __MANUL_TELEMETRY_URL__: JSON.stringify(process.env.MANUL_TELEMETRY_URL || ''),
       __MANUL_POSTHOG_TOKEN__: JSON.stringify(process.env.MANUL_POSTHOG_TOKEN || ''),
-      __MANUL_SENTRY_DSN__: JSON.stringify(process.env.MANUL_SENTRY_DSN || ''),
     },
-    build: { sourcemap: sourcemaps },
   },
   preload: {
     plugins: [externalizeDepsPlugin(), extensionPreloads()],
@@ -46,6 +40,5 @@ export default defineConfig({
   renderer: {
     resolve: { alias: { '@': resolve('src/renderer/src') } },
     plugins: [react(), tailwindcss()],
-    build: { sourcemap: sourcemaps },
   },
 })

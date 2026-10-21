@@ -1,9 +1,10 @@
 // Manul's usage proxy, a Cloudflare Worker in front of PostHog. The app sends its batches here, so:
 // - PostHog never sees users' IP addresses (nothing from the request but the batch is passed on);
-// - only the events and properties in src/shared/telemetry.ts get through, rebuilt from scratch;
+// - only the events and properties in src/shared/telemetry.ts get through, rebuilt from scratch, and crash reports
+//   ($exception, PostHog error tracking) rebuilt by cleanException;
 // - each IP is rate-limited, and the proxy only sends to Manul's own PostHog project.
 // Deploy: see telemetry/README.md.
-import { USAGE_EVENTS } from '../../src/shared/telemetry'
+import { cleanException, USAGE_EVENTS } from '../../src/shared/telemetry'
 
 export type Env = {
   POSTHOG_HOST: string
@@ -11,7 +12,7 @@ export type Env = {
   LIMITER?: { limit(o: { key: string }): Promise<{ success: boolean }> }
 }
 
-const MAX_BODY = 64 * 1024
+const MAX_BODY = 128 * 1024   // a crash report with its stack frames is the biggest
 const MAX_EVENTS = 50
 const CONTEXT = ['app_version', 'os', 'arch'] as const
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -23,12 +24,15 @@ const plain = (v: unknown) => typeof v === 'boolean' || (typeof v === 'number' &
 
 /** The event as PostHog will get it, or null when anything about it is off the list. */
 export function clean(e: Incoming): Record<string, unknown> | null {
-  const allowed = (USAGE_EVENTS as Record<string, string[]>)[String(e.event)]
+  const crash = e.event === '$exception'
+  const allowed = crash ? [] : (USAGE_EVENTS as Record<string, string[]>)[String(e.event)]
   const p = e.properties
   if (!allowed || typeof e.uuid !== 'string' || !UUID.test(e.uuid) || !p || typeof p !== 'object') return null
   if (typeof e.timestamp !== 'string' || Number.isNaN(Date.parse(e.timestamp))) return null
   if (typeof p.distinct_id !== 'string' || !UUID.test(p.distinct_id)) return null
-  const properties: Record<string, unknown> = { distinct_id: p.distinct_id, $process_person_profile: false, $geoip_disable: true }
+  const exception = crash ? cleanException(p) : {}
+  if (!exception) return null
+  const properties: Record<string, unknown> = { ...exception, distinct_id: p.distinct_id, $process_person_profile: false, $geoip_disable: true }
   for (const k of [...allowed, ...CONTEXT]) {
     if (p[k] === undefined) continue
     if (!plain(p[k])) return null

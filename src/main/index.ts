@@ -1,5 +1,5 @@
 // Manul's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
-import { CRASH_DSN } from './crash' // first: crash reports must start before anything else
+import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
 import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -618,7 +618,7 @@ function wire() {
   ipcMain.handle('telemetry:state', () => telemetryState())
   ipcMain.handle('telemetry:set', (_e, choice: { usage: boolean; crashes: boolean }) => {
     const usage = choice?.usage === true && telemetry.available
-    setConfig({ telemetry: { usage, crashes: choice?.crashes === true && !!CRASH_DSN, asked: true } })
+    setConfig({ telemetry: { usage, crashes: choice?.crashes === true && CRASHES_AVAILABLE, asked: true } })
     telemetry.setEnabled(usage)
     return telemetryState()
   })
@@ -853,7 +853,7 @@ function wire() {
 // ---------------------------------------------------------------- crash reports and usage statistics (both opt-in)
 function telemetryState(): TelemetryState {
   const c = getConfig().telemetry
-  return { usage: !!c?.usage, crashes: !!c?.crashes, asked: !!c?.asked, available: { usage: telemetry.available, crashes: !!CRASH_DSN } }
+  return { usage: !!c?.usage, crashes: !!c?.crashes, asked: !!c?.asked, available: { usage: telemetry.available, crashes: CRASHES_AVAILABLE } }
 }
 
 /** One 'agent run' per agent turn: the model, which of Manul's tools it called, how it ended. Never what was said. */

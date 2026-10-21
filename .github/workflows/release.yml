@@ -60,10 +60,6 @@ jobs:
           # crash reports and usage statistics, both opt-in (telemetry/README.md); unset, the build has neither
           MANUL_TELEMETRY_URL: ${{ vars.MANUL_TELEMETRY_URL }}
           MANUL_POSTHOG_TOKEN: ${{ vars.MANUL_POSTHOG_TOKEN }}
-          MANUL_SENTRY_DSN: ${{ vars.MANUL_SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
           CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -71,12 +67,6 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           npx electron-vite build
-          # source maps go to Sentry for readable crash stacks, and never into the app
-          if [ -n "$SENTRY_AUTH_TOKEN" ]; then
-            npx --yes @sentry/cli@3.8.0 sourcemaps inject out
-            npx --yes @sentry/cli@3.8.0 sourcemaps upload out
-            find out -name '*.map' -delete
-          fi
           # an empty CSC_LINK makes electron-builder read the project folder as the certificate: unset what isn't configured
           for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do [ -n "${!v}" ] || unset "$v"; done
           NOTARIZE=false
