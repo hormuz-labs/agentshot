@@ -14,6 +14,8 @@ kubectl -n manul create configmap manul-media --from-file=media.json="$here/medi
 kubectl get secret manul-secrets -n manul >/dev/null || { echo "Create the manul-secrets secret first (gateway/README.md)."; exit 1; }
 # production keys from gateway/.env, if there is one (the restart below picks them up)
 [ -f "$here/../.env" ] && "$here/set-secrets.sh" --no-restart
+# the wallet and the plans: Pitch's
+"$here/link-pitch.sh" --no-restart
 kubectl apply -f "$here/manul.yaml"
 # pick up changed config or code
 kubectl -n manul rollout restart deployment/bifrost deployment/account

@@ -76,6 +76,81 @@
         "scope": "global",
         "enabled": true,
         "priority": 0
+      },
+      {
+        "id": "manul-low",
+        "name": "manul-low",
+        "cel_expression": "model == 'manul-low'",
+        "targets": [
+          {
+            "provider": "azure",
+            "model": "gpt-5.6-luna",
+            "weight": 1.0
+          }
+        ],
+        "scope": "global",
+        "enabled": true,
+        "priority": 0
+      },
+      {
+        "id": "manul-medium",
+        "name": "manul-medium",
+        "cel_expression": "model == 'manul-medium'",
+        "targets": [
+          {
+            "provider": "gemini",
+            "model": "gemini-3.8-flash",
+            "weight": 1.0
+          }
+        ],
+        "scope": "global",
+        "enabled": true,
+        "priority": 0
+      },
+      {
+        "id": "manul-high",
+        "name": "manul-high",
+        "cel_expression": "model == 'manul-high'",
+        "targets": [
+          {
+            "provider": "gemini",
+            "model": "gemini-4-argon",
+            "weight": 1.0
+          }
+        ],
+        "scope": "global",
+        "enabled": true,
+        "priority": 0
+      },
+      {
+        "id": "manul-max",
+        "name": "manul-max",
+        "cel_expression": "model == 'manul-max'",
+        "targets": [
+          {
+            "provider": "azure",
+            "model": "gpt-6.1-sol",
+            "weight": 1.0
+          }
+        ],
+        "scope": "global",
+        "enabled": true,
+        "priority": 0
+      },
+      {
+        "id": "manul-ultra",
+        "name": "manul-ultra",
+        "cel_expression": "model == 'manul-ultra'",
+        "targets": [
+          {
+            "provider": "azure",
+            "model": "gpt-6-astra",
+            "weight": 1.0
+          }
+        ],
+        "scope": "global",
+        "enabled": true,
+        "priority": 0
       }
     ],
     "auth_config": {
