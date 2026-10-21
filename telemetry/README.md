@@ -54,7 +54,7 @@ you said yes is never sent later. See [`src/main/crash.ts`](../src/main/crash.ts
 ## How the pieces fit
 
 ```
-Manul ── usage batches, crash reports ──▶ analytics.manul.si (Cloudflare Worker, telemetry/proxy) ──▶ PostHog
+Manul ── usage batches, crash reports ──▶ telemetry.manul.si (Cloudflare Worker, telemetry/proxy) ──▶ PostHog
 GitHub Actions, daily (telemetry/github-stats.mjs) ── downloads, stars, forks, clones ──▶ PostHog
 ```
 
@@ -74,9 +74,9 @@ GitHub Actions, daily (telemetry/github-stats.mjs) ── downloads, stars, fork
 1. **PostHog.** Create a project. Note its project token (`phc_…`, public by design: it can only send events) and its
    region's capture host (`https://us.i.posthog.com` or `https://eu.i.posthog.com`).
 2. **Proxy.** Put the token and host in [`proxy/wrangler.toml`](proxy/wrangler.toml). Then, from `telemetry/proxy`,
-   run `npx wrangler deploy`. It serves `analytics.manul.si`, so remove that name's old tunnel route first.
+   run `npx wrangler deploy`. It serves `telemetry.manul.si` (`analytics.manul.si` is the separate Manul analytics dashboard).
 3. **GitHub repository settings.**
-   - Variables: `MANUL_TELEMETRY_URL=https://analytics.manul.si`, `MANUL_POSTHOG_TOKEN`, and for the daily snapshot
+   - Variables: `MANUL_TELEMETRY_URL=https://telemetry.manul.si`, `MANUL_POSTHOG_TOKEN`, and for the daily snapshot
      `POSTHOG_TOKEN` and `POSTHOG_HOST`.
    - Secret, optional: `GH_TRAFFIC_TOKEN` for clone counts.
 

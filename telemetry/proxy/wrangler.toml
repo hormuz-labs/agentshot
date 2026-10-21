@@ -3,7 +3,7 @@ name = "manul-telemetry"
 main = "worker.ts"
 compatibility_date = "2025-09-01"
 workers_dev = false
-routes = [{ pattern = "analytics.manul.si", custom_domain = true }]
+routes = [{ pattern = "telemetry.manul.si", custom_domain = true }]
 
 [vars]
 # The project token is public by design: it can only send events. The proxy accepts no other.
