@@ -60,6 +60,9 @@ export interface Env {
   [product: `DODO_PRODUCT_${string}`]: string | undefined
   /** where the account service is reached, for the checkout's return page; default https://account.manul.si */
   PUBLIC_URL?: string
+  /** PostHog (Pitch's project, so a person's events in both apps are one person's): account events only */
+  POSTHOG_KEY?: string
+  POSTHOG_HOST?: string
   /** path to media.json (which vendor makes voice and music, the voices, the prices); default MEDIA below */
   MEDIA_CONFIG?: string
   GEMINI_API_KEY?: string
@@ -177,6 +180,18 @@ export async function syncAll(env: Env, wallet: Wallet) {
   }
 }
 
+/**
+ * An account event in PostHog, as the wallet's user (Pitch identifies people by the same id), never with their email.
+ * Fire and forget: analytics never hold up or break an account request.
+ */
+export function track(env: Env, event: string, distinctId: string, properties: Record<string, unknown> = {}) {
+  if (!env.POSTHOG_KEY) return
+  fetch(`${(env.POSTHOG_HOST || 'https://us.i.posthog.com').replace(/\/+$/, '')}/i/v0/e/`, {
+    method: 'POST', signal: AbortSignal.timeout(5_000), headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ api_key: env.POSTHOG_KEY, event, distinct_id: distinctId, properties: { ...properties, app: 'manul', $geoip_disable: true } }),
+  }).catch(() => {})
+}
+
 export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<Response> {
   const url = new URL(req.url)
   const clerk = (path: string, init: RequestInit = {}) =>
@@ -263,6 +278,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       if (vk) {
         if (!vk.is_active) return fail(403, 'Your Manul key is turned off. Contact support.')
         await sync(env, wallet, vk.id, userId)
+        track(env, 'manul signed in', userId, { new_key: false, from_pitch: !userId.startsWith('manul_') })
         return json({ key: vk.value, key_id: vk.id, email })
       }
       // the key was deleted in the gateway: make a new one below (the wallet is unchanged)
@@ -290,6 +306,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     const saved = await saveMeta(sub, { ...m, bifrost: { customer_id: customerId, virtual_key_id: vk.id }, wallet: userId })
     if (!saved.ok) return fail(502, 'Could not save your Manul key. Try again in a moment.')
     await sync(env, wallet, vk.id, userId)
+    track(env, 'manul signed in', userId, { new_key: true, from_pitch: !userId.startsWith('manul_') })
     return json({ key: vk.value, key_id: vk.id, email })
   }
 
@@ -346,6 +363,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       return fail(502, 'Could not start the payment. Try again in a moment.')
     }
     console.log(JSON.stringify({ checkout: (plan || topup)!.key, user: userId }))
+    track(env, 'manul checkout started', userId, { pack: (plan || topup)!.key, type: plan ? 'subscription' : 'topup', price: (plan || topup)!.price })
     return json({ url: out.checkout_url })
   }
 
@@ -391,6 +409,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       await wallet.post(userId, -cost, 'usage', `Manul: ${kind}`, operation)
       return true
     })
+    if (taken !== true) track(env, 'manul out of credits', userId, { kind })
     if (taken !== true) return fail(402, `You're out of Manul credits: this needs ${cost} and ${Math.max(0, taken)} are left. Get more in Settings → Keys → Manul key.`)
     let audio
     try {

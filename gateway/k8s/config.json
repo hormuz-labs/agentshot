@@ -2,7 +2,8 @@
   "$schema": "https://www.getbifrost.ai/schema",
   "client": {
     "enforce_auth_on_inference": true,
-    "drop_excess_requests": false
+    "drop_excess_requests": false,
+    "disable_content_logging": true
   },
   "providers": {
     "anthropic": {

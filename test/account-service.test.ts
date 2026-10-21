@@ -42,6 +42,7 @@ beforeEach(() => {
       return reply({ virtual_key: keys[vk] })
     }
     if (vk) return keys[vk] ? reply({ virtual_key: keys[vk] }) : reply({ error: 'not found' }, 404)
+    if (url === 'https://ph.test/i/v0/e/') return reply({ status: 1 })
     if (url === 'https://dodo.test/checkouts' && method === 'POST') return auth === 'Bearer dodo_key' ? reply({ session_id: 'cks_1', checkout_url: 'https://checkout.dodo.test/cks_1' }) : reply({}, 401)
     if (url === 'https://dodo.test/customers?email=ada%40example.com') return reply({ items: [{ customer_id: 'cus_dodo' }] })
     if (url === 'https://dodo.test/customers/cus_dodo/customer-portal/session' && method === 'POST') return reply({ link: 'https://portal.dodo.test/x' })
@@ -204,5 +205,14 @@ describe('the account service: credits and plans', () => {
     expect(r.status).toBe(200)
     const created = calls.find(c => c.url.endsWith('/virtual-keys') && c.method === 'POST')!
     expect(created.body.provider_configs.map((p: any) => p.provider)).toEqual(['gemini'])
+  })
+  it('tells PostHog about sign-ins and checkouts as the wallet’s user, never with an email', async () => {
+    const tracked = { ...env, POSTHOG_KEY: 'phc_1', POSTHOG_HOST: 'https://ph.test' }
+    await handle(new Request('https://account.test/v1/key', { method: 'POST', headers: { authorization: 'Bearer good' } }), tracked, wallet)
+    await handle(new Request('https://account.test/v1/checkout', { method: 'POST', headers: asKey(), body: '{"plan":"max"}' }), tracked, wallet)
+    await new Promise(r => setTimeout(r, 0))
+    const events = calls.filter(c => c.url === 'https://ph.test/i/v0/e/').map(c => c.body)
+    expect(events.map(e => [e.event, e.distinct_id, e.api_key])).toEqual([['manul signed in', 'manul_user_1', 'phc_1'], ['manul checkout started', 'manul_user_1', 'phc_1']])
+    expect(JSON.stringify(events)).not.toContain('ada@example.com')
   })
 })
