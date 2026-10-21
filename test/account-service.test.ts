@@ -139,6 +139,7 @@ describe('the account service: credits and plans', () => {
     await ask('good')
     subscribe('manul_user_1')
     const b = await balance()
+    expect(b.discount).toEqual({ percent: 50, on: 'model usage' })
     expect(b).toMatchObject({ credits: STARTER_CREDITS, plan: { key: 'pro', name: 'Pro', every: 'month', renews: true, until: '2026-11-21T00:00:00.000Z' } })
     expect(b.tiers.filter((t: any) => t.available).map((t: any) => t.tier)).toEqual(['low', 'medium', 'high', 'max', 'ultra'])
     expect(b.plans.map((p: any) => [p.key, p.price, p.credits, p.buyable])).toEqual([['pro', 45, 10_000, true], ['max', 80, 30_000, true], ['pro_annual', 432, 120_000, false], ['max_annual', 768, 360_000, false]])

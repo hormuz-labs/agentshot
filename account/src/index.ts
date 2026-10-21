@@ -26,7 +26,7 @@
 import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { brandPage } from '../../src/shared/brand-page.ts'
-import { costForCredits, creditsForCost, creditsForPrice, isPaid, PLANS, productEnv, providerConfigs, STARTER_CREDITS, TIERS, tiersFor, TOPUPS, type PlanKey, type TopupKey } from './plans.ts'
+import { costForCredits, creditsForCost, creditsForPrice, DISCOUNT, isPaid, PLANS, productEnv, providerConfigs, STARTER_CREDITS, TIERS, tiersFor, TOPUPS, type PlanKey, type TopupKey } from './plans.ts'
 import { planOf, type Wallet } from './wallet.ts'
 import { checkMusic, checkVoice, compose, KEY_ENV, MediaError, speak, VENDOR_NAME, VOICES, type Choice, type MusicRequest, type Voice, type VoiceRequest } from './media.ts'
 
@@ -325,6 +325,8 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       tiers: TIERS.map(t => ({ tier: t.tier, name: t.name, paid: t.paid, available: tiersFor(sub?.plan).includes(t.tier) })),
       plans: Object.values(PLANS).map(p => ({ ...p, buyable: !!env[productEnv(p.key as PlanKey, live)] })),
       topups: Object.values(TOPUPS).map(p => ({ ...p, buyable: !!env[productEnv(p.key as TopupKey, live)] })),
+      // the launch offer: model usage below its list rate
+      discount: DISCOUNT > 0 ? { percent: DISCOUNT, on: 'model usage' } : null,
       // for apps from before plans: the same, in dollars of model cost
       credit: b?.max_limit ?? 0, used: b?.current_usage ?? 0, left: Math.max(0, (b?.max_limit ?? 0) - (b?.current_usage ?? 0)),
     })

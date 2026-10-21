@@ -147,6 +147,8 @@ export type Balance = {
   tiers: { tier: string; name: string; paid: boolean; available: boolean }[]
   plans: Offer[]
   topups: Offer[]
+  /** a launch offer on model usage, while there is one */
+  discount?: { percent: number; on: string } | null
 }
 
 export type ToolStatus = { name: string; version?: string; path?: string; bundled: boolean; ok: boolean }

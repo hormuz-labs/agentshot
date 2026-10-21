@@ -24,10 +24,18 @@ export const productEnv = (key: PlanKey | TopupKey, live: boolean) => `DODO_PROD
 /** Billable usage per credit (Pitch's CREDIT_USD) and the margin over model cost (Pitch's STUDIO_PLATFORM_MARGIN). */
 export const CREDIT_USD = 0.0025
 export const MARGIN = 1.25
+/**
+ * Model usage is priced at a list rate of twice the plain rate (Pitch's premium models cost 2× credits) and sold at the
+ * plain rate during launch, shown as a 50% discount. Ending the launch offer: USAGE_RATE = LIST_USAGE_RATE.
+ */
+export const LIST_USAGE_RATE = 2
+export const USAGE_RATE = 1
+export const DISCOUNT = Math.round((1 - USAGE_RATE / LIST_USAGE_RATE) * 100)
+const RATE = MARGIN * USAGE_RATE
 /** Credits for a model cost in dollars (what the gateway meters). */
-export const creditsForCost = (usd: number, margin = MARGIN) => Math.floor(Math.round((usd * margin / CREDIT_USD) * 1e6) / 1e6)
+export const creditsForCost = (usd: number, rate = RATE) => Math.floor(Math.round((usd * rate / CREDIT_USD) * 1e6) / 1e6)
 /** Dollars of model cost a number of credits buys. */
-export const costForCredits = (credits: number, margin = MARGIN) => Math.max(0, credits) * CREDIT_USD / margin
+export const costForCredits = (credits: number, rate = RATE) => Math.max(0, credits) * CREDIT_USD / rate
 /** Credits for a retail price in dollars (voice and music are priced as billable usage already). */
 export const creditsForPrice = (usd: number) => Math.ceil(Math.round((usd / CREDIT_USD) * 1e6) / 1e6)
 
