@@ -184,9 +184,11 @@ test('public Windows release fails without complete credentials and exact publis
 })
 
 test('portable release tag command fails before modifying metadata on invalid tags', () => {
-  const result = spawnSync(process.execPath, [join(root, 'scripts/version-from-tag.mjs')], {
-    encoding: 'utf8', env: { ...process.env, GITHUB_REF_NAME: 'main' },
-  })
+  // release.yml exports TAG for the tag being built; the test drives the script through GITHUB_REF_NAME,
+  // so an inherited TAG would make the invalid "main" look like a valid release tag.
+  const env = { ...process.env, GITHUB_REF_NAME: 'main' }
+  delete env.TAG
+  const result = spawnSync(process.execPath, [join(root, 'scripts/version-from-tag.mjs')], { encoding: 'utf8', env })
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /Invalid release tag/)
 })
