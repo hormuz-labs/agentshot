@@ -48,6 +48,23 @@ export type MediaInfo = {
   pixfmt?: string
 }
 
+/** Subtitles chosen for a video: the file, and (once there is a transcript) the share of its lines heard in the
+ *  speech and how far its times are off (seconds; positive = the subtitles come late). */
+export type SubtitleLink = { file: string; match?: number; offset?: number }
+
+/** What a file the user added is, so the agent knows how to use it. */
+export type FileKind = 'video' | 'audio' | 'image' | 'subtitles' | 'text' | 'font' | 'lut' | 'other'
+
+export type FileInfo = {
+  kind: FileKind
+  size: number
+  addedAt: number
+  /** One line on what is in it (cues and span, size, font family…), for the user and the agent. */
+  summary: string
+  /** Fonts: the family name (ASS Fontname, what libass matches) and style. */
+  font?: { family: string; style: string }
+}
+
 export type Project = {
   id: string
   title: string
@@ -60,6 +77,8 @@ export type Project = {
   proposal?: string
   notes: Note[]
   media: Record<string, MediaInfo>
+  /** Every file the user (or the agent) added, under media/: what each is. */
+  files?: Record<string, FileInfo>
   /** What the film is made of (media segments and motion clips); rendering it makes a version. */
   timeline?: Timeline
   /** Motion clips by id. */
@@ -68,17 +87,69 @@ export type Project = {
   proxies?: Record<string, string>
   /** media path → transcript path (both project-relative) */
   transcripts?: Record<string, string>
+  /** media path → its diarization (who speaks when), project-relative */
+  speakers?: Record<string, string>
+  /** media path → the names given to its voices (A → "Tony"); the same name on two voices makes them one person */
+  speakerNames?: Record<string, Record<string, string>>
+  /** media path → the subtitles that go with it, and how well they match what's said */
+  subtitles?: Record<string, SubtitleLink>
   /** The model the user picked for this project (else the best available). */
   model?: { provider: string; modelId: string }
   /** The project's durable agent conversation on screen. */
   conversation?: string
   /** Every conversation in this project (newest last); titles come from the first message. */
   conversations?: { id: string; title: string; createdAt: number }[]
+  /** A motion video made from nothing (no footage): it starts on a blank canvas in this format, which the agent replaces
+   *  with its scenes. example: the gallery example it started from (its prompt is the brief, its video the reference);
+   *  reference: a video (in media/) whose style to take, never its content. */
+  motion?: { aspect: '16:9' | '9:16' | '1:1'; length?: number; example?: { id: string; title: string; handle: string; post?: string }; reference?: string; canvas: string }
+  /** A product walkthrough made from nothing: the agent films the product in a browser (walkthroughs/<take>/) and
+   *  narrates it; the film starts as a blank 16:9 canvas until the first walkthrough is proposed. */
+  walkthrough?: { canvas: string }
 }
 
-export type RecentProject = { id: string; title: string; dir: string; openedAt: number; thumb?: string }
+/** A motion example in the gallery (from prompt-motion.com): the video, who made it, and the prompt or skill behind it.
+ *  Ids and tag slugs are the site's own. */
+export type GalleryExample = {
+  id: string
+  title: string
+  creator: { name: string; handle: string; url?: string }
+  /** The maker's post on X. */
+  post?: string
+  /** The example's page on prompt-motion.com. */
+  source: string
+  kind: 'prompt' | 'skill'
+  prompt?: string
+  skill?: string
+  tags: { name: string; slug: string }[]
+  width?: number
+  height?: number
+  date?: string
+  /** seconds */
+  duration?: number
+  sound?: boolean
+  /** manul://gallery URLs */
+  video: string
+  poster: string
+}
+
+export type RecentProject = { id: string; title: string; dir: string; openedAt: number; createdAt?: number; thumb?: string }
 
 export type KeyInfo = { env: string; label: string; unlocks: string[]; hint: string; set: boolean }
+/** Who is signed in to Manul (never their key), and whether this build can sign in at all. */
+export type AccountStatus = { email?: string; available: boolean }
+/** The signed-in person's credits and plan (shared with Pitch), from the account service. */
+export type AccountPlan = { key: string; name: string; every: 'month' | 'year'; credits: number; renews: boolean; until: string }
+export type Offer = { key: string; name: string; price: number; credits: number; every?: 'month' | 'year'; buyable: boolean }
+export type Balance = {
+  credits: number
+  plan: AccountPlan | null
+  tiers: { tier: string; name: string; paid: boolean; available: boolean }[]
+  plans: Offer[]
+  topups: Offer[]
+  /** a launch offer on model usage, while there is one */
+  discount?: { percent: number; on: string } | null
+}
 
 export type ToolStatus = { name: string; version?: string; path?: string; bundled: boolean; ok: boolean }
 
@@ -102,7 +173,7 @@ export type Job = {
   title: string
   /** Shown once it finished, e.g. "Installed Whisper". */
   doneTitle?: string
-  kind: 'download' | 'install' | 'transcribe' | 'render' | 'import'
+  kind: 'download' | 'install' | 'transcribe' | 'speakers' | 'render' | 'import'
   project?: string
   status: 'running' | 'done' | 'failed'
   /** 0–1, or null when there is no estimate */
@@ -147,7 +218,8 @@ export type Segment = { s: number; e: number; text: string; words: Word[] }
 export type Transcript = { media: string; language: string; model: string; segments: Segment[]; createdAt: number }
 
 // ---------------------------------------------------------------- the agent's browser
-export type BrowserTab = { id: number; title: string; url: string; loading: boolean; agent: boolean; canBack: boolean; canForward: boolean }
+/** recording: a product walkthrough is filming this tab */
+export type BrowserTab = { id: number; title: string; url: string; loading: boolean; agent: boolean; recording?: boolean; canBack: boolean; canForward: boolean }
 export type BrowserState = { tabs: BrowserTab[]; active: number | null; bsk: { connected: boolean; status: string } }
 /** manul: Manul's own browser with its private bsk (default). chrome: the user's own Chrome through their bsk. */
 export type BrowserMode = 'manul' | 'chrome'

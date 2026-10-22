@@ -81,7 +81,9 @@ export function BrowserPanel({ visible, onClose }: { visible: boolean; onClose()
               <span className="shrink-0 truncate text-faint">{host(tab.url)}</span>
             </button>
           )}
-          {agentHere && <span className="flex shrink-0 items-center gap-1 text-[10.5px] text-amber"><Bot className="size-3" />Agent</span>}
+          {tab?.recording
+            ? <span data-recording className="flex shrink-0 items-center gap-1.5 text-[10.5px] text-bad" title="Manul is filming this tab for a walkthrough. The time it spends thinking is cut later."><span className="size-1.5 animate-pulse rounded-full bg-bad" />Recording</span>
+            : agentHere && <span className="flex shrink-0 items-center gap-1 text-[10.5px] text-amber"><Bot className="size-3" />Agent</span>}
           {tab && s.tabs.length > 1 && !editing && (
             <button type="button" className="shrink-0 rounded text-faint opacity-0 hover:text-fg group-hover/addr:opacity-100" onClick={() => window.manul.browser.close(tab.id)} title="Close this tab"><X className="size-3" /></button>
           )}
@@ -97,7 +99,7 @@ export function BrowserPanel({ visible, onClose }: { visible: boolean; onClose()
             className="group flex h-7 w-[120px] shrink cursor-default items-center gap-1.5 rounded-md px-2 text-xs text-dim hover:bg-hover hover:text-fg"
             title={t.agent ? `The agent is using this tab · ${t.url}` : t.url}
           >
-            {t.loading ? <Loader2 className="size-3 shrink-0 animate-spin" /> : t.agent ? <Bot className="size-3 shrink-0 text-amber" /> : <Globe className="size-3 shrink-0" />}
+            {t.recording ? <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-bad" /> : t.loading ? <Loader2 className="size-3 shrink-0 animate-spin" /> : t.agent ? <Bot className="size-3 shrink-0 text-amber" /> : <Globe className="size-3 shrink-0" />}
             <span className="truncate">{t.title || host(t.url) || 'New tab'}</span>
             <button className="ml-auto shrink-0 rounded text-faint opacity-0 hover:text-fg group-hover:opacity-100" onClick={e => { e.stopPropagation(); window.manul.browser.close(t.id) }}><X className="size-3" /></button>
           </div>

@@ -1,11 +1,22 @@
 // The renderer's only door to the main process. Keys never come back through here: only whether they are set.
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BaseEvent } from '@ag-ui/core'
-import type { Anchor, BrowserMode, BrowserState, ChromeBsk, ConsentRequest, Job, KeyInfo, OnDemandTool, Project, RecentProject, ToolStatus, Transcript, WhisperConfig, WhisperStatus } from '../shared/types'
+import type { AccountStatus, Anchor, Balance, BrowserMode, BrowserState, ChromeBsk, ConsentRequest, Job, KeyInfo, OnDemandTool, Project, RecentProject, ToolStatus, Transcript, WhisperConfig, WhisperStatus } from '../shared/types'
 import type { CustomProvider, CustomProviderInfo } from '../shared/providers'
+import type { Cue } from '../shared/subtitles'
+import type { Edit } from '../shared/timeline'
+import type { PreviewState } from '../shared/proxy'
+import type { DemoOptions } from '../main/demo'
+import type { GalleryExample, SubtitleLink } from '../shared/types'
+import type { TelemetryState } from '../shared/telemetry'
+import type { SettingsOpened } from '../shared/onboarding'
+
+export type SubtitlesState = { link?: SubtitleLink; cues: Cue[]; candidates: string[] }
+/** How many edits can be undone (back) and redone (forward). */
+export type UndoState = { back: number; forward: number }
 type ProvidersState = { providers: CustomProviderInfo[]; omp: boolean }
 
-type SkillState = { skills: { id: string; name: string; description: string; path: string; source: 'bundled' | 'user' }[]; enabled: string[]; profile: { id: string; name: string }; profiles: { id: string; name: string }[] }
+type SkillState = { skills: { id: string; name: string; description: string; path: string }[]; enabled: string[]; profile: { id: string; name: string }; profiles: { id: string; name: string }[] }
 
 type ModelInfo = { provider: string; providerLabel: string; modelId: string; name: string; context?: number; price?: { input: number; output: number }; images: boolean; reasoning: boolean }
 
@@ -18,7 +29,15 @@ const on = <T extends unknown[]>(ch: string) => (fn: (...args: T) => void) => {
 }
 
 const api = {
+  onboarding: {
+    settingsOpened: () => ipcRenderer.invoke('onboarding:settings-opened') as Promise<SettingsOpened>,
+    finishSettings: (status: 'completed' | 'skipped') => ipcRenderer.invoke('onboarding:settings-finish', status) as Promise<void>,
+  },
   info: () => ipcRenderer.invoke('app:info') as Promise<{ version: string; platform: string; projectsRoot: string }>,
+  telemetry: {
+    state: () => ipcRenderer.invoke('telemetry:state') as Promise<TelemetryState>,
+    set: (choice: { usage: boolean; crashes: boolean }) => ipcRenderer.invoke('telemetry:set', choice) as Promise<TelemetryState>,
+  },
   pathForFile: (f: File) => webUtils.getPathForFile(f),
   tools: {
     bundled: () => ipcRenderer.invoke('tools:status') as Promise<ToolStatus[]>,
@@ -31,8 +50,6 @@ const api = {
     enable: (id: string, on: boolean) => ipcRenderer.invoke('skills:enable', id, on) as Promise<SkillState>,
     useProfile: (id: string) => ipcRenderer.invoke('skills:profile', id) as Promise<SkillState>,
     newProfile: (name: string) => ipcRenderer.invoke('skills:newProfile', name) as Promise<SkillState>,
-    edit: (id: string) => ipcRenderer.invoke('skills:edit', id) as Promise<SkillState>,
-    openFolder: () => ipcRenderer.invoke('skills:folder'),
   },
   memory: {
     list: () => ipcRenderer.invoke('memory:list') as Promise<{ name: string; description: string; body: string }[]>,
@@ -53,14 +70,32 @@ const api = {
   },
   transcript: (dir: string, mediaRel: string, make = false) => ipcRenderer.invoke('transcript:get', dir, mediaRel, make) as Promise<Transcript | null>,
   thumbnails: (dir: string, src: string, count: number, start?: number, end?: number) => ipcRenderer.invoke('media:thumbnails', dir, src, count, start, end) as Promise<string[]>,
+  preview: {
+    prepare: (dir: string, media: string, retry = false) => ipcRenderer.invoke('preview:prepare', dir, media, retry) as Promise<PreviewState>,
+    onState: on<[string, string, PreviewState]>('preview:state'),
+  },
+  /** The edit by hand: changes at once (no render) and can be undone; it renders on export or when saved as a version. */
+  timeline: {
+    edit: (dir: string, edits: Edit[]) => ipcRenderer.invoke('timeline:edit', dir, edits) as Promise<Project>,
+    undo: (dir: string, redo = false) => ipcRenderer.invoke('timeline:undo', dir, redo) as Promise<Project>,
+    /** Render the edit into a version and put it on screen; resolves to its id. */
+    render: (dir: string) => ipcRenderer.invoke('timeline:render', dir) as Promise<string>,
+    /** Put footage into the edit at t (seconds of the film). */
+  },
+  demo: {
+    cancel: (dir: string) => ipcRenderer.invoke('demo:cancel', dir) as Promise<void>,
+    create: (dir: string, options: DemoOptions) => ipcRenderer.invoke('demo:create', dir, options) as Promise<{ version: string; duration: number; removed: number; warning?: string }>,
+  },
+  /** Who speaks when in a media file (make: work it out as a background job if not done yet). */
+  /** The subtitles that go with a media file, their lines, and the subtitle files there are to choose from. */
   export: {
     run: (dir: string, req: { preset: 'original' | 'landscape' | 'vertical' | 'square'; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string }) =>
       ipcRenderer.invoke('export:run', dir, req) as Promise<{ file: string; srt?: string } | null>,
     reveal: (file: string) => ipcRenderer.invoke('export:reveal', file),
   },
   mix: {
+    /** Where speech is on a version's timeline ('edit': the edit by hand). */
     speech: (dir: string, versionId?: string) => ipcRenderer.invoke('mix:speech', dir, versionId) as Promise<[number, number][]>,
-    apply: (dir: string, mix: { filmDb: number; music?: { src: string; db: number; duckDb: number } }) => ipcRenderer.invoke('mix:apply', dir, mix) as Promise<Project>,
   },
   history: {
     log: (dir: string) => ipcRenderer.invoke('history:log', dir) as Promise<{ id: string; message: string; at: number }[]>,
@@ -75,6 +110,19 @@ const api = {
   keys: {
     list: () => ipcRenderer.invoke('keys:list') as Promise<KeyInfo[]>,
     set: (name: string, value: string) => ipcRenderer.invoke('keys:set', name, value) as Promise<KeyInfo[]>,
+  },
+  /** Signing in to Manul: brings the person's Manul key (stays in the main process); only who is signed in comes back. */
+  account: {
+    status: () => ipcRenderer.invoke('account:status') as Promise<AccountStatus>,
+    signIn: () => ipcRenderer.invoke('account:signIn') as Promise<AccountStatus>,
+    cancel: () => ipcRenderer.invoke('account:cancel'),
+    signOut: () => ipcRenderer.invoke('account:signOut') as Promise<AccountStatus>,
+    /** credits, plan and model tiers (shared with Pitch), and what's on sale */
+    balance: () => ipcRenderer.invoke('account:balance') as Promise<Balance>,
+    /** opens a Dodo Payments checkout in the browser, for a plan or a top-up */
+    checkout: (what: { plan: string } | { topup: string }) => ipcRenderer.invoke('account:checkout', what) as Promise<void>,
+    /** opens Dodo's billing page: card, invoices, cancelling */
+    billing: () => ipcRenderer.invoke('account:billing') as Promise<void>,
   },
   /** Custom model providers (OpenAI/Anthropic-compatible endpoints); keys go in, only "set or not" comes back. */
   providers: {
@@ -106,14 +154,28 @@ const api = {
     get: () => ipcRenderer.invoke('tabs:get') as Promise<{ open: string[]; active: string | null }>,
     set: (t: { open: string[]; active: string | null }) => ipcRenderer.invoke('tabs:set', t),
   },
+  /** light, dark or the system's: the window and native menus follow it */
+  theme: { set: (t: 'light' | 'dark' | 'system') => ipcRenderer.invoke('theme:set', t) },
+  /** Motion examples (with the prompt behind each) for the start screen. */
+  gallery: { list: () => ipcRenderer.invoke('gallery:list') as Promise<GalleryExample[]> },
   project: {
     recent: () => ipcRenderer.invoke('project:recent') as Promise<RecentProject[]>,
-    pick: () => ipcRenderer.invoke('project:pick') as Promise<string | null>,
-    create: (file: string) => ipcRenderer.invoke('project:create', file) as Promise<Project>,
+    pick: () => ipcRenderer.invoke('project:pick') as Promise<string[]>,
+    create: (files: string | string[], model?: Project['model']) => ipcRenderer.invoke('project:create', files, model) as Promise<Project>,
+    /** A motion video from nothing: a blank canvas in that format, from a gallery example and/or a reference video. */
+    createMotion: (o: { title?: string; aspect: '16:9' | '9:16' | '1:1'; length?: number; example?: string; reference?: string; files?: string[]; walkthrough?: boolean; model?: Project['model'] }) =>
+      ipcRenderer.invoke('project:createMotion', o) as Promise<Project>,
     open: (dir: string) => ipcRenderer.invoke('project:open', dir) as Promise<Project>,
     close: (dir: string) => ipcRenderer.invoke('project:close', dir),
+    /** Move the project folder and every render, file and conversation asset to the system Trash. */
+    delete: (dir: string) => ipcRenderer.invoke('project:delete', dir),
     reveal: (dir: string) => ipcRenderer.invoke('project:reveal', dir),
-    import: (dir: string, file: string) => ipcRenderer.invoke('project:import', dir, file) as Promise<string>,
+    downloadFile: (dir: string, rel: string) => ipcRenderer.invoke('project:downloadFile', dir, rel) as Promise<string | null>,
+    revealFile: (dir: string, rel: string) => ipcRenderer.invoke('project:revealFile', dir, rel) as Promise<void>,
+    import: (dir: string, file: string) => ipcRenderer.invoke('project:import', dir, file) as Promise<string[]>,
+    pickFiles: () => ipcRenderer.invoke('project:pickFiles') as Promise<string[]>,
+    /** Files out of the project, into the Trash; the ones the film uses are kept, with why. */
+    removeFiles: (dir: string, rels: string[]) => ipcRenderer.invoke('project:removeFiles', dir, rels) as Promise<{ removed: string[]; blocked: { file: string; why: string }[] }>,
     decide: (dir: string, accept: boolean) => ipcRenderer.invoke('project:decide', dir, accept) as Promise<Project>,
     setCurrent: (dir: string, id: string) => ipcRenderer.invoke('project:current', dir, id) as Promise<Project>,
     onChange: on<[Project]>('project'),
@@ -121,7 +183,7 @@ const api = {
   agent: {
     ready: () => ipcRenderer.invoke('agent:ready') as Promise<boolean>,
     attach: (dir: string) => ipcRenderer.invoke('agent:attach', dir),
-    send: (dir: string, msg: { text: string; anchor?: Anchor; still?: string }) => ipcRenderer.invoke('agent:send', dir, msg),
+    send: (dir: string, msg: { text: string; anchor?: Anchor; still?: string; files?: string[] }) => ipcRenderer.invoke('agent:send', dir, msg),
     stop: (dir: string) => ipcRenderer.invoke('agent:stop', dir),
     newConversation: (dir: string) => ipcRenderer.invoke('agent:newConversation', dir) as Promise<Project>,
     switchConversation: (dir: string, id: string) => ipcRenderer.invoke('agent:switch', dir, id) as Promise<Project>,

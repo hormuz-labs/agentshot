@@ -13,6 +13,14 @@ type Any = Record<string, any> // pi-durable's view is plain JSON; only the fiel
 const textOf = (c: unknown): string =>
   typeof c === 'string' ? c : Array.isArray(c) ? c.map((x: Any) => (x.type === 'text' ? x.text : '')).join('') : ''
 
+/** Manul's gateway's refusals, said so the person knows what to do. */
+export function friendly(error: string) {
+  if (/budget exceeded/i.test(error)) return 'You’re out of Manul credits. Get a plan or more credits in Settings → Keys → Manul key.'
+  if (/model_blocked|is not allowed for virtual key/i.test(error)) return 'Manul Max and Ultra come with a Pro or Max plan. Get one in Settings → Keys → Manul key, or pick Manul High.'
+  if (/access not found|virtual key is required/i.test(error)) return 'Your Manul key isn’t valid any more. Sign in again in Settings → Keys → Manul key.'
+  return error
+}
+
 /** Committed conversation → AG-UI messages, plus usage cost and any model error. */
 function messagesOf(view: Any): { messages: Message[]; cost: number; error?: string } {
   const messages: Message[] = []
@@ -23,7 +31,7 @@ function messagesOf(view: Any): { messages: Message[]; cost: number; error?: str
       if (m.role === 'user') {
         messages.push({ id, role: 'user', content: textOf(m.content) })
       } else if (m.role === 'assistant') {
-        if (m.stopReason === 'error') error = m.errorMessage || 'The model returned an error.'
+        if (m.stopReason === 'error') error = friendly(m.errorMessage || 'The model returned an error.')
         const calls = ((m.content || []) as Any[]).filter(c => c.type === 'toolCall')
         messages.push({
           id, role: 'assistant',

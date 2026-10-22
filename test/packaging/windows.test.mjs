@@ -117,10 +117,10 @@ test('ZIP extraction refuses traversal and symlinks before writing files', t => 
 
 test('downloads fail closed on HTTP errors and checksum mismatches', async t => {
   const data = Buffer.from('archive')
-  t.mock.method(globalThis, 'fetch', async () => new Response(data))
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response(data))
   assert.deepEqual(await download('https://example.test/file', sha256(data)), data)
   await assert.rejects(download('https://example.test/file', '0'.repeat(64)), /checksum mismatch/)
-  t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 404 }))
+  fetchMock.mock.mockImplementation(async () => new Response('', { status: 404 }))
   await assert.rejects(download('https://example.test/file', sha256(data)), /HTTP 404/)
 })
 
@@ -201,7 +201,7 @@ function packagingFixture(t) {
   put(`${bin}/.whisper-cli.version`, `${WINDOWS_IDENTITY}\n`)
   for (const name of ['ffmpeg-LICENSE.txt', 'ffmpeg-README.txt', 'whisper-LICENSE.txt']) put(`${bin}/${name}`)
   put(`${bin}/vcruntime140.dll`, 'MZ test DLL')
-  for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'resources/skills-public.pem', 'resources/bsk-ext/manifest.json',
+  for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'resources/bsk-ext/manifest.json',
     'resources/lib/gsap.min.js', 'resources/lib/fonts/Inter.woff2', 'resources/lib/fonts/Inter-Regular.ttf', 'resources/lib/fonts/Inter-Bold.ttf', 'resources/lib/fonts/Inter-LICENSE.txt']) put(name)
   put('resources/bsk-ext/.sha256', EXTENSION.sha256)
   for (const name of ['resources/skills', 'resources/py']) mkdirSync(join(dir, name), { recursive: true })

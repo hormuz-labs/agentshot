@@ -1,0 +1,54 @@
+# Every merge to main ships: tag the next version and release it (release.yml), with notes generated from the merged
+# pull requests. A patch release by default; label the pull request release:minor or release:major for a bigger step,
+# or release:skip to merge without releasing. A commit that already has a version tag (tagged by hand) is left alone.
+name: Tag
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+# one release at a time, in merge order
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Next version
+        id: next
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git tag --points-at "$GITHUB_SHA" | grep -q '^v[0-9]'; then echo "Already tagged: $(git tag --points-at "$GITHUB_SHA")"; exit 0; fi
+          labels=",$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[].labels[].name] | join(",")'),"
+          case "$labels" in *,release:skip,*) echo "Labelled release:skip"; exit 0 ;; esac
+          last=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
+          IFS=. read -r major minor patch <<< "${last:-v0.0.0}"; major=${major#v}
+          case "$labels" in
+            *,release:major,*) major=$((major + 1)); minor=0; patch=0 ;;
+            *,release:minor,*) minor=$((minor + 1)); patch=0 ;;
+            *) patch=$((patch + 1)) ;;
+          esac
+          tag="v$major.$minor.$patch"
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "$tag"
+          echo "Tagged $tag (after ${last:-nothing})"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+    secrets: inherit

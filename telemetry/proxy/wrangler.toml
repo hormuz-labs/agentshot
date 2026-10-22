@@ -1,0 +1,17 @@
+# Manul's usage proxy: `npx wrangler deploy` from this folder (see telemetry/README.md).
+name = "manul-telemetry"
+main = "worker.ts"
+compatibility_date = "2025-09-01"
+workers_dev = false
+routes = [{ pattern = "telemetry.manul.si", custom_domain = true }]
+
+[vars]
+# The project token is public by design: it can only send events. The proxy accepts no other.
+POSTHOG_HOST = "https://us.i.posthog.com"
+POSTHOG_TOKEN = "phc_mw5p4LNJDGfSdwSAaWdmRWTRXEqQVxiEpLEJNQ6CwJpR"
+
+# Per-IP limit. The app sends at most one batch every 15 seconds.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }

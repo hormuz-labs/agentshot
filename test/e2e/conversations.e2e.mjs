@@ -1,5 +1,6 @@
 // Conversations in the real app with a real model (needs GEMINI_API_KEY; skipped without). Run after npm run build.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
@@ -14,8 +15,9 @@ const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${ud
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
-  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(out, 'cv.mp4'))
-  await win.click('text=Drop a video here')
+  await dismissOnboarding(win)
+  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(out, 'cv.mp4'))
+  await win.click('[data-tour="import"]')
   await win.locator('textarea').first().fill('Reply with just the word apple. Do not edit anything.')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForSelector('video')

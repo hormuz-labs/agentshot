@@ -44,12 +44,13 @@ export function startJob(title: string, kind: Job['kind'], opts: JobOptions = {}
   }
 }
 
-/** Run fn as a job: progress, done and failure are reported for you. */
-export async function asJob<T>(title: string, kind: Job['kind'], fn: (j: JobHandle) => Promise<T>, opts: JobOptions = {}): Promise<T> {
-  const j = startJob(title, kind, opts)
+/** Run fn as a job: progress, done and failure are reported for you (doneDetail: a line under it when done, from fn's result). */
+export async function asJob<T>(title: string, kind: Job['kind'], fn: (j: JobHandle) => Promise<T>, opts: JobOptions & { doneDetail?(r: T): string | undefined } = {}): Promise<T> {
+  const { doneDetail, ...job } = opts
+  const j = startJob(title, kind, job)
   try {
     const r = await fn(j)
-    j.done()
+    j.done(doneDetail?.(r))
     return r
   } catch (e) {
     j.fail(e)

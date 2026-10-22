@@ -40,6 +40,7 @@ export async function loadRecordedTranscript(win, words) {
   p.transcripts = { ...p.transcripts, [media]: transcript }
   writeFileSync(join(dir, 'project.json'), JSON.stringify(p))
   await win.reload()
-  await win.getByText('Welcome', { exact: true }).waitFor()
+  await win.waitForSelector('video')
+  await win.waitForFunction(d => window.manul.project.open(d).then(proj => Object.keys(proj.transcripts || {}).length > 0), dir)
   return dir
 }

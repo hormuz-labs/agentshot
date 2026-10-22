@@ -1,0 +1,9 @@
+# The account-service build only needs its source and npm manifests.
+**
+!package.json
+!package-lock.json
+!account/
+!account/server.mjs
+!account/local.mjs
+!account/src/
+!account/src/**

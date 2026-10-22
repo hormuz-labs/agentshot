@@ -1,6 +1,6 @@
-// Skills: how Manul does each kind of work. Switch them on per profile, edit them (bundled ones are copied first).
+// Skills: how Manul does each kind of work, built into the app. Switch them on per profile.
 import { useEffect, useState } from 'react'
-import { FolderOpen, Pencil, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PanelHeader } from '@/components/ui/panel-header'
 import { cn } from '@/lib/utils'
@@ -14,7 +14,7 @@ export function SkillsPanel() {
   if (!st) return null
   return (
     <div>
-      <PanelHeader title="Skills" description="How Manul does each kind of work. Manul reads a skill before the work it covers; when you correct it for good, it updates the skill." />
+      <PanelHeader title="Skills" description="How Manul does each kind of work, built into the app and updated with it. Manul reads a skill before the work it covers; when you correct it for good, it remembers (Memory)." />
       <div className="mb-3 flex items-center gap-2">
         <span className="text-xs text-dim">Profile</span>
         <select value={st.profile.id} onChange={async e => setSt(await window.manul.skills.useProfile(e.target.value))}
@@ -27,27 +27,20 @@ export function SkillsPanel() {
               <input autoFocus value={naming} onChange={e => setNaming(e.target.value)} placeholder="e.g. Podcasts" className="h-7 rounded-md border border-line bg-bg px-2 text-xs outline-none focus:border-amber/60" />
               <Button size="sm" type="submit">Create</Button>
             </form>}
-        <span className="flex-1" />
-        <Button size="sm" variant="ghost" onClick={() => window.manul.skills.openFolder()}><FolderOpen />Your skills folder</Button>
       </div>
       <div className="space-y-1.5">
         {st.skills.map(k => {
           const on = st.enabled.includes(k.id)
           return (
-            <div key={k.id} className="group flex items-start gap-3 rounded-lg border border-line bg-raised/60 px-3 py-2.5">
+            <div key={k.id} className="flex items-start gap-3 rounded-lg border border-line bg-raised/60 px-3 py-2.5">
               <button role="switch" aria-checked={on} title={on ? 'On' : 'Off'} onClick={async () => setSt(await window.manul.skills.enable(k.id, !on))}
                 className={cn('mt-0.5 h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors', on ? 'bg-amber' : 'bg-line-strong')}>
                 <span className={cn('block size-3 rounded-full bg-bg transition-transform', on && 'translate-x-3')} />
               </button>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{k.name}</span>
-                  <span className="rounded bg-bg px-1 text-[10px] text-faint">{k.source === 'bundled' ? 'built in' : 'yours'}</span>
-                </div>
+                <div className="font-medium">{k.name}</div>
                 <p className="mt-0.5 text-xs leading-relaxed text-dim">{k.description}</p>
               </div>
-              <button onClick={async () => setSt(await window.manul.skills.edit(k.id))} className="text-faint opacity-0 hover:text-fg group-hover:opacity-100"
-                title={k.source === 'bundled' ? 'Make an editable copy and open it' : 'Open'}><Pencil className="size-3.5" /></button>
             </div>
           )
         })}

@@ -12,6 +12,8 @@ export const KEYS: Omit<KeyInfo, 'set'>[] = [
   { env: 'ANTHROPIC_API_KEY', label: 'Anthropic', unlocks: ['text'], hint: 'console.anthropic.com → API keys' },
   { env: 'OPENAI_API_KEY', label: 'OpenAI', unlocks: ['text', 'images', 'voice'], hint: 'platform.openai.com → API keys' },
   { env: 'ELEVENLABS_API_KEY', label: 'ElevenLabs', unlocks: ['voice', 'music'], hint: 'elevenlabs.io → Profile → API keys' },
+  // one key for the models above, through Manul's gateway (gateway.ts); shown in its own tab
+  { env: 'MANUL_KEY', label: 'Manul', unlocks: ['text', 'voice', 'music'], hint: 'Your Manul key' },
 ]
 
 const file = () => join(app.getPath('userData'), 'keys.json')

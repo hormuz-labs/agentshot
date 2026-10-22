@@ -23,7 +23,8 @@ on Debian/Ubuntu: `sudo apt install cmake build-essential`.
 ```bash
 git clone git@github.com:hormuz-labs/manul.git && cd manul
 npm install                  # also fetches the pinned ffmpeg/ffprobe and BrowserSkill for this machine
-npm run build:whisper         # builds the bundled whisper-cli; preserves the existing Unix build path
+npm run setup:native         # builds whisper, beats, speakers and vision; checks tools/models (needs cmake + a C/C++ compiler)
+npm run build:whisper        # builds the bundled whisper-cli (macOS/Linux/Windows)
 npm run dev                  # Manul, with hot reload
 ```
 
@@ -54,14 +55,22 @@ Visual Studio's `VC/Redist/MSVC` (or `VCToolsRedistDir`), and CI verifies its Mi
 
 Add a key in **Settings → Keys** (⌘,), drop a video on the start screen, and ask for something.
 
+On macOS, `npm run dev` and `npm start` use a cached `Manul.app` development launcher so the Dock shows Manul's name and icon. It refreshes automatically when Electron or the icon changes.
+
 | Command | What it does |
 |---|---|
 | `npm run dev` | The app with hot reload |
 | `npm run typecheck` | TypeScript, no emit |
+| `npm run build:ml` | Builds the native speaker and face/object detection runners for this machine |
+| `npm run setup:native` | Completes and verifies all native tool/model setup for the host Mac/Linux architecture |
+| `npm run brand` | Regenerates the full-body 3D mascot logo and all app/account icon assets |
+| `npm run test:mascot` | Checks gaze tracking, touch response, paw/growl interactions, and compact controls in Electron |
 | `npm test` | Unit and integration tests (Vitest) |
 | `npm run test:e2e` | The real app, end to end (Playwright) |
 | `npm run smoke` | Builds, launches, screenshots each screen (set `GEMINI_API_KEY` and pass a prompt to test the agent) |
-| `node scripts/screenshot.mjs` | Takes a demo screenshot of a staged project (`docs/screenshot.png`) |
+| `node scripts/screenshot.mjs` | Takes the README screenshots of a staged project (`docs/start.png`, `chat.png`, `inline.png`, `dark.png`) |
+| `node scripts/fetch-motion-gallery.mjs [--media]` | The motion gallery from prompt-motion.com: catalogue and posters (shipped), and with `--media` the videos from each creator's post (local only) |
+| `node scripts/publish-motion-gallery.mjs [--upload gs://manul-gallery/v1]` | Encodes the gallery videos for streaming and uploads them with the posters to the bucket the app streams from |
 | `node scripts/annotate.mjs <spec.json>` | Turns screenshots into the README's annotated images (arrows, labels, blurred areas) |
 | `npm run build:whisper` | Native whisper.cpp build, including Windows CMake/MSVC |
 | `npm run test:packaging` | Focused packaging scripts/config tests, independent of runtime suites |
@@ -113,7 +122,7 @@ Manul is **test-driven**: every change comes with tests, and the suites run befo
 
 ```bash
 npm test           # unit + integration (Vitest); Electron is stubbed, ffmpeg is real
-npm run test:e2e   # the real app: clips, export, menu, proxies, tabs, mix, browser, conversations
+npm run test:e2e   # the real app: clips, export, menu, proxies, projects in the sidebar, resizing, instructions at the selection, files, browser, conversations
 npm run test:packaging   # no runtime suite; native Windows CI also downloads the pinned model and tests Unicode paths
 npm run package:dir && node test/e2e/packaged.e2e.mjs   # the packaged app: tools, clips, skills, export from the bundle
 MANUL_TEST_TOOLS=<tools folder with whisper installed> npm test   # also runs the downloaded-engine test
@@ -146,4 +155,17 @@ Releases (signing, Windows NSIS, Homebrew, apt) are covered in [RELEASING.md](RE
 
 ## License
 
-By contributing you agree your work is released under the [GPL-3.0](LICENSE).
+Manul is open source under the [Apache License 2.0](LICENSE); redistributions keep the attribution in [NOTICE](NOTICE). A few parts carry their own licence, marked at the top of the file:
+programs built together with GPL code (`scripts/beats/manul-beats.c`, `scripts/ml/manul-speakers.c`) are
+GPL-3.0-or-later, and the ffmpeg build modules are Apache-2.0 (texts in [LICENSES](LICENSES)).
+
+### Contributor agreement
+
+By sending a contribution (a pull request, a patch, a commit) you agree that:
+
+1. it is your own work, or you have the right to submit it under these terms;
+2. it is licensed under the licence of the files it changes; and
+3. you grant Hormuz Labs a perpetual, worldwide, non-exclusive, royalty-free, irrevocable licence to use, reproduce,
+   modify, distribute and sublicense it, and to release it under other licence terms, including commercial ones.
+
+You keep the copyright in your contribution.

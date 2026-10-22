@@ -21,7 +21,14 @@ function extensionPreloads(): Plugin {
 }
 
 export default defineConfig({
-  main: { plugins: [externalizeDepsPlugin()] },
+  main: {
+    plugins: [externalizeDepsPlugin()],
+    // Release builds only (see telemetry/README.md); without them a build reports nothing and never asks.
+    define: {
+      __MANUL_TELEMETRY_URL__: JSON.stringify(process.env.MANUL_TELEMETRY_URL || ''),
+      __MANUL_POSTHOG_TOKEN__: JSON.stringify(process.env.MANUL_POSTHOG_TOKEN || ''),
+    },
+  },
   preload: {
     plugins: [externalizeDepsPlugin(), extensionPreloads()],
     build: {

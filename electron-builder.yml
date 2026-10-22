@@ -10,14 +10,19 @@ files:
   - package.json
   - "!**/*.map"
 asar: true
-beforePack: scripts/before-pack.cjs
+beforePack: scripts/check-native.mjs
+afterPack: scripts/check-packaged-native.mjs
 # Manul's own tools and assets live next to the app, never inside the asar archive
 extraResources:
+  - from: build/icon.png
+    to: icon.png
   - from: resources/bin/${platform}-${arch}
     to: bin
-    filter: ["ffmpeg", "ffprobe", "whisper-cli", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
+    filter: ["ffmpeg", "ffprobe", "whisper-cli", "manul-beats", "manul-speakers", "manul-vision", "manul-fence", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
   - from: resources/lib
     to: lib
+  - from: resources/models
+    to: models
   - from: resources/skills
     to: skills
   # BrowserSkill's extension, run inside Manul's own browser (scripts/fetch-bsk.mjs)
@@ -26,12 +31,18 @@ extraResources:
     filter: ["**/*", "!.sha256"]
   - from: resources/py
     to: py
+  # The motion gallery: catalogue and posters only (~4 MB); the videos stream from Manul's bucket (scripts/publish-motion-gallery.mjs)
+  - from: resources/motion-gallery
+    to: motion-gallery
+    filter: ["catalog.json", "posters/*.jpg"]
   - from: THIRD_PARTY_NOTICES.md
     to: THIRD_PARTY_NOTICES.md
   - from: LICENSE
     to: LICENSE
-  - from: resources/skills-public.pem
-    to: skills-public.pem
+  - from: LICENSES/three-MIT.txt
+    to: LICENSES/three-MIT.txt
+  - from: LICENSES/driver-MIT.txt
+    to: LICENSES/driver-MIT.txt
 mac:
   category: public.app-category.video
   target:

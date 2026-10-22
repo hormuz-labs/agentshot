@@ -20,7 +20,7 @@ const BIN = join(bundle, 'bin')
 for (const tool of ['ffmpeg', 'ffprobe', 'whisper-cli', 'bsk']) assert.ok(existsSync(join(BIN, tool + suffix)), `Bundled ${tool} missing`)
 if (process.platform === 'win32') assert.ok(existsSync(join(BIN, 'vcruntime140.dll')), 'Bundled BrowserSkill VC runtime missing')
 for (const tool of ['whisper-cli', 'bsk']) execFileSync(join(BIN, tool + suffix), ['--version'], { timeout: 30000, windowsHide: true })
-for (const file of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'bsk-ext/manifest.json', 'skills-public.pem', 'lib/fonts/Inter-Regular.ttf'])
+for (const file of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'bsk-ext/manifest.json', 'lib/fonts/Inter-Regular.ttf'])
   assert.ok(existsSync(join(bundle, file)), `Bundled resource missing: ${file}`)
 const tmp = mkdtempSync(join(tmpdir(), 'manul-pkg-'))
 execFileSync(join(BIN, 'ffmpeg' + suffix), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=3', '-f', 'lavfi', '-i', 'sine=duration=3',
@@ -44,7 +44,7 @@ try {
   assert.equal(r.frames, 60)
   // bundled skills are listed
   const skills = await win.evaluate(() => window.manul.skills.state())
-  assert.ok(skills.skills.some(k => k.id === 'motion-design' && k.source === 'bundled'), 'bundled skills found')
+  assert.ok(skills.skills.some(k => k.id === 'motion-design' && /Contents\/Resources\/skills\/|resources\/skills\//.test(k.path.replaceAll('\\', '/'))), 'bundled skills found, read from the app')
   // export with the bundled fonts (captions .srt, even if empty without speech)
   await app.evaluate(({ dialog }, f) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }) }, join(tmp, 'out.mp4'))
   const ex = await win.evaluate(dir => window.manul.export.run(dir, { preset: 'square', captions: 'none' }), p.dir)

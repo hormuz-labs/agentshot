@@ -1,0 +1,13 @@
+{
+  "voice": { "provider": "gemini", "model": "gemini-3.8-flash-tts" },
+  "music": { "provider": "gemini", "model": "lyria-3.5" },
+  "prices": {
+    "gemini-3.8-flash-tts": { "per_1k_chars": 0.02 },
+    "gemini-3.8-flash-lite-tts": { "per_1k_chars": 0.01 },
+    "lyria-3.5": { "per_request": 0.08 },
+    "lyria-3-clip-preview": { "per_request": 0.04 },
+    "eleven_v3": { "per_1k_chars": 0.10 },
+    "eleven_flash_v2_5": { "per_1k_chars": 0.05 },
+    "music_v2_5": { "per_minute": 0.30 }
+  }
+}

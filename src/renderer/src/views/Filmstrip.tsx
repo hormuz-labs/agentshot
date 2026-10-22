@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { memo, useEffect, useRef, useState, type RefObject } from 'react'
 import { Film } from 'lucide-react'
 import { mediaUrl } from '@/lib/utils'
 import { thumbnailCount } from '@/lib/timelineScale'
 
-/** Sample just the visible tiles (plus overscan), even on a heavily zoomed timeline. */
-export function Filmstrip({ dir, src, revision, duration, fps, viewport }: {
-  dir: string; src: string; revision: number; duration: number; fps: number; viewport: RefObject<HTMLDivElement | null>
+/** A piece's frames (from–to of its file), sampling just the visible tiles (plus overscan), even on a heavily zoomed timeline. */
+export const Filmstrip = memo(function Filmstrip({ dir, src, revision, from = 0, to, fps, viewport }: {
+  dir: string; src: string; revision: number; from?: number; to: number; fps: number; viewport: RefObject<HTMLDivElement | null>
 }) {
+  const duration = Math.max(0, to - from)
   const strip = useRef<HTMLDivElement>(null)
   const [window, setWindow] = useState({ total: 0, first: 0, count: 0 })
   const [result, setResult] = useState<{ key: string; total: number; first: number; frames: string[]; failed: boolean }>()
-  const key = `${dir}/${src}:${revision}:${duration}:${fps}`
+  const key = `${dir}/${src}:${revision}:${from}:${to}:${fps}`
   const current = result?.key === key && result.total === window.total ? result : undefined
   useEffect(() => {
     const el = strip.current!, scroll = viewport.current!
@@ -25,7 +26,8 @@ export function Filmstrip({ dir, src, revision, duration, fps, viewport }: {
         const tile = r.width / total
         const first = Math.max(0, Math.floor((view.left - r.left) / tile) - 1)
         const last = Math.min(total, Math.ceil((view.right - r.left) / tile) + 1)
-        const count = Math.min(24, Math.max(1, last - first))
+        // a piece scrolled out of view loads nothing
+        const count = r.right < view.left || r.left > view.right ? 0 : Math.min(24, Math.max(1, last - first))
         setWindow(old => old.total === total && old.first === first && old.count === count ? old : { total, first, count })
       }, 120)
     }
@@ -39,11 +41,11 @@ export function Filmstrip({ dir, src, revision, duration, fps, viewport }: {
     if (!window.count || duration <= 0) return
     let cancelled = false
     const { total, first, count } = window
-    globalThis.window.manul.thumbnails(dir, src, count, duration * first / total, duration * (first + count) / total).then(frames => {
+    globalThis.window.manul.thumbnails(dir, src, count, from + duration * first / total, from + duration * (first + count) / total).then(frames => {
       if (!cancelled) setResult({ key, total, first, frames, failed: frames.length === 0 })
     }).catch(() => { if (!cancelled) setResult({ key, total, first, frames: [], failed: true }) })
     return () => { cancelled = true }
-  }, [dir, src, key, duration, window])
+  }, [dir, src, key, from, duration, window])
 
   return (
     <div ref={strip} data-testid="timeline-filmstrip" data-frame-count={window.total} className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] bg-raised" aria-hidden="true">
@@ -55,4 +57,4 @@ export function Filmstrip({ dir, src, revision, duration, fps, viewport }: {
       ))}
     </div>
   )
-}
+})

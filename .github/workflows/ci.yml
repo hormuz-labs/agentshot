@@ -26,9 +26,16 @@ jobs:
       - run: npm ci
       - name: Build bundled whisper.cpp
         run: npm run build:whisper
+      - name: Build the bundled beat tracker
+        run: ./scripts/build-beats.sh
+      - name: Build the bundled model runners (speakers, vision)
+        run: ./scripts/build-ml.sh
       - run: npm run test:packaging
       - run: npm run typecheck
       - run: npm test
+      # Electron 44 downloads its executable lazily; do not let the E2E launch timeout include that download.
+      - name: Prepare Electron for end-to-end tests
+        run: node -e "require('electron')"
       - name: End-to-end (macOS)
         if: runner.os == 'macOS'
         run: npx electron-vite build && node test/e2e/filmstrip.e2e.mjs && node test/e2e/clips.e2e.mjs && node test/e2e/menu.e2e.mjs
@@ -60,6 +67,8 @@ jobs:
       - name: Windows runtime end-to-end
         timeout-minutes: 20
         run: |
+          node -e "require('electron')"
+          if ($LASTEXITCODE -ne 0) { throw 'Electron download failed' }
           npx electron-vite build
           if ($LASTEXITCODE -ne 0) { throw 'Runtime build failed' }
           foreach ($test in @('filmstrip', 'clips', 'browser', 'export', 'menu')) {

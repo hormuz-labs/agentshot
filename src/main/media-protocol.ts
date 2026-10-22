@@ -11,14 +11,15 @@ const MIME: Record<string, string> = { '.mp4': 'video/mp4', '.mov': 'video/quick
 const CLIP_CSP = "default-src manul: data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src manul: data: blob:"
 
 /** Both normal playback and offscreen clips use the same authorized, range-aware protocol. */
-export function serveMedia(req: Request, lib: string, projectRoots: string[]): Response {
+export function serveMedia(req: Request, lib: string, projectRoots: string[], gallery?: string): Response {
   let file: string
   let size: number
   try {
     const url = new URL(req.url)
     if (url.protocol !== 'manul:' || url.username || url.password) throw new Error('Invalid URL')
-    file = realpathSync(url.host === 'lib' ? join(lib, decodeURIComponent(url.pathname).replace(/^\/+/, '')) : decodeMediaPath(url))
-    const roots = url.host === 'lib' ? [lib] : projectRoots
+    const fixed = url.host === 'lib' ? lib : url.host === 'gallery' && gallery ? gallery : null
+    file = realpathSync(fixed ? join(fixed, decodeURIComponent(url.pathname).replace(/^\/+/, '')) : decodeMediaPath(url))
+    const roots = fixed ? [fixed] : projectRoots
     if (!roots.some(root => { try { return isWithinDir(realpathSync(root), file) } catch { return false } })) throw new Error('Outside project')
     const stat = statSync(file)
     if (!stat.isFile()) throw new Error('Not a file')

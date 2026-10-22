@@ -1,10 +1,11 @@
-// Skills: folders with a SKILL.md (frontmatter name + description, then instructions). Manul ships some (bundled,
-// read-only, updated with the app); the user and the agent add their own (user folder, editable). A profile says which
-// skills are on; the agent sees the enabled skills' descriptions and reads a SKILL.md before work it covers.
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+// Skills: folders with a SKILL.md (frontmatter name + description, then instructions), bundled with the app and updated
+// with it — nothing else is read, so the skills always match the tools the app has. A profile says which skills are on;
+// the agent sees the enabled skills' descriptions and reads a SKILL.md before work it covers. Lasting corrections from the
+// user go to memory, not into skills.
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
-export type Skill = { id: string; name: string; description: string; path: string; source: 'bundled' | 'user' }
+export type Skill = { id: string; name: string; description: string; path: string }
 export type Profile = { id: string; name: string; /** when set, only these skills */ only?: string[]; disabled: string[] }
 
 const slug = (s: string) => {
@@ -13,12 +14,13 @@ const slug = (s: string) => {
 }
 
 export class Skills {
-  /** updates: skills delivered over the air, which override the bundled ones */
-  constructor(private dirs: { bundled: string; updates?: string; user: string; profiles: string }) {
-    for (const d of [dirs.user, dirs.profiles]) mkdirSync(d, { recursive: true })
+  constructor(private dirs: { bundled: string; profiles: string }) {
+    mkdirSync(dirs.profiles, { recursive: true })
   }
 
-  private read(dir: string, source: Skill['source']): Skill[] {
+  /** Every bundled skill. */
+  list(): Skill[] {
+    const dir = this.dirs.bundled
     if (!existsSync(dir)) return []
     return readdirSync(dir).sort().flatMap(id => {
       const path = join(dir, id, 'SKILL.md')
@@ -31,16 +33,8 @@ export class Skills {
         const v = /^[|>][+-]?$/.test(m[1].trim()) ? m[2] : `${m[1]}${m[2]}`
         return v.split('\n').map(s => s.trim()).filter(Boolean).join(' ')
       }
-      return [{ id, name: field('name') || id, description: field('description'), path, source }]
+      return [{ id, name: field('name') || id, description: field('description'), path }]
     })
-  }
-
-  /** Every skill; a user skill with the same id as a bundled one replaces it (that is how a bundled skill is changed). */
-  list(): Skill[] {
-    const user = this.read(this.dirs.user, 'user')
-    const updates = this.dirs.updates ? this.read(this.dirs.updates, 'bundled') : []
-    const bundled = [...this.read(this.dirs.bundled, 'bundled').map(b => updates.find(u => u.id === b.id) || b), ...updates.filter(u => !this.read(this.dirs.bundled, 'bundled').some(b => b.id === u.id))]
-    return [...bundled.filter(b => !user.some(u => u.id === b.id)), ...user]
   }
 
   // ---------------------------------------------------------------- profiles
@@ -83,22 +77,12 @@ export class Skills {
     this.save(p)
   }
 
-  /** Copy a bundled skill into the user folder so it can be changed. */
-  fork(id: string): Skill {
-    const k = this.list().find(s => s.id === id)
-    if (!k) throw new Error(`No skill "${id}".`)
-    if (k.source === 'user') return k
-    cpSync(dirname(k.path), join(this.dirs.user, id), { recursive: true })
-    return this.list().find(s => s.id === id)!
-  }
-
   prompt(): string {
     const on = this.enabled()
     if (!on.length) return ''
     return `Skills (profile "${this.profile().name}"). Each holds how a kind of work should be done. Before work a skill covers, read its ` +
-      `SKILL.md (and any files it names) with the read tool, and follow it. When the user corrects how something should be done for good, ` +
-      `change the skill: user skills (${this.dirs.user}) can be edited directly; to change a bundled skill, first copy it with fork_skill, ` +
-      `then edit the copy. Say which file you changed.\n` +
-      on.map(k => `- ${k.id} [${k.source}] (${k.path}): ${k.description.slice(0, 400)}`).join('\n')
+      `SKILL.md (and any files it names) with the read tool, and follow it. Skills are part of Manul and read-only; when the user ` +
+      `corrects how something should be done for good, save it with remember.\n` +
+      on.map(k => `- ${k.id} (${k.path}): ${k.description.slice(0, 400)}`).join('\n')
   }
 }

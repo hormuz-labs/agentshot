@@ -6,7 +6,7 @@ import { app } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { lstat, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readdir, rename, rm } from 'node:fs/promises'
 import { basename, join, win32 } from 'node:path'
 import { promisify } from 'node:util'
 import { asJob, type JobHandle } from './jobs'
@@ -36,6 +36,7 @@ export const WHISPER_MODEL = 'base'
 // The bundled whisper.cpp's model: multilingual base (huggingface.co/ggerganov/whisper.cpp), SHA-256 from its LFS pointer
 const WHISPER_MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin'
 export const WHISPER_MODEL_SHA256 = '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe'
+export const WHISPER_LARGE_SHA256 = '64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2'
 
 type Def = Omit<OnDemandTool, 'installed' | 'diskBytes' | 'version'> & { install(j: JobHandle): Promise<string> }
 
@@ -73,6 +74,14 @@ const DEFS: Def[] = [
     },
   },
   {
+    id: 'whisper-large-v3', name: 'Higher-accuracy captions (Whisper Large-v3)', sizeMB: 3096,
+    description: 'Optional local speech recognition for caption exports. Downloads about 3.1 GB and needs more memory and processing time than Base. Used automatically for export captions once installed.',
+    async install(j) {
+      await download('https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin', whisperLargeModelPath(), WHISPER_LARGE_SHA256, j, 'Downloading Whisper Large-v3')
+      return 'ggml-large-v3'
+    },
+  },
+  {
     id: 'whisper', name: 'Speech recognition (Python engine)', sizeMB: 330, needs: ['uv'],
     description: 'faster-whisper in its own Python. Only needed on systems where Manul has no built-in whisper.cpp.',
     async install(j) {
@@ -99,6 +108,7 @@ export function windowsPowerShell(): string {
 }
 
 export const whisperModelPath = () => join(dir('whisper-model'), 'ggml-base.bin')
+export const whisperLargeModelPath = () => join(dir('whisper-large-v3'), 'ggml-large-v3.bin')
 export const uvBin = () => join(dir('uv'), process.platform === 'win32' ? 'uv.exe' : 'uv')
 export const venvPython = (id: string) => process.platform === 'win32' ? join(dir(id), 'venv', 'Scripts', 'python.exe') : join(dir(id), 'venv', 'bin', 'python')
 export const whisperEnv = () => ({ ...pyEnv(), HF_HOME: join(dir('whisper'), 'models'), HF_HUB_OFFLINE: '1' })
@@ -114,7 +124,9 @@ const pyEnv = () => ({
 })
 
 // ---------------------------------------------------------------- status, install, remove
-export function isInstalled(id: string) { return existsSync(stamp(id)) }
+export function isInstalled(id: string) {
+  return existsSync(stamp(id)) && (id !== 'whisper-large-v3' || existsSync(whisperLargeModelPath()))
+}
 
 export async function listTools(): Promise<OnDemandTool[]> {
   return Promise.all(DEFS.map(async ({ install: _i, ...d }) => {
@@ -143,6 +155,10 @@ export function plan(id: string): Def[] {
 
 const installing = new Map<string, Promise<void>>()
 
+/** Told when an install ends, for usage statistics. */
+export let onInstalled: (id: string, ok: boolean) => void = () => {}
+export const setOnInstalled = (fn: typeof onInstalled) => { onInstalled = fn }
+
 export function install(id: string): Promise<void> {
   const busy = installing.get(id)
   if (busy) return busy
@@ -154,7 +170,7 @@ export function install(id: string): Promise<void> {
       writeFileSync(stamp(d.id), JSON.stringify({ version, at: Date.now() }))
     }
     if (isInstalled('uv')) await sh(uvBin(), ['cache', 'clean'], pyEnv()).catch(() => {}) // wheels are installed; the cache only takes space
-  })().finally(() => installing.delete(id))
+  })().then(() => onInstalled(id, true), e => { onInstalled(id, false); throw e }).finally(() => installing.delete(id))
   installing.set(id, p)
   return p
 }
@@ -184,17 +200,24 @@ async function download(url: string, to: string, sha256: string, j: JobHandle, l
   if (!res.ok || !res.body) throw new Error(`Download failed (${res.status}): ${url}`)
   const total = Number(res.headers.get('content-length')) || 0
   const hash = createHash('sha256')
-  const chunks: Uint8Array[] = []
   let got = 0
-  for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
-    chunks.push(chunk)
-    hash.update(chunk)
-    got += chunk.length
-    j.progress(total ? got / total : null, `${label} · ${(got / 1e6).toFixed(1)} MB`)
+  // Stream large models to disk rather than retaining several gigabytes in memory.
+  const partial = `${to}.part`
+  const file = await open(partial, 'w')
+  try {
+    for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+      await file.writeFile(chunk)
+      hash.update(chunk)
+      got += chunk.length
+      j.progress(total ? got / total : null, `${label} · ${(got / 1e6).toFixed(1)} MB`)
+    }
+    if (hash.digest('hex') !== sha256) throw new Error(`Checksum mismatch for ${url}: the download was not what Manul expected, so it was discarded.`)
+    await file.close()
+    await rename(partial, to)
+  } finally {
+    await file.close()
+    await rm(partial, { force: true })
   }
-  const digest = hash.digest('hex')
-  if (digest !== sha256) throw new Error(`Checksum mismatch for ${url}: the download was not what Manul expected, so it was discarded.`)
-  await writeFile(to, Buffer.concat(chunks))
 }
 
 function sh(cmd: string, args: string[], env: NodeJS.ProcessEnv): Promise<string> {

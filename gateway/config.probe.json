@@ -1,0 +1,164 @@
+{
+  "$schema": "https://www.getbifrost.ai/schema",
+  "client": {
+    "enforce_auth_on_inference": true,
+    "drop_excess_requests": false
+  },
+  "providers": {
+    "anthropic": {
+      "keys": [
+        {
+          "name": "anthropic",
+          "value": "env.ANTHROPIC_API_KEY",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ],
+      "network_config": {
+        "base_url": "http://host.docker.internal:9912",
+        "allow_private_network": true
+      }
+    },
+    "gemini": {
+      "keys": [
+        {
+          "name": "gemini",
+          "value": "env.GEMINI_API_KEY",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ],
+      "network_config": {
+        "base_url": "http://host.docker.internal:9911",
+        "allow_private_network": true
+      }
+    },
+    "openai": {
+      "keys": [
+        {
+          "name": "openai",
+          "value": "env.OPENAI_API_KEY",
+          "models": [
+            "*"
+          ],
+          "weight": 1.0
+        }
+      ],
+      "network_config": {
+        "base_url": "http://host.docker.internal:9913",
+        "allow_private_network": true
+      }
+    }
+  },
+  "governance": {
+    "budgets": [
+      {
+        "id": "budget-dev",
+        "max_limit": 5.0,
+        "reset_duration": "1M",
+        "virtual_key_id": "vk-dev"
+      }
+    ],
+    "rate_limits": [
+      {
+        "id": "rl-dev",
+        "request_max_limit": 300,
+        "request_reset_duration": "1h"
+      }
+    ],
+    "virtual_keys": [
+      {
+        "id": "vk-dev",
+        "name": "dev",
+        "value": "env.MANUL_DEV_KEY",
+        "is_active": true,
+        "rate_limit_id": "rl-dev",
+        "provider_configs": [
+          {
+            "provider": "anthropic",
+            "allowed_models": [
+              "claude-opus-5-5",
+              "claude-sonnet-5-5"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          },
+          {
+            "provider": "gemini",
+            "allowed_models": [
+              "gemini-3.8-flash",
+              "gemini-3.1-pro-preview"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          },
+          {
+            "provider": "openai",
+            "allowed_models": [
+              "gpt-5.5"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1
+          }
+        ]
+      }
+    ],
+    "routing_rules": [
+      {
+        "id": "probe-gemini",
+        "name": "probe-gemini",
+        "cel_expression": "model == 'probe-gemini'",
+        "targets": [
+          {
+            "provider": "gemini",
+            "model": "gemini-3.8-flash",
+            "weight": 1.0
+          }
+        ],
+        "scope": "global",
+        "enabled": true,
+        "priority": 0
+      },
+      {
+        "id": "probe-claude",
+        "name": "probe-claude",
+        "cel_expression": "model == 'probe-claude'",
+        "targets": [
+          {
+            "provider": "anthropic",
+            "model": "claude-opus-5-5",
+            "weight": 1.0
+          }
+        ],
+        "scope": "global",
+        "enabled": true,
+        "priority": 1
+      },
+      {
+        "id": "probe-gpt",
+        "name": "probe-gpt",
+        "cel_expression": "model == 'probe-gpt'",
+        "targets": [
+          {
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "weight": 1.0
+          }
+        ],
+        "scope": "global",
+        "enabled": true,
+        "priority": 2
+      }
+    ]
+  }
+}

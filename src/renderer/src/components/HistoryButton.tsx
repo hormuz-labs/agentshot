@@ -16,7 +16,7 @@ export function HistoryButton({ project, onRestored, open, onOpenChange }: { pro
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger className="no-drag inline-flex size-7 items-center justify-center rounded-lg text-dim hover:bg-hover hover:text-fg" title="History"><HistoryIcon className="size-4" /></Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content align="end" sideOffset={6} className="z-50 w-80 rounded-card border border-line bg-panel p-1 shadow-2xl shadow-black/50">
+        <Popover.Content align="end" sideOffset={6} className="z-50 w-80 rounded-card border border-line bg-panel p-1 shadow-2xl shadow-shade">
           <div className="px-2 py-1.5 text-xs font-medium uppercase tracking-wider text-faint">History</div>
           <div className="max-h-96 overflow-y-auto">
             {log.map((e, i) => (

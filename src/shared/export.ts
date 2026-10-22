@@ -68,6 +68,8 @@ export type ExportOptions = {
 /** ffmpeg arguments (after "ffmpeg -y") for one export. */
 export function exportArgs(o: ExportOptions): string[] {
   const preset = PRESETS.find(p => p.id === o.preset)!
+  // No resize/captions: export the finished edit without a second lossy encode.
+  if (!preset.size && !o.burnCaptions) return ['-i', o.input, '-map', '0:v', '-map', '0:a?', '-c', 'copy', '-movflags', '+faststart', o.out]
   const [W, H] = preset.size || [o.source.width - (o.source.width % 2), o.source.height - (o.source.height % 2)]
   const filters: string[] = []
   let label = '0:v'

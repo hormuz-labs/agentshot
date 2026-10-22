@@ -12,7 +12,7 @@ export function useConsents() {
 
 export function ConsentCard({ c }: { c: ConsentRequest }) {
   return (
-    <div className="beam rounded-xl border border-amber/30 bg-panel p-3 shadow-xl shadow-black/40">
+    <div className="beam rounded-xl border border-amber/30 bg-panel p-3 shadow-xl shadow-shade">
       <div className="mb-1 flex items-center gap-2 font-medium"><Download className="size-4 text-amber" />{c.title}</div>
       <p className="mb-3 text-xs leading-relaxed text-dim">{c.body}</p>
       <div className="flex justify-end gap-1.5">

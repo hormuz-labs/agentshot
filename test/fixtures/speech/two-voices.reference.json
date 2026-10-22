@@ -1,0 +1,10 @@
+{
+ "note": "macOS `say` conversation, 16 kHz mono FLAC: Samantha (speaker A) and Daniel (speaker B) alternate, 0.6 s of silence between turns.",
+ "turns": [
+  { "speaker": "A", "s": 0.0, "e": 5.958 },
+  { "speaker": "B", "s": 6.558, "e": 12.251 },
+  { "speaker": "A", "s": 12.851, "e": 16.98 },
+  { "speaker": "B", "s": 17.58, "e": 23.338 },
+  { "speaker": "A", "s": 23.938, "e": 30.043 }
+ ]
+}

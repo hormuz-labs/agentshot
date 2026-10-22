@@ -1,33 +1,34 @@
 # Releasing Manul
 
-After the acceptance gates below pass, a pushed tag starts CI. Windows support is configured, but has not
-yet been validated on a native runner or published. Missing Windows signing configuration intentionally
-blocks the entire public release; there is no unsigned Windows fallback.
+Merge to `main` and CI does the rest. `.github/workflows/tag.yml` tags the next version, a patch release unless the merged
+pull request is labelled `release:minor` or `release:major` (or `release:skip` to merge without releasing), and the
+release notes are generated from the pull requests merged since the last release. Windows support is configured, but has not
+yet been validated on a native runner or published; missing Windows signing configuration intentionally blocks the entire
+public release (there is no unsigned Windows fallback). To release by hand, push a tag:
 
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-`.github/workflows/release.yml` then:
+Either way, `.github/workflows/release.yml` then:
 1. builds on five native runners (macOS arm64 + Intel, Linux x64 + arm64, Windows x64): bundled whisper.cpp, pinned ffmpeg, packaging tests, typecheck and runtime unit tests; Windows also runs selected runtime E2E and the native whisper Unicode-path regression;
 2. packages, **signs and notarizes** the Mac app (when the Apple secrets exist); then one job merges the two Mac update feeds and publishes `.dmg`, `.zip`,
    `.deb`, AppImage, signed Windows NSIS `.exe`, blockmaps and the `latest*.yml` update files to **GitHub Releases** — this is what installed apps update from;
 3. rebuilds and signs the **apt repository** and pushes its small metadata files to the `apt` branch (when `APT_GPG_KEY_ID` is set). Cloudflare Pages serves that branch; `.deb` downloads redirect to GitHub Releases.
 
-When `resources/skills/**` changes on main, `.github/workflows/skills.yml` signs the **skills feed**
-(`updates/skills.json`), which installed apps pick up within 6 hours — no app release needed.
+Skills ship inside the app (`resources/skills`) and update with it: a skill change reaches users in the next release,
+together with the tools it relies on.
 
 ## One-time setup (owner)
 
 | What | Where | Why |
 |---|---|---|
-| The `hormuz-labs/manul` repository | GitHub | code, releases (the update feed), the skills feed |
+| The `hormuz-labs/manul` repository | GitHub | code, releases (the update feed) |
 | Apple Developer Program ($99/yr) | developer.apple.com | signing + notarization; Homebrew drops casks Gatekeeper blocks |
 | `MAC_CERT_P12_BASE64`, `MAC_CERT_PASSWORD` | repo secrets | "Developer ID Application" certificate (.p12, base64) |
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | repo secrets | notarization |
 | `WINDOWS_CERT_P12_BASE64`, `WINDOWS_CERT_PASSWORD` | repo secrets | Windows Authenticode certificate (.p12/.pfx, base64) and password, passed as `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` |
 | `WINDOWS_PUBLISHER_NAME` | repo variable | Exact certificate publisher common name, case-sensitive. Injected into `win.signtoolOptions.publisherName` and the packaged updater configuration; do not guess it from the product or company name |
-| `MANUL_SKILLS_KEY` | repo secret | contents of `~/.config/manul/skills-signing.pem` (Ed25519 private key; its public half ships in `resources/skills-public.pem`). Keep a backup: a lost key means shipping a new public key in an app release |
 | `hormuz-labs/homebrew-tap` repository | GitHub | `brew install hormuz-labs/tap/manul`. Its own workflow checks Manul's releases hourly and rewrites the cask with `scripts/homebrew-cask.mjs` from the release tag, so no token is shared ("Run workflow" there to update at once) |
 | Cloudflare Pages project tracking the `apt` branch | Cloudflare | Only package lists, signatures, public key and redirects are stored in git; large `.deb` files stay on GitHub Releases |
 | `APT_GPG_KEY_ID` (variable), `APT_GPG_PRIVATE_KEY` (secret) | repo settings | apt metadata signing; no R2 bucket/access-key configuration is used by the current workflow |
@@ -118,8 +119,8 @@ brew install hormuz-labs/tap/manul
 ```
 
 ```bash
-curl -fsSL https://apt.manul.si/manul.gpg | sudo gpg --dearmor -o /usr/share/keyrings/manul.gpg
-echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list
+curl -fsSL https://apt.manul.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &&
+echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &&
 sudo apt update && sudo apt install manul
 ```
 

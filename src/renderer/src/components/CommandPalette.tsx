@@ -20,7 +20,7 @@ export function CommandPalette({ open, onOpenChange, onAsk }: { open: boolean; o
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-40 bg-black/50" />
-        <D.Content className="fixed left-1/2 top-[18vh] z-50 w-[560px] max-w-[calc(100vw-32px)] -translate-x-1/2 overflow-hidden rounded-card border border-line bg-panel shadow-2xl shadow-black/60 focus:outline-none">
+        <D.Content className="fixed left-1/2 top-[18vh] z-50 w-[560px] max-w-[calc(100vw-32px)] -translate-x-1/2 overflow-hidden rounded-card border border-line bg-panel shadow-2xl shadow-shade focus:outline-none">
           <D.Title className="sr-only">Command palette</D.Title>
           <div className="flex items-center gap-2 bg-bg/40 px-3">
             <Search className="size-4 text-faint" />

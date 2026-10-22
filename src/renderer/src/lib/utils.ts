@@ -14,3 +14,6 @@ export const timecode = (s: number, tenths = true) => {
 
 /** File path → manul:// URL served by the main process (with Range support). */
 export const mediaUrl = encodeMediaPath
+
+/** Typing in a field: keys and menu commands are its own (undo is the field's). */
+export const typing = () => !!(document.activeElement as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]')

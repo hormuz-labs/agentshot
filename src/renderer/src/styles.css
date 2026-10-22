@@ -1,14 +1,43 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
+@import "@fontsource-variable/source-serif-4";
 
-/* Manul: warm dark greys of the Pallas cat's fur, amber of its eyes. */
+/* Manul: Claude's near-white neutrals by day, the Pallas cat's dark fur by night; amber of its eyes in both.
+   Light is the default; html.dark switches every token at once. */
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Source Serif 4 Variable", ui-serif, Georgia, serif; /* headings and the agent's replies */
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
+  --color-bg: #fbfbf9; /* the sidebar and window chrome (Claude's near-white neutrals) */
+  --color-canvas: #f3f3f1; /* the work area (film, browser): between the window chrome and the side panels */
+  --color-panel: #fcfcfb;
+  --color-surface: #ffffff; /* the message box, cards that sit on a panel */
+  --color-raised: #f0f0ee;
+  --color-hover: #efefed;
+  --color-line: #e4e4e2;
+  --color-line-strong: #d4d3d0;
+  --color-fg: #141413;
+  --color-dim: #52514f;
+  --color-faint: #898782;
+  --color-amber: #c06f12;
+  --color-amber-hover: #a85f0c;
+  --color-amber-soft: #c06f121a;
+  --color-on-amber: #ffffff;
+  --color-ok: #2d8653;
+  --color-bad: #c2412f;
+  --color-note: #2f6bd0;
+  --color-shade: #1414132e; /* shadows under popovers and dialogs */
+  --color-scrim: #1414134d; /* behind a dialog */
+
+  --radius-card: 12px;
+}
+
+html.dark {
   --color-bg: #0e0d0c;
-  --color-canvas: #121110; /* the work area (film, browser): between the window chrome and the side panels */
+  --color-canvas: #121110;
   --color-panel: #161412;
+  --color-surface: #1d1a17;
   --color-raised: #1d1a17;
   --color-hover: #25211d;
   --color-line: #2c2723;
@@ -17,13 +46,17 @@
   --color-dim: #a39888;
   --color-faint: #6f665b;
   --color-amber: #f2a541;
+  --color-amber-hover: #f7b65e;
   --color-amber-soft: #f2a54122;
+  --color-on-amber: #1a1208;
   --color-ok: #7cc79a;
   --color-bad: #ef7a6a;
   --color-note: #8fb5ff;
-
-  --radius-card: 12px;
+  --color-shade: #00000080;
+  --color-scrim: #00000099;
+  color-scheme: dark;
 }
+html { color-scheme: light; }
 
 html, body, #root { height: 100%; }
 body {
@@ -60,4 +93,52 @@ textarea, input, [data-selectable] { user-select: text; }
   background: conic-gradient(from var(--beam), transparent 70%, #f2a541 85%, transparent 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
   animation: beam 2.4s linear infinite;
+}
+
+/* The Pallas's cat sits on the page, without a tile or a competing chat bubble. */
+.manul-mascot-wrap { position: relative; display: inline-block; flex-shrink: 0; vertical-align: middle; }
+.manul-mascot { position: relative; display: inline-block; flex-shrink: 0; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 24px; vertical-align: middle; touch-action: manipulation; }
+.manul-mascot:focus-visible { outline: 2px solid var(--color-amber); outline-offset: -6px; }
+.manul-mascot canvas, .manul-mascot-fallback { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.manul-mascot canvas { opacity: 0; transition: opacity .2s ease; }
+.manul-mascot canvas.is-ready { opacity: 1; }
+.manul-mascot-sleep { position: absolute; right: 9%; top: 18%; color: var(--color-faint); font-family: var(--font-serif); font-size: 14px; transform: rotate(-12deg); }
+.manul-mascot-sleep span { position: absolute; left: 8px; top: -9px; font-size: 11px; }
+.manul-mascot-controls { position: absolute; bottom: -5px; left: 50%; display: flex; gap: 2px; padding: 2px; border: 1px solid var(--color-line); border-radius: 8px; background: var(--color-panel); box-shadow: 0 2px 8px var(--color-shade); opacity: 0; transform: translate(-50%, 4px); transition: opacity .12s, transform .12s; pointer-events: none; z-index: 2; }
+.manul-mascot-wrap:hover .manul-mascot-controls, .manul-mascot-wrap:focus-within .manul-mascot-controls { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.manul-mascot-controls button { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--color-dim); cursor: pointer; }
+.manul-mascot-controls button:hover { background: var(--color-hover); color: var(--color-amber); }
+.manul-mascot-controls button:focus-visible { outline: 2px solid var(--color-amber); outline-offset: 1px; }
+.manul-mascot-controls svg { width: 13px; height: 13px; }
+.manul-mascot-actions { display: inline-flex; align-items: center; justify-self: start; gap: 3px; height: 24px; }
+.manul-mascot-actions button { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--color-faint); cursor: pointer; transition: color .12s, background-color .12s; }
+.manul-mascot-actions button:hover { background: var(--color-amber-soft); color: var(--color-amber); }
+.manul-mascot-actions button:active { background: var(--color-hover); }
+.manul-mascot-actions button:focus-visible { outline: 2px solid var(--color-amber); outline-offset: 1px; }
+.manul-mascot-actions svg { width: 13px; height: 13px; flex-shrink: 0; }
+.manul-mascot-delight { position: absolute; inset: 0; pointer-events: none; color: var(--color-amber); }
+.manul-mascot-delight i { position: absolute; top: 38%; left: 16%; font-style: normal; font-size: 15px; animation: cat-delight .7s ease-out both; }
+.manul-mascot-delight i:nth-child(2) { top: 28%; left: 74%; animation-delay: .06s; font-size: 11px; }
+.manul-mascot-delight i:nth-child(3) { top: 18%; left: 60%; animation-delay: .1s; font-size: 13px; }
+@keyframes cat-delight { 0% { opacity: 0; transform: translateY(4px) scale(.5); } 20% { opacity: .8; } 100% { opacity: 0; transform: translateY(-16px) scale(1.15); } }
+.manul-mascot-fallback { object-fit: contain; transform: translate(var(--cat-gaze-x, 0px), var(--cat-gaze-y, 0px)); }
+.manul-mascot[data-mascot-reaction="wave"] .manul-mascot-fallback { animation: cat-fallback-wave 1.6s ease-in-out; }
+.manul-mascot[data-mascot-reaction="pet"] .manul-mascot-fallback { animation: cat-fallback-pet .65s ease-out; }
+@keyframes cat-fallback-pet { 0% { transform: scale(1); } 12% { transform: scale(1.04, .94); } 36% { transform: translateY(-7px) scale(.98, 1.04); } 75% { transform: scale(1.02, .98); } 100% { transform: none; } }
+@keyframes cat-fallback-wave { 0%, 100% { transform: none; } 25%, 65% { transform: rotate(-5deg); } 45%, 80% { transform: rotate(4deg); } }
+.manul-companion { display: flex; align-items: center; gap: 2px; min-height: 88px; margin: -5px 0 5px -12px; }
+.manul-companion-copy { display: grid; grid-template-rows: 16px 16px 24px; row-gap: 3px; align-content: center; height: 64px; flex: 1; }
+.manul-companion-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; line-height: 16px; }
+.manul-companion-tag { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manul-companion-status { margin: 0; font-size: 11.5px; line-height: 16px; }
+.manul-companion-hero { margin: -28px auto 8px; }
+.manul-companion-tag { color: var(--color-faint); font-size: 10px; font-weight: 400; }
+.manul-companion-pulse { margin-left: auto; margin-right: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--color-amber); animation: companion-pulse 1.8s ease-in-out infinite; }
+@keyframes companion-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .manul-mascot canvas { transition: none; }
+  .manul-companion-pulse { animation: none; }
+  .manul-mascot-controls { transition: none; }
+  .manul-mascot-actions button { transition: none; }
+  .manul-mascot-fallback { animation: none !important; }
 }

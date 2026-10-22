@@ -1,11 +1,22 @@
-# Push a tag like v0.2.0 → native builds on five runners, then publish ONE GitHub release
-# (the auto-update feed) with every build's files, and rebuild the apt repository (apt.yml).
+# A tag like v0.2.0 → build, sign and notarize (macOS) on five native runners, then publish ONE GitHub release
+# (the auto-update feed) with every build's files and generated notes, and rebuild the apt repository (apt.yml).
+# Runs when a tag is pushed by hand, or when tag.yml tags a merge to main and calls it with that tag (a tag pushed by a
+# workflow doesn't start other workflows).
 # The Homebrew tap (hormuz-labs/homebrew-tap) picks up new releases on its own.
 # Builds don't publish themselves: parallel uploads made duplicate releases and one Mac feed overwrote the other.
 name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: the tag to release, e.g. v0.4.1 (already pushed)
+        required: true
+        type: string
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -27,6 +38,8 @@ jobs:
         shell: ${{ matrix.shell }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -51,6 +64,14 @@ jobs:
         run: node --input-type=module -e "import { windowsSigning } from './scripts/package.mjs'; windowsSigning()"
       - run: npm ci
       - run: npm run build:whisper
+      - name: Build the bundled beat tracker and model runners (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ./scripts/build-beats.sh
+          ./scripts/build-ml.sh
+      - name: Verify target-native tools and models before release
+        if: runner.os != 'Windows'
+        run: npm run check:native
       - name: Inspect bundled Windows executable dependencies
         if: runner.os == 'Windows'
         run: ./scripts/check-windows-dependencies.ps1
@@ -63,6 +84,8 @@ jobs:
         if: runner.os == 'Windows'
         timeout-minutes: 20
         run: |
+          node -e "require('electron')"
+          if ($LASTEXITCODE -ne 0) { throw 'Electron download failed' }
           npx electron-vite build
           if ($LASTEXITCODE -ne 0) { throw 'Runtime build failed' }
           foreach ($test in @('filmstrip', 'clips', 'browser', 'export', 'menu')) {
@@ -71,6 +94,9 @@ jobs:
           }
       - name: Build, sign, notarize
         env:
+          # crash reports and usage statistics, both opt-in (telemetry/README.md); unset, the build has neither
+          MANUL_TELEMETRY_URL: ${{ vars.MANUL_TELEMETRY_URL }}
+          MANUL_POSTHOG_TOKEN: ${{ vars.MANUL_POSTHOG_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -115,6 +141,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/download-artifact@v4
         with:
           pattern: dist-*
@@ -128,12 +156,12 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" out/* --title "${GITHUB_REF_NAME#v}" --generate-notes --verify-tag
+        run: gh release create "$TAG" out/* --title "${TAG#v}" --generate-notes --verify-tag
 
   apt:
     needs: publish
     if: ${{ vars.APT_GPG_KEY_ID != '' }}
     uses: ./.github/workflows/apt.yml
     with:
-      tag: ${{ github.ref_name }}
+      tag: ${{ inputs.tag || github.ref_name }}
     secrets: inherit

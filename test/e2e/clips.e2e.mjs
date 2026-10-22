@@ -1,6 +1,7 @@
 // End to end in the real app: render a GSAP clip frame-exact and check pixels at known times.
 // Run: npm run build && node test/e2e/clips.e2e.mjs
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdtempSync, readFileSync } from 'node:fs'
@@ -26,6 +27,7 @@ const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${jo
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   const p = await win.evaluate(f => window.manul.project.create(f), video)
   cpSync(join(root, 'test', 'fixtures', 'clips', 'slide'), join(p.dir, 'clips', 'slide'), { recursive: true })
 
@@ -92,10 +94,9 @@ try {
 
   // the clip editor: open the project, select the clip on the timeline strip, drag its element, click it
   await win.reload()
-  await win.waitForSelector('text=Recent')
-  await win.locator('button:has-text("src")').first().click()
-  await win.waitForSelector('button[title="Card · click to edit"]')
-  await win.click('button[title="Card · click to edit"]')
+  await win.locator('[data-project-row]:has-text("src")').first().click()
+  await win.waitForSelector('button[title^="Card · click to edit"]')
+  await win.click('button[title^="Card · click to edit"]')
   const handle = win.locator('div.cursor-move:has(span:text-is("title"))')
   await handle.waitFor({ timeout: 10000 })
   const b = await handle.boundingBox()
@@ -136,6 +137,25 @@ try {
   assert.doesNotMatch(readFileSync(join(p.dir, 'clips', 'card', 'clip.html'), 'utf8'), /translate:/, 'the move is undone in the clip')
   assert.notEqual(restored.current, moved.current, 'the version from before the drag is back')
   assert.match((await win.evaluate(dir => window.manul.history.log(dir), p.dir))[0].message, /^Restored/)
+
+  // an overlay over an edit that isn't rendered yet: its HTML plays live over the pieces, only during its time
+  await win.keyboard.press('Escape') // close the clip editor
+  await win.evaluate(dir => window.manul.clips.overlay(dir, 'lower', 0.5, 'Name added'), p.dir)
+  await win.evaluate(dir => window.manul.project.decide(dir, true), p.dir)
+  await win.evaluate(dir => window.manul.timeline.edit(dir, [{ op: 'split', at: 0.3 }]), p.dir)
+  const frame = win.locator('iframe[data-overlay]')
+  await frame.waitFor({ state: 'attached' })
+  const seekTo = t => app.evaluate(({ BrowserWindow }, [d, t]) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().endsWith('index.html')).webContents.send('seek', d, t), [p.dir, t])
+  await seekTo(0.2)
+  await win.waitForFunction(() => document.querySelector('iframe[data-overlay]').style.visibility === 'hidden')
+  await seekTo(0.9)
+  await win.waitForFunction(() => document.querySelector('iframe[data-overlay]').style.visibility === 'visible')
+  await win.waitForTimeout(500)
+  const box = await frame.boundingBox(), shot = join(tmp, 'live-overlay.png')
+  await win.screenshot({ path: shot, scale: 'css', clip: box })
+  // the red name bar sits at 20–320 × 280–340 of the 640 × 360 frame; the footage (blue) shows elsewhere
+  assert.ok(red(pixel(shot, 0, Math.round(box.width * 0.2), Math.round(box.height * 0.86))), `the overlay plays live: ${pixel(shot, 0, Math.round(box.width * 0.2), Math.round(box.height * 0.86))}`)
+  assert.ok(pixel(shot, 0, Math.round(box.width * 0.8), Math.round(box.height * 0.3))[2] > 150, 'the footage shows through it')
   console.log('clips e2e: ok')
 } finally {
   await app.close()

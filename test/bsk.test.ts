@@ -172,7 +172,7 @@ describe('browserExtension', () => {
     mkdirSync(join(dir, 'downloads'))
     writeFileSync(join(dir, 'downloads', 'song.mp3'), 'x')
     const got: string[] = []
-    const bridge = { project: () => ({ dir }), importMedia: async (_d: string, abs: string) => { got.push(abs); return 'media/song.mp3' } }
+    const bridge = { project: () => ({ dir }), importFiles: async (_d: string, abs: string) => { got.push(abs); return ['media/song.mp3 — audio, 3:12'] } }
     const ext = browserExtension(bridge as never, () => dir, () => 'Browser: test') as unknown as { tools: { name: string; execute: (a: object, api: object) => Promise<{ content: { text: string }[] }> }[] }
     const tool = ext.tools.find(t => t.name === 'import_media')!
     const out = await tool.execute({ path: 'downloads/song.mp3' }, { conversationId: '1' })

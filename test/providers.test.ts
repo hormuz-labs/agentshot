@@ -63,6 +63,45 @@ describe('custom providers: stored, imported, used by the agent', () => {
   let server: ReturnType<typeof createServer>
   afterAll(() => server?.close())
 
+  it('sends supported reasoning for Sol when the agent leaves thinking off, while preserving explicit effort', async () => {
+    const efforts: string[] = []
+    const endpoint = createServer((req, res) => {
+      let body = ''
+      req.on('data', c => (body += c))
+      req.on('end', () => {
+        const request = JSON.parse(body)
+        efforts.push(request.reasoning?.effort)
+        if (!['low', 'medium', 'high', 'xhigh', 'max'].includes(request.reasoning?.effort)) {
+          res.writeHead(400, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ error: { message: 'Unsupported reasoning effort' } }))
+          return
+        }
+        res.writeHead(200, { 'content-type': 'text/event-stream' })
+        res.end(`data: ${JSON.stringify({ type: 'response.completed', response: { id: 'r1', status: 'completed', output: [], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } })}\n\n`)
+      })
+    })
+    await new Promise<void>(r => endpoint.listen(0, '127.0.0.1', r))
+    try {
+      const port = (endpoint.address() as { port: number }).port
+      const provider = normalizeProvider({ name: 'Sol test', baseUrl: `http://localhost:${port}/v1`, models: ['gpt-6.1-sol', 'gpt-6.1-sol-2026-09-29'] })
+      const models = createModels({ authContext: { env: async () => 'test-key', fileExists: async () => false } })
+      for (const p of buildProviders([provider])) models.setProvider(p as any)
+      for (const id of provider.models.map(m => m.id)) {
+        const model = models.getModel(provider.id, id)!
+        const context = { messages: [{ role: 'user', content: 'hi', timestamp: Date.now() }] }
+        const reply = await (models as any).completeSimple(model, context)
+        expect(reply.stopReason).not.toBe('error')
+        for (const reasoning of ['off', 'low', 'medium', 'high']) {
+          const reply = await (models as any).completeSimple(model, context, { reasoning })
+          expect(reply.stopReason).not.toBe('error')
+        }
+      }
+      expect(efforts).toEqual(['high', 'high', 'low', 'medium', 'high', 'high', 'high', 'low', 'medium', 'high'])
+    } finally {
+      await new Promise<void>((resolve, reject) => endpoint.close(e => e ? reject(e) : resolve()))
+    }
+  })
+
   it('imports from omp with the key read from its file, never exposing the key', () => {
     writeFileSync(join(tmp, 'key'), 'secret-azure\n')
     const keyCommand = JSON.stringify(`!cat ${join(tmp, 'key')}`)

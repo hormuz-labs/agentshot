@@ -1,0 +1,100 @@
+# Manul's own ffmpeg + ffprobe (scripts/ffmpeg/build.sh: Martin Riedl's build plus vid.stab and Rubber Band), for every
+# platform Manul ships. A pull request that changes the build builds it here to check it (once: later pushes that leave
+# the build alone reuse it from the cache, and a new push cancels the run before). Merging to main builds nothing: the
+# app uses the pinned prerelease, not main. Pushing a tag like ffmpeg-9.0.2-1 builds that commit and publishes the zips
+# as a GitHub prerelease under the tag (never "latest", so the app's updater and the Homebrew tap ignore it). Then pin
+# the printed SHA-256s and the tag in scripts/fetch-ffmpeg.mjs.
+name: ffmpeg
+on:
+  push:
+    tags: ["ffmpeg-*"]
+  pull_request:
+    paths: ["scripts/ffmpeg/**", ".github/workflows/ffmpeg.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ffmpeg-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14, target: darwin-arm64 }
+          - { os: macos-15-intel, target: darwin-x64 }
+          - { os: ubuntu-24.04, target: linux-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      # the same build scripts make the same build: a pull request builds them once (a release tag always builds); the
+      # workflow isn't in the key, so editing it alone reuses the build
+      - name: Build from before
+        id: cache
+        if: github.event_name == 'pull_request'
+        uses: actions/cache@v4
+        with:
+          path: dist/ffmpeg/${{ matrix.target }}
+          key: ffmpeg-${{ matrix.target }}-${{ hashFiles('scripts/ffmpeg/**') }}
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux' && steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libtool gperf curl zip bzip2 git python3-venv python3-virtualenv pkg-config libssl-dev
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS' && steps.cache.outputs.cache-hit != 'true'
+        run: |
+          brew install autoconf automake libtool
+          # the build runs with a system-only PATH: virtualenv for the system python3, which is the one it finds
+          /usr/bin/python3 -m pip install --user virtualenv
+      - name: Hide /usr/local from the compiler (Apple's clang searches it by default; Homebrew lives there on Intel)
+        if: runner.os == 'macOS' && steps.cache.outputs.cache-hit != 'true'
+        run: for d in include lib; do if [ -d /usr/local/$d ]; then sudo mv /usr/local/$d /usr/local/$d.off; fi; done
+      - name: Rust + cargo-c (rav1e)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          rustup update stable
+          cargo install cargo-c --locked
+      - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./scripts/ffmpeg/build.sh
+      - name: Name the files for the release
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cd dist/ffmpeg/${{ matrix.target }}
+          mv ffmpeg.zip ffmpeg-${{ matrix.target }}.zip
+          mv ffprobe.zip ffprobe-${{ matrix.target }}.zip
+          mv buildconf.txt buildconf-${{ matrix.target }}.txt
+          shasum -a 256 *.zip | tee SHA256-${{ matrix.target }}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-${{ matrix.target }}
+          path: dist/ffmpeg/${{ matrix.target }}/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: ${{ startsWith(github.ref, 'refs/tags/ffmpeg-') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ffmpeg-*
+          merge-multiple: true
+          path: out
+      - name: Publish the prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat out/SHA256-*.txt > out/SHA256SUMS.txt
+          rm out/SHA256-*.txt
+          gh release create "$TAG" out/* -R "$GITHUB_REPOSITORY" --prerelease --latest=false \
+            --title "$TAG (bundled ffmpeg)" --notes "Manul's bundled ffmpeg/ffprobe, built by scripts/ffmpeg/build.sh. Not an app release."
+          cat out/SHA256SUMS.txt

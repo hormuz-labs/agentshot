@@ -21,7 +21,7 @@
 | Phase | Progress | ✅ Done | 🚧 Doing | ⬜ Next |
 |---|---|:-:|:-:|:-:|
 | [**0 · Foundations**](#phase-0-foundations) | `██████░░░░` 55% | 5 | 1 | 4 |
-| [**1 · MVP (v0.1)**](#phase-1-mvp-v01) | `████████░░` 75% | 13 | 4 | 3 |
+| [**1 · MVP (v0.1)**](#phase-1-mvp-v01) | `████████░░` 76% | 14 | 4 | 3 |
 | [**2 · Generated shots, hand-off, publishing**](#phase-2-generated-shots-hand-off-publishing) | `░░░░░░░░░░` 0% | 0 | 0 | 9 |
 | [**3 · Manul key and Pro**](#phase-3-manul-key-and-pro) | `░░░░░░░░░░` 0% | 0 | 0 | 5 |
 | [**4 · Cloud, mobile, teams**](#phase-4-cloud-mobile-teams) | `░░░░░░░░░░` 0% | 0 | 0 | 7 |
@@ -103,7 +103,7 @@ pro editors can take a Manul rough cut into their own editor.
 | Agent runtime | **pi-durable** (pinned) + **pi-ai** for models | Conversations and tool calls are saved to SQLite before they're shown, so a crash or quit resumes mid-run |
 | Agent ↔ UI | **AG-UI protocol** (`@ag-ui/core`, `@ag-ui/client`) over Electron IPC | Standard events for tool calls, shared state (JSON Patch), interrupts, plan/activity, subagents. Later the same protocol works over HTTP for a cloud agent, mobile and review links |
 | Motion / generated footage | **HTML + GSAP** clips (`clip.html`), paused timelines seeked on Manul's clock, rendered offscreen frame by frame → ffmpeg | The agent makes footage it can edit; frame-exact scrub and export; GSAP is free incl. plugins (clear the no-code clause, §7) |
-| Skills | Plain `SKILL.md` folders grouped into **profiles** | Readable, diffable, editable by the agent, updatable over the air |
+| Skills | Plain `SKILL.md` folders grouped into **profiles** | Readable, diffable, editable by the agent; they ship inside the app and update with it |
 | Memory | One fact per file, plus an index fed into the prompt | Survives across projects |
 | Media tools | **Bundled:** ffmpeg, ffprobe (static, per platform). **On demand:** demucs, whisper models, yt-dlp, rubberband… | Small install; heavy tools only when needed, with a size prompt first |
 | Python tools | Isolated Python environments managed by **uv**, inside Manul's support folder | Never touch the system Python |
@@ -122,11 +122,11 @@ pro editors can take a Manul rough cut into their own editor.
 
 - **Your own keys** tab (v1): Anthropic, Gemini, OpenAI, ElevenLabs. Each shows what it unlocks, plus a "what works
   with your keys" summary.
-- **Manul key** tab: shown as *soon*, with an early-access sign-up in v1. It ships in a later update (see phase 3).
+- **Manul key** tab: paste a Manul key and the agent uses the model Manul's gateway picks (see phase 3).
 
 ### Updates
 
-1. **Skills, prompts, profiles, tool lists and feature switches:** over the air from a signed list we publish, with no app release.
+1. **Skills, prompts and profiles:** inside the app, updated with each release, so the skills always match the tools they describe.
 2. **Tools:** updated one at a time, checked against their version, without restarting.
 3. **App:** `electron-updater` for direct downloads, a Homebrew cask that updates itself (`auto_updates true`), and apt from our
    own package repository.
@@ -157,7 +157,9 @@ pro editors can take a Manul rough cut into their own editor.
 - ✅ Repo, licence, CONTRIBUTING, CI (lint, typecheck, build per platform)
 - ⬜ UI mockups: start screen, Screen view with notes on the picture, agent panel (plan + tool cards + permission
       cards), Keys tabs, Tools page
-- ✅ Electron shell + React/shadcn/Tailwind design system (dark theme, warm accents)
+- ✅ Electron shell + React/shadcn/Tailwind design system (light and dark themes, warm accents, a serif for reading)
+- ✅ One window, as in Claude's app: the conversation with the film beside it; projects in a sidebar, each opening up into its chats and files; instructions given right at a box or range on the film
+- ✅ Hand editing pared down to what's quicker by hand: drag a piece to move it, drag footage in from Files (⌘Z undoes either); the agent does the cutting (the split, trim and levels tools, the mix panel and the transcript and subtitles panels are gone)
 - ✅ pi-durable agent in the main process → **AG-UI adapter** → IPC → renderer
 - ✅ Generic tool card + per-tool card registry
 - 🚧 Capability router (chat · image · voice · transcription) + bring-your-own-key keystore (keystore, Keys tabs, model picker done)
@@ -175,20 +177,27 @@ pro editors can take a Manul rough cut into their own editor.
 - ✅ **HTML motion clips:** the agent builds `clip.html` (slides, title cards, charts, kinetic type, GSAP motion
       design) as timeline items next to MP4s and images. They are sandboxed, run on Manul's clock and render frame-exactly
 - ✅ Clip renderer: offscreen Chromium frame stepping → ffmpeg; "bake to MP4"; final export mixes clips with footage
+- ✅ **Motion videos from nothing:** no footage needed. Start from one of 233 gallery examples (with the prompt that made it,
+  credited to its maker), a video whose look to match, or a description; storyboard first, then one clip per scene
 - 🚧 Motion skill(s): house style, easing and layout rules so agent-made motion looks designed, not generic
 - ✅ Make room on the timeline: split at a point and open a gap so the agent can insert (or propose an insertion) in between
 - ✅ Slide editing by hand: drag, resize and edit text/images/shapes on the picture, written back to the HTML
 - ✅ Slide editing by the agent: pick an element, then a note scoped to that element; the agent changes only it
 - ✅ Transcript panel with text-based editing (click to seek, drag to select a range, fillers marked, find)
-- ⬜ Tracks drawer (timeline, mix, inspector)
+- 🚧 Tracks drawer (timeline, mix, inspector) (editing by hand done: split, cut a range, delete, trim, reorder and
+      per-piece volume on the timeline, played straight from the pieces with undo; the agent edits the same way with
+      edit_timeline; renders only when saved as a version or exported, and a cut of one file renders fast: the picture
+      between keyframes is copied as it is and only the frames at each cut are encoded (a 20-minute 1080p film with ten
+      cuts: 10 s instead of 90 s). Still to come: more tracks, transitions, speed)
 - ✅ Agent browser with take-over (Manul's own browser via private bsk; Settings → Browser switches to the user's Chrome)
-- ⬜ Bring in your own footage, images and extra videos anywhere
+- 🚧 Bring in your own footage, images and extra videos anywhere (files, folders and zips: subtitles, music, fonts,
+      LUTs, logos; footage dragged onto the timeline goes into the edit at once)
 - ✅ Carry over the existing editor features: several projects and conversations, model picker, skills and profiles, memory,
       history (git underneath), move elements, live mix, proxies, native menu, ⌘K
       (all done: conversations, model picker, skills + profiles, memory, history, move elements in clips, project tabs,
       live mix with music ducking, preview copies, native menu, ⌘K)
 - ✅ Export: MP4 presets (16:9, 9:16, 1:1), captions burned in or as sidecar files
-- ✅ Over-the-air updates for skills (Ed25519-signed feed, no rollbacks, user copies win)
+- ✅ Skills bundled with the app, one per kind of video (the over-the-air feed was dropped: skills now always match the app's tools)
 - 🚧 macOS (signed + notarized) and Linux builds; Homebrew cask; apt repository (pipeline ready, see RELEASING.md; needs the accounts and secrets)
   Windows x64 NSIS/native CI is also configured; signing and clean-Windows/update validation remain release gates, not completed support.
 - ⬜ driver.js first-run tour
@@ -209,8 +218,13 @@ pro editors can take a Manul rough cut into their own editor.
 - ⬜ Manul key early-access sign-up live
 
 ### Phase 3: Manul key and Pro
-- ⬜ **Manul gateway**: an LLM endpoint (pi-ai uses a custom base URL) plus a media endpoint (voice, images,
-      transcription). It checks the key, counts usage, and forwards to providers with our keys
+- 🚧 **Manul gateway** ([gateway/](gateway/README.md)): [Bifrost](https://github.com/maximhq/bifrost) holds our provider
+      keys; a Manul key is one of its virtual keys (budget, rate limit, allowed models). The app's side is done: with a
+      Manul key the agent uses one model, "Manul", and the gateway's routing rule picks the real one (Claude, Gemini or
+      GPT), changeable without an app release. Signing in (Clerk, [account/](account/README.md)) gives each person their own
+      key under their own Bifrost customer. Gateway and account service run on the silverfish cluster (manul.si), Clerk in production. New
+      accounts get $2 of credit; Dodo Payments top-ups raise it (Test Mode). Left: Dodo Live Mode, and voice and images
+      through the gateway
 - ⬜ Optional accounts, licence check (works offline for a month), credits, top-ups
 - ⬜ Pro plan: AI included, cloud versions of heavy tools (demucs, upscaling), publishing automation, premium skill packs
 - 🚧 **Cloud tools on Manul's worker** (`worker.trypitch.co`): Upscale (Real-ESRGAN) has its place in Tools as *Coming soon*; only the shot being processed is sent
@@ -245,9 +259,10 @@ Rules:
 
 ## 7. Open questions 💬
 
-- **Licence:** the editor is GPL-3.0 (LICENSE, chosen 2026-10-06). Still open: the paid cloud parts (Manul key gateway,
-  storage) can stay closed as separate services; a contributor licence agreement may be needed before outside
-  contributions land, if we ever want to relicense.
+- **Licence:** the editor is open source under Apache-2.0 with attribution in NOTICE since 2026-10-12 (FSL-1.1-ALv2 from
+  2026-10-08; GPL-3.0 before that, and releases up to 0.1.1 and the code published before stay GPL). Contributors agree to the contributor agreement in CONTRIBUTING. The bundled GPL
+  programs (ffmpeg, manul-beats, manul-speakers) stay separate programs with their source. The paid cloud parts (Manul
+  key gateway, storage) stay closed as separate services.
 - **Windows:** x64 build configured; native CI, clean-PC acceptance, certificate/publisher setup and signed-update validation are still pending. External manul.si pages need a manual update after those gates pass.
 - **Personality:** how much manul (mascot, warm colours, orbs) versus a quiet pro tool?
 - **Video models:** which to support first, and whether generation runs only through the Manul key (simpler billing) or also with users' own keys.

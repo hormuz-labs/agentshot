@@ -1,0 +1,26 @@
+# Once a day: installer downloads, stars, forks and clones into PostHog (telemetry/github-stats.mjs).
+name: GitHub stats
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: ${{ vars.POSTHOG_TOKEN != '' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node telemetry/github-stats.mjs
+        env:
+          POSTHOG_TOKEN: ${{ vars.POSTHOG_TOKEN }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # optional: a token with push access, for clone traffic
+          GH_TRAFFIC_TOKEN: ${{ secrets.GH_TRAFFIC_TOKEN }}

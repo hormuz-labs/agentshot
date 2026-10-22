@@ -18,6 +18,16 @@ export const FFMPEG = join(BIN, executableName('ffmpeg'))
 export const FFPROBE = join(BIN, executableName('ffprobe'))
 /** Manul's own whisper.cpp (scripts/build-whisper.sh); its model is downloaded on demand. */
 export const WHISPER_CLI = join(BIN, executableName('whisper-cli'))
+/** Manul's beat tracker on aubio (scripts/build-beats.sh): tempo, beats, onsets and energy of music, as JSON. */
+export const BEATS = join(BIN, executableName('manul-beats'))
+/** Model runners (scripts/build-ml.sh): who speaks when, and faces/objects in frames. */
+export const SPEAKERS = join(BIN, executableName('manul-speakers'))
+export const VISION = join(BIN, executableName('manul-vision'))
+/** Their models (scripts/fetch-models.mjs). */
+export const MODELS_DIR = app.isPackaged ? join(process.resourcesPath, 'models') : join(import.meta.dirname, '../../resources/models')
+
+/** Inter (Regular, Bold) as TTF, for text ffmpeg draws: drawtext fontfile=…, subtitles fontsdir=… (scripts/copy-libs.mjs). */
+export const FONTS_DIR = join(app.isPackaged ? join(process.resourcesPath, 'lib') : join(import.meta.dirname, '../../resources/lib'), 'fonts')
 
 /** PATH with the bundled tools first, for every process the agent starts. */
 export const toolPath = () => withToolPath([dirname(FFMPEG), dirname(FFPROBE)]).PATH!

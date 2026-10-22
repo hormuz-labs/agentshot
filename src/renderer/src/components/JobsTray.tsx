@@ -44,7 +44,7 @@ export function JobsTray() {
         {pct != null && <span className="tabular text-faint">{Math.round(pct * 100)}%</span>}
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content align="end" sideOffset={6} className="z-50 w-80 space-y-3 rounded-card border border-line bg-panel p-3 shadow-2xl shadow-black/50">
+        <Popover.Content align="end" sideOffset={6} className="z-50 w-80 space-y-3 rounded-card border border-line bg-panel p-3 shadow-2xl shadow-shade">
           {jobs.map(j => <JobRow key={j.id} j={j} />)}
         </Popover.Content>
       </Popover.Portal>

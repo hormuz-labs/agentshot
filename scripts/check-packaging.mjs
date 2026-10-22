@@ -43,7 +43,7 @@ export function checkPackaging({ root = join(import.meta.dirname, '..'), platfor
     const dll = required(`${bin}/vcruntime140.dll`)
     if (readFileSync(dll).toString('ascii', 0, 2) !== 'MZ') throw new Error(`Not a Windows DLL: ${dll}`)
   }
-  for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'resources/skills-public.pem', 'resources/bsk-ext/manifest.json',
+  for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'resources/bsk-ext/manifest.json',
     'resources/lib/gsap.min.js', 'resources/lib/fonts/Inter.woff2', 'resources/lib/fonts/Inter-Regular.ttf', 'resources/lib/fonts/Inter-Bold.ttf', 'resources/lib/fonts/Inter-LICENSE.txt']) required(name)
   stamp('resources/bsk-ext/.sha256', EXTENSION.sha256)
   for (const dir of ['resources/skills', 'resources/py'])

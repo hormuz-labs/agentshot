@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, normalize, resolve } from 'node:path'
 import { isWithinDir } from './paths'
 import { queryTabs, Store } from '../shared/ext-match'
+import { BINDING, matchExpression, type Cdp } from './cdp'
 import type { BrowserState } from '../shared/types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -25,6 +26,10 @@ const HOME_URL = 'https://www.google.com/'
 type Tab = { id: number; windowId: number; view: WebContentsView; agent: boolean; opener?: number; lastAccessed: number }
 type Win = { id: number; type: string; activeTab: number | null; agent: boolean }
 type Rect = { x: number; y: number; width: number; height: number }
+
+/** CDP events only a walkthrough take wants: not passed on to the extension (a screencast frame is a whole JPEG). */
+const FILM_EVENTS = new Set(['Page.screencastFrame', 'Page.screencastVisibilityChanged'])
+type Filming = { listeners: Set<(method: string, params: Any) => void>; closers: ((why: string) => void)[] }
 
 const MIME: Record<string, string> = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.wasm': 'application/wasm' }
 
@@ -47,6 +52,10 @@ export class Browser {
   private nextDl = 1
   private wantDl: { id: number; filename?: string }[] = []
   private manifest: Any
+  /** tabs a walkthrough take is filming: their debugger stays attached and they keep painting while out of sight */
+  private filming = new Map<number, Filming>()
+  /** tabs the extension has attached chrome.debugger to */
+  private extAttached = new Set<number>()
   host: BrowserWindow | null = null
   private saveT: NodeJS.Timeout | undefined
 
@@ -112,16 +121,24 @@ export class Browser {
   }
 
   private show(id: number) {
-    if (this.shown && this.shown !== id) this.tabs.get(this.shown)?.view.setVisible(false)
+    const prev = this.shown && this.shown !== id ? this.tabs.get(this.shown) : undefined
+    if (prev) this.hide(prev)
     this.shown = id
     const t = this.tabs.get(id); if (!t) return
-    if (this.bounds) { t.view.setBounds(this.bounds); t.view.setVisible(true) } else t.view.setVisible(false)
+    if (this.bounds) { t.view.setBounds(this.bounds); t.view.setVisible(true) } else this.hide(t)
+  }
+
+  /** Out of sight. A tab being filmed stays visible at one pixel: Chromium paints nothing for a hidden view. */
+  private hide(t: Tab) {
+    if (this.filming.has(t.id)) { t.view.setBounds({ x: 0, y: 0, width: 1, height: 1 }); t.view.setVisible(true) }
+    else t.view.setVisible(false)
   }
 
   closeTab(id: number) {
     const t = this.tabs.get(id); if (!t) return
     const w = this.windows.get(t.windowId)!
     this.tabs.delete(id)
+    this.endFilming(id, 'The tab was closed.')
     try { if (t.view.webContents.debugger.isAttached()) t.view.webContents.debugger.detach() } catch { /* gone */ }
     this.o.win()?.contentView.removeChildView(t.view)
     t.view.webContents.close()
@@ -142,8 +159,8 @@ export class Browser {
     this.bounds = r && { x: Math.round(r.x), y: Math.round(r.y), width: Math.max(1, Math.round(r.width)), height: Math.max(1, Math.round(r.height)) }
     if (this.bounds && !this.tabs.size) this.createTab({ url: HOME_URL })
     for (const t of this.tabs.values()) {
-      if (this.bounds) t.view.setBounds(this.bounds)
-      t.view.setVisible(!!this.bounds && t.id === this.shown)
+      if (this.bounds && t.id === this.shown) { t.view.setBounds(this.bounds); t.view.setVisible(true) }
+      else { if (this.bounds) t.view.setBounds(this.bounds); this.hide(t) }
     }
   }
 
@@ -166,8 +183,18 @@ export class Browser {
     wc.on('did-fail-load', (_e, code, desc, url, isMain, _pid, rid) => { if (code !== -3) this.event('webNavigation.onErrorOccurred', { ...base(fid(isMain, rid), url), error: desc }) })
     wc.on('did-navigate-in-page', (_e, url, isMain, _pid, rid) => this.event(url.includes('#') ? 'webNavigation.onReferenceFragmentUpdated' : 'webNavigation.onHistoryStateUpdated', { ...base(fid(isMain, rid), url), transitionType: 'link', transitionQualifiers: [] }))
     // CDP events from an attached debugger
-    wc.debugger.on('message', (_e, method, params, sessionId) => this.event('debugger.onEvent', sessionId ? { tabId: t.id, sessionId } : { tabId: t.id }, method, params))
-    wc.debugger.on('detach', (_e, reason) => this.event('debugger.onDetach', { tabId: t.id }, reason === 'target closed' ? 'target_closed' : 'canceled_by_user'))
+    wc.debugger.on('message', (_e, method, params, sessionId) => {
+      const f = this.filming.get(t.id)
+      if (f && !sessionId) {
+        for (const l of f.listeners) l(method, params)
+        if (FILM_EVENTS.has(method) || (method === 'Runtime.bindingCalled' && params?.name === BINDING)) return
+      }
+      this.event('debugger.onEvent', sessionId ? { tabId: t.id, sessionId } : { tabId: t.id }, method, params)
+    })
+    wc.debugger.on('detach', (_e, reason) => {
+      this.endFilming(t.id, 'The browser stopped the recording (its debugger was detached).')
+      this.event('debugger.onDetach', { tabId: t.id }, reason === 'target closed' ? 'target_closed' : 'canceled_by_user')
+    })
   }
 
   private frameById(t: Tab, frameId = 0) {
@@ -179,7 +206,7 @@ export class Browser {
 
   state(): BrowserState {
     return {
-      tabs: [...this.tabs.values()].map(t => { const wc = t.view.webContents; return { id: t.id, title: wc.getTitle(), url: wc.getURL(), loading: wc.isLoading(), agent: t.agent, canBack: wc.navigationHistory.canGoBack(), canForward: wc.navigationHistory.canGoForward() } }),
+      tabs: [...this.tabs.values()].map(t => { const wc = t.view.webContents; return { id: t.id, title: wc.getTitle(), url: wc.getURL(), loading: wc.isLoading(), agent: t.agent, recording: this.filming.has(t.id), canBack: wc.navigationHistory.canGoBack(), canForward: wc.navigationHistory.canGoForward() } }),
       active: this.shown, bsk: this.bsk,
     }
   }
@@ -343,8 +370,9 @@ export class Browser {
         return undefined
       }
       // debugger: Chrome's CDP bridge, on Electron's webContents.debugger
-      case 'debugger.attach': { const t = tab(a.tabId); if (!t.view.webContents.debugger.isAttached()) t.view.webContents.debugger.attach(b || '1.3'); return undefined }
-      case 'debugger.detach': { const t = tab(a.tabId); if (t.view.webContents.debugger.isAttached()) t.view.webContents.debugger.detach(); return undefined }
+      case 'debugger.attach': { const t = tab(a.tabId); this.extAttached.add(t.id); if (!t.view.webContents.debugger.isAttached()) t.view.webContents.debugger.attach(b || '1.3'); return undefined }
+      // a take keeps filming through it: the extension sees a detach, the debugger stays on until the take ends
+      case 'debugger.detach': { const t = tab(a.tabId); this.extAttached.delete(t.id); if (!this.filming.has(t.id) && t.view.webContents.debugger.isAttached()) t.view.webContents.debugger.detach(); return undefined }
       case 'debugger.sendCommand': return tab(a.tabId).view.webContents.debugger.sendCommand(b, c || {}, a.sessionId)
       case 'debugger.getTargets': return [...this.tabs.values()].map(t => ({ id: String(t.id), tabId: t.id, type: 'page', url: t.view.webContents.getURL(), title: t.view.webContents.getTitle(), attached: t.view.webContents.debugger.isAttached() }))
       // scripting
@@ -394,6 +422,52 @@ export class Browser {
   private area(n: string) {
     if (n === 'session') return this.session
     return this.local // local, and sync (kept on this machine)
+  }
+
+  // ---------------------------------------------------------------- filming a tab (product walkthroughs)
+  /** The tab whose page carries the take's mark (set by the agent's bsk session), as CDP for the take. Brings the
+   *  Browser panel up so the user watches it record. */
+  async film(nonce: string): Promise<{ tabId: number; cdp: Cdp }> {
+    let t: Tab | undefined
+    for (const x of this.tabs.values()) {
+      const v = await x.view.webContents.executeJavaScript(matchExpression, true).catch(() => null)
+      if (v === nonce) { t = x; break }
+    }
+    if (!t) throw new Error('Manul could not find the walkthrough\'s tab in its browser. Keep the bsk session\'s tab open and try again.')
+    if (this.filming.has(t.id)) throw new Error('That tab is already being recorded.')
+    const wc = t.view.webContents
+    if (!wc.debugger.isAttached()) wc.debugger.attach('1.3')
+    const f: Filming = { listeners: new Set(), closers: [] }
+    this.filming.set(t.id, f)
+    if (t.id !== this.shown || !this.bounds) this.hide(t) // painting from the first frame, before the panel opens
+    this.reveal(t.windowId)
+    this.push()
+    const id = t.id
+    return {
+      tabId: id,
+      cdp: {
+        send: (method, params) => wc.debugger.sendCommand(method, params || {}),
+        on: fn => { f.listeners.add(fn); return () => { f.listeners.delete(fn) } },
+        onClose: fn => { f.closers.push(fn) },
+        close: async () => {
+          if (this.filming.get(id) !== f) return
+          this.filming.delete(id)
+          this.push()
+          const tab = this.tabs.get(id)
+          if (!tab) return
+          if (tab.id !== this.shown || !this.bounds) tab.view.setVisible(false)
+          if (!this.extAttached.has(id) && wc.debugger.isAttached()) { try { wc.debugger.detach() } catch { /* gone */ } }
+        },
+      },
+    }
+  }
+
+  private endFilming(id: number, why: string) {
+    const f = this.filming.get(id)
+    if (!f) return
+    this.filming.delete(id)
+    this.push()
+    for (const c of f.closers) { try { c(why) } catch { /* */ } }
   }
 
   reveal(windowId: number) {

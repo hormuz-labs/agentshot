@@ -1,0 +1,199 @@
+# Manul's gateway (Bifrost) and account service, in namespace manul on the silverfish cluster. Applied by deploy.sh.
+# Public: gateway.manul.si (/openai, /v1: the models, Manul keys only) and account.manul.si (signing in, credit,
+# Dodo Payments' webhook, voice and music).
+# Admin: admin.manul.si is Bifrost's dashboard and admin API, behind its admin login (manul-secrets).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: manul
+---
+# Bifrost keeps everything in Postgres (database bifrost on the silverfish Cloud SQL instance, see config.json);
+# /app/data only holds the mounted config and scratch files.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bifrost
+  namespace: manul
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: bifrost }
+  template:
+    metadata:
+      labels: { app: bifrost }
+    spec:
+      nodeSelector: { pool: system }
+      securityContext: { runAsUser: 1000, runAsGroup: 0, fsGroup: 1000 }
+      containers:
+        - name: bifrost
+          image: maximhq/bifrost:v2.2.6
+          ports: [{ name: http, containerPort: 8080 }]
+          envFrom: [{ secretRef: { name: manul-secrets } }]
+          volumeMounts:
+            - { name: data, mountPath: /app/data }
+            - { name: config, mountPath: /app/data/config.json, subPath: config.json, readOnly: true }
+          readinessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /health, port: http }, initialDelaySeconds: 30, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: config
+          configMap: { name: bifrost-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bifrost
+  namespace: manul
+  annotations:
+    cloud.google.com/backend-config: '{"default": "bifrost"}'
+spec:
+  selector: { app: bifrost }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: bifrost
+  namespace: manul
+spec:
+  timeoutSec: 3600                # a long agent turn streams for minutes
+  connectionDraining: { drainingTimeoutSec: 30 }
+  healthCheck: { type: HTTP, requestPath: /health, port: 8080 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: account
+  namespace: manul
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: account }
+  template:
+    metadata:
+      labels: { app: account }
+    spec:
+      nodeSelector: { pool: system }
+      securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+      containers:
+        - name: account
+          image: node:24.11.1-alpine
+          command: [node, /app/server.mjs]
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            - { name: CLERK_ISSUER, value: https://clerk.manul.si }          # Clerk production
+            - { name: BIFROST_URL, value: "http://bifrost:8080" }   # the admin API, over the cluster network
+            - { name: BIFROST_PROVIDERS, value: "anthropic,gemini,openai,azure" }
+            - { name: CLERK_SECRET_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: CLERK_SECRET_KEY } } }
+            - { name: BIFROST_AUTH, valueFrom: { secretKeyRef: { name: manul-secrets, key: BIFROST_AUTH } } }
+            # What each key was charged shares the gateway's Postgres database, in its own table.
+            - { name: PG_HOST, valueFrom: { secretKeyRef: { name: manul-secrets, key: PG_HOST } } }
+            - { name: PG_USER, valueFrom: { secretKeyRef: { name: manul-secrets, key: PG_USER } } }
+            - { name: PG_PASSWORD, valueFrom: { secretKeyRef: { name: manul-secrets, key: PG_PASSWORD } } }
+            # The wallet and the plans are Pitch's: its database, its Dodo Payments business (live) and products, all
+            # copied from Pitch's secret by link-pitch.sh. Plans are granted by Pitch's Dodo webhook.
+            - { name: WALLET_DATABASE_URL, valueFrom: { secretKeyRef: { name: manul-secrets, key: WALLET_DATABASE_URL } } }
+            - { name: DODO_API, value: https://live.dodopayments.com }
+            - { name: DODO_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_API_KEY, optional: true } } }
+            - { name: DODO_PRODUCT_PRO_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_PRO_LIVE, optional: true } } }
+            - { name: DODO_PRODUCT_MAX_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_MAX_LIVE, optional: true } } }
+            - { name: DODO_PRODUCT_PRO_ANNUAL_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_PRO_ANNUAL_LIVE, optional: true } } }
+            - { name: DODO_PRODUCT_MAX_ANNUAL_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_MAX_ANNUAL_LIVE, optional: true } } }
+            - { name: DODO_PRODUCT_FLEX_LIVE, valueFrom: { secretKeyRef: { name: manul-secrets, key: DODO_PRODUCT_FLEX_LIVE, optional: true } } }
+            # account events (signed in, checkout started) in Pitch's PostHog project
+            - { name: POSTHOG_KEY, value: phc_mw5p4LNJDGfSdwSAaWdmRWTRXEqQVxiEpLEJNQ6CwJpR }   # the project token: public, it can only send events
+            - { name: POSTHOG_HOST, valueFrom: { secretKeyRef: { name: manul-secrets, key: POSTHOG_HOST, optional: true } } }
+            # voice and music for Manul keys: which vendor and model, the voices and the prices (re-read every 30 s,
+            # so `kubectl -n manul edit configmap manul-media` applies within about a minute, no restart)
+            - { name: MEDIA_CONFIG, value: /config/media.json }
+            - { name: GEMINI_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: GEMINI_API_KEY, optional: true } } }
+            - { name: ELEVENLABS_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: ELEVENLABS_API_KEY, optional: true } } }
+            - { name: OPENAI_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: OPENAI_API_KEY, optional: true } } }
+          volumeMounts:
+            - { name: code, mountPath: /app, readOnly: true }
+            - { name: media, mountPath: /config, readOnly: true }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+          resources:
+            requests: { cpu: 25m, memory: 96Mi }
+            limits: { memory: 512Mi }    # a song comes back as base64 JSON
+      volumes:
+        - name: code
+          configMap: { name: account-code }
+        - name: media
+          configMap: { name: manul-media }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: account
+  namespace: manul
+  annotations:
+    cloud.google.com/backend-config: '{"default": "account"}'
+spec:
+  selector: { app: account }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: account
+  namespace: manul
+spec:
+  timeoutSec: 600                 # making music takes a minute or two
+  healthCheck: { type: HTTP, requestPath: /healthz, port: 8080 }
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: manul
+  namespace: manul
+spec:
+  domains: [gateway.manul.si, account.manul.si]
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: manul-admin
+  namespace: manul
+spec:
+  domains: [admin.manul.si]
+---
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: manul
+  namespace: manul
+spec:
+  redirectToHttps: { enabled: true }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: manul
+  namespace: manul
+  annotations:
+    kubernetes.io/ingress.class: gce
+    kubernetes.io/ingress.global-static-ip-name: manul-gateway
+    networking.gke.io/managed-certificates: manul,manul-admin
+    networking.gke.io/v1beta1.FrontendConfig: manul
+spec:
+  defaultBackend:                 # anything else gets the account service's 404
+    service: { name: account, port: { number: 8080 } }
+  rules:
+    - host: gateway.manul.si
+      http:
+        paths:
+          - { path: /openai, pathType: Prefix, backend: { service: { name: bifrost, port: { number: 8080 } } } }
+          - { path: /v1, pathType: Prefix, backend: { service: { name: bifrost, port: { number: 8080 } } } }
+    - host: admin.manul.si          # the dashboard: Bifrost's admin login
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: bifrost, port: { number: 8080 } } } }
+    - host: account.manul.si
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: account, port: { number: 8080 } } } }

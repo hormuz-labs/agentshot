@@ -1,16 +1,24 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install build dev run start preview typecheck test test-watch test-e2e smoke package package-dir clean whisper
+.PHONY: help install build dev run start preview typecheck test test-watch test-e2e smoke package package-dir clean whisper beats ml
 
 help: ## Show this help message
 	@grep -E '^[-a-zA-Z0-9_]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install dependencies and binaries (ffmpeg, bsk, whisper-cli)
+install: ## Install dependencies and binaries (ffmpeg, bsk, models, whisper-cli, manul-beats, manul-speakers, manul-vision)
 	npm install
 	./scripts/build-whisper.sh
+	./scripts/build-beats.sh
+	./scripts/build-ml.sh
 
 whisper: ## Build the bundled whisper-cli binary
 	./scripts/build-whisper.sh
+
+beats: ## Build the bundled beat tracker (manul-beats, on aubio)
+	./scripts/build-beats.sh
+
+ml: ## Build the bundled model runners (manul-speakers, manul-vision)
+	./scripts/build-ml.sh
 
 dev: ## Run Manul in development mode with hot reload
 	npm run dev

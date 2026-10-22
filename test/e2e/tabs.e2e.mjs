@@ -1,8 +1,9 @@
-// Several projects open as tabs: each keeps its own playhead, tabs close, and they come back after a relaunch.
+// Several projects open in the sidebar: each keeps its own playhead, they close, and they come back after a relaunch.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
@@ -11,55 +12,77 @@ const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-tabs-'))
 for (const [name, color] of [['alpha', 'red'], ['beta', 'blue'], ['gamma', 'green']])
   execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=${color}:s=320x240:d=6`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, `${name}.mp4`)])
-const tab = name => `[title$=${JSON.stringify(`${sep}${name}`)}]`
+const row = name => `[data-project-row$=${JSON.stringify(`${sep}${name}`)}]`
 const launch = () => electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'p') } })
 const menu = (app, label) => app.evaluate(({ Menu }, l) => {
   const find = items => { for (const it of items) { if (it.label === l) return it; const s = it.submenu && find(it.submenu.items); if (s) return s } }
   find(Menu.getApplicationMenu().items).click()
 }, label)
 
+// open projects have a close button in the sidebar; the one on screen is aria-current
+const openCount = () => win.locator('[data-project-row] button[title="Close project"]').count()
+const shown = () => win.locator('[data-project-row][aria-current="true"]').getAttribute('data-project-row')
+const order = () => win.locator('[data-project-row]').evaluateAll(rows => rows.map(r => r.getAttribute('data-project-row').split(/[/\\]/).pop()))
+
+let win
 let app = await launch()
 try {
-  let win = await app.firstWindow()
+  win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   const openFile = async name => {
-    await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, `${name}.mp4`))
-    await win.click('text=Drop a video here')
+    await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, `${name}.mp4`))
+    await win.click('[data-tour="import"]')
     await win.locator('button:has(svg.lucide-arrow-up)').click()
-    await win.waitForSelector(tab(name))
+    await win.waitForSelector(`[data-project-title="${name}"]`)
   }
   await openFile('alpha')
+  await win.getByRole('button', { name: 'Collapse media', exact: true }).click()
   await win.evaluate(() => { const v = [...document.querySelectorAll('video')].find(v => v.checkVisibility({ visibilityProperty: true })); v.currentTime = 2 })
   await menu(app, 'New Project')
   await win.waitForSelector('text=What are we making?')
   await openFile('beta')
+  await win.getByRole('button', { name: 'Collapse media', exact: true }).waitFor()
+  assert.equal(await win.locator('[data-project-file="media/beta.mp4"]').count(), 1, 'alpha folder state does not leak into beta')
   await win.evaluate(() => { const v = [...document.querySelectorAll('video')].find(v => v.checkVisibility({ visibilityProperty: true })); v.currentTime = 4 })
   await menu(app, 'New Project'); await openFile('gamma')
-  assert.equal(await win.locator('[draggable="true"][title]').count(), 3, 'three tabs')
+  assert.equal(await openCount(), 3, 'three projects open')
+  assert.deepEqual(await order(), ['gamma', 'beta', 'alpha'], 'newest-created project is first')
 
   // each tab keeps its own playhead
-  await win.click(tab('alpha'))
+  await win.click(row('alpha'))
+  await win.getByRole('button', { name: 'Expand media', exact: true }).waitFor()
+  assert.equal(await win.locator('[data-project-file="media/alpha.mp4"]').count(), 0, 'alpha keeps its own collapsed folder after switching projects')
   await win.waitForTimeout(300)
+  assert.deepEqual(await order(), ['gamma', 'beta', 'alpha'], 'opening an older project does not shuffle the list')
   const t = await win.evaluate(() => [...document.querySelectorAll('video')].find(v => v.checkVisibility({ visibilityProperty: true })).currentTime)
   assert.ok(Math.abs(t - 2) < 0.2, `alpha's playhead stayed at 2 s (got ${t})`)
-  await menu(app, 'Next Tab')
+  await menu(app, 'Next Project')
   await win.waitForTimeout(300)
-  assert.match(await win.locator('[draggable="true"].bg-raised').getAttribute('title'), /beta$/, 'Next Tab goes to beta')
+  assert.match(await shown(), /beta$/, 'Next Project goes to beta')
+  assert.deepEqual(await order(), ['gamma', 'beta', 'alpha'], 'next-project navigation keeps the creation order')
 
   // close beta (⌘W) → gamma (the right neighbour) is on screen
-  await menu(app, 'Close Tab')
+  await menu(app, 'Close Project')
   await win.waitForTimeout(300)
-  assert.equal(await win.locator('[draggable="true"][title]').count(), 2)
-  assert.match(await win.locator('[draggable="true"].bg-raised').getAttribute('title'), /gamma$/)
-  await win.waitForTimeout(500) // tabs are saved
+  assert.equal(await openCount(), 2)
+  assert.match(await shown(), /gamma$/)
+  // delete gamma → its project folder moves to the Trash and alpha is selected
+  await win.click(`${row('gamma')} button[title="Delete project (moves to the Trash)"]`)
+  await win.click(`${row('gamma')} button:has-text("Delete")`)
+  await win.waitForSelector(`${row('alpha')}[aria-current="true"]`)
+  assert.equal(await openCount(), 1)
+  await win.getByRole('button', { name: 'Expand media', exact: true }).waitFor()
+  assert.equal(await win.locator('[data-project-file="media/alpha.mp4"]').count(), 0, 'per-project folder state survives app relaunch')
+  assert.equal(existsSync(join(tmp, 'p', 'gamma')), false)
+  await win.waitForTimeout(500) // the remaining open project is saved
   await app.close()
 
-  // relaunch: alpha and gamma come back, gamma on screen
+  // relaunch: only alpha comes back
   app = await launch()
   win = await app.firstWindow()
-  await win.waitForSelector(tab('gamma'))
-  assert.equal(await win.locator('[draggable="true"][title]').count(), 2)
-  assert.match(await win.locator('[draggable="true"].bg-raised').getAttribute('title'), /gamma$/)
+  await win.waitForSelector(`${row('alpha')}[aria-current="true"]`)
+  assert.equal(await openCount(), 1)
   console.log('tabs e2e: ok')
 } finally {
   await app.close()

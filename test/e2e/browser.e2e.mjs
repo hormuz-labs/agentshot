@@ -2,6 +2,7 @@
 // the agent's bsk session opens a tab in the Browser panel, reads and clicks a page, and the user's own Chrome bsk
 // never sees Manul. Settings → Browser switches the agent to the user's Chrome and back.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding, dismissSettingsOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -42,10 +43,11 @@ try {
   app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${ud}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'p') } })
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
-  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'film.mp4'))
-  await win.click('text=Drop a video here')
+  await dismissOnboarding(win)
+  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, 'film.mp4'))
+  await win.click('[data-tour="import"]')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
-  await win.waitForSelector(`[title$=${JSON.stringify(`${sep}film`)}]`)
+  await win.waitForSelector('[data-project-title="film"]')
 
   // 1. the private daemon: Manul's home, not bsk's default port, and the extension inside Manul connected to it
   const info = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8'))
@@ -74,9 +76,6 @@ try {
   await bsk('click', ref[1], '--session', session)
   assert.match((await bsk('observe', '--session', session)).text, /Clicked by the agent/)
   await win.waitForSelector('[data-testid="browser-panel"] [data-agent-tab]', { timeout: 5000 }) // the agent's tab, marked
-  // one toolbar level with the transcript and agent headers (no second bar of lines)
-  const tops = await win.evaluate(() => [...document.querySelectorAll('[data-panel-header]')].filter(e => e.checkVisibility()).map(e => Math.round(e.getBoundingClientRect().bottom)))
-  assert.ok(tops.length >= 3 && new Set(tops).size === 1, `transcript, browser and agent headers line up (${tops})`)
   const shown = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.isVisible()).contentView.children.filter(v => v.getVisible()).length)
   assert.equal(await shown(), 1, 'the page is on screen')
   // no duplicate tabs: the address bar is the current tab; only the other tabs get pills
@@ -102,6 +101,7 @@ try {
   // 4. a dialog over the panel hides the native page; closing it brings the page back
   await app.evaluate(({ Menu }) => { const f = it => { for (const i of it) { if (i.label === 'Settings…') return i; const s = i.submenu && f(i.submenu.items); if (s) return s } }; f(Menu.getApplicationMenu().items).click() })
   await win.waitForSelector('text=Settings')
+  await dismissSettingsOnboarding(win)
   await until('page hidden under the dialog', async () => (await shown()) === 0, 3000)
 
   // 5. Settings → Browser: switch the agent to the user's Chrome and back

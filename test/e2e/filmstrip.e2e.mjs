@@ -1,5 +1,6 @@
 // Real imported video: visible, distinct thumbnails; seeking and range selection still work.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
@@ -19,8 +20,9 @@ const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${jo
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
-  await app.evaluate(({ ipcMain }, file) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => file) }, source)
-  await win.click('text=Drop a video here')
+  await dismissOnboarding(win)
+  await app.evaluate(({ ipcMain }, file) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [file]) }, source)
+  await win.click('[data-tour="import"]')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForFunction(() => document.querySelector('video')?.readyState >= 2)
   await win.evaluate(() => document.querySelector('video').play())
@@ -66,7 +68,7 @@ try {
     const strip = document.querySelector('[data-testid="timeline-filmstrip"]')
     const imgs = [...strip.querySelectorAll('img')]
     const last = imgs.at(-1)
-    return last && last.complete && last.naturalWidth > 0 && parseFloat(last.style.left) > 95 && last.getBoundingClientRect().width <= 113
+    return last && last.complete && last.naturalWidth > 0 && last.getBoundingClientRect().right >= strip.getBoundingClientRect().right - 2 && last.getBoundingClientRect().width <= 113
   })
   const zoomFrame = await win.locator('[data-testid="timeline-filmstrip"] img').first().boundingBox()
   assert.ok(zoomFrame.width / zoomBox.width < beforeZoom.width / box.width, `each thumbnail covers a smaller time interval when zoomed: ${JSON.stringify({ zoomFrame, zoomBox, beforeZoom, box })}`)

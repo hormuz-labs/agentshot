@@ -30,10 +30,16 @@ describe('bundled ffmpeg', () => {
     for (const x of ['subtitles', 'drawtext', 'boxblur', 'loudnorm', 'afade', 'fade', 'concat', 'trim', 'atrim', 'overlay', 'scale', 'crop', 'sidechaincompress'])
       expect(f).toMatch(new RegExp(`\\s${x}\\s`))
   })
+
+  it('has what analysis and repair need (vid.stab and Rubber Band come from Manul\'s own build)', () => {
+    const f = out(FFMPEG, '-filters')
+    for (const x of ['vidstabdetect', 'vidstabtransform', 'rubberband', 'scdet', 'signalstats', 'blackdetect', 'freezedetect', 'ebur128', 'silencedetect', 'tile', 'minterpolate', 'eq', 'colorbalance', 'curves'])
+      expect(f, x).toMatch(new RegExp(`\\s${x}\\s`))
+  })
 })
 
 describe('pinned builds', async () => {
-  const { BUILDS, VERSION } = await import('../scripts/fetch-ffmpeg.mjs')
+  const { BUILDS, RELEASE, VERSION } = await import('../scripts/fetch-ffmpeg.mjs')
   it('covers every platform Manul ships for, with verified archives for both tools', () => {
     expect(Object.keys(BUILDS).sort()).toEqual(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-x64'])
     for (const b of Object.values(BUILDS)) {
@@ -44,8 +50,8 @@ describe('pinned builds', async () => {
       } else {
         expect(b.ffmpeg).toMatch(/^[0-9a-f]{64}$/)
         expect(b.ffprobe).toMatch(/^[0-9a-f]{64}$/)
-        expect(b.path.endsWith(`_${VERSION}`)).toBe(true)
       }
     }
+    expect(RELEASE.startsWith(`ffmpeg-${VERSION}-`)).toBe(true) // our own build of this FFmpeg version
   })
 })

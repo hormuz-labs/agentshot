@@ -1,33 +1,66 @@
-// The scrubber: playhead, note pins, and a drag to select a range (the anchor for the next note).
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Maximize2 } from 'lucide-react'
-import { cn, timecode } from '@/lib/utils'
+// The timeline: the film's pieces in order, each with its frames, the overlays laid over it, the playhead and note pins,
+// and a drag to select a range to point the agent at. A piece's name drags it somewhere else in the film; footage
+// dragged from the sidebar's Files drops in where it lands; a motion clip's name opens it on the picture to adjust.
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { Maximize2, Sparkles, VolumeX } from 'lucide-react'
+import { cn, mediaUrl, timecode } from '@/lib/utils'
 import { Tip } from '@/components/ui/tooltip'
-import type { Note } from '../../../shared/types'
+import { duration as lengthOf, length, starts, type Item, type Timeline } from '../../../shared/timeline'
+import { DRAG_FILE, dragKind } from './FilesPanel'
+import type { ClipInfo, Note } from '../../../shared/types'
 import { Filmstrip } from './Filmstrip'
 import { frameZoom } from '@/lib/timelineScale'
 
 type Props = {
-  media: { dir: string; src: string; revision: number; fps: number }
+  dir: string
+  /** changes when another version is on screen (the zoom resets) */
+  revision: number
+  fps: number
   duration: number
   time: number
   notes: Note[]
   range?: { t0: number; t1?: number }
+  /** what the film is made of */
+  track: Timeline
+  clips: Record<string, ClipInfo>
+  /** the motion clip open on the picture, outlined */
+  selected?: string | null
+  /** what to say on the right of the header (an edit not yet saved as a version) */
+  status?: ReactNode
   onSeek(t: number): void
   onRange(r: { t0: number; t1: number } | null): void
+  /** a drag across the strip ended with a range selected */
+  onRangeEnd?(): void
+  /** a message box to show above the selection (a range, or a note's moment) */
+  ask?: ReactNode
   onNote(n: Note): void
+  /** a motion clip (a piece or an overlay) clicked: adjust it on the picture */
+  onOpenClip(id: string, clip: string, start: number): void
+  /** pieces can be dragged to another place (not while a proposal waits) */
+  movable?: boolean
+  /** a piece dragged before another (null: to the end) */
+  onMove?(id: string, before: string | null): void
+  /** footage dragged from the sidebar's Files, dropped at t */
+  onInsert?(rel: string, t: number): void
 }
 
-export function Scrubber({ media, duration, time, notes, range, onSeek, onRange, onNote }: Props) {
+type Move = { id: string; x0: number; moved: boolean; before: string | null }
+
+export function Scrubber({ dir, revision, fps: rate, duration, time, notes, range, track, clips, selected = null, status, onSeek, onRange, onRangeEnd, ask, onNote, onOpenClip, movable = false, onMove, onInsert }: Props) {
   const bar = useRef<HTMLDivElement>(null)
+  const root = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(1)
   const [view, setView] = useState({ width: 1, left: 0 })
   const center = useRef<number | null>(null)
   const [drag, setDrag] = useState<{ start: number; moved: boolean } | null>(null)
+  const [move, setMove] = useState<Move | null>(null)
+  const [drop, setDrop] = useState<number | null>(null)
   const [hover, setHover] = useState<number | null>(null)
-  const d = duration || 1
-  const fps = media.fps || 30
+  const shown = track
+  const at0 = starts(shown)
+  const d = (duration || lengthOf(track)) || 1
+  const fps = rate || 30
   const maxZoom = frameZoom(view.width, d, fps)
   const changeZoom = (value: number) => {
     const el = viewport.current!
@@ -39,7 +72,7 @@ export function Scrubber({ media, duration, time, notes, range, onSeek, onRange,
     if (el && center.current != null) el.scrollLeft = center.current * el.scrollWidth - el.clientWidth / 2
     center.current = null
   }, [zoom])
-  useLayoutEffect(() => { setZoom(1); if (viewport.current) viewport.current.scrollLeft = 0 }, [media.src, media.revision])
+  useLayoutEffect(() => { setZoom(1); if (viewport.current) viewport.current.scrollLeft = 0 }, [revision])
   useEffect(() => {
     const el = viewport.current!
     const measure = () => setView({ width: el.clientWidth, left: el.scrollLeft })
@@ -70,17 +103,66 @@ export function Scrubber({ media, duration, time, notes, range, onSeek, onRange,
   const firstTick = Math.max(0, Math.floor(view.left / (view.width * zoom) * ticks) - 1)
   const lastTick = Math.min(ticks, Math.ceil((view.left + view.width) / (view.width * zoom) * ticks) + 1)
   const rulerTime = (t: number) => {
-    if (duration / ticks >= 0.1) return timecode(t, duration / zoom < 10)
-    const fps = media.fps || 30
+    if (d / ticks >= 0.1) return timecode(t, d / zoom < 10)
     return `${timecode(t, false)}:${Math.floor((t % 1) * fps + 1e-6).toString().padStart(2, '0')}`
   }
 
+  // ---- moving a piece by its name
+  const canMove = movable && !!onMove && shown.items.length > 1
+  /** the piece the dragged one would go before (null: the end), from the pointer's time */
+  const gapAt = (t: number, id: string) => {
+    for (let k = 0; k < shown.items.length; k++) {
+      const it = shown.items[k]
+      if (it.id !== id && t < at0[k] + length(it) / 2) return it.id
+    }
+    return null
+  }
+  const startMove = (e: PointerEvent, it: Item) => {
+    e.stopPropagation()
+    if (e.button !== 0 || !canMove) return
+    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    setMove({ id: it.id, x0: e.clientX, moved: false, before: null })
+  }
+  const moveTo = (e: PointerEvent) => {
+    if (!move || (!move.moved && Math.abs(e.clientX - move.x0) < 4)) return
+    setMove({ ...move, moved: true, before: gapAt(at(e.clientX), move.id) })
+  }
+  /** let go: where it was dropped, if it moved; a click otherwise (a motion clip opens, footage is gone to) */
+  const endMove = (it: Item, start: number) => {
+    const m = move
+    setMove(null)
+    if (m?.moved) {
+      const k = shown.items.findIndex(x => x.id === m.id)
+      const next = shown.items[k + 1]?.id ?? null
+      if (m.before !== next && m.before !== m.id) onMove?.(m.id, m.before)
+      return
+    }
+    if (it.kind === 'clip') onOpenClip(it.id, it.clip, start)
+    else onSeek(start)
+  }
+  const gapX = move?.moved ? (move.before ? at0[shown.items.findIndex(x => x.id === move.before)] : d) : null
+
+  const sel = shown.items.findIndex(x => x.id === selected)
+  const selItem = sel >= 0 ? shown.items[sel] : undefined
+  const overlays = shown.overlays || []
+
   return (
-    <div className="relative shrink-0 select-none rounded-lg border border-line bg-panel px-2 pb-2">
-      <div className="flex h-8 items-center gap-1 border-b border-line text-dim">
-        <span className="mr-auto text-[10px] font-medium uppercase tracking-wider">Timeline</span>
-        <span className="mr-2 text-[10px] text-faint tabular" title="Source video frame rate">{fps} fps</span>
-        <span data-testid="timeline-scale" className="mr-1 text-[10px] tabular" title="Pinch or hold Ctrl/⌘ and scroll to zoom">{zoom > 1 ? `${(duration / zoom).toFixed(duration / zoom < 1 ? 3 : 1)} s visible` : ''}{zoom > 1 && zoom >= maxZoom - 1e-6 ? ' · Frame view' : ''}</span>
+    <div data-tour="timeline" ref={root} className="relative shrink-0 select-none rounded-lg border border-line bg-panel px-2 pb-2">
+      {ask && range && (() => {
+        // above the selection's middle (or the note's moment), where the strip shows it now, kept inside the box
+        const r = root.current?.getBoundingClientRect(), b = bar.current?.getBoundingClientRect()
+        if (!r || !b) return null
+        const t = range.t1 != null ? (range.t0 + range.t1) / 2 : range.t0
+        const x = b.left - r.left + (t / d) * b.width, W = Math.min(320, r.width - 8)
+        return <div className="absolute bottom-full z-30 mb-2" style={{ left: Math.max(4, Math.min(r.width - W - 4, x - W / 2)), width: W }}>{ask}</div>
+      })()}
+      {/* wraps onto a second row when the film is narrow, rather than spilling out of the box */}
+      <div className="flex min-h-8 flex-wrap items-center gap-1 border-b border-line py-0.5 text-dim">
+        <span className="mr-1 text-[10px] font-medium uppercase tracking-wider">Timeline</span>
+        <span className="flex-1" />
+        {status}
+        <span className="mx-2 whitespace-nowrap text-[10px] text-faint tabular" title="Source video frame rate">{fps} fps</span>
+        <span data-testid="timeline-scale" className="mr-1 text-[10px] tabular" title="Pinch or hold Ctrl/⌘ and scroll to zoom">{zoom > 1 ? `${(d / zoom).toFixed(d / zoom < 1 ? 3 : 1)} s visible` : ''}{zoom > 1 && zoom >= maxZoom - 1e-6 ? ' · Frame view' : ''}</span>
         <button type="button" aria-label="Fit timeline" title="Fit entire video" onClick={() => changeZoom(1)} className="ml-1 rounded p-1 hover:bg-hover hover:text-fg"><Maximize2 className="size-3.5" /></button>
       </div>
       <div ref={viewport} data-testid="timeline-viewport" className="overflow-x-auto overflow-y-hidden">
@@ -98,8 +180,20 @@ export function Scrubber({ media, duration, time, notes, range, onSeek, onRange,
         ))}
       </div>
       <div className="relative mb-1 h-5 border-b border-line text-[9px] text-dim tabular" aria-hidden="true">
-        {Array.from({ length: lastTick - firstTick + 1 }, (_, index) => { const i = firstTick + index; return <div key={i} className="absolute inset-y-0 border-l border-line-strong" style={{ left: `${100 * i / ticks}%` }}><span className={cn('absolute whitespace-nowrap bg-panel pb-1', i === 0 ? 'left-0' : i === ticks ? 'right-0' : '-translate-x-1/2')}>{rulerTime(duration * i / ticks)}</span></div> })}
+        {Array.from({ length: lastTick - firstTick + 1 }, (_, index) => { const i = firstTick + index; return <div key={i} className="absolute inset-y-0 border-l border-line-strong" style={{ left: `${100 * i / ticks}%` }}><span className={cn('absolute whitespace-nowrap bg-panel pb-1', i === 0 ? 'left-0' : i === ticks ? 'right-0' : '-translate-x-1/2')}>{rulerTime(d * i / ticks)}</span></div> })}
       </div>
+      {/* overlays: lower thirds, captions, callouts laid over the footage */}
+      {overlays.length > 0 && (
+        <div className="relative mb-1 h-5">
+          {overlays.map(o => (
+            <button key={o.id} onClick={() => onOpenClip(o.id, o.clip, o.start)} title={`${clips[o.clip]?.title || o.clip} (over the footage) · click to edit`}
+              style={{ left: pct(o.start), width: pct(o.dur) }}
+              className={cn('absolute inset-y-0 min-w-4 truncate rounded-sm border px-1 text-left text-[10px] font-medium', selected === o.id ? 'border-note bg-note/30 text-fg' : 'border-note/40 bg-note/15 text-note hover:border-note')}>
+              {clips[o.clip]?.title || o.clip}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         ref={bar}
         data-testid="timeline-scrubber"
@@ -110,29 +204,88 @@ export function Scrubber({ media, duration, time, notes, range, onSeek, onRange,
           const t = at(e.clientX)
           setHover(t)
           if (!drag) return
-           if (Math.abs(t - drag.start) >= Math.max(1 / fps, d / zoom * 0.004)) { setDrag({ ...drag, moved: true }); onRange({ t0: Math.min(t, drag.start), t1: Math.max(t, drag.start) }) }
+          if (Math.abs(t - drag.start) >= Math.max(1 / fps, d / zoom * 0.004)) { setDrag({ ...drag, moved: true }); onRange({ t0: Math.min(t, drag.start), t1: Math.max(t, drag.start) }) }
           onSeek(t)
         }}
-        onPointerUp={() => { if (drag && !drag.moved) onRange(null); setDrag(null) }}
+        onPointerUp={() => {
+          // a click seeks (and drops the range); a drag leaves a range to point at
+          if (drag && !drag.moved) onRange(null)
+          else if (drag?.moved) onRangeEnd?.()
+          setDrag(null)
+        }}
         onPointerCancel={() => { setDrag(null); setHover(null) }}
         onPointerLeave={() => setHover(null)}
+        // footage from the sidebar's Files: it goes into the film where it's dropped
+        onDragOver={e => {
+          if (!onInsert || dragKind(e.dataTransfer.types) !== 'video') return
+          e.preventDefault(); e.dataTransfer.dropEffect = 'copy'
+          setDrop(at(e.clientX))
+        }}
+        onDragLeave={() => setDrop(null)}
+        onDrop={e => {
+          const rel = e.dataTransfer.getData(DRAG_FILE)
+          setDrop(null)
+          if (!rel || !onInsert) return
+          e.preventDefault()
+          onInsert(rel, at(e.clientX))
+        }}
       >
-        <Filmstrip {...media} duration={duration} viewport={viewport} />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 truncate rounded-b bg-panel/90 px-2 py-0.5 text-[10px] font-medium text-fg">{media.src.split(/[\\/]/).pop()}</div>
+        {/* the pieces */}
+        {shown.items.map((it, k) => {
+          const c = it.kind === 'clip' ? clips[it.clip] : undefined
+          const name = it.kind === 'media' ? it.src.split('/').pop() : c?.title || it.clip
+          return (
+            <div key={it.id} data-piece={it.id} className={cn('absolute inset-y-0 overflow-hidden', k > 0 && 'border-l border-black/50', move?.moved && move.id === it.id && 'opacity-40')}
+              style={{ left: pct(at0[k]), width: pct(length(it)), minWidth: 2 }}>
+              {it.kind === 'media' ? (
+                <Filmstrip dir={dir} src={it.src} revision={revision} from={it.in} to={it.out} fps={fps} viewport={viewport} />
+              ) : (
+                <div className="pointer-events-none absolute inset-0 bg-amber/15">
+                  {c?.poster && <img src={`${mediaUrl(`${dir}/${c.poster}`)}?v=${c.updatedAt}`} alt="" draggable={false} className="absolute inset-0 size-full object-cover opacity-70" />}
+                </div>
+              )}
+              <button
+                type="button"
+                data-grip
+                title={it.kind === 'clip' ? `${name} · click to edit${canMove ? ', drag to move' : ''}` : canMove ? `${name} · drag to move` : name}
+                className={cn('absolute inset-x-0 bottom-0 flex items-center gap-1 truncate bg-panel/90 px-2 py-0.5 text-left text-[10px] font-medium text-fg', canMove ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer')}
+                // the name: drag it to move the piece; a click opens a motion clip, or goes to where footage starts
+                onPointerDown={e => startMove(e, it)}
+                onPointerMove={moveTo}
+                onPointerUp={() => endMove(it, at0[k])}
+                onPointerCancel={() => setMove(null)}
+              >
+                {it.kind === 'clip' && <Sparkles className="size-3 shrink-0 text-amber" />}
+                <span className="truncate">{name}</span>
+                {it.kind === 'media' && it.muted && <VolumeX className="size-3 shrink-0 text-amber" aria-label="muted" />}
+                {it.kind === 'media' && !it.muted && !!it.db && <span className="shrink-0 tabular text-amber">{it.db > 0 ? '+' : ''}{it.db} dB</span>}
+              </button>
+            </div>
+          )
+        })}
         {/* resolved and open note ranges */}
         {notes.filter(n => n.anchor.t1 != null).map(n => (
-          <div key={n.id} className={cn('absolute inset-y-0 rounded-sm', n.status === 'open' ? 'bg-note/15' : 'bg-white/5')} style={{ left: pct(n.anchor.t0), width: pct(n.anchor.t1! - n.anchor.t0) }} />
+          <div key={n.id} className={cn('pointer-events-none absolute inset-y-0 rounded-sm', n.status === 'open' ? 'bg-note/15' : 'bg-fg/5')} style={{ left: pct(n.anchor.t0), width: pct(n.anchor.t1! - n.anchor.t0) }} />
         ))}
         {/* played part */}
-        <div className="pointer-events-none absolute inset-y-0 left-0 rounded-l bg-white/[0.04]" style={{ width: pct(time) }} />
+        <div className="pointer-events-none absolute inset-y-0 left-0 rounded-l bg-fg/[0.04]" style={{ width: pct(time) }} />
+        {/* the motion clip open on the picture */}
+        {selItem && <div className="pointer-events-none absolute inset-y-0 z-[5] rounded-sm ring-2 ring-inset ring-fg" style={{ left: pct(at0[sel]), width: pct(length(selItem)) }} data-selected-piece={selItem.id} />}
         {/* selection */}
-        {range?.t1 != null && <div className="absolute inset-y-0 border-x-2 border-amber bg-amber/20" style={{ left: pct(range.t0), width: pct(range.t1 - range.t0) }} />}
+        {range?.t1 != null && <div className="pointer-events-none absolute inset-y-0 border-x-2 border-amber bg-amber/20" style={{ left: pct(range.t0), width: pct(range.t1 - range.t0) }} />}
         {/* hover time */}
-        {hover != null && !drag && (
+        {/* where a moved piece would go, or where dropped footage would go in */}
+        {gapX != null && <div className="pointer-events-none absolute -inset-y-1 z-10 w-1 -translate-x-1/2 rounded bg-note" style={{ left: pct(gapX) }} />}
+        {drop != null && (
+          <div className="pointer-events-none absolute -inset-y-1 z-10 w-0.5 -translate-x-1/2 bg-note" style={{ left: pct(drop) }}>
+            <span className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-note px-1.5 py-0.5 text-[10px] font-medium text-white">Insert at {rulerTime(drop)}</span>
+          </div>
+        )}
+        {hover != null && !drag && !move && (
           <div className="pointer-events-none absolute inset-y-0 border-l border-fg/50" style={{ left: pct(hover) }}><span className="absolute -top-6 -translate-x-1/2 whitespace-nowrap rounded bg-raised px-1.5 py-0.5 text-[10px] text-fg tabular">{rulerTime(hover)}</span></div>
         )}
         {/* playhead */}
-        <div className="pointer-events-none absolute -inset-y-1 w-0.5 -translate-x-1/2 bg-amber shadow-[0_0_3px_#000]" style={{ left: pct(Math.max(0, Math.min(time, d))) }}><span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-b-sm bg-amber" /></div>
+        <div className="pointer-events-none absolute -inset-y-1 z-[6] w-0.5 -translate-x-1/2 bg-amber shadow-[0_0_3px_#000]" style={{ left: pct(Math.max(0, Math.min(time, d))) }}><span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-b-sm bg-amber" /></div>
       </div>
       </div>
       </div>

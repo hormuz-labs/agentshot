@@ -1,6 +1,7 @@
 // Settings → Keys → Other providers: import omp's custom providers (a fake ~/.omp with a key file), add one by hand,
 // and their models reach the agent's model list. Talks to no real endpoint.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding, dismissSettingsOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -31,7 +32,9 @@ try {
   const win = await app.firstWindow()
   await win.setViewportSize({ width: 1440, height: 900 }).catch(() => {})
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   await app.evaluate(({ Menu }) => { const f = it => { for (const i of it) { if (i.label === 'Keys…') return i; const s = i.submenu && f(i.submenu.items); if (s) return s } }; f(Menu.getApplicationMenu().items).click() })
+  await dismissSettingsOnboarding(win)
   const dlg = win.locator('[role="dialog"]')
   await dlg.locator('text=Other providers').waitFor()
 

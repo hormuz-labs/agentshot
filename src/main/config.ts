@@ -10,6 +10,14 @@ export type Config = {
   tabs?: { open: string[]; active: string | null }
   /** which browser the agent's bsk drives (default: Manul's own) */
   browser?: { mode: BrowserMode }
+  /** the first-run answers: both opt-in, both off unless ticked (see src/shared/telemetry.ts) */
+  telemetry?: { usage: boolean; crashes: boolean; asked: boolean }
+  /** the look: light (the default), dark, or the system's */
+  theme?: 'light' | 'dark' | 'system'
+  /** where the Manul key's models are reached (gateway.ts): unset means Manul's own gateway */
+  gateway?: string
+  /** who is signed in to Manul (account.ts); their key is in the keychain */
+  account?: { email?: string; keyId?: string }
 }
 
 const file = () => join(app.getPath('userData'), 'config.json')

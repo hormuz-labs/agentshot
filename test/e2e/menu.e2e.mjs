@@ -1,5 +1,6 @@
 // The native menu and the ⌘K palette drive the same commands.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding, dismissSettingsOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
@@ -20,6 +21,7 @@ const click = label => app.evaluate(({ Menu }, l) => {
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
   const closeDialog = async () => {
     const dialog = win.getByRole('dialog')
     await dialog.locator('button:has(svg.lucide-x)').click()
@@ -27,11 +29,12 @@ try {
   }
   // menu → settings section
   await click('Keys…')
+  await dismissSettingsOnboarding(win)
   await win.waitForSelector('[role="dialog"] h2:text-is("Keys")')
   await closeDialog()
   // open a project, then the palette from the menu, search, run
-  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'm.mp4'))
-  await win.click('text=Drop a video here')
+  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, 'm.mp4'))
+  await win.click('[data-tour="import"]')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForSelector('video')
   await click('Command Palette…')
@@ -42,22 +45,10 @@ try {
   await search.press('Enter')
   await win.waitForSelector('[role="dialog"] h2:text-is("Export")')
   await closeDialog()
-  // menu → export directly, and transcript toggle
+  // menu → export directly
   await click('Export…')
   await win.waitForSelector('[role="dialog"] h2:text-is("Export")')
   await closeDialog()
-  // View → Transcript folds the transcript into its rail and back; so do its own collapse button and the rail
-  const open = () => win.locator('[aria-label="Collapse the transcript"]').count()
-  const was = await open()
-  await click('Transcript')
-  await win.waitForTimeout(300)
-  assert.equal(await open(), was ? 0 : 1, 'View → Transcript toggles it')
-  if (!(await open())) await win.click('[aria-label="Show the transcript"]')
-  await win.click('[aria-label="Collapse the transcript"]')
-  await win.waitForSelector('[aria-label="Show the transcript"]')
-  assert.equal(await open(), 0, 'the collapse button folds it to the rail')
-  await win.click('[aria-label="Show the transcript"]')
-  await win.waitForSelector('[aria-label="Collapse the transcript"]')
   console.log('menu e2e: ok')
 } finally {
   await app.close()

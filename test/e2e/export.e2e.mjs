@@ -1,6 +1,7 @@
 // Export through the real UI: 9:16 with an .srt from the transcript, and 16:9 with captions in the picture.
 // Recorded speech and its reference transcript keep this independent of local speech engines.
 import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
@@ -19,8 +20,9 @@ const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${jo
 try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
-  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'talk.mp4'))
-  await win.click('text=Drop a video here')
+  await dismissOnboarding(win)
+  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, 'talk.mp4'))
+  await win.click('[data-tour="import"]')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForSelector('video')
   await loadRecordedTranscript(win, words)
@@ -32,7 +34,9 @@ try {
     await dialog.getByRole('button', { name: new RegExp(label) }).click()
     await dialog.getByRole('button', { name: captions, exact: true }).click()
     await dialog.getByRole('button', { name: 'Export', exact: true }).click()
-    await dialog.getByRole('button', { name: 'Show', exact: true }).waitFor({ timeout: 120000 })
+    await dialog.getByRole('button', { name: 'Show', exact: true }).waitFor({ timeout: 120000 }).catch(async e => {
+      throw new Error(`${e.message}\nExport dialog: ${await dialog.innerText()}`)
+    })
     await dialog.locator('button:has(svg.lucide-x)').click()
     await dialog.waitFor({ state: 'detached' })
   }
