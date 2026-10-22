@@ -198,7 +198,16 @@ export const importMedia = async (p: Project, file: string) => (await addFiles(p
  *  list existed). True when it changed. */
 export async function syncFiles(p: Project): Promise<boolean> {
   const onDisk = new Set((await Files.walk(join(p.dir, 'media')).catch(() => [] as string[])).map(f => join('media', f)))
+  for (const folder of ['renders', 'exports', 'documents', 'outputs', 'downloads', 'generated']) {
+    for (const file of await Files.walk(join(p.dir, folder)).catch(() => [] as string[])) {
+      if (/\.(png|jpe?g|webp|gif|svg|avif|pdf|docx?|xlsx?|pptx?|txt|md|csv|tsv|srt|vtt|ass|zip|mp4|mov|webm|mp3|wav|m4a|flac|html)$/i.test(file)) onDisk.add(join(folder, file))
+    }
+  }
+  for (const file of readdirSync(p.dir, { withFileTypes: true })) {
+    if (file.isFile() && file.name !== 'thumb.jpg' && !file.name.startsWith('.') && /\.(pdf|docx?|xlsx?|pptx?|txt|md|csv|tsv|png|jpe?g|webp|zip)$/i.test(file.name)) onDisk.add(file.name)
+  }
   let changed = false
+  if (p.files?.['thumb.jpg']) { delete p.files['thumb.jpg']; changed = true } // internal project thumbnail, not a deliverable
   for (const rel of Object.keys(p.files || {})) if (!onDisk.has(rel) && !existsSync(join(p.dir, rel))) { delete p.files![rel]; changed = true } // (or added while listing)
   for (const rel of onDisk) if (!p.files?.[rel]) { await register(p, rel).catch(e => console.warn('file', rel, e)); changed = true }
   return changed

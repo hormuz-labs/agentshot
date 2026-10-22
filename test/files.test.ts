@@ -236,12 +236,24 @@ describe('files attached to a message', () => {
     expect(lines.at(-1)).toBe('…and 10 more (project_state lists every file)')
   })
 
-  it('the Files list: top-level files, then each folder with its files', () => {
+  it('the Files list nests every level, with folders before files', () => {
     expect(fileRows(['media/kit/b.png', 'media/z.srt', 'media/kit/a.png', 'media/a.mp4'])).toEqual([
-      { kind: 'file', rel: 'media/a.mp4', depth: 0 }, { kind: 'file', rel: 'media/z.srt', depth: 0 },
-      { kind: 'folder', name: 'kit', rels: ['media/kit/a.png', 'media/kit/b.png'] },
-      { kind: 'file', rel: 'media/kit/a.png', depth: 1 }, { kind: 'file', rel: 'media/kit/b.png', depth: 1 },
+      { kind: 'folder', name: 'media', rels: ['media/a.mp4', 'media/kit/a.png', 'media/kit/b.png', 'media/z.srt'], depth: 0 },
+      { kind: 'folder', name: 'media/kit', rels: ['media/kit/a.png', 'media/kit/b.png'], depth: 1 },
+      { kind: 'file', rel: 'media/kit/a.png', depth: 2 }, { kind: 'file', rel: 'media/kit/b.png', depth: 2 },
+      { kind: 'file', rel: 'media/a.mp4', depth: 1 }, { kind: 'file', rel: 'media/z.srt', depth: 1 },
     ])
+  })
+
+  it('collapsing one folder hides only its descendants, including deeply nested files', () => {
+    const paths = ['renders/thumbs/social/cover.png', 'renders/final.mp4', 'media/a.mp4', 'summary.md']
+    const rows = fileRows(paths, new Set(['renders/thumbs']))
+    expect(rows).toContainEqual({ kind: 'folder', name: 'renders/thumbs', rels: ['renders/thumbs/social/cover.png'], depth: 1 })
+    expect(rows.some(r => r.kind === 'folder' && r.name === 'renders/thumbs/social')).toBe(false)
+    expect(rows).toContainEqual({ kind: 'file', rel: 'renders/final.mp4', depth: 1 })
+    expect(rows).toContainEqual({ kind: 'file', rel: 'media/a.mp4', depth: 1 })
+    expect(fileRows(paths, new Set(['renders'])).some(r => r.kind === 'file' && r.rel.startsWith('renders/'))).toBe(false)
+    expect(fileRows(paths)).toContainEqual({ kind: 'file', rel: 'renders/thumbs/social/cover.png', depth: 3 })
   })
 
   it("a folder's files collapse into one chip", () => {

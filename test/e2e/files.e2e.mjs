@@ -50,6 +50,21 @@ try {
   // each file says what it is (on hover)
   await win.waitForSelector('[data-files-tree] button[title*="SRT subtitles: 2 cues, 0:01–0:04, 3 words; starts “Hello there”"]')
   await win.waitForSelector('[data-files-tree] button[title*="font “Inter” Bold (Inter Bold)"]')
+  // The explorer folds each directory independently; closing media keeps the Brand Kit's own fold state.
+  const kit = win.locator('[data-file-folder="media/Brand Kit"]')
+  const font = win.locator('[data-project-file="media/Brand Kit/Brand-Bold.ttf"]')
+  await kit.getByRole('button', { name: 'Collapse media/Brand Kit', exact: true }).click()
+  await font.waitFor({ state: 'detached' })
+  await win.locator('[data-project-file="media/film.srt"]').waitFor()
+  await win.getByRole('button', { name: 'Collapse media', exact: true }).click()
+  await kit.waitFor({ state: 'detached' })
+  await win.getByRole('button', { name: 'Expand media', exact: true }).click()
+  assert.equal(await font.count(), 0, 'child folder stays collapsed when its parent is reopened')
+  await kit.getByRole('button', { name: 'Expand media/Brand Kit', exact: true }).focus()
+  await win.keyboard.press('ArrowRight')
+  await font.waitFor()
+  const folds = await win.evaluate(d => JSON.parse(localStorage.getItem(`manul.tree.folders.${d}`)), dir)
+  assert.deepEqual(folds, [], 'expanded state is persisted per project')
   if (shots) await win.screenshot({ path: join(shots, 'files-list.png') })
   const project = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
   assert.deepEqual(Object.fromEntries(Object.entries(project.files).map(([k, f]) => [k, f.kind])), {
@@ -100,7 +115,16 @@ try {
   assert.deepEqual(sent.map(m => [m.text, m.files]), [['Lay @song.mp3 under the opening', ['media/song.mp3']]])
 
   // delete in the project tree (the Trash is stubbed: nothing of the test lands in yours)
-  await app.evaluate(({ shell }) => { globalThis.__trashed = []; shell.trashItem = async p => { globalThis.__trashed.push(p) } })
+  await app.evaluate(({ shell }, trash) => {
+    globalThis.__trashed = []
+    shell.trashItem = async p => {
+      globalThis.__trashed.push(p)
+      const fs = process.getBuiltinModule('fs/promises')
+      const path = process.getBuiltinModule('path')
+      await fs.mkdir(trash, { recursive: true })
+      await fs.rename(p, path.join(trash, path.basename(p)))
+    }
+  }, join(tmp, 'trash'))
   const srtRow = win.locator('li:has(span.truncate:text-is("film.srt"))')
   await srtRow.hover()
   await srtRow.locator('button[aria-label="Delete film.srt"]').click()

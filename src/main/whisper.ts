@@ -9,7 +9,7 @@ import { promisify } from 'node:util'
 import { getConfig, setConfig } from './config'
 import { asJob, type JobHandle } from './jobs'
 import { FFMPEG, probe, WHISPER_CLI } from './media'
-import { isInstalled, scriptPath, venvPython, WHISPER_MODEL, whisperEnv, whisperModelPath } from './tools'
+import { isInstalled, scriptPath, venvPython, WHISPER_MODEL, whisperEnv, whisperModelPath, whisperLargeModelPath } from './tools'
 import type { Segment, Transcript, WhisperConfig, WhisperStatus, Word } from '../shared/types'
 import { dtwFlags, dtwLag, envelope, readWav, snapSegments, whisperCppWords } from './wordtimes'
 
@@ -95,13 +95,35 @@ export async function setWhisper(c: Partial<WhisperConfig> & { mode: WhisperConf
 // ---------------------------------------------------------------- transcription (queued: one at a time)
 let queue: Promise<unknown> = Promise.resolve()
 
-export function transcribe(file: string, outJson: string, title: string, project?: string): Promise<Transcript> {
-  const next = queue.then(() => asJob(title, 'transcribe', j => runTranscribe(file, outJson, j), { project, doneTitle: title.replace(/^Transcribing/, 'Transcribed') }))
+export function transcribe(file: string, outJson: string, title: string, project?: string, engine?: WhisperStatus['active']): Promise<Transcript> {
+  const next = queue.then(() => asJob(title, 'transcribe', j => runTranscribe(file, outJson, j, engine), { project, doneTitle: title.replace(/^Transcribing/, 'Transcribed') }))
   queue = next.catch(() => {})
   return next
 }
 
-async function runTranscribe(file: string, outJson: string, j: JobHandle): Promise<Transcript> {
+const largeExports = new Map<string, Promise<Transcript>>()
+export const LARGE_EXPORT_LABEL = 'whisper.cpp · large-v3 (export)'
+
+/** Separate cache: export upgrades never reuse Base text or replace editing transcripts and their word timings. */
+export async function exportTranscript(file: string, outJson: string, title: string, project?: string): Promise<Transcript | null> {
+  if (!isInstalled('whisper-large-v3')) return null
+  try {
+    const cached = JSON.parse(await readFile(outJson, 'utf8')) as Transcript
+    if (cached.model === LARGE_EXPORT_LABEL || cached.model === 'no audio track') return cached
+  } catch { /* not transcribed with Large-v3 yet */ }
+  const busy = largeExports.get(outJson)
+  if (busy) return busy
+  const task = (async () => {
+    const cfg = getConfig().whisper
+    const binary = bundledBinary() ? WHISPER_CLI : cfg?.binary && existsSync(cfg.binary) ? cfg.binary : (await findBinaries())[0]
+    if (!binary) throw new Error('Whisper Large-v3 needs whisper.cpp. Set its binary in Settings → Speech recognition.')
+    return transcribe(file, outJson, title, project, { engine: 'system', binary, model: whisperLargeModelPath(), label: LARGE_EXPORT_LABEL })
+  })().finally(() => largeExports.delete(outJson))
+  largeExports.set(outJson, task)
+  return task
+}
+
+async function runTranscribe(file: string, outJson: string, j: JobHandle, selected?: WhisperStatus['active']): Promise<Transcript> {
   await mkdir(dirname(outJson), { recursive: true })
   // nothing to hear: an empty transcript, no engine needed
   if (!(await probe(file).then(i => i.hasAudio, () => true))) {
@@ -109,7 +131,7 @@ async function runTranscribe(file: string, outJson: string, j: JobHandle): Promi
     await writeFile(outJson, JSON.stringify(t))
     return t
   }
-  const engine = await resolveEngine()
+  const engine = selected || await resolveEngine()
   if (!engine) throw new Error('No speech recognition installed.')
   await mkdir(dirname(outJson), { recursive: true })
   let segments: Segment[], language: string

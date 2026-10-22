@@ -89,7 +89,7 @@ function ProjectRow({ dir, title, active, open, project, onSelect, onClose, onDe
             ))}
           </Branch>
           <Branch label="Files" count={Object.keys(project.files || {}).length} add={() => pickFiles(dir)} addLabel="Add files">
-            <FilesTree project={project} />
+            <FilesTree key={dir} project={project} />
           </Branch>
         </div>
       )}

@@ -266,7 +266,7 @@ function Item({ m, project, results, busy, onAnswer, laterUser }: { m: Message; 
           }
           return <ToolCard key={c.id} call={call} result={r?.content} state={r ? (r.error ? 'error' : 'done') : busy ? 'running' : 'error'} />
         })}
-        {m.content && <ChatMarkdown text={String(m.content)} />}
+        {m.content && <ChatMarkdown text={String(m.content)} dir={project.dir} files={Object.keys(project.files || {})} />}
       </div>
     )
   }

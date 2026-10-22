@@ -170,6 +170,8 @@ const api = {
     /** Move the project folder and every render, file and conversation asset to the system Trash. */
     delete: (dir: string) => ipcRenderer.invoke('project:delete', dir),
     reveal: (dir: string) => ipcRenderer.invoke('project:reveal', dir),
+    downloadFile: (dir: string, rel: string) => ipcRenderer.invoke('project:downloadFile', dir, rel) as Promise<string | null>,
+    revealFile: (dir: string, rel: string) => ipcRenderer.invoke('project:revealFile', dir, rel) as Promise<void>,
     import: (dir: string, file: string) => ipcRenderer.invoke('project:import', dir, file) as Promise<string[]>,
     pickFiles: () => ipcRenderer.invoke('project:pickFiles') as Promise<string[]>,
     /** Files out of the project, into the Trash; the ones the film uses are kept, with why. */
