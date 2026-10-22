@@ -2,7 +2,7 @@
 // Shared geometry and instanced, tapered fur keep the small desktop companion inexpensive to draw.
 import * as T from 'three'
 import type { MascotState } from '@/lib/mascot'
-import { blinkAmount, gestureDuration, gesturePose, type MascotGesture } from '@/lib/mascot-motion'
+import { blinkAmount, gestureDuration, gesturePose, runningLeg, type MascotGesture } from '@/lib/mascot-motion'
 
 export type MascotScene = ReturnType<typeof createMascotScene>
 
@@ -81,27 +81,43 @@ export function createMascotScene(canvas: HTMLCanvasElement) {
     mesh(ear, earPink, 0, .02, .145, .118, .16, .028)
     fluff(head, [side * .74, -.23, .19], [.47, .41, .43], 1200, .15, '#b7b0a2', true)
   }
-  const paws: T.Group[] = [], arms: T.Group[] = []
+  const paws: T.Group[] = [], arms: T.Group[] = [], elbows: T.Group[] = []
   for (const side of [-1, 1]) {
     const arm = new T.Group(); arm.position.set(side * .43, -.45, .37); body.add(arm); arms.push(arm)
-    fluff(arm, [0, -.28, .035], [.19, .36, .2], 260, .045, '#99958c')
-    const paw = new T.Group(); paw.position.set(0, -.59, .11); arm.add(paw); paws.push(paw)
+    fluff(arm, [0, -.18, 0], [.16, .23, .17], 220, .045, '#99958c')
+    const elbow = new T.Group(); elbow.position.y = -.38; arm.add(elbow); elbows.push(elbow)
+    fluff(elbow, [0, -.15, 0], [.13, .21, .14], 180, .035, '#99958c')
+    const paw = new T.Group(); paw.position.set(0, -.21, .11); elbow.add(paw); paws.push(paw)
     fluff(paw, [0, 0, 0], [.27, .21, .32], 350, .055, '#b7b0a2')
     for (const dx of [-.06, .06]) mesh(paw, coat, dx, -.05, .295, .011, .066, .008)
     // Paw pads appear when the front leg turns up to wave.
     mesh(paw, earPink, 0, -.19, .08, .1, .025, .12)
     for (const dx of [-.12, 0, .12]) mesh(paw, noseMat, dx, -.16, .23, .045, .025, .05)
   }
-  // A thick, ringed tail curled beside its paws.
-  const tail = new T.Group(); tail.position.set(.68, -.93, -.18); body.add(tail)
-  const tailCurve = new T.CatmullRomCurve3([new T.Vector3(0, 0, 0), new T.Vector3(.49, .03, .01), new T.Vector3(.64, -.01, .46), new T.Vector3(.29, -.07, .87)])
-  const tailMesh = new T.Mesh(geometry(new T.TubeGeometry(tailCurve, 24, .15, 10, false)), coat); tail.add(tailMesh)
-  for (const t of [.38, .55, .72, .89]) {
-    const point = tailCurve.getPoint(t), tangent = tailCurve.getTangent(t)
-    const ring = new T.Mesh(geometry(new T.TorusGeometry(.151, .033, 6, 16)), dark)
-    ring.position.copy(point); ring.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), tangent); tail.add(ring)
+  const hindLegs: T.Group[] = [], hocks: T.Group[] = [], hindPaws: T.Group[] = []
+  for (const side of [-1, 1]) {
+    const leg = new T.Group(); leg.position.set(side * .48, -.48, -.53); body.add(leg); hindLegs.push(leg)
+    fluff(leg, [0, -.16, 0], [.23, .25, .23], 300, .055, '#99958c')
+    const hock = new T.Group(); hock.position.y = -.38; leg.add(hock); hocks.push(hock)
+    fluff(hock, [0, -.15, 0], [.14, .21, .15], 180, .035, '#99958c')
+    const paw = new T.Group(); paw.position.set(0, -.16, .1); hock.add(paw); hindPaws.push(paw)
+    fluff(paw, [0, 0, 0], [.22, .16, .27], 240, .045, '#b7b0a2')
+    for (const dx of [-.06, .06]) mesh(paw, coat, dx, -.05, .25, .011, .06, .008)
   }
-  mesh(tail, dark, .29, -.07, .87, .152, .152, .16)
+  // Linked tail joints uncurl behind the runner; the wave travels all the way to the tip.
+  const tail = new T.Group(); tail.position.set(.68, -.93, -.18); body.add(tail)
+  const tailJoints: T.Group[] = []
+  let tailParent = tail
+  for (let i = 0; i < 7; i++) {
+    const joint = new T.Group(); joint.position.z = i ? -.19 : 0; tailParent.add(joint)
+    const radius = .16 - i * .008
+    mesh(joint, i === 6 ? dark : coat, 0, 0, -.095, radius, radius, .16)
+    if (i > 1 && i < 6) {
+      const ring = new T.Mesh(geometry(new T.TorusGeometry(radius, .025, 6, 16)), dark)
+      ring.position.z = -.12; joint.add(ring)
+    }
+    tailJoints.push(joint); tailParent = joint
+  }
 
   const eyes: T.Group[] = [], pupils: T.Group[] = [], brows: T.Mesh[] = []
   for (const side of [-1, 1]) {
@@ -159,7 +175,7 @@ export function createMascotScene(canvas: HTMLCanvasElement) {
 
   let previous = 0, currentState: MascotState = 'idle', entered = 0, pointerX = 0, pointerY = 0
   let gesture: MascotGesture | null = null, gestureAt = -100, sleeping = 0, pressure = 0
-  let nextBlink = 2.2, blinkAt = -100, doubleBlink = false, nextFidget = 8, fidget = 0
+  let nextBlink = 2.2, blinkAt = -100, doubleBlink = false, nextFidget = 8, fidget = 0, busyPose = 0
   const damp = (from: number, to: number, dt: number) => T.MathUtils.damp(from, to, 8, dt)
   function render(time: number, state: MascotState, reduced: boolean, pointer: { x: number; y: number }, darkTheme: boolean, pressed = false) {
     const dt = reduced ? 10 : Math.min(Math.max(time - previous, .001), .1); previous = time
@@ -175,6 +191,9 @@ export function createMascotScene(canvas: HTMLCanvasElement) {
     pressure = T.MathUtils.damp(pressure, pressed && !reduced ? 1 : 0, 35, dt)
     sleeping = damp(sleeping, state === 'sleeping' ? 1 : 0, dt)
     const work = state === 'working', thinking = state === 'thinking', talk = state === 'speaking'
+    const running = !reduced && (work || thinking || talk)
+    busyPose = damp(busyPose, running ? 1 : 0, dt)
+    const stride = t * 11
     const celebrating = state === 'success' && age < 2.3
     if (!reduced && state === 'idle' && time > nextFidget && !pressed && !gesture) {
       gesture = fidget++ % 3 === 2 ? 'yawn' : 'peek'; gestureAt = time
@@ -184,27 +203,48 @@ export function createMascotScene(canvas: HTMLCanvasElement) {
     const pose = gesturePose(reduced ? null : gesture, gestureAge)
     if (gesture && gestureAge > gestureDuration[gesture]) gesture = null
     const hop = pose.lift
-    const bounce = reduced ? 0 : celebrating ? Math.abs(Math.sin(age * 5)) * .17 * Math.max(0, 1 - age / 2.3) : work ? Math.sin(t * 5.5) * .025 : 0
+    const bounce = reduced ? 0 : celebrating ? Math.abs(Math.sin(age * 5)) * .17 * Math.max(0, 1 - age / 2.3) : 0
     const breath = Math.sin(t * (state === 'sleeping' ? 1.7 : 2.3)) * .012
-    root.position.y = bounce + hop - pressure * .035
+    const runBob = Math.sin(stride * 2) * .045
+    root.position.y = bounce + hop - pressure * .035 + busyPose * (.06 + runBob)
     const stretch = pose.squash - pressure * .08
     root.scale.set(1 - stretch * .45, 1 + breath + stretch, 1 - stretch * .25)
-    root.rotation.y = damp(root.rotation.y, -.09 + pointerX * .13 + (!reduced && work ? Math.sin(t * 2.2) * .035 : 0), dt)
-    const yaw = pointerX * .16 + (reduced ? 0 : Math.sin(t * .56) * .04)
+    root.scale.multiplyScalar(1 - busyPose * .1)
+    // A right-facing profile exposes the four-legged gallop in real 3D.
+    root.rotation.y = damp(root.rotation.y, running ? Math.PI / 2 : -.09 + pointerX * .13, dt)
+    root.rotation.x = busyPose * Math.sin(stride) * .035
+    body.scale.z = 1 + busyPose * (.12 + Math.cos(stride) * .035)
+    head.position.z = .26 + busyPose * .5
+    const yaw = (1 - busyPose) * (pointerX * .16 + (reduced ? 0 : Math.sin(t * .56) * .04))
     head.rotation.y = damp(head.rotation.y, yaw, dt)
     head.rotation.x = damp(head.rotation.x, sleeping * .17 + pointerY * .085 + pose.lean + (state === 'error' ? .07 : thinking ? -.055 : 0), dt)
-    head.rotation.z = damp(head.rotation.z, pose.tilt + (thinking ? -.13 + Math.sin(t * 1.2) * .025 : state === 'waiting' ? .1 : state === 'error' ? -.09 : celebrating ? Math.sin(age * 5) * .065 : Math.sin(t * .7) * .018), dt)
-    head.position.y = .47 + breath
-    tail.rotation.y = damp(tail.rotation.y, reduced ? 0 : Math.sin(t * (gesture ? 5 : work ? 3 : 1.4)) * (gesture ? .2 : work ? .15 : .065), dt)
+    head.rotation.z = damp(head.rotation.z, pose.tilt + (1 - busyPose) * (thinking ? -.13 + Math.sin(t * 1.2) * .025 : state === 'waiting' ? .1 : state === 'error' ? -.09 : celebrating ? Math.sin(age * 5) * .065 : Math.sin(t * .7) * .018), dt)
+    head.position.y = .47 + breath - busyPose * .3
+    tail.position.set(.68 * (1 - busyPose), -.93 + busyPose * .62, -.18 - busyPose * .57)
+    tail.rotation.y = T.MathUtils.lerp(-1.8, 0, busyPose)
+    tailJoints.forEach((joint, i) => {
+      joint.rotation.y = T.MathUtils.lerp(-.35, Math.sin(stride * .55 - i * .55) * .1, busyPose)
+      joint.rotation.x = busyPose * (.055 + Math.sin(stride * .8 - i * .6) * .16)
+    })
     paws.forEach((paw, i) => {
+      const side = i === 0 ? -1 : 1
       const raise = i === 1 ? pose.paw : 0
-      arms[i].position.x = (i === 0 ? -1 : 1) * (.43 + raise * .5)
-      arms[i].position.y = -.45 + raise * .5
-      arms[i].rotation.x = raise * -2.25 + (work && !reduced ? Math.sin(t * 7 + i * Math.PI) * .16 : 0)
-      arms[i].rotation.z = i === 1 ? raise * .8 + pose.wave : 0
-      paw.position.y = -.59 + (reduced ? 0 : work ? Math.max(0, Math.sin(t * 7 + i * Math.PI)) * .055 : 0)
-      paw.rotation.x = raise * -.55
+      const gait = runningLeg(stride / (Math.PI * 2) + i * .12, runBob)
+      arms[i].position.x = side * (.43 + raise * .5 * (1 - busyPose))
+      arms[i].position.y = -.45 + raise * .5 * (1 - busyPose)
+      arms[i].rotation.x = T.MathUtils.lerp(raise * -2.25, gait.hip, busyPose)
+      elbows[i].rotation.x = busyPose * gait.knee
+      arms[i].rotation.z = (raise * .8 + (i === 1 ? pose.wave : 0)) * (1 - busyPose)
+      paw.position.y = T.MathUtils.lerp(-.21, -.36, busyPose)
+      paw.rotation.x = T.MathUtils.lerp(raise * -.55, gait.ankle, busyPose)
       paw.rotation.z = i === 1 ? pose.wave * .5 : 0
+    })
+    hindLegs.forEach((leg, i) => {
+      const gait = runningLeg(stride / (Math.PI * 2) + .5 + i * .12, runBob, true)
+      leg.rotation.x = busyPose * gait.hip
+      hocks[i].rotation.x = busyPose * gait.knee
+      hindPaws[i].position.y = T.MathUtils.lerp(-.16, -.36, busyPose)
+      hindPaws[i].rotation.x = busyPose * gait.ankle
     })
     if (!reduced && time >= nextBlink) { blinkAt = time; doubleBlink = random() > .72; nextBlink = time + 2.4 + random() * 4 }
     const blink = reduced ? 0 : blinkAmount(time - blinkAt, doubleBlink)
@@ -238,6 +278,11 @@ export function createMascotScene(canvas: HTMLCanvasElement) {
     canvas.dataset.paw = pose.paw.toFixed(3); canvas.dataset.lift = hop.toFixed(3)
     canvas.dataset.gesture = gesture ?? 'none'
     canvas.dataset.mouth = opening.toFixed(3)
+    canvas.dataset.rotationY = root.rotation.y.toFixed(3)
+    canvas.dataset.busyPose = busyPose.toFixed(3)
+    canvas.dataset.legAngles = [...arms, ...hindLegs].map(leg => leg.rotation.x.toFixed(3)).join(',')
+    canvas.dataset.jointAngles = [...elbows, ...hocks].map(joint => joint.rotation.x.toFixed(3)).join(',')
+    canvas.dataset.tailWave = tailJoints.map(joint => joint.rotation.x.toFixed(3)).join(',')
   }
   return {
     render,
