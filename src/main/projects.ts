@@ -16,6 +16,7 @@ import { kindByName } from '../shared/file-kinds'
 import { ASPECTS, type Aspect } from '../shared/motion-formats'
 import { example as galleryExample, exampleVideo } from './gallery'
 import { sameCut, timelineOfFile } from '../shared/timeline'
+import { newestProjects } from '../shared/project-order'
 import type { MediaInfo, Note, Project, RecentProject, Version } from '../shared/types'
 
 const run = promisify(execFile)
@@ -29,13 +30,19 @@ const recentFile = () => join(app.getPath('userData'), 'recent.json')
 
 export function recent(): RecentProject[] {
   try {
-    return (JSON.parse(readFileSync(recentFile(), 'utf8')) as RecentProject[]).filter(r => existsSync(join(r.dir, 'project.json')))
+    const list = (JSON.parse(readFileSync(recentFile(), 'utf8')) as RecentProject[]).filter(r => existsSync(join(r.dir, 'project.json')))
+    return newestProjects(list.map(r => {
+      if (Number.isFinite(r.createdAt)) return r
+      // Older recent.json entries only stored openedAt; recover the immutable creation date, not the last-opened date.
+      try { return { ...r, createdAt: JSON.parse(readFileSync(join(r.dir, 'project.json'), 'utf8')).createdAt } }
+      catch { return r }
+    }))
   } catch { return [] }
 }
 
 function touchRecent(p: Project) {
   const thumb = existsSync(join(p.dir, 'thumb.jpg')) ? join(p.dir, 'thumb.jpg') : undefined
-  const list = [{ id: p.id, title: p.title, dir: p.dir, openedAt: Date.now(), thumb }, ...recent().filter(r => r.dir !== p.dir)].slice(0, 12)
+  const list = [{ id: p.id, title: p.title, dir: p.dir, createdAt: p.createdAt, openedAt: Date.now(), thumb }, ...recent().filter(r => r.dir !== p.dir).sort((a, b) => b.openedAt - a.openedAt)].slice(0, 12)
   writeFileSync(recentFile(), JSON.stringify(list, null, 1))
 }
 
@@ -82,14 +89,14 @@ export async function save(p: Project) {
 
 /** A new project from picked or dropped files. Import the whole batch before opening it; the first playable video
  *  starts the timeline, and every other asset is available to the user and agent. */
-export async function createFromFiles(files: string[], progress?: (done: number, total: number, file: string) => void): Promise<Project> {
+export async function createFromFiles(files: string[], progress?: (done: number, total: number, file: string) => void, model?: Project['model']): Promise<Project> {
   const sources = [...new Set(files.filter(Boolean))]
   if (!sources.length) throw new Error('Choose files to start a project.')
   const file = sources.find(f => kindByName(f) === 'video') || sources[0]
   const title = basename(file, extname(file))
   let dir = join(projectsRoot(), slug(title))
   for (let n = 2; existsSync(dir); n++) dir = join(projectsRoot(), `${slug(title)}-${n}`)
-  const p: Project = { id: id(), title, dir, createdAt: Date.now(), versions: [], current: '', notes: [], media: {}, files: {} }
+  const p: Project = { id: id(), title, dir, createdAt: Date.now(), versions: [], current: '', notes: [], media: {}, files: {}, ...(model ? { model } : {}) }
   try {
     for (const sub of ['media', 'renders', 'notes', 'clips']) await mkdir(join(dir, sub), { recursive: true })
     for (const [index, src] of sources.entries()) {
@@ -128,14 +135,14 @@ export const createFromFile = (file: string) => createFromFiles([file])
  *  prompt (read from the gallery when the agent runs) and its video as the reference; a reference video of the user's own
  *  is imported the same way.
  *  A product walkthrough starts the same way (16:9, 30 fps) until the agent proposes the first one it filmed. */
-export async function createMotion(o: { title?: string; aspect: Aspect; length?: number; example?: string; reference?: string; files?: string[]; walkthrough?: boolean }): Promise<Project> {
+export async function createMotion(o: { title?: string; aspect: Aspect; length?: number; example?: string; reference?: string; files?: string[]; walkthrough?: boolean; model?: Project['model'] }): Promise<Project> {
   const ex = o.example ? galleryExample(o.example) : undefined
   if (o.example && !ex) throw new Error('That example is no longer in the gallery.')
   const title = o.title?.trim() || ex?.title || (o.walkthrough ? 'Product walkthrough' : 'Motion video')
   let dir = join(projectsRoot(), slug(title))
   for (let n = 2; existsSync(dir); n++) dir = join(projectsRoot(), `${slug(title)}-${n}`)
   const { width, height } = ASPECTS[o.aspect]
-  const p: Project = { id: id(), title, dir, createdAt: Date.now(), versions: [], current: '', notes: [], media: {}, files: {} }
+  const p: Project = { id: id(), title, dir, createdAt: Date.now(), versions: [], current: '', notes: [], media: {}, files: {}, ...(o.model ? { model: o.model } : {}) }
   try {
     for (const sub of ['media', 'renders', 'notes', 'clips']) await mkdir(join(dir, sub), { recursive: true })
     const canvas = 'media/canvas.mp4'
@@ -198,7 +205,16 @@ export const importMedia = async (p: Project, file: string) => (await addFiles(p
  *  list existed). True when it changed. */
 export async function syncFiles(p: Project): Promise<boolean> {
   const onDisk = new Set((await Files.walk(join(p.dir, 'media')).catch(() => [] as string[])).map(f => join('media', f)))
+  for (const folder of ['renders', 'exports', 'documents', 'outputs', 'downloads', 'generated']) {
+    for (const file of await Files.walk(join(p.dir, folder)).catch(() => [] as string[])) {
+      if (/\.(png|jpe?g|webp|gif|svg|avif|pdf|docx?|xlsx?|pptx?|txt|md|csv|tsv|srt|vtt|ass|zip|mp4|mov|webm|mp3|wav|m4a|flac|html)$/i.test(file)) onDisk.add(join(folder, file))
+    }
+  }
+  for (const file of readdirSync(p.dir, { withFileTypes: true })) {
+    if (file.isFile() && file.name !== 'thumb.jpg' && !file.name.startsWith('.') && /\.(pdf|docx?|xlsx?|pptx?|txt|md|csv|tsv|png|jpe?g|webp|zip)$/i.test(file.name)) onDisk.add(file.name)
+  }
   let changed = false
+  if (p.files?.['thumb.jpg']) { delete p.files['thumb.jpg']; changed = true } // internal project thumbnail, not a deliverable
   for (const rel of Object.keys(p.files || {})) if (!onDisk.has(rel) && !existsSync(join(p.dir, rel))) { delete p.files![rel]; changed = true } // (or added while listing)
   for (const rel of onDisk) if (!p.files?.[rel]) { await register(p, rel).catch(e => console.warn('file', rel, e)); changed = true }
   return changed

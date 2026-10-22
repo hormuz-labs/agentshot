@@ -23,6 +23,7 @@ try {
   win.on('pageerror', e => errors.push(e.message))
   await win.waitForSelector('text=What are we making?')
   await dismissOnboarding(win)
+  await win.bringToFront()
   await app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('agent:ready'); ipcMain.handle('agent:ready', () => true) })
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.isVisible()).webContents.send('agent:ready'))
   const mascot = win.locator('[data-mascot-state]:visible')
@@ -30,18 +31,21 @@ try {
   const rig = () => win.locator('[data-mascot-renderer="webgl"]:visible canvas')
   const box = await mascot.boundingBox()
   await win.mouse.move(box.x - 200, box.y + box.height * .43)
+  await win.evaluate(box => window.dispatchEvent(new PointerEvent('pointermove', { clientX: box.x - 200, clientY: box.y + box.height * .43 })), box)
   await win.waitForFunction(() => Number(document.querySelector('[data-mascot-renderer="webgl"] canvas').dataset.gazeX) < -.8)
   await mascot.screenshot({ path: join(out, 'gaze-left.png') })
   await win.mouse.move(box.x + box.width + 200, box.y + box.height * .43 + 180)
+  await win.evaluate(box => window.dispatchEvent(new PointerEvent('pointermove', { clientX: box.x + box.width + 200, clientY: box.y + box.height * .43 + 180 })), box)
   await win.waitForFunction(() => {
     const canvas = document.querySelector('[data-mascot-renderer="webgl"] canvas')
-    return Number(canvas.dataset.gazeX) > .8 && Number(canvas.dataset.gazeY) > .5
+    return canvas && Number(canvas.dataset.gazeX) > .8 && Number(canvas.dataset.gazeY) > .5
   })
   assert.ok(Number(await rig().getAttribute('data-gaze-y')) > .5, 'pupils follow the cursor outside the mascot')
   await mascot.screenshot({ path: join(out, 'gaze-right.png') })
   await win.waitForFunction(() => Number(document.querySelector('[data-mascot-renderer="webgl"] canvas').dataset.blink) > .7, { timeout: 10000 })
   await win.screenshot({ path: join(out, 'home.png') })
   await mascot.hover()
+  await mascot.focus()
   await win.getByRole('button', { name: 'Raise Manul’s paw' }).click()
   await win.waitForFunction(() => Number(document.querySelector('[data-mascot-renderer="webgl"] canvas').dataset.paw) > .9)
   await win.waitForTimeout(120)
@@ -58,17 +62,42 @@ try {
     BrowserWindow.getAllWindows().find(w => w.isVisible()).webContents.send('agui', project, { type, timestamp: Date.now(), ...rest })
   }, { project, type, rest })
   const state = async name => { await win.waitForSelector(`[data-mascot-state="${name}"]:visible`); await win.waitForSelector('[data-mascot-renderer="webgl"]:visible') }
+  const running = () => win.waitForFunction(() => Number(document.querySelector('[data-mascot-renderer="webgl"] canvas').dataset.busyPose) > .99)
   await send('MESSAGES_SNAPSHOT', { messages: [{ id: 'u', role: 'user', content: 'Make this feel like a quiet Sunday morning.' }] })
   await send('RUN_STARTED')
   await state('thinking')
+  await running()
+  const gallop = await rig().evaluate(canvas => new Promise(resolve => {
+    const started = performance.now()
+    const frames = []
+    const sample = () => {
+      frames.push({ heading: Number(canvas.dataset.rotationY), legs: canvas.dataset.legAngles.split(',').map(Number), joints: canvas.dataset.jointAngles.split(',').map(Number), tail: canvas.dataset.tailWave.split(',').map(Number) })
+      if (performance.now() - started < 1200) requestAnimationFrame(sample)
+      else resolve(frames)
+    }
+    requestAnimationFrame(sample)
+  }))
+  assert.ok(gallop.every(frame => Math.abs(frame.heading - Math.PI / 2) < .03), 'running faces right without spinning')
+  for (let leg = 0; leg < 4; leg++) {
+    const angles = gallop.map(frame => frame.legs[leg])
+    assert.ok(Math.max(...angles) - Math.min(...angles) > 1.5, `leg ${leg + 1} moves through a full running stride`)
+    const bends = gallop.map(frame => frame.joints[leg])
+    assert.ok(Math.max(...bends) - Math.min(...bends) > 1, `leg ${leg + 1} folds during recovery`)
+  }
+  for (const joint of [0, 6]) {
+    const wave = gallop.map(frame => frame.tail[joint])
+    assert.ok(Math.max(...wave) - Math.min(...wave) > .2, 'tail waves from base to tip')
+  }
   await win.screenshot({ path: join(out, 'thinking.png') })
   await send('TEXT_MESSAGE_CONTENT', { messageId: 'reply', delta: 'I’ll soften the opening, let the shots breathe, and find a gentler rhythm.' })
   await state('speaking')
+  await running()
   await send('TEXT_MESSAGE_END')
   const assistant = { id: 'a', role: 'assistant', content: 'I’ll soften the opening, let the shots breathe, and find a gentler rhythm.', toolCalls: [{ id: 'render', type: 'function', function: { name: 'ffmpeg', arguments: JSON.stringify({ args: ['-i', 'media/film.mp4', 'versions/sunday.mp4'] }) } }] }
   await send('MESSAGES_SNAPSHOT', { messages: [{ id: 'u', role: 'user', content: 'Make this feel like a quiet Sunday morning.' }, assistant] })
   await send('ACTIVITY_SNAPSHOT', { activityType: 'tools', content: { running: ['render'] } })
   await state('working')
+  await running()
   await win.evaluate(() => {
     window.__catSounds = []
     const start = AudioBufferSourceNode.prototype.start
@@ -87,6 +116,10 @@ try {
   await send('MESSAGES_SNAPSHOT', { messages: [{ id: 'u', role: 'user', content: 'Make this feel like a quiet Sunday morning.' }, assistant, question] })
   await send('ACTIVITY_SNAPSHOT', { activityType: 'tools', content: { running: ['question'] } })
   await state('waiting')
+  await win.waitForFunction(() => {
+    const pose = document.querySelector('[data-mascot-renderer="webgl"] canvas').dataset
+    return Number(pose.busyPose) < .01 && Math.abs(Number(pose.rotationY)) < .25
+  })
   await win.screenshot({ path: join(out, 'waiting.png') })
   await send('MESSAGES_SNAPSHOT', { messages: [{ id: 'u', role: 'user', content: 'Make this feel like a quiet Sunday morning.' }, assistant] })
   await send('ACTIVITY_SNAPSHOT', { activityType: 'tools', content: { running: ['render'] } })
@@ -133,6 +166,7 @@ try {
   await win.waitForTimeout(450)
   const still2 = await mascot.screenshot()
   assert.ok(still1.equals(still2), 'reduced motion renders a still pose, without ongoing animation')
+  assert.equal(Number(await rig().getAttribute('data-busy-pose')), 0, 'reduced motion stops the gallop')
   await win.emulateMedia({ reducedMotion: 'no-preference' })
   await state('working')
   await win.evaluate(() => document.documentElement.classList.add('dark'))
@@ -161,6 +195,7 @@ try {
   await win.screenshot({ path: join(out, 'chat-controls-dark.png') })
   await win.evaluate(() => document.documentElement.classList.remove('dark'))
   await win.mouse.move(5, 5)
+  await win.bringToFront()
   await win.waitForSelector('[data-mascot-state="sleeping"]:visible', { timeout: 45000 })
   await mascot.click()
   await state('idle')

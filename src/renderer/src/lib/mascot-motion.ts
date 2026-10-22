@@ -2,6 +2,20 @@ export type MascotGesture = 'pet' | 'wave' | 'growl' | 'nuzzle' | 'peek' | 'yawn
 export const gestureDuration: Record<MascotGesture, number> = { pet: .72, wave: 1.6, growl: 1.05, nuzzle: 1.4, peek: 1.2, yawn: 2 }
 export const petGestures: MascotGesture[] = ['pet', 'wave', 'nuzzle', 'growl']
 
+/** Grounded push-off followed by a tucked recovery, solved as a two-bone leg. */
+export function runningLeg(phase: number, bob: number, hind = false) {
+  const cycle = ((phase % 1) + 1) % 1, stance = .38
+  const recovery = Math.max(0, (cycle - stance) / (1 - stance))
+  const z = cycle < stance ? .4 - .8 * cycle / stance : -.4 + .8 * (recovery * recovery * (3 - 2 * recovery))
+  const y = -.69 - bob + Math.sin(recovery * Math.PI) * .4
+  const upper = .38, lower = .36
+  const distance = Math.min(Math.hypot(y, z), upper + lower - .001)
+  const bend = hind ? -1 : 1
+  const hip = Math.atan2(-z, -y) + bend * Math.acos(Math.max(-1, Math.min(1, (upper * upper + distance * distance - lower * lower) / (2 * upper * distance))))
+  const knee = -bend * Math.acos(Math.max(-1, Math.min(1, (distance * distance - upper * upper - lower * lower) / (2 * upper * lower))))
+  return { hip, knee, ankle: -hip - knee, stance: cycle < stance }
+}
+
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n))
 const smooth = (n: number) => { const x = clamp(n, 0, 1); return x * x * (3 - 2 * x) }
 const windowed = (age: number, duration: number, attack = .12, release = .2) =>

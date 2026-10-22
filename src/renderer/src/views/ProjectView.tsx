@@ -19,7 +19,6 @@ import { BrowserPanel } from './BrowserPanel'
 import { EditStatus } from './EditStatus'
 import { ClipEditor } from './ClipEditor'
 import { ExportDialog } from './ExportDialog'
-import { DemoToolbox } from './DemoToolbox'
 import { DemoFollowup } from './DemoFollowup'
 import { CameraControls } from './CameraControls'
 import { VideoControls } from './VideoControls'
@@ -50,7 +49,6 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const [compare, setCompare] = useState<'after' | 'before'>('after')
   const [over, setOver] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [demoOpen, setDemoOpen] = useState(false)
   const [demoAdjusting, setDemoAdjusting] = useState(false)
   const openAdjustment = useRef(false)
   const [cameraMode, setCameraMode] = useState<'move' | 'frame' | null>(null)
@@ -105,15 +103,6 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     clearAttached(p.dir)
     await window.manul.agent.send(p.dir, { text, anchor: a, still, files }).catch(e => alert((e as Error).message))
   }, [anchor, attached, p.dir])
-  const submitDemo = async (request: { text: string; files: string[] }) => {
-    setChatShut(false); setPreview(true); setBrowsing(false)
-    stage.current?.video?.pause()
-    if (!ready) throw new Error('Add an API key in Settings → Keys so Manul can generate this demo in chat.')
-    // This is a new whole-film brief, not a note on an old playhead selection. Unrelated draft attachments stay intact.
-    await window.manul.agent.send(p.dir, request)
-    detachFiles(p.dir, request.files)
-    setAnchor(undefined); setDrawing(false)
-  }
 
   // Startup files belong to the submitted request, or to the first draft when no request was typed.
   // Handle that handoff once, including StrictMode's replay of mount effects.
@@ -238,12 +227,10 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     setP(next); setChatShut(false); setPreview(true); setBrowsing(false)
     if (!proposal) { setDemoAdjusting(true); setCameraMode('move'); setVideoEditing(false); revealCamera(next.timeline!) }
   }
-  const openDemo = () => { setDemoOpen(true); setChatShut(false); setBrowsing(false); stage.current?.video?.pause() }
   const shownDemo = proposal ? (proposal.timeline?.demo ? proposal : undefined) : current.timeline?.demo || tl.demo ? current : undefined
   // Follow the producing turn, not whichever message happens to be newest. A hand-saved layout inherits its
   // most recent agent output anchor until the agent actually produces another demo version.
   const demoAnchor = shownDemo && (demoOutputMessage(agent.messages, shownDemo) || [...p.versions].reverse().filter(v => v.timeline?.demo).map(v => demoOutputMessage(agent.messages, v)).find(Boolean))
-  const demoSetup = demoOpen ? <DemoToolbox project={p} attached={attached} onClose={() => setDemoOpen(false)} onSubmit={submitDemo} /> : null
   const demoTools = shownDemo ? <DemoFollowup key={demoAnchor || shownDemo.id} editing={demoAdjusting} busy={agent.busy} proposal={!!proposal} onAdjust={adjustDemo} onDone={() => { setDemoAdjusting(false); setCameraMode(null); setVideoEditing(false) }} onRender={async () => {
       if (!ready) throw new Error('Add an API key to render the adjusted video in chat.')
       await window.manul.agent.send(p.dir, { text: 'Render the face-layout and framing adjustments I made in the chat toolbox. They are already on the current timeline. Use rerender_timeline, preserve the existing sync and cuts, and show the updated video beside this chat.', files: [] })
@@ -442,8 +429,6 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
               inputRef={input}
               demoTools={demoTools}
               demoToolsMessage={demoAnchor}
-              demoSetup={demoSetup}
-              onAutoDemo={Object.values(p.files || {}).filter(f => f.kind === 'video').length >= 2 && !proposal ? openDemo : undefined}
             />
           </div>
         )}

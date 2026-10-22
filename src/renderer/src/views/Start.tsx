@@ -3,6 +3,7 @@ import { ArrowUp, Clapperboard, KeyRound, Loader2, Paperclip, X } from 'lucide-r
 import { extOf, kindByName } from '../../../shared/file-kinds'
 import { FileIcon } from './FilesPanel'
 import { JobsTray } from '@/components/JobsTray'
+import { ModelPicker } from '@/components/ModelPicker'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
 import { ManulMascot } from '@/components/mascot/ManulMascot'
@@ -32,6 +33,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
   const [example, setExample] = useState<GalleryExample | null>(null)
   const [reference, setReference] = useState<string | null>(null)
   const [aspect, setAspect] = useState<Aspect>('16:9')
+  const [model, setModel] = useState<Project['model']>()
   const gallery = useGallery()
   const input = useRef<HTMLTextAreaElement>(null)
   const top = useRef<HTMLDivElement>(null)
@@ -69,17 +71,17 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
     setError(null)
     try {
       if (walkthrough) {
-        const p = await window.manul.project.createMotion({ title: titleOf(prompt, null), aspect: '16:9', walkthrough: true, files })
+        const p = await window.manul.project.createMotion({ title: titleOf(prompt, null), aspect: '16:9', walkthrough: true, files, model })
         onOpen(p, prompt.trim(), Object.keys(p.files || {}).filter(f => f !== p.walkthrough?.canvas))
         return
       }
       if (motion) {
-        const p = await window.manul.project.createMotion({ title: titleOf(prompt, example), aspect, example: example?.id, reference: reference ?? undefined, files })
+        const p = await window.manul.project.createMotion({ title: titleOf(prompt, example), aspect, example: example?.id, reference: reference ?? undefined, files, model })
         const ask = prompt.trim() || (example ? `Make a video like “${example.title}”.` : 'Make a motion video in the style of the reference.')
         onOpen(p, ask, Object.keys(p.files || {}).filter(f => f !== p.motion?.canvas))
         return
       }
-      const p = await window.manul.project.create(files)
+      const p = await window.manul.project.create(files, model)
       onOpen(p, prompt.trim() || undefined, Object.keys(p.files || {}))
     } catch (e) {
       setError(message(e))
@@ -184,6 +186,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
               )}
               {busy && <span role="status" className="ml-1 text-xs text-dim">{motion || walkthrough ? 'Setting up…' : `Importing ${files.length} ${files.length === 1 ? 'item' : 'items'}…`}</span>}
               <span className="flex-1" />
+              <ModelPicker picked={model} onPick={setModel} disabled={busy} />
               <Button data-tour="start" size="icon" variant="primary" className="rounded-lg" disabled={!canGo} onClick={go} aria-label="Start">
                 {busy ? <Loader2 className="animate-spin" /> : <ArrowUp />}
               </Button>

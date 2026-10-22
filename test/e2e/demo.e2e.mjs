@@ -1,5 +1,5 @@
 // A non-editor creates an actual auto-synced demo, adjusts the live face layer, undoes, saves and exports.
-// Inline chat toolbox submission is captured (no paid model), then the backend composition is exercised separately.
+// Ordinary chat submission is captured (no paid model), then the backend composition is exercised separately.
 import { _electron as electron } from 'playwright-core'
 import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
@@ -25,12 +25,24 @@ try {
   await win.waitForSelector('[data-project-title]')
   const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
   await win.evaluate(([dir, file]) => window.manul.project.import(dir, file), [dir, join(tmp, 'camera.mp4')])
-  assert.equal(await win.locator('[data-tour="composer"]').getByRole('button', { name: 'Auto Demo', exact: true }).count(), 1, 'demo tools belong in chat')
-  await win.getByRole('button', { name: 'Auto Demo', exact: true }).click()
-  await win.locator('[data-demo-toolbox]').waitFor()
-  assert.equal(await win.getByRole('dialog').count(), 0, 'toolbox is inline, not a modal')
-  await win.getByLabel('Demo pacing').selectOption('none')
-  await win.getByLabel('Face shape').selectOption('circle')
+  const noAutoDemo = async () => {
+    assert.equal(await win.getByRole('button', { name: 'Auto Demo', exact: true }).count(), 0, 'multiple videos never add an Auto Demo button')
+    assert.equal(await win.locator('[data-demo-toolbox]').count(), 0, 'no automatic demo setup in ordinary chat')
+  }
+  await noAutoDemo()
+  await win.reload()
+  await win.locator('[data-project-title]').waitFor()
+  await noAutoDemo()
+  await app.evaluate(({ ipcMain, BrowserWindow }) => {
+    ipcMain.removeHandler('agent:ready'); ipcMain.handle('agent:ready', () => false)
+    BrowserWindow.getAllWindows().find(w => w.isVisible()).webContents.send('agent:ready')
+  })
+  await win.getByText('Add an API key', { exact: false }).first().waitFor()
+  await noAutoDemo()
+  await app.evaluate(({ ipcMain, BrowserWindow }) => {
+    ipcMain.removeHandler('agent:ready'); ipcMain.handle('agent:ready', () => true)
+    BrowserWindow.getAllWindows().find(w => w.isVisible()).webContents.send('agent:ready')
+  })
   await app.evaluate(({ ipcMain }, dir) => {
     globalThis.__demoRequests = []
     ipcMain.removeHandler('agent:send')
@@ -39,16 +51,17 @@ try {
       e.sender.send('agui', d, { type: 'MESSAGES_SNAPSHOT', messages: [{ id: 'demo-brief', role: 'user', content: `${request.text}\n\n[attached files]\n${request.files.map(f => `- ${f} — video`).join('\n')}` }] })
     })
   }, dir)
-  await win.getByRole('button', { name: 'Generate in chat', exact: true }).click()
-  await win.locator('[data-demo-toolbox]').waitFor({ state: 'detached' })
+  const brief = 'Create a synced screen + face-camera demo using media/screen.mp4 and media/camera.mp4. Use a circle, top right, 128 × 128 px, cleanup: none.'
+  await win.locator('[data-tour="composer"] textarea').fill(brief)
+  await win.getByRole('button', { name: 'Send', exact: true }).click()
   const requests = await app.evaluate(() => globalThis.__demoRequests)
-  assert.equal(requests.length, 1, 'Generate submits exactly one chat request')
-  assert.deepEqual(requests[0].files, ['media/screen.mp4', 'media/camera.mp4'])
+  assert.equal(requests.length, 1, 'the ordinary composer submits exactly one chat request')
   assert.match(requests[0].text, /circle, top right, 128 × 128 px/)
   assert.match(requests[0].text, /cleanup: none/)
-  await win.getByText('Create a synced screen + face-camera demo using these choices:', { exact: false }).first().waitFor()
+  await win.getByText(brief, { exact: false }).first().waitFor()
+  await noAutoDemo()
   let p = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
-  assert.equal(p.versions.length, 1, 'The chat toolbox submits a brief instead of generating a video itself')
+  assert.equal(p.versions.length, 1, 'chat submits a brief instead of generating a video itself')
   // Separately verify the deterministic tool backend an agent invokes after receiving the brief.
   await win.evaluate(dir => window.manul.demo.create(dir, { screen: 'media/screen.mp4', camera: 'media/camera.mp4', corner: 'top-right', layout: { shape: 'circle', width: 128, height: 128 }, cleanup: 'none', audio: 'screen' }), dir)
   await win.getByRole('button', { name: 'Accept', exact: true }).waitFor({ timeout: 60000 })

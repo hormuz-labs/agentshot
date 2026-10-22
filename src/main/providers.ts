@@ -77,6 +77,8 @@ export function buildProviders(list = listProviders()) {
       models: p.models.map(m => ({
         id: m.id, name: m.name || m.id, api: p.api, provider: p.id, baseUrl: p.baseUrl, ...(headers ? { headers } : {}),
         input: m.images === false ? ['text'] : ['text', 'image'], reasoning: m.reasoning !== false,
+        // Sol cannot disable reasoning; the harness's default "off" would otherwise send the unsupported "none".
+        ...(/^gpt-6\.1-sol(?:-\d{4}-\d{2}-\d{2})?$/.test(m.id) ? { thinkingLevelMap: { off: 'high' } } : {}),
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: m.contextWindow || 400_000, maxTokens: m.maxTokens || 128_000,
       })) as any,

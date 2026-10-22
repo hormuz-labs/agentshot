@@ -102,7 +102,8 @@ export const ManulMascot = forwardRef<MascotHandle, {
       lastTime = now
       const state = live.current.state
       const reduced = live.current.reduced
-      const fps = live.current.pressed || live.current.gesture || now < live.current.highFpsUntil ? 60 : state === 'idle' || state === 'sleeping' ? 30 : 40
+      const busy = state === 'thinking' || state === 'working' || state === 'speaking'
+      const fps = busy || live.current.pressed || live.current.gesture || now < live.current.highFpsUntil ? 60 : state === 'idle' || state === 'sleeping' ? 30 : 40
       if (now - lastFrame >= 1000 / fps - .5 || reduced) {
         if (live.current.gesture) {
           if (!reduced) scene.react(live.current.gesture, clock)

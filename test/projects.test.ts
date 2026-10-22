@@ -33,6 +33,21 @@ describe('projects', () => {
     expect((p.timeline!.items[0] as { out: number }).out).toBeCloseTo(2, 0)
   })
 
+  it('persists a startup model selection before a footage project is opened', async () => {
+    const model = { provider: 'azure', modelId: 'gpt-6.1-sol' }
+    const p = await Projects.createFromFiles([clip], undefined, model)
+    expect(p.model).toEqual(model)
+    expect(JSON.parse(readFileSync(join(p.dir, 'project.json'), 'utf8')).model).toEqual(model)
+    expect((await Projects.load(p.dir)).model).toEqual(model)
+  })
+
+  it.each([false, true])('persists startup model selection for motion/walkthrough projects (walkthrough=%s)', async walkthrough => {
+    const model = { provider: 'azure', modelId: 'gpt-6.1-sol' }
+    const p = await Projects.createMotion({ title: 'Model choice', aspect: '16:9', walkthrough, model })
+    expect(JSON.parse(readFileSync(join(p.dir, 'project.json'), 'utf8')).model).toEqual(model)
+    expect((await Projects.load(p.dir)).model).toEqual(model)
+  })
+
   it('gives older projects a timeline when they load', async () => {
     const p = await Projects.createFromFile(clip)
     delete p.timeline

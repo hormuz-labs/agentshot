@@ -33,7 +33,7 @@ export function mascotActivity(agent: AgentState, needsConsent = false): MascotA
 }
 
 export const mascotLabels: Record<MascotState, string> = {
-  idle: 'Manul, a fluffy Pallas’s cat, looking around', thinking: 'Manul thinking, with a curious head tilt',
-  working: 'Manul working, tapping its little paws', speaking: 'Manul talking', waiting: 'Manul waiting for your answer',
+  idle: 'Manul, a fluffy Pallas’s cat, looking around', thinking: 'Manul thinking, running on all four paws',
+  working: 'Manul working, running on all four paws', speaking: 'Manul writing a reply, running on all four paws', waiting: 'Manul waiting for your answer',
   success: 'Manul celebrating with a raised paw', error: 'Manul looking concerned', sleeping: 'Manul dozing, with closed eyes',
 }

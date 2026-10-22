@@ -20,6 +20,7 @@ const menu = (app, label) => app.evaluate(({ Menu }, l) => {
 // open projects have a close button in the sidebar; the one on screen is aria-current
 const openCount = () => win.locator('[data-project-row] button[title="Close project"]').count()
 const shown = () => win.locator('[data-project-row][aria-current="true"]').getAttribute('data-project-row')
+const order = () => win.locator('[data-project-row]').evaluateAll(rows => rows.map(r => r.getAttribute('data-project-row').split('/').pop()))
 
 let win
 let app = await launch()
@@ -34,22 +35,30 @@ try {
     await win.waitForSelector(`[data-project-title="${name}"]`)
   }
   await openFile('alpha')
+  await win.getByRole('button', { name: 'Collapse media', exact: true }).click()
   await win.evaluate(() => { const v = [...document.querySelectorAll('video')].find(v => v.checkVisibility({ visibilityProperty: true })); v.currentTime = 2 })
   await menu(app, 'New Project')
   await win.waitForSelector('text=What are we making?')
   await openFile('beta')
+  await win.getByRole('button', { name: 'Collapse media', exact: true }).waitFor()
+  assert.equal(await win.locator('[data-project-file="media/beta.mp4"]').count(), 1, 'alpha folder state does not leak into beta')
   await win.evaluate(() => { const v = [...document.querySelectorAll('video')].find(v => v.checkVisibility({ visibilityProperty: true })); v.currentTime = 4 })
   await menu(app, 'New Project'); await openFile('gamma')
   assert.equal(await openCount(), 3, 'three projects open')
+  assert.deepEqual(await order(), ['gamma', 'beta', 'alpha'], 'newest-created project is first')
 
   // each tab keeps its own playhead
   await win.click('[data-project-row$="/alpha"]')
+  await win.getByRole('button', { name: 'Expand media', exact: true }).waitFor()
+  assert.equal(await win.locator('[data-project-file="media/alpha.mp4"]').count(), 0, 'alpha keeps its own collapsed folder after switching projects')
   await win.waitForTimeout(300)
+  assert.deepEqual(await order(), ['gamma', 'beta', 'alpha'], 'opening an older project does not shuffle the list')
   const t = await win.evaluate(() => [...document.querySelectorAll('video')].find(v => v.checkVisibility({ visibilityProperty: true })).currentTime)
   assert.ok(Math.abs(t - 2) < 0.2, `alpha's playhead stayed at 2 s (got ${t})`)
   await menu(app, 'Next Project')
   await win.waitForTimeout(300)
   assert.match(await shown(), /beta$/, 'Next Project goes to beta')
+  assert.deepEqual(await order(), ['gamma', 'beta', 'alpha'], 'next-project navigation keeps the creation order')
 
   // close beta (⌘W) → gamma (the right neighbour) is on screen
   await menu(app, 'Close Project')
@@ -61,6 +70,8 @@ try {
   await win.click('[data-project-row$="/gamma"] button:has-text("Delete")')
   await win.waitForSelector('[data-project-row$="/alpha"][aria-current="true"]')
   assert.equal(await openCount(), 1)
+  await win.getByRole('button', { name: 'Expand media', exact: true }).waitFor()
+  assert.equal(await win.locator('[data-project-file="media/alpha.mp4"]').count(), 0, 'per-project folder state survives app relaunch')
   assert.equal(existsSync(join(tmp, 'p', 'gamma')), false)
   await win.waitForTimeout(500) // the remaining open project is saved
   await app.close()

@@ -266,7 +266,7 @@ function Item({ m, project, results, busy, onAnswer, laterUser }: { m: Message; 
           }
           return <ToolCard key={c.id} call={call} result={r?.content} state={r ? (r.error ? 'error' : 'done') : busy ? 'running' : 'error'} />
         })}
-        {m.content && <ChatMarkdown text={String(m.content)} />}
+        {m.content && <ChatMarkdown text={String(m.content)} dir={project.dir} files={Object.keys(project.files || {})} />}
       </div>
     )
   }
@@ -310,7 +310,7 @@ function MentionList({ items, query, pick, onPick, onHover }: { items: Mention[]
   )
 }
 
-export function AgentPanel({ project, projectInfo, model, agent, anchor, onClearAnchor, attached = [], onAttach, onDetach, onAdd, onSend, onStop, ready, onKeys, inputRef, active = true, demoTools, demoToolsMessage, demoSetup, onAutoDemo }: {
+export function AgentPanel({ project, projectInfo, model, agent, anchor, onClearAnchor, attached = [], onAttach, onDetach, onAdd, onSend, onStop, ready, onKeys, inputRef, active = true, demoTools, demoToolsMessage }: {
   project: string
   projectInfo: Project
   model?: { provider: string; modelId: string }
@@ -331,8 +331,6 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
   inputRef: React.RefObject<HTMLTextAreaElement | null>
   demoTools?: ReactNode
   demoToolsMessage?: string
-  demoSetup?: ReactNode
-  onAutoDemo?(): void
 }) {
   const [text, setText] = useState('')
   const consents = useConsents().filter(c => c.project === project)
@@ -340,7 +338,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
   const results = resultsOf(agent.messages)
   const shown = agent.messages.filter(m => m.role === 'user' || m.role === 'assistant')
 
-  useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }) }, [agent.messages.length, agent.streaming?.text.length, Object.keys(agent.pending).length, consents.length, !!demoSetup])
+  useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }) }, [agent.messages.length, agent.streaming?.text.length, Object.keys(agent.pending).length, consents.length])
 
   const submit = () => { const t = text.trim(); if (!t && !attached.length) return; onSend(t); setText('') }
   // @ in the message box: a list of the project's files, versions and clips; picking one attaches it
@@ -417,7 +415,6 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
       </div>
       <div className="flex items-center gap-1 px-1.5 pb-1.5">
         {onAdd && <button onClick={onAdd} title="Add files" aria-label="Add files" className="flex size-7 items-center justify-center rounded-lg text-dim hover:bg-hover hover:text-fg"><Plus className="size-4" /></button>}
-        {onAutoDemo && <Button size="sm" variant="ghost" disabled={agent.busy} onClick={onAutoDemo}>Auto Demo</Button>}
         <span className="flex-1" />
         {agent.cost > 0 && <span className="px-1 text-[11px] text-faint tabular" title="Spent on AI in this project">${agent.cost.toFixed(agent.cost < 1 ? 3 : 2)}</span>}
         <ModelPicker dir={project} picked={model} />
@@ -434,7 +431,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
     <div className="flex h-full flex-col">
       <div ref={scroller} className="flex-1 overflow-y-auto">
         <div className={cn(col, 'space-y-5 pb-8 pt-3')}>
-        {empty && !demoSetup && (
+        {empty && (
           <div className="pt-[14vh] text-center">
             <ManulCompanion agent={agent} needsConsent={consents.length > 0} active={active} hero />
             <h2 className="font-serif text-[30px] font-normal tracking-[-0.01em]">What should change?</h2>
@@ -453,12 +450,10 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
         {agent.error && (
           <div className="flex gap-2 rounded-lg border border-bad/30 bg-bad/10 p-2.5 text-xs text-bad"><TriangleAlert className="mt-px size-3.5 shrink-0" /><span data-selectable>{agent.error}</span></div>
         )}
-        {demoSetup}
         </div>
       </div>
 
       <div data-tour="composer" className={cn(col, 'pb-5')}>
-        {!ready && onAutoDemo && <Button size="sm" variant="ghost" onClick={onAutoDemo}>Auto Demo</Button>}
         {!empty && <ManulCompanion agent={agent} needsConsent={consents.length > 0} active={active} />}
         {box}
       </div>

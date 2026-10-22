@@ -2,8 +2,9 @@
 import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
 import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { dirname, extname, join, resolve, sep } from 'node:path'
+import { copyFile, readFile } from 'node:fs/promises'
+import { basename, dirname, extname, join, resolve, sep } from 'node:path'
+import { artifactPath } from './artifacts'
 import { Readable } from 'node:stream'
 import { startAgent, type AgentHandle } from './agent'
 import { renderCuts } from './cuts'
@@ -556,7 +557,9 @@ async function exportFilm(p: Project, req: ExportRequest, outAbs: string, by: 'u
     let srt: string | undefined
     if (req.captions !== 'none') {
       j.progress(null, 'Captions')
-      const t = await transcriptOf(p, v.path, { ask: true })
+      const largeCache = Whisper.transcriptPathFor(v.path).replace(/\.json$/, '.large-v3.json')
+      const t = await Whisper.exportTranscript(join(p.dir, v.path), join(p.dir, largeCache), `Transcribing export captions with Large-v3`, p.dir)
+        || await transcriptOf(p, v.path, { ask: true })
       srt = outAbs.replace(/\.[^.]+$/, '.srt')
       await writeFile(srt, toSrt(t ? captionCues(t) : []))
     }
@@ -695,10 +698,10 @@ function wire() {
     })
     return r.canceled ? [] : r.filePaths
   })
-  ipcMain.handle('project:create', async (_e, files: string | string[]) => {
+  ipcMain.handle('project:create', async (_e, files: string | string[], model?: Project['model']) => {
     const sources = typeof files === 'string' ? [files] : files
     const created = await asJob(`Importing ${sources.length === 1 ? 'project files' : `${sources.length} items`}`, 'import', j => {
-      return Projects.createFromFiles(sources, (done, total, file) => j.progress(done / total, `${done} of ${total} · ${file}`))
+      return Projects.createFromFiles(sources, (done, total, file) => j.progress(done / total, `${done} of ${total} · ${file}`), model)
     }, { doneTitle: 'Project files imported' })
     const p = await openProject(created.dir)
     telemetry.track('project created', {})
@@ -731,6 +734,16 @@ function wire() {
     open.delete(dir)
   })
   ipcMain.handle('project:reveal', (_e, dir: string) => shell.openPath(dir))
+  ipcMain.handle('project:downloadFile', async (_e, dir: string, rel: string) => {
+    const file = await artifactPath(projectOf(dir).dir, rel)
+    const result = await dialog.showSaveDialog(win!, { title: 'Download file', defaultPath: join(app.getPath('downloads'), basename(file)) })
+    if (result.canceled || !result.filePath) return null
+    if (resolve(result.filePath) !== file) await copyFile(file, result.filePath)
+    return result.filePath
+  })
+  ipcMain.handle('project:revealFile', async (_e, dir: string, rel: string) => {
+    shell.showItemInFolder(await artifactPath(projectOf(dir).dir, rel))
+  })
   // ---------------------------------------------------------------- the browser panel and which browser the agent drives
   ipcMain.handle('browser:state', () => browser?.state() ?? { tabs: [], active: null, bsk: { connected: false, status: 'starting' } })
   ipcMain.on('browser:bounds', (_e, r) => browser?.setBounds(r))
@@ -859,6 +872,10 @@ function telemetryState(): TelemetryState {
 /** One 'agent run' per agent turn: the model, which of Manul's tools it called, how it ended. Never what was said. */
 const runs = new Map<string, { started: number; tools: string[]; failed: boolean }>()
 function agentRuns(dir: string, e: BaseEvent) {
+  if (e.type === 'RUN_FINISHED' || e.type === 'RUN_ERROR') {
+    const p = open.get(dir)
+    if (p) Projects.syncFiles(p).then(changed => { if (changed) return publish(p) }).catch(e => console.warn('generated files', e))
+  }
   const r = runs.get(dir)
   if (e.type === 'RUN_STARTED') runs.set(dir, { started: Date.now(), tools: [], failed: false })
   else if (r && e.type === 'TOOL_CALL_START') r.tools.push(String((e as { toolCallName?: string }).toolCallName))

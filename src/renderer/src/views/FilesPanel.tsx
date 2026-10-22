@@ -1,7 +1,7 @@
 // The files the user added to the project (footage, music, subtitles, fonts, LUTs…), what Manul made of each, and
 // deleting them: the Files in the sidebar's project tree. Clicking one attaches it to the next message, so the agent
 // knows to use it. Also the icons and chips for files the message box and the start screen use.
-import { Captions, File, Film, Folder, Image as ImageIcon, Music, Palette, ScrollText, Sparkles, Trash2, Type } from 'lucide-react'
+import { Captions, ChevronRight, Download, File, Film, Folder, FolderOpen, Image as ImageIcon, Music, Palette, Paperclip, ScrollText, Sparkles, Trash2, Type } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { cn, timecode } from '@/lib/utils'
 import { attachFiles, detachFiles, useAttached } from '@/lib/attach'
@@ -36,17 +36,29 @@ export function chipGroups(rels: string[]): { label: string; rels: string[] }[] 
   return out
 }
 
-type Row = { kind: 'file'; rel: string; depth: number } | { kind: 'folder'; name: string; rels: string[] }
+type Row = { kind: 'file'; rel: string; depth: number } | { kind: 'folder'; name: string; rels: string[]; depth: number }
 
-/** The list: top-level files, then each folder (media/<name>/…) with its files under it. */
-export function fileRows(rels: string[]): Row[] {
-  const sorted = [...rels].sort((a, b) => a.localeCompare(b))
-  const rows: Row[] = sorted.filter(r => r.split('/').length === 2).map(rel => ({ kind: 'file', rel, depth: 0 }))
-  const folders = [...new Set(sorted.filter(r => r.split('/').length > 2).map(r => r.split('/')[1]))]
-  for (const name of folders) {
-    const inside = sorted.filter(r => r.startsWith(`media/${name}/`))
-    rows.push({ kind: 'folder', name, rels: inside }, ...inside.map(rel => ({ kind: 'file' as const, rel, depth: 1 })))
+/** Explorer order: folders first, then files, with every directory level independently collapsible. */
+export function fileRows(rels: string[], collapsed: ReadonlySet<string> = new Set()): Row[] {
+  const rows: Row[] = []
+  const visit = (paths: string[], prefix: string, depth: number) => {
+    const folders = new Map<string, string[]>()
+    const files: string[] = []
+    for (const rel of paths) {
+      const rest = rel.slice(prefix.length)
+      if (!rest.includes('/')) files.push(rel)
+      else {
+        const name = `${prefix}${rest.split('/')[0]}`
+        folders.set(name, [...(folders.get(name) || []), rel])
+      }
+    }
+    for (const [name, inside] of [...folders].sort(([a], [b]) => a.localeCompare(b))) {
+      rows.push({ kind: 'folder', name, rels: inside, depth })
+      if (!collapsed.has(name)) visit(inside, `${name}/`, depth + 1)
+    }
+    rows.push(...files.map(rel => ({ kind: 'file' as const, rel, depth })))
   }
+  visit([...new Set(rels)].sort((a, b) => a.localeCompare(b)), '', 0)
   return rows
 }
 
@@ -66,12 +78,24 @@ function Remove({ label, onConfirm }: { label: string; onConfirm(): void }) {
 export const DRAG_FILE = 'manul/file'
 export const dragKind = (types: readonly string[]) => (types.find(t => t.startsWith('manul/kind-'))?.slice('manul/kind-'.length) as FileKind | undefined)
 
-/** The project's files, compact, for the sidebar's tree: click one to attach it to the next message (again to take it
- *  off), a folder to attach all of it; drag footage onto the timeline to put it in the film; the bin moves one to the
- *  Trash, after a second click. */
+/** Fold folders to navigate; their paperclip attaches all descendants. File clicks still attach to the next message. */
 export function FilesTree({ project }: { project: Project }) {
   const files = project.files || {}
-  const rows = fileRows(Object.keys(files))
+  const storageKey = `manul.tree.folders.${project.dir}`
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      return new Set(Array.isArray(stored) ? stored.filter((p): p is string => typeof p === 'string') : [])
+    } catch { return new Set() }
+  })
+  const toggleFolder = (name: string, expanded?: boolean) => setCollapsed(old => {
+    const next = new Set(old)
+    if (expanded ?? old.has(name)) next.delete(name)
+    else next.add(name)
+    try { localStorage.setItem(storageKey, JSON.stringify([...next])) } catch { /* private mode */ }
+    return next
+  })
+  const rows = fileRows(Object.keys(files), collapsed)
   const attached = useAttached(project.dir)
   const [kept, setKept] = useState<Record<string, string>>({})
   const remove = async (rels: string[]) => {
@@ -86,13 +110,18 @@ export function FilesTree({ project }: { project: Project }) {
     <ul data-files-tree>
       {rows.map(row => {
         if (row.kind === 'folder') {
+          const expanded = !collapsed.has(row.name)
           return (
-            <li key={`dir:${row.name}`} className="group flex items-center">
-              <button onClick={() => attachFiles(project.dir, row.rels)} title={`Attach all ${row.rels.length} files`}
-                className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[12.5px] text-dim hover:bg-hover/60 hover:text-fg">
-                <FileIcon kind="folder" /><span className="truncate">{row.name}</span><span className="ml-auto shrink-0 text-[11px] text-faint">{row.rels.length}</span>
+            <li key={`dir:${row.name}`} data-file-folder={row.name} className="group flex items-center" style={{ paddingLeft: row.depth * 12 }}>
+              <button type="button" onClick={() => toggleFolder(row.name)} aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} ${row.name}`} title={row.name}
+                onKeyDown={e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); toggleFolder(row.name, e.key === 'ArrowRight') } }}
+                className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-[12.5px] text-dim hover:bg-hover/60 hover:text-fg">
+                <ChevronRight className={cn('size-3 shrink-0 transition-transform', expanded && 'rotate-90')} />
+                {expanded ? <FolderOpen className="size-3.5 shrink-0" /> : <FileIcon kind="folder" />}
+                <span className="truncate">{row.name.split('/').pop()}</span><span className="ml-auto shrink-0 text-[11px] text-faint">{row.rels.length}</span>
               </button>
-              <Remove label={`the folder ${row.name}`} onConfirm={() => remove(row.rels)} />
+              <button type="button" onClick={() => attachFiles(project.dir, row.rels)} aria-label={`Attach all files in ${row.name}`} title={`Attach all ${row.rels.length} files`} className="shrink-0 rounded p-1 text-faint opacity-0 hover:bg-hover hover:text-fg focus:opacity-100 group-hover:opacity-100"><Paperclip className="size-3" /></button>
+              {row.name.startsWith('media/') && <Remove label={`the folder ${row.name.split('/').pop()}`} onConfirm={() => remove(row.rels)} />}
             </li>
           )
         }
@@ -101,7 +130,7 @@ export function FilesTree({ project }: { project: Project }) {
         const m = project.media[row.rel]
         const long = (f.kind === 'video' || f.kind === 'audio') && m?.duration ? timecode(m.duration, false) : ''
         return (
-          <li key={row.rel} className={cn('group flex items-center', row.depth && 'pl-3')}>
+          <li key={row.rel} data-project-file={row.rel} className="group flex items-center" style={{ paddingLeft: row.depth * 12 + 18 }}>
             <button
               draggable={f.kind === 'video'}
               onDragStart={e => { e.dataTransfer.setData(DRAG_FILE, row.rel); e.dataTransfer.setData(`manul/kind-${f.kind}`, '1'); e.dataTransfer.effectAllowed = 'copy' }}
@@ -111,10 +140,12 @@ export function FilesTree({ project }: { project: Project }) {
               className={cn('flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[12.5px] hover:bg-hover/60', on ? 'bg-amber-soft text-fg' : 'text-dim hover:text-fg')}
             >
               <FileIcon kind={f.kind} className={on ? 'text-amber' : undefined} />
-              <span className="truncate">{row.depth ? row.rel.split('/').slice(2).join('/') : row.rel.replace(/^media\//, '')}</span>
+              <span className="truncate">{row.rel.split('/').pop()}</span>
               {long && <span className="ml-auto shrink-0 text-[10.5px] tabular text-faint">{long}</span>}
             </button>
-            <Remove label={row.rel.split('/').pop()!} onConfirm={() => remove([row.rel])} />
+            <button type="button" aria-label={`Download ${row.rel.split('/').pop()}`} title="Download file" className="shrink-0 rounded p-1 text-faint hover:bg-hover hover:text-fg" onClick={() => window.manul.project.downloadFile(project.dir, row.rel).catch(e => alert((e as Error).message))}><Download className="size-3" /></button>
+            <button type="button" aria-label={`Show ${row.rel.split('/').pop()} in folder`} title="Show in folder" className="shrink-0 rounded p-1 text-faint hover:bg-hover hover:text-fg" onClick={() => window.manul.project.revealFile(project.dir, row.rel).catch(e => alert((e as Error).message))}><FolderOpen className="size-3" /></button>
+            {row.rel.startsWith('media/') && <Remove label={row.rel.split('/').pop()!} onConfirm={() => remove([row.rel])} />}
           </li>
         )
       })}
