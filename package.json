@@ -21,7 +21,9 @@
     "smoke": "electron-vite build && node scripts/smoke.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:delivery": "electron-vite build && node test/e2e/delivery.e2e.mjs && node test/e2e/files.e2e.mjs && node test/e2e/tabs.e2e.mjs",
     "test:mascot": "electron-vite build && node test/e2e/mascot.e2e.mjs",
+    "test:mascot-performance": "electron-vite build && node test/e2e/mascot-performance.e2e.mjs",
     "test:tour": "electron-vite build && node test/e2e/tour.e2e.mjs",
     "test:demo": "electron-vite build && node test/e2e/demo.e2e.mjs",
     "test:walkthrough": "electron-vite build && node test/e2e/walkthrough.e2e.mjs && node test/e2e/walkthrough.e2e.mjs --chrome",
@@ -31,7 +33,7 @@
     "postinstall": "node scripts/fetch-ffmpeg.mjs && node scripts/fetch-bsk.mjs && node scripts/fetch-models.mjs && node scripts/copy-libs.mjs",
     "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "fetch:bsk": "node scripts/fetch-bsk.mjs",
-    "test:e2e": "electron-vite build && node test/e2e/start.e2e.mjs && node test/e2e/playback.e2e.mjs && node test/e2e/filmstrip.e2e.mjs && node test/e2e/clips.e2e.mjs && node test/e2e/export.e2e.mjs && node test/e2e/menu.e2e.mjs && node test/e2e/proxy.e2e.mjs && node test/e2e/tabs.e2e.mjs && node test/e2e/resize.e2e.mjs && node test/e2e/inline.e2e.mjs && node test/e2e/drag.e2e.mjs && node test/e2e/files.e2e.mjs && node test/e2e/browser.e2e.mjs && node test/e2e/conversations.e2e.mjs && node test/e2e/tools.e2e.mjs && node test/e2e/providers.e2e.mjs && node test/e2e/manul-key.e2e.mjs",
+    "test:e2e": "electron-vite build && node test/e2e/start.e2e.mjs && node test/e2e/playback.e2e.mjs && node test/e2e/filmstrip.e2e.mjs && node test/e2e/clips.e2e.mjs && node test/e2e/export.e2e.mjs && node test/e2e/delivery.e2e.mjs && node test/e2e/menu.e2e.mjs && node test/e2e/proxy.e2e.mjs && node test/e2e/tabs.e2e.mjs && node test/e2e/resize.e2e.mjs && node test/e2e/inline.e2e.mjs && node test/e2e/drag.e2e.mjs && node test/e2e/files.e2e.mjs && node test/e2e/browser.e2e.mjs && node test/e2e/conversations.e2e.mjs && node test/e2e/tools.e2e.mjs && node test/e2e/providers.e2e.mjs && node test/e2e/manul-key.e2e.mjs",
     "package": "electron-vite build && electron-builder",
     "package:dir": "electron-vite build && electron-builder --dir"
   },

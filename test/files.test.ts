@@ -256,6 +256,30 @@ describe('files attached to a message', () => {
     expect(fileRows(paths)).toContainEqual({ kind: 'file', rel: 'renders/thumbs/social/cover.png', depth: 3 })
   })
 
+  it('handles empty trees, duplicate paths and stale collapsed folders without mutating inputs', () => {
+    const paths = ['z.txt', 'renders/b.txt', 'renders/a.txt', 'renders/a.txt', 'media/z.txt']
+    const original = [...paths]
+    const collapsed = new Set(['gone', 'renders-old'])
+    expect(fileRows([])).toEqual([])
+    expect(fileRows(paths, collapsed)).toEqual([
+      { kind: 'folder', name: 'media', rels: ['media/z.txt'], depth: 0 },
+      { kind: 'file', rel: 'media/z.txt', depth: 1 },
+      { kind: 'folder', name: 'renders', rels: ['renders/a.txt', 'renders/b.txt'], depth: 0 },
+      { kind: 'file', rel: 'renders/a.txt', depth: 1 },
+      { kind: 'file', rel: 'renders/b.txt', depth: 1 },
+      { kind: 'file', rel: 'z.txt', depth: 0 },
+    ])
+    expect(paths).toEqual(original)
+    expect([...collapsed]).toEqual(['gone', 'renders-old'])
+  })
+
+  it('uses full folder paths so identically named sibling folders collapse independently', () => {
+    const rows = fileRows(['media/docs/a.txt', 'outputs/docs/b.txt', 'outputs/docs-old/c.txt'], new Set(['outputs/docs']))
+    expect(rows).toContainEqual({ kind: 'file', rel: 'media/docs/a.txt', depth: 2 })
+    expect(rows).toContainEqual({ kind: 'file', rel: 'outputs/docs-old/c.txt', depth: 2 })
+    expect(rows.some(r => r.kind === 'file' && r.rel === 'outputs/docs/b.txt')).toBe(false)
+  })
+
   it("a folder's files collapse into one chip", () => {
     expect(chipGroups(['media/a.srt', 'media/kit/1.png', 'media/kit/2.png', 'media/kit/3.png', 'media/kit/4.png', 'media/two/x.txt']))
       .toEqual([{ label: 'a.srt', rels: ['media/a.srt'] }, { label: 'kit/ · 4 files', rels: ['media/kit/1.png', 'media/kit/2.png', 'media/kit/3.png', 'media/kit/4.png'] }, { label: 'two/x.txt', rels: ['media/two/x.txt'] }])

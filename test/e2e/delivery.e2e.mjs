@@ -1,0 +1,226 @@
+// Generated chat downloads and export-caption controls in Electron, with isolated profiles and no real model calls.
+// Native file downloads and cached-caption exports are real; optional model installation is simulated, never downloaded.
+import { _electron as electron } from 'playwright-core'
+import { dismissOnboarding } from './onboarding.mjs'
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
+
+const root = join(import.meta.dirname, '..', '..')
+const bin = join(root, 'resources', 'bin', `${process.platform}-${process.arch}`)
+const tmp = mkdtempSync(join(tmpdir(), 'manul-delivery-'))
+const tools = join(tmp, 'tools')
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/_API_KEY$|_TOKEN$/.test(k)))
+const launch = () => electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...env, ANTHROPIC_API_KEY: 'sk-ant-e2e-not-a-real-key', MANUL_PROJECTS: join(tmp, 'projects'), MANUL_TOOLS: tools } })
+execFileSync(join(bin, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=320x240:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'film.mp4')])
+execFileSync(join(bin, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=32x32', '-frames:v', '1', join(tmp, 'cover.png')])
+
+let app = await launch()
+try {
+  let win = await app.firstWindow()
+  await win.setViewportSize({ width: 1400, height: 860 })
+  await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win)
+  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, 'film.mp4'))
+  await win.click('[data-tour="import"]')
+  await win.locator('button:has(svg.lucide-arrow-up)').click()
+  await win.waitForSelector('video')
+  const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
+  const output = join(dir, 'renders', 'docs')
+  mkdirSync(output, { recursive: true })
+  writeFileSync(join(output, 'report.pdf'), '%PDF-1.4\nGenerated fixture\n%%EOF')
+  writeFileSync(join(dir, 'renders', 'my cover.png'), readFileSync(join(tmp, 'cover.png')))
+  await win.evaluate(d => window.manul.project.open(d), dir)
+  const file = win.locator('[data-project-file="renders/docs/report.pdf"]')
+  await file.waitFor()
+  assert.equal(await file.getByRole('button', { name: 'Delete report.pdf', exact: true }).count(), 0, 'generated files have no imported-file deletion control')
+
+  // Feed a committed assistant reply through the real AG-UI/preload bridge, not a component-only fixture.
+  await app.evaluate(({ BrowserWindow }, d) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html')).webContents.send('agui', d, {
+    type: 'MESSAGES_SNAPSHOT', messages: [{ id: 'delivery', role: 'assistant', content: '[Cover](renders/my%20cover.png) ![Preview](renders/my%20cover.png) [Report](renders/docs/report.pdf) [Missing image](renders/missing.png) [Web](https://example.com) [Unsafe](../secret.pdf)' }],
+  }), dir)
+  const cover = win.locator('[data-artifact="renders/my cover.png"]')
+  const report = win.locator('[data-artifact="renders/docs/report.pdf"]')
+  await cover.waitFor()
+  assert.equal(await cover.count(), 1, 'repeated image links produce one card')
+  await cover.locator('img').evaluate(img => img.decode())
+  assert.ok(await cover.locator('img').evaluate(img => img.naturalWidth > 0), 'preview loads through the media protocol')
+  assert.equal(await report.locator('img').count(), 0, 'PDFs do not get broken image previews')
+  await win.locator('[data-artifact="renders/missing.png"] img').waitFor({ state: 'hidden' })
+  const missing = win.locator('[data-artifact="renders/missing.png"]')
+  await missing.getByRole('button', { name: 'Download missing.png', exact: true }).click()
+  await missing.getByRole('alert').waitFor()
+  assert.match(await missing.getByRole('alert').innerText(), /ENOENT/, 'missing files show an actionable download error')
+  await missing.getByRole('button', { name: 'Show missing.png in folder', exact: true }).click()
+  await missing.getByRole('alert').waitFor()
+  assert.equal(await win.locator('[data-artifact="../secret.pdf"]').count(), 0)
+  assert.equal(await win.locator('[data-chat-markdown] a[href="https://example.com"]').getAttribute('target'), '_blank')
+
+  // Real save-copy IPC: success, cancellation, saving onto the original, errors and retry.
+  const saved = join(tmp, 'saved-report.pdf')
+  const saveTo = f => app.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: !file, filePath: file }) }, f)
+  await saveTo(saved)
+  await report.getByRole('button', { name: 'Download report.pdf', exact: true }).click()
+  await report.getByText('Saved', { exact: true }).waitFor()
+  assert.deepEqual(readFileSync(saved), readFileSync(join(output, 'report.pdf')))
+  await saveTo(null)
+  await report.getByRole('button', { name: 'Download report.pdf', exact: true }).click()
+  await report.getByText('Project file', { exact: true }).waitFor()
+  assert.equal(await report.getByRole('alert').count(), 0, 'cancelling is not an error')
+  await saveTo(realpathSync(join(output, 'report.pdf')))
+  await report.getByRole('button', { name: 'Download report.pdf', exact: true }).click()
+  await report.getByText('Saved', { exact: true }).waitFor()
+  assert.ok(readFileSync(join(output, 'report.pdf'), 'utf8').includes('Generated fixture'), 'saving onto itself preserves the source')
+  await saveTo(join(tmp, 'missing-directory', 'report.pdf'))
+  await report.getByRole('button', { name: 'Download report.pdf', exact: true }).click()
+  await report.getByRole('alert').waitFor()
+  assert.ok(!(await report.getByRole('alert').innerText()).includes('Error invoking remote method'), 'IPC wrapper is removed from errors')
+  await saveTo(saved)
+  await report.getByRole('button', { name: 'Download report.pdf', exact: true }).click()
+  await report.getByText('Saved', { exact: true }).waitFor()
+  assert.equal(await report.getByRole('alert').count(), 0, 'successful retry clears the error')
+
+  await app.evaluate(({ dialog }) => { dialog.showSaveDialog = () => new Promise(resolve => { globalThis.__save = resolve }) })
+  const download = report.getByRole('button', { name: 'Download report.pdf', exact: true })
+  await download.click()
+  assert.equal(await download.isDisabled(), true, 'duplicate downloads are disabled while the save dialog is pending')
+  await app.evaluate(() => globalThis.__save({ canceled: true }))
+  await report.getByText('Project file', { exact: true }).waitFor()
+  await win.waitForFunction(() => !document.querySelector('[data-artifact="renders/docs/report.pdf"] button[aria-label="Download report.pdf"]').disabled)
+
+  await app.evaluate(({ shell }) => { globalThis.__revealed = []; shell.showItemInFolder = p => { globalThis.__revealed.push(p) } })
+  await report.getByRole('button', { name: 'Show report.pdf in folder', exact: true }).click()
+  await saveTo(join(tmp, 'sidebar-report.pdf'))
+  await file.getByRole('button', { name: 'Download report.pdf', exact: true }).click()
+  await win.waitForFunction(() => !document.querySelector('[data-project-file="renders/docs/report.pdf"] button[aria-pressed]').getAttribute('aria-pressed').includes('true'))
+  await file.getByRole('button', { name: 'Show report.pdf in folder', exact: true }).click()
+  await app.evaluate(() => { if (globalThis.__revealed.length !== 2) throw new Error('Both chat and sidebar must reveal the file') })
+  assert.deepEqual(readFileSync(join(tmp, 'sidebar-report.pdf')), readFileSync(saved))
+  assert.equal(await file.locator('button[aria-pressed]').getAttribute('aria-pressed'), 'false', 'download/reveal must not attach files')
+  const blocked = await win.evaluate(async d => {
+    const errors = []
+    for (const action of ['downloadFile', 'revealFile']) {
+      try { await window.manul.project[action](d, '../secret.pdf') }
+      catch (e) { errors.push(e.message) }
+    }
+    return errors
+  }, dir)
+  assert.equal(blocked.length, 2, 'both IPC actions reject out-of-project paths')
+
+  // Caption UI installation state is simulated at IPC; opening/choosing captions never starts a download.
+  await app.evaluate(({ ipcMain }) => {
+    globalThis.__installs = []
+    globalThis.__exports = []
+    globalThis.__largeInstalled = false
+    ipcMain.removeHandler('tools:list')
+    ipcMain.handle('tools:list', () => [{ id: 'whisper-large-v3', installed: globalThis.__largeInstalled }])
+    ipcMain.removeHandler('tools:install')
+    ipcMain.handle('tools:install', (_e, id) => { globalThis.__installs.push(id); throw new Error('Download interrupted') })
+    ipcMain.removeHandler('export:run')
+    ipcMain.handle('export:run', (_e, d, req) => { globalThis.__exports.push({ dir: d, ...req }); return null })
+  })
+  await win.getByRole('button', { name: 'Export', exact: true }).click()
+  const dialog = win.getByRole('dialog', { name: 'Export', exact: true })
+  const upgrade = dialog.getByRole('button', { name: 'Download Whisper Large-v3 · 3.1 GB', exact: true })
+  const exportButton = dialog.getByRole('button', { name: 'Export', exact: true })
+  await upgrade.waitFor()
+  const captionChoice = dialog.getByRole('button', { name: 'Separate .srt', exact: true })
+  await captionChoice.waitFor()
+  const captionBottom = await captionChoice.evaluate(el => el.getBoundingClientRect().bottom)
+  assert.ok(await upgrade.evaluate(el => el.getBoundingClientRect().top) >= captionBottom, 'upgrade button stays below caption choices')
+  await dialog.getByRole('button', { name: 'Separate .srt', exact: true }).click()
+  await dialog.getByText('Using your current transcription model.', { exact: true }).waitFor()
+  assert.deepEqual(await app.evaluate(() => globalThis.__installs), [])
+  await dialog.getByRole('button', { name: 'About Whisper Large-v3', exact: true }).focus()
+  await win.getByRole('tooltip').filter({ hasText: 'needs more memory and processing time' }).waitFor()
+  await exportButton.focus()
+  await win.getByRole('tooltip').waitFor({ state: 'detached' })
+  await dialog.getByRole('button', { name: 'Tips for better captions', exact: true }).focus()
+  await win.getByRole('tooltip').filter({ hasText: 'avoid adding a second set' }).waitFor()
+  await exportButton.focus()
+  await win.getByRole('tooltip').waitFor({ state: 'detached' })
+  await upgrade.click()
+  await dialog.getByRole('alert').waitFor()
+  assert.equal(await dialog.getByRole('alert').innerText(), 'Download interrupted')
+  assert.equal(await upgrade.isEnabled(), true, 'failed download can be retried')
+
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('tools:install')
+    ipcMain.handle('tools:install', (_e, id) => {
+      globalThis.__installs.push(id)
+      return new Promise(resolve => { globalThis.__finishInstall = () => { globalThis.__largeInstalled = true; resolve() } })
+    })
+  })
+  await upgrade.click()
+  const downloading = dialog.getByRole('button', { name: 'Downloading… See jobs for progress', exact: true })
+  await downloading.waitFor()
+  assert.equal(await downloading.isDisabled(), true)
+  assert.equal(await exportButton.isDisabled(), true, 'caption exports wait for model installation')
+  assert.equal(await dialog.getByRole('alert').count(), 0, 'retry clears the previous error')
+  await dialog.getByRole('button', { name: 'None', exact: true }).click()
+  assert.equal(await exportButton.isEnabled(), true, 'caption-free export does not wait for an optional model')
+  await exportButton.click()
+  await dialog.getByRole('button', { name: 'In the picture', exact: true }).click()
+  assert.equal(await exportButton.isDisabled(), true)
+  await app.evaluate(() => globalThis.__finishInstall())
+  await dialog.getByText('Whisper Large-v3 installed', { exact: true }).waitFor()
+  await dialog.getByText('Using Whisper Large-v3 for export captions.', { exact: true }).waitFor()
+  await exportButton.click()
+  await dialog.getByRole('button', { name: 'Separate .srt', exact: true }).click()
+  await exportButton.click()
+  assert.deepEqual(await app.evaluate(() => globalThis.__exports.map(r => r.captions)), ['none', 'burn', 'srt'])
+  assert.deepEqual(await app.evaluate(() => globalThis.__installs), ['whisper-large-v3', 'whisper-large-v3'])
+  await win.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'detached' })
+  await win.getByRole('button', { name: 'Export', exact: true }).click()
+  await dialog.getByText('Whisper Large-v3 installed', { exact: true }).waitFor()
+  assert.equal(await upgrade.count(), 0, 'installed model is not offered for download again')
+  await win.keyboard.press('Escape')
+
+  // Relaunch with fixture caches. This tests the actual export handler and FFmpeg, but not Large-v3 inference.
+  await app.close()
+  const project = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
+  const src = project.versions.find(v => v.id === project.current).path
+  const baseCache = `transcripts/${basename(src, '.mp4')}.json`
+  const largeCache = baseCache.replace(/\.json$/, '.large-v3.json')
+  const transcript = (model, text) => ({ media: basename(src), model, language: 'en', createdAt: 1, segments: [{ s: 0, e: 0.8, text, words: text.split(' ').map((w, i) => ({ w, s: i * 0.2, e: (i + 1) * 0.2 })) }] })
+  mkdirSync(join(dir, 'transcripts'), { recursive: true })
+  const baseText = JSON.stringify(transcript('whisper.cpp · base (bundled)', 'Base caption fixture'))
+  writeFileSync(join(dir, baseCache), baseText)
+  writeFileSync(join(dir, largeCache), JSON.stringify(transcript('whisper.cpp · large-v3 (export)', 'Large caption fixture')))
+  project.transcripts = { ...project.transcripts, [src]: baseCache }
+  writeFileSync(join(dir, 'project.json'), JSON.stringify(project))
+  mkdirSync(join(tools, 'whisper-large-v3'), { recursive: true })
+  writeFileSync(join(tools, 'whisper-large-v3', '.installed.json'), '{"version":"test-cache-fixture"}')
+  writeFileSync(join(tools, 'whisper-large-v3', 'ggml-large-v3.bin'), '')
+  app = await launch()
+  win = await app.firstWindow()
+  await win.waitForSelector('video')
+  const exportCached = async (captions, name) => {
+    await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }) }, join(tmp, name))
+    await win.getByRole('button', { name: 'Export', exact: true }).click()
+    const d = win.getByRole('dialog', { name: 'Export', exact: true })
+    await d.getByRole('button', { name: captions, exact: true }).click()
+    await d.getByRole('button', { name: 'Export', exact: true }).click()
+    await d.getByRole('button', { name: 'Show', exact: true }).waitFor({ timeout: 60000 })
+    await win.keyboard.press('Escape')
+    await d.waitFor({ state: 'detached' })
+  }
+  await exportCached('Separate .srt', 'large.mp4')
+  assert.match(readFileSync(join(tmp, 'large.srt'), 'utf8'), /Large caption fixture/)
+  assert.ok(!readFileSync(join(tmp, 'large.srt'), 'utf8').includes('Base caption fixture'))
+  await exportCached('In the picture', 'burn.mp4')
+  assert.ok(existsSync(join(tmp, 'burn.mp4')))
+  assert.ok(!existsSync(join(tmp, 'burn.srt')), 'burned captions do not create a sidecar')
+  writeFileSync(join(dir, largeCache), '{broken cache must not be read for caption-free export')
+  await exportCached('None', 'plain.mp4')
+  assert.ok(!existsSync(join(tmp, 'plain.srt')))
+  assert.equal(readFileSync(join(dir, largeCache), 'utf8'), '{broken cache must not be read for caption-free export')
+  await win.evaluate(() => window.manul.tools.remove('whisper-large-v3'))
+  await exportCached('Separate .srt', 'base.mp4')
+  assert.match(readFileSync(join(tmp, 'base.srt'), 'utf8'), /Base caption fixture/, 'without the upgrade, exports reuse the editing transcript')
+  assert.equal(readFileSync(join(dir, baseCache), 'utf8'), baseText, 'export upgrade never overwrites editing transcripts')
+  console.log('delivery e2e: ok (chat downloads, caption UI, cached Large-v3 exports)')
+} finally { await app.close() }

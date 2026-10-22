@@ -10,6 +10,7 @@ import type { Section } from '@/views/SettingsDialog'
 import { FilesTree } from '@/views/FilesPanel'
 import { pickFiles } from '@/lib/attach'
 import type { Project, RecentProject } from '../../../shared/types'
+import { newestProjects } from '../../../shared/project-order'
 
 export function SidebarToggle({ onClick, side = 'bottom' }: { onClick(): void; side?: 'bottom' | 'right' }) {
   return (
@@ -109,10 +110,13 @@ export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onDele
   useEffect(() => { window.manul.project.recent().then(setRecent).catch(() => {}) }, [open.join('\n'), active])
   const info = (d: string) => live[d] ?? loaded[d]
 
-  // every project: open ones first if they're not in the recent list yet, then the recent ones
+  // Open and recent projects share one stable creation order; switching the active project never promotes it.
   const rows = useMemo(() => {
     const seen = new Set(recent.map(r => r.dir))
-    const all = [...open.filter(d => !seen.has(d)).map(d => ({ dir: d, title: info(d)?.title || d.split('/').pop()! })), ...recent]
+    const all = newestProjects([
+      ...open.filter(d => !seen.has(d)).map(d => ({ dir: d, title: info(d)?.title || d.split('/').pop()!, createdAt: info(d)?.createdAt })),
+      ...recent.map(r => ({ ...r, createdAt: info(r.dir)?.createdAt ?? r.createdAt })),
+    ])
     const needle = q.trim().toLowerCase()
     return needle ? all.filter(r => r.title.toLowerCase().includes(needle)) : all
   }, [recent, open, q, live, loaded]) // eslint-disable-line react-hooks/exhaustive-deps

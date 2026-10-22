@@ -133,7 +133,7 @@ export type GalleryExample = {
   poster: string
 }
 
-export type RecentProject = { id: string; title: string; dir: string; openedAt: number; thumb?: string }
+export type RecentProject = { id: string; title: string; dir: string; openedAt: number; createdAt?: number; thumb?: string }
 
 export type KeyInfo = { env: string; label: string; unlocks: string[]; hint: string; set: boolean }
 /** Who is signed in to Manul (never their key), and whether this build can sign in at all. */

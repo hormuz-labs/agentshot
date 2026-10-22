@@ -91,10 +91,12 @@ describe('custom providers: stored, imported, used by the agent', () => {
         const context = { messages: [{ role: 'user', content: 'hi', timestamp: Date.now() }] }
         const reply = await (models as any).completeSimple(model, context)
         expect(reply.stopReason).not.toBe('error')
-        const low = await (models as any).completeSimple(model, context, { reasoning: 'low' })
-        expect(low.stopReason).not.toBe('error')
+        for (const reasoning of ['off', 'low', 'medium', 'high']) {
+          const reply = await (models as any).completeSimple(model, context, { reasoning })
+          expect(reply.stopReason).not.toBe('error')
+        }
       }
-      expect(efforts).toEqual(['high', 'low', 'high', 'low'])
+      expect(efforts).toEqual(['high', 'high', 'low', 'medium', 'high', 'high', 'high', 'low', 'medium', 'high'])
     } finally {
       await new Promise<void>((resolve, reject) => endpoint.close(e => e ? reject(e) : resolve()))
     }

@@ -698,10 +698,10 @@ function wire() {
     })
     return r.canceled ? [] : r.filePaths
   })
-  ipcMain.handle('project:create', async (_e, files: string | string[]) => {
+  ipcMain.handle('project:create', async (_e, files: string | string[], model?: Project['model']) => {
     const sources = typeof files === 'string' ? [files] : files
     const created = await asJob(`Importing ${sources.length === 1 ? 'project files' : `${sources.length} items`}`, 'import', j => {
-      return Projects.createFromFiles(sources, (done, total, file) => j.progress(done / total, `${done} of ${total} · ${file}`))
+      return Projects.createFromFiles(sources, (done, total, file) => j.progress(done / total, `${done} of ${total} · ${file}`), model)
     }, { doneTitle: 'Project files imported' })
     const p = await openProject(created.dir)
     telemetry.track('project created', {})
