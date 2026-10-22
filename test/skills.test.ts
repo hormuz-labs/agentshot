@@ -33,6 +33,23 @@ describe('skills and profiles', () => {
     expect(s.list().find(k => k.id === 'web')?.description).toBe('Drive a browser: read pages, fill forms.')
   })
 
+  it('reads CRLF frontmatter including folded descriptions', () => {
+    const { s, bundled } = setup()
+    mkdirSync(join(bundled, 'windows'))
+    writeFileSync(join(bundled, 'windows', 'SKILL.md'), '---\r\nname: windows\r\ndescription: >\r\n  Native commands,\r\n  portable paths.\r\n---\r\nbody\r\n')
+    expect(s.list().find(k => k.id === 'windows')).toMatchObject({ name: 'windows', description: 'Native commands, portable paths.' })
+  })
+
+  it('avoids Windows reserved profile filenames', () => {
+    const { s } = setup()
+    for (const name of ['CON', 'prn', 'aux', 'NUL', 'COM1', 'lpt9']) {
+      const p = s.createProfile(name)
+      expect(p.id).toBe(`${name.toLowerCase()}-profile`)
+      s.useProfile(p.id)
+      expect(s.profile().id).toBe(p.id)
+    }
+  })
+
   it('the default profile has every skill on', () => {
     const { s } = setup()
     expect(s.profile()).toMatchObject({ id: 'default' })

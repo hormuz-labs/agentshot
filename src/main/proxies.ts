@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, rename, rm, stat } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, join, posix } from 'node:path'
 import { asJob } from './jobs'
 import { FFMPEG, probe } from './media'
 import { needsProxy, proxyArgs, type PreviewState } from '../shared/proxy'
@@ -11,7 +11,7 @@ import type { Project } from '../shared/types'
 
 type Runner = (args: string[], cwd: string, progress: (p: number) => void, duration: number) => Promise<void>
 const run: Runner = (args, cwd, progress, duration) => new Promise((ok, fail) => {
-  const child = spawn(FFMPEG, ['-y', '-v', 'error', '-progress', 'pipe:1', '-nostats', ...args], { cwd })
+  const child = spawn(FFMPEG, ['-y', '-v', 'error', '-progress', 'pipe:1', '-nostats', ...args], { cwd, windowsHide: true })
   let err = '', pending = ''
   child.stdout.on('data', d => {
     pending += d
@@ -51,7 +51,7 @@ export class PreviewCopies {
     const source = join(p.dir, media), info = p.media[media]
     const st = await stat(source)
     const hash = createHash('sha256').update(`${media}:${st.size}:${st.mtimeMs}:v2`).digest('hex').slice(0, 12)
-    const out = join('proxies', `${basename(media).replace(/\.[^.]+$/, '')}-${hash}.mp4`)
+    const out = posix.join('proxies', `${basename(media).replace(/\.[^.]+$/, '')}-${hash}.mp4`)
     const old = p.proxies?.[media]
     // Recover old projects and interrupted renders. A mapped path alone is not evidence of a playable preview.
     const valid = async (rel: string) => {

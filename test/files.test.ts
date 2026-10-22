@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFile
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
+import AdmZip from 'adm-zip'
 import { FFMPEG, FONTS_DIR, probe } from '../src/main/media'
 import * as Files from '../src/main/files'
 import { kindByName } from '../src/shared/file-kinds'
@@ -35,8 +36,11 @@ beforeAll(() => {
   mkdirSync(join(src, 'Brand Kit', 'fonts'), { recursive: true })
   writeFileSync(join(src, 'Brand Kit', '.DS_Store'), 'x')
   writeFileSync(join(src, 'Brand Kit', 'colours.txt'), 'Orange #F2A541\nInk #111111\n')
-  execFileSync('cp', [join(FONTS_DIR, 'Inter-Bold.ttf'), join(src, 'Brand Kit', 'fonts', 'Brand-Bold.ttf')])
-  execFileSync('zip', ['-q', '-r', join(src, 'kit.zip'), 'Brand Kit', '-x', '*.DS_Store'], { cwd: src })
+  copyFileSync(join(FONTS_DIR, 'Inter-Bold.ttf'), join(src, 'Brand Kit', 'fonts', 'Brand-Bold.ttf'))
+  const zip = new AdmZip()
+  zip.addFile('Brand Kit/colours.txt', readFileSync(join(src, 'Brand Kit', 'colours.txt')))
+  zip.addFile('Brand Kit/fonts/Brand-Bold.ttf', readFileSync(join(src, 'Brand Kit', 'fonts', 'Brand-Bold.ttf')))
+  zip.writeZip(join(src, 'kit.zip'))
 })
 
 describe('what a file is', () => {
@@ -191,7 +195,7 @@ describe('adding files to a project', () => {
     const kit = await Projects.addFiles(p, join(src, 'Brand Kit'))
     p.subtitles = { 'media/clip.mp4': { file: srt, match: 0.9, offset: 0 } }
     const trashed: string[] = []
-    const trash = async (abs: string) => { trashed.push(abs.slice(p.dir.length + 1)); rmSync(abs, { recursive: true }) }
+    const trash = async (abs: string) => { trashed.push(abs.slice(p.dir.length + 1).replace(/\\/g, '/')); rmSync(abs, { recursive: true }) }
 
     let r = await Projects.removeFiles(p, [srt, 'media/clip.mp4'], trash)
     expect(r).toEqual({ removed: [srt], blocked: [{ file: 'media/clip.mp4', why: 'it is the version “Original”' }] })

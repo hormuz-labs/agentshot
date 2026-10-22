@@ -4,9 +4,10 @@
 // commands run inside the operating system's sandbox: Seatbelt (sandbox-exec) on macOS, Landlock (manul-fence) on Linux.
 import { existsSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, resolve, sep } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { FileError } from '@earendil-works/pi-durable/env'
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node'
+import { isWithinDir } from './paths'
 
 export type Fence = { rw: string[]; ro: string[] }
 
@@ -25,11 +26,12 @@ export function realish(p: string): string {
   return tail.length ? join(real, ...tail) : real
 }
 
-const within = (p: string, root: string) => p === root || p.startsWith(root.endsWith(sep) ? root : root + sep)
+const within = (p: string, root: string) =>
+  (process.platform === 'win32' ? p.toLowerCase() === root.toLowerCase() : p === root) || isWithinDir(root, p)
 
 /** The folders the agent may use: the project, temp, Manul's bundled resources, and the private browser's home. */
 export function fenceFor(o: { project: string; resources: string; extraRw?: string[]; extraRo?: string[] }): Fence {
-  const tmp = [tmpdir(), process.platform === 'darwin' ? '/private/tmp' : '/tmp']
+  const tmp = [tmpdir(), ...(process.platform === 'win32' ? [] : [process.platform === 'darwin' ? '/private/tmp' : '/tmp'])]
   return {
     rw: [o.project, ...tmp, ...(o.extraRw || [])].map(realish),
     ro: [o.resources, ...(o.extraRo || [])].map(realish),

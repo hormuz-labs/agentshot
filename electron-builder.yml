@@ -1,4 +1,4 @@
-# Packaging: macOS (.dmg + .zip for updates), Linux (.deb + AppImage). Release builds run in CI (.github/workflows).
+# Native packaging: macOS (.dmg + .zip), Linux (.deb + AppImage), Windows x64 (per-user NSIS).
 appId: com.hormuzlabs.manul
 productName: Manul
 copyright: Copyright © 2026 Hormuz Labs
@@ -18,7 +18,7 @@ extraResources:
     to: icon.png
   - from: resources/bin/${platform}-${arch}
     to: bin
-    filter: ["ffmpeg", "ffprobe", "whisper-cli", "manul-beats", "manul-speakers", "manul-vision", "manul-fence", "bsk"]
+    filter: ["ffmpeg", "ffprobe", "whisper-cli", "manul-beats", "manul-speakers", "manul-vision", "manul-fence", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
   - from: resources/lib
     to: lib
   - from: resources/models
@@ -37,6 +37,8 @@ extraResources:
     filter: ["catalog.json", "posters/*.jpg"]
   - from: THIRD_PARTY_NOTICES.md
     to: THIRD_PARTY_NOTICES.md
+  - from: LICENSE
+    to: LICENSE
   - from: LICENSES/three-MIT.txt
     to: LICENSES/three-MIT.txt
   - from: LICENSES/driver-MIT.txt
@@ -55,6 +57,28 @@ mac:
 dmg:
   title: Manul
   artifactName: Manul-${version}-${arch}.dmg
+win:
+  executableName: Manul
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: Manul-${version}-windows-${arch}-Setup.exe
+  verifyUpdateCodeSignature: true
+  signtoolOptions:
+    signingHashAlgorithms: [sha256]
+    # Exact publisherName is injected from WINDOWS_PUBLISHER_NAME by scripts/package.mjs.
+nsis:
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  runAfterFinish: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Manul
+  deleteAppDataOnUninstall: false
+  uninstallDisplayName: Manul
+  # No acceptance page or directory wizard. LICENSE still ships in extraResources.
 linux:
   category: AudioVideo
   icon: build/icons

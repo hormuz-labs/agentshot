@@ -3,6 +3,7 @@
 // and the render (ffmpeg) follow the same envelope.
 import { length, type Timeline } from './timeline'
 import type { Transcript } from './types'
+import { escapeFilterPath } from './ffmpeg'
 
 export type Mix = { filmDb: number; music?: { src: string; db: number; duckDb: number } }
 export type Region = [number, number]
@@ -102,7 +103,7 @@ export function mixArgs(o: { dry: string; duration: number; mix: Mix; commands?:
   const film = `[0:a]volume=${mix.filmDb}dB[af]`
   if (!mix.music) return ['-i', o.dry, '-filter_complex', film, '-map', '0:v', '-map', '[af]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', o.out]
   const music = `[1:a]atrim=0:${total},asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${mix.music.db}dB` +
-    `${o.commands ? `,asendcmd=f=${o.commands},volume@duck=1` : ''},afade=t=in:d=1,afade=t=out:st=${Math.max(0, r3(total - 2))}:d=2[mus]`
+    `${o.commands ? `,asendcmd=f=${escapeFilterPath(o.commands)},volume@duck=1` : ''},afade=t=in:d=1,afade=t=out:st=${Math.max(0, r3(total - 2))}:d=2[mus]`
   return ['-i', o.dry, '-stream_loop', '-1', '-i', mix.music.src,
     '-filter_complex', `${film};${music};[af][mus]amix=inputs=2:duration=first:normalize=0[am]`,
     '-map', '0:v', '-map', '[am]', '-t', String(total), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', o.out]

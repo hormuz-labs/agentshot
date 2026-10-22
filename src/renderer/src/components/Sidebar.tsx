@@ -11,6 +11,7 @@ import { FilesTree } from '@/views/FilesPanel'
 import { pickFiles } from '@/lib/attach'
 import type { Project, RecentProject } from '../../../shared/types'
 import { newestProjects } from '../../../shared/project-order'
+import { pathBasename } from '../../../shared/paths'
 
 export function SidebarToggle({ onClick, side = 'bottom' }: { onClick(): void; side?: 'bottom' | 'right' }) {
   return (
@@ -114,7 +115,7 @@ export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onDele
   const rows = useMemo(() => {
     const seen = new Set(recent.map(r => r.dir))
     const all = newestProjects([
-      ...open.filter(d => !seen.has(d)).map(d => ({ dir: d, title: info(d)?.title || d.split('/').pop()!, createdAt: info(d)?.createdAt })),
+      ...open.filter(d => !seen.has(d)).map(d => ({ dir: d, title: info(d)?.title || pathBasename(d), createdAt: info(d)?.createdAt })),
       ...recent.map(r => ({ ...r, createdAt: info(r.dir)?.createdAt ?? r.createdAt })),
     ])
     const needle = q.trim().toLowerCase()

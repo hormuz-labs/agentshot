@@ -11,19 +11,19 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const BIN = join(root, 'resources', 'bin', `${process.platform}-${process.arch}`)
 const tmp = mkdtempSync(join(tmpdir(), 'manul-files-'))
 const shots = process.env.MANUL_E2E_SHOTS
-execFileSync(join(BIN, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:r=25:d=4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'film.mp4')])
+execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:r=25:d=4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'film.mp4')])
 writeFileSync(join(tmp, 'film.srt'), '1\n00:00:00,500 --> 00:00:02,000\nHello there\n\n2\n00:00:02,200 --> 00:00:03,500\nGoodbye\n')
 writeFileSync(join(tmp, 'notes.md'), 'Colours: keep it warm.\n')
 mkdirSync(join(tmp, 'Brand Kit'))
 writeFileSync(join(tmp, 'Brand Kit', 'colours.txt'), 'Orange #F2A541\n')
 copyFileSync(join(root, 'resources', 'fonts', 'Inter-Bold.ttf'), join(tmp, 'Brand Kit', 'Brand-Bold.ttf'))
-execFileSync(join(BIN, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x240:r=30:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'b.mp4')])
-execFileSync(join(BIN, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=duration=3', join(tmp, 'song.mp3')])
+execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x240:r=30:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'b.mp4')])
+execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=duration=3', join(tmp, 'song.mp3')])
 
 // no real keys reach the app: a fake one makes the agent "ready" without ever reaching a paid model
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/_API_KEY$|_TOKEN$/.test(k)))

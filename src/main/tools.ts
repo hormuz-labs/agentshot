@@ -6,8 +6,8 @@ import { app } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { mkdir, open, rename, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, mkdir, open, readdir, rename, rm } from 'node:fs/promises'
+import { basename, join, win32 } from 'node:path'
 import { promisify } from 'node:util'
 import { asJob, type JobHandle } from './jobs'
 import type { OnDemandTool } from '../shared/types'
@@ -19,12 +19,14 @@ const dir = (id: string) => join(toolsRoot(), id)
 const stamp = (id: string) => join(dir(id), '.installed.json')
 
 // ---------------------------------------------------------------- pinned downloads
-const UV_VERSION = '0.12.23'
-const UV_BUILDS: Record<string, { target: string; sha256: string }> = {
+export const UV_VERSION = '0.12.23'
+export const UV_BUILDS: Record<string, { target: string; sha256: string }> = {
   'darwin-arm64': { target: 'aarch64-apple-darwin', sha256: '50487ae565ccd96e499056b4674d438f4c53170202617b4c759defe0c6a1b544' },
   'darwin-x64': { target: 'x86_64-apple-darwin', sha256: '960da44cb4b73685206ddd250b19e0a117fa41095710c1038f081f5cb613efb4' },
   'linux-x64': { target: 'x86_64-unknown-linux-gnu', sha256: '9167d72b3319674b6303c4cbe071854bba13ebdf3d76b1a7cbdc175471fb66d6' },
   'linux-arm64': { target: 'aarch64-unknown-linux-gnu', sha256: '6524bd338177ed50d035d39354e12545e993bbeba2ecbddf0480c5b3a81d313f' },
+  'win32-x64': { target: 'x86_64-pc-windows-msvc', sha256: '75d05de6762778c31ee183398de7dd15093fad0ed90b1f236d8205ea5ec00c90' },
+  'win32-arm64': { target: 'aarch64-pc-windows-msvc', sha256: '13294e232ececbe709c06b74e6ced06f2a225ea5591476685362f22be56a50d5' },
 }
 const PYTHON = '3.12'
 const FASTER_WHISPER = '1.2.1'
@@ -45,11 +47,21 @@ const DEFS: Def[] = [
     async install(j) {
       const build = UV_BUILDS[`${process.platform}-${process.arch}`]
       if (!build) throw new Error(`No uv build for ${process.platform}-${process.arch}`)
-      const url = `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${build.target}.tar.gz`
-      const tgz = join(dir('uv'), 'uv.tar.gz')
-      await download(url, tgz, build.sha256, j, 'Downloading uv')
-      await run('tar', ['-xzf', tgz, '-C', dir('uv'), '--strip-components', '1'])
-      await rm(tgz)
+      const ext = process.platform === 'win32' ? 'zip' : 'tar.gz'
+      const url = `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${build.target}.${ext}`
+      const archive = join(dir('uv'), `uv.${ext}`)
+      await download(url, archive, build.sha256, j, 'Downloading uv')
+      if (process.platform === 'win32') {
+        // .NET paths are literal, unlike Expand-Archive's wildcard-sensitive DestinationPath.
+        const quote = (s: string) => `'${s.replace(/'/g, "''")}'`
+        await run(windowsPowerShell(), ['-NoProfile', '-NonInteractive', '-Command',
+          `$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; ` +
+          `[System.IO.Compression.ZipFile]::ExtractToDirectory(${quote(archive)}, ${quote(dir('uv'))})`], { windowsHide: true })
+      } else {
+        await run('tar', ['-xzf', archive, '-C', dir('uv'), '--strip-components', '1'], { windowsHide: true })
+      }
+      if (!existsSync(uvBin())) throw new Error('The uv archive did not contain the expected executable.')
+      await rm(archive)
       return UV_VERSION
     },
   },
@@ -88,10 +100,17 @@ const DEFS: Def[] = [
 ]
 
 // ---------------------------------------------------------------- paths other modules use
+/** Never let Windows executable lookup select a project-supplied powershell.exe or pwsh.exe. */
+export function windowsPowerShell(): string {
+  const root = process.env.SystemRoot || 'C:\\Windows'
+  if (!/^[a-z]:[\\/]/i.test(root)) throw new Error('SystemRoot must be an absolute Windows drive path.')
+  return win32.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+}
+
 export const whisperModelPath = () => join(dir('whisper-model'), 'ggml-base.bin')
 export const whisperLargeModelPath = () => join(dir('whisper-large-v3'), 'ggml-large-v3.bin')
 export const uvBin = () => join(dir('uv'), process.platform === 'win32' ? 'uv.exe' : 'uv')
-export const venvPython = (id: string) => join(dir(id), 'venv', 'bin', 'python')
+export const venvPython = (id: string) => process.platform === 'win32' ? join(dir(id), 'venv', 'Scripts', 'python.exe') : join(dir(id), 'venv', 'bin', 'python')
 export const whisperEnv = () => ({ ...pyEnv(), HF_HOME: join(dir('whisper'), 'models'), HF_HUB_OFFLINE: '1' })
 /** Python scripts ship in resources/py (unpacked next to the app when packaged). */
 export const scriptPath = (name: string) =>
@@ -203,18 +222,26 @@ async function download(url: string, to: string, sha256: string, j: JobHandle, l
 
 function sh(cmd: string, args: string[], env: NodeJS.ProcessEnv): Promise<string> {
   return new Promise((ok, fail) => {
-    const p = spawn(cmd, args, { env })
+    const p = spawn(cmd, args, { env, windowsHide: true })
     let out = '', err = ''
     p.stdout.on('data', d => { out += d })
     p.stderr.on('data', d => { err += d })
     p.on('error', fail)
-    p.on('close', code => (code === 0 ? ok(out) : fail(new Error(`${cmd.split('/').pop()} ${args[0]} failed: ${err.slice(-1500)}`))))
+    p.on('close', code => (code === 0 ? ok(out) : fail(new Error(`${basename(cmd)} ${args[0]} failed: ${err.slice(-1500)}`))))
   })
 }
 
 async function du(path: string) {
   try {
-    const { stdout } = await run('du', ['-sk', path])
-    return Number(stdout.split(/\s/)[0]) * 1024
+    const stats = await lstat(path)
+    if (stats.isSymbolicLink()) return 0 // never follow links outside the managed tool or count an environment twice
+    if (!stats.isDirectory()) return stats.size
+    let bytes = 0
+    for (const name of await readdir(path)) {
+      const size = await du(join(path, name))
+      if (size === undefined) return undefined
+      bytes += size
+    }
+    return bytes
   } catch { return undefined }
 }

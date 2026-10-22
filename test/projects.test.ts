@@ -1,12 +1,14 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { app } from 'electron'
 import { FFMPEG } from '../src/main/media'
 
 const root = mkdtempSync(join(tmpdir(), 'manul-proj-'))
+const previousRoot = process.env.MANUL_PROJECTS
 process.env.MANUL_PROJECTS = join(root, 'projects')
 const Projects = await import('../src/main/projects')
 const clip = join(root, 'My Clip.mp4')
@@ -14,6 +16,11 @@ const clip = join(root, 'My Clip.mp4')
 beforeAll(() => {
   execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=25:duration=2', '-f', 'lavfi', '-i', 'sine=duration=2',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', clip])
+})
+afterAll(() => {
+  if (previousRoot === undefined) delete process.env.MANUL_PROJECTS
+  else process.env.MANUL_PROJECTS = previousRoot
+  rmSync(root, { recursive: true, force: true })
 })
 
 describe('projects', () => {
@@ -83,7 +90,7 @@ describe('projects', () => {
 
   it('refuses a reference that is not a video, and leaves nothing behind', async () => {
     const notes = join(root, 'notes.txt')
-    execFileSync('sh', ['-c', `echo hi > "${notes}"`])
+    writeFileSync(notes, 'hi\n')
     await expect(Projects.createMotion({ title: 'Bad ref', aspect: '16:9', reference: notes })).rejects.toThrow('has to be a video')
     expect(existsSync(join(process.env.MANUL_PROJECTS!, 'bad-ref'))).toBe(false)
   })
@@ -114,9 +121,49 @@ describe('projects', () => {
     expect(await Projects.importMedia(p, clip)).toBe('media/My Clip-2.mp4')
     const n = await Projects.addNote(p, { anchor: { t0: 1, box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }, text: 'blur' }, Buffer.from('jpeg'))
     expect(n.status).toBe('open')
+    expect(n.still).toMatch(/^notes\/[^/]+\.jpg$/)
     expect(readFileSync(join(p.dir, n.still!), 'utf8')).toBe('jpeg')
     const again = await Projects.load(p.dir)
     expect(again.notes[0].text).toBe('blur')
     expect(Projects.recent()[0].dir).toBe(p.dir)
+  })
+
+  it('normalizes an older Windows project, including lookup keys and saved timelines', async () => {
+    const p = await Projects.createFromFile(clip)
+    const dir = p.dir
+    const info = p.media['media/My Clip.mp4']
+    p.dir = 'C:\\Users\\Me\\Videos\\Manul\\my-clip'
+    p.media = { 'media\\My Clip.mp4': info }
+    p.versions[0].path = 'media\\My Clip.mp4'
+    p.versions[0].dry = 'renders\\dry.mp4'
+    p.timeline!.items = [{ id: 'm', kind: 'media', src: 'media\\My Clip.mp4', in: 0, out: 2 }]
+    p.timeline!.mix = { filmDb: 0, music: { src: 'media\\music.mp3', db: -10, duckDb: 6 } }
+    p.versions[0].timeline = structuredClone(p.timeline!)
+    p.proxies = { 'media\\My Clip.mp4': 'proxies\\My Clip.mp4' }
+    p.transcripts = { 'media\\My Clip.mp4': 'transcripts\\My Clip.json' }
+    p.clips = { title: { id: 'title', title: 'Title', duration: 2, video: 'clips\\title\\clip.mp4', poster: 'clips\\title\\poster.jpg', updatedAt: 0 } }
+    p.notes = [{ id: 'n', anchor: { t0: 0 }, text: 'note', still: 'notes\\n.jpg', status: 'open', createdAt: 0 }]
+    // Save at its current disk location while preserving the original platform marker in project.json.
+    await writeFile(join(dir, 'project.json'), JSON.stringify(p))
+    const loaded = await Projects.load(dir)
+    expect(loaded.dir).toBe(dir)
+    expect(loaded.media).toEqual({ 'media/My Clip.mp4': info })
+    expect(loaded.versions[0]).toMatchObject({ path: 'media/My Clip.mp4', dry: 'renders/dry.mp4' })
+    expect(loaded.timeline!.items[0]).toMatchObject({ src: 'media/My Clip.mp4' })
+    expect(loaded.versions[0].timeline!.items[0]).toMatchObject({ src: 'media/My Clip.mp4' })
+    expect(loaded.timeline!.mix!.music!.src).toBe('media/music.mp3')
+    expect(loaded.proxies).toEqual({ 'media/My Clip.mp4': 'proxies/My Clip.mp4' })
+    expect(loaded.transcripts).toEqual({ 'media/My Clip.mp4': 'transcripts/My Clip.json' })
+    expect(loaded.clips!.title).toMatchObject({ video: 'clips/title/clip.mp4', poster: 'clips/title/poster.jpg' })
+    expect(loaded.notes[0].still).toBe('notes/n.jpg')
+    await Projects.save(loaded)
+    expect((await Projects.load(dir)).media).toEqual(loaded.media)
+  })
+
+  it.skipIf(process.platform === 'win32')('preserves literal backslashes in POSIX project filenames', async () => {
+    const p = await Projects.createFromFile(clip)
+    p.versions[0].path = 'media/literal\\filename.mp4'
+    await Projects.save(p)
+    expect((await Projects.load(p.dir)).versions[0].path).toBe('media/literal\\filename.mp4')
   })
 })

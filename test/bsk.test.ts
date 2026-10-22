@@ -1,15 +1,15 @@
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { agentEnv, browserPrompt, chromeBsk, BskDaemon, BSK_BIN, daemonArgs, liveEnv, DEFAULT_PORT, extensionStorage, findUserBsk, freePort, privateHome } from '../src/main/bsk'
+import { delimiter, dirname, join } from 'node:path'
+import { agentEnv, browserPrompt, chromeBsk, BskDaemon, BSK_BIN, daemonArgs, liveEnv, DEFAULT_PORT, environmentPath, extensionStorage, findUserBsk, freePort, privateHome } from '../src/main/bsk'
 // @ts-expect-error plain JS module
 import { CLI, EXTENSION } from '../scripts/fetch-bsk.mjs'
 
 describe('pinned BrowserSkill', () => {
   it('pins the CLI for every platform Manul ships and the extension, by SHA-256', () => {
-    for (const t of ['darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64']) {
+    for (const t of ['darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64', 'win32-x64']) {
       expect(CLI.builds[t].url).toMatch(/^https:\/\/github\.com\/Tencent\/BrowserSkill\/releases\/download\/cli-v/)
       expect(CLI.builds[t].sha256).toMatch(/^[0-9a-f]{64}$/)
     }
@@ -26,13 +26,21 @@ describe('pinned BrowserSkill', () => {
 
 describe("Manul's private bsk", () => {
   it('lives in its own home, never the user\'s ~/.bsk', () => {
-    expect(privateHome('/Users/a/Library/Application Support/Manul', '/Users/a')).toBe('/Users/a/Library/Application Support/Manul/bsk')
+    const home = join(tmpdir(), 'home'), userData = join(home, 'Manul')
+    expect(privateHome(userData, home)).toBe(join(userData, 'bsk'))
   })
 
   it('moves to a short home when the socket path would be too long for macOS', () => {
-    const long = `/Users/a/${'x'.repeat(90)}`
-    expect(privateHome(long, '/Users/a')).toMatch(/^\/Users\/a\/\.manul\/bsk-[0-9a-f]{8}$/)
-    expect(privateHome(`${long}2`, '/Users/a')).not.toBe(privateHome(long, '/Users/a')) // two installs never share a daemon
+    const home = join(tmpdir(), 'home'), long = join(home, 'x'.repeat(110))
+    expect(dirname(privateHome(long, home, 'darwin'))).toBe(join(home, '.manul'))
+    expect(privateHome(`${long}2`, home, 'darwin')).not.toBe(privateHome(long, home, 'darwin')) // two installs never share a daemon
+    for (const platform of ['linux', 'win32'] as const) expect(privateHome(long, home, platform)).toBe(join(long, 'bsk'))
+  })
+
+  it('measures macOS socket limits in bytes, not characters', () => {
+    const home = join(tmpdir(), 'home')
+    const long = join(home, '\u00e9'.repeat(60))
+    expect(dirname(privateHome(long, home, 'darwin'))).toBe(join(home, '.manul'))
   })
 
   it('never uses the default port, so the user\'s Chrome extension cannot find it', async () => {
@@ -55,33 +63,35 @@ describe("Manul's private bsk", () => {
 })
 
 describe('which browser the agent drives', () => {
-  const base = { bundledDir: '/app/bin', privateHome: '/ud/bsk', userHome: '/Users/a', path: '/usr/bin' }
+  const base = { bundledDir: join(tmpdir(), 'app', 'bin'), privateHome: join(tmpdir(), 'ud', 'bsk'), userHome: join(tmpdir(), 'user'), path: join(tmpdir(), 'system', 'bin') }
+  const userBsk = join(base.userHome, '.local', 'bin', process.platform === 'win32' ? 'bsk.exe' : 'bsk')
 
   it("default: Manul's own browser — private home, no auto-start, bundled CLI first", () => {
-    expect(agentEnv('manul', { ...base, userBsk: '/Users/a/.local/bin/bsk' })).toEqual({ BSK_HOME: '/ud/bsk', BSK_AUTO_START: '0', PATH: '/app/bin:/usr/bin' })
+    expect(agentEnv('manul', { ...base, userBsk })).toEqual({ BSK_HOME: base.privateHome, BSK_AUTO_START: '0', PATH: `${base.bundledDir}${delimiter}${base.path}` })
   })
 
   it("Chrome: the user's own bsk and daemon (their logins)", () => {
-    expect(agentEnv('chrome', { ...base, userBsk: '/Users/a/.local/bin/bsk' })).toEqual({ BSK_HOME: '/Users/a/.bsk', BSK_AUTO_START: '1', PATH: '/Users/a/.local/bin:/usr/bin' })
+    expect(agentEnv('chrome', { ...base, userBsk })).toEqual({ BSK_HOME: join(base.userHome, '.bsk'), BSK_AUTO_START: '1', PATH: `${dirname(userBsk)}${delimiter}${base.path}` })
   })
 
   it('Chrome without an installed CLI falls back to the bundled one on the user\'s daemon', () => {
-    expect(agentEnv('chrome', { ...base, userBsk: null })).toMatchObject({ BSK_HOME: '/Users/a/.bsk', PATH: '/app/bin:/usr/bin' })
+    expect(agentEnv('chrome', { ...base, userBsk: null })).toMatchObject({ BSK_HOME: join(base.userHome, '.bsk'), PATH: `${base.bundledDir}${delimiter}${base.path}` })
   })
 
   it("finds the user's own bsk, never Manul's bundled copy", () => {
     const home = mkdtempSync(join(tmpdir(), 'manul-home-'))
     mkdirSync(join(home, '.local/bin'), { recursive: true })
     expect(findUserBsk({ home, bundled: BSK_BIN, path: '' })).toBeNull()
-    writeFileSync(join(home, '.local/bin/bsk'), '#!/bin/sh\n', { mode: 0o755 })
-    expect(findUserBsk({ home, bundled: BSK_BIN, path: '' })).toBe(join(home, '.local/bin/bsk'))
+    const bin = join(home, '.local', 'bin', process.platform === 'win32' ? 'bsk.exe' : 'bsk')
+    writeFileSync(bin, '')
+    expect(findUserBsk({ home, bundled: BSK_BIN, path: '' })).toBe(bin)
     expect(findUserBsk({ home: '/nowhere', bundled: BSK_BIN, path: join(BSK_BIN, '..') })).toBeNull()
     rmSync(home, { recursive: true })
   })
 })
 
 describe('the private daemon (real bundled bsk)', () => {
-  const home = mkdtempSync('/tmp/mbsk-')
+  const home = mkdtempSync(join(tmpdir(), 'mbsk-'))
   const d = new BskDaemon({ bin: BSK_BIN, home })
   afterAll(async () => { await d.stop(); rmSync(home, { recursive: true, force: true }) })
 
@@ -130,8 +140,8 @@ describe('agent instructions and live environment', () => {
     const env = liveEnv(() => agentEnv(mode, { bundledDir: '/b', privateHome: '/p', userHome: '/u', userBsk: null, path: '/usr/bin' }))
     expect({ ...env }.BSK_HOME).toBe('/p')
     mode = 'chrome'
-    expect({ ...env }.BSK_HOME).toBe('/u/.bsk')
-    expect(Object.keys(env).sort()).toEqual(['BSK_AUTO_START', 'BSK_HOME', 'PATH'])
+    expect({ ...env }.BSK_HOME).toBe(join('/u', '.bsk'))
+    expect(Object.keys(env)).toEqual(expect.arrayContaining(['BSK_AUTO_START', 'BSK_HOME', 'PATH']))
   })
 })
 
@@ -144,12 +154,14 @@ describe("the agent's shell", () => {
     const env = new NodeExecutionEnv({ cwd: tmpdir(), shellEnv })
     const run = async () => {
       let out = ''
-      await env.exec('echo "$BSK_HOME|$BSK_AUTO_START|$(command -v bsk)"', { onOutput: (t: string) => { out += t } }, BACKGROUND_CONTEXT)
+      const command = process.platform === 'win32' ? ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', 'Write-Output "$env:BSK_HOME|$env:BSK_AUTO_START|$((Get-Command bsk.exe).Source)"'] : 'echo "$BSK_HOME|$BSK_AUTO_START|$(command -v bsk)"'
+      const result = await env.exec(command, { onOutput: (t: string) => { out += t } }, BACKGROUND_CONTEXT)
+      expect(result.ok).toBe(true)
       return out.trim()
     }
     expect(await run()).toBe(`/p|0|${BSK_BIN}`)
     mode = 'chrome'
-    expect(await run()).toBe(`/u/.bsk|1|${BSK_BIN}`)
+    expect(await run()).toBe(`${join('/u', '.bsk')}|1|${BSK_BIN}`)
   })
 })
 
@@ -167,16 +179,60 @@ describe('browserExtension', () => {
     expect(out.content[0].text).toContain('media/song.mp3')
     expect(got).toEqual([join(dir, 'downloads', 'song.mp3')])
     await expect(tool.execute({ path: '/etc/hosts' }, { conversationId: '1' })).rejects.toThrow(/inside the project/)
+    await expect(tool.execute({ path: `${dir}-sibling/song.mp3` }, { conversationId: '1' })).rejects.toThrow(/inside the project/)
+    await expect(tool.execute({ path: '../song.mp3' }, { conversationId: '1' })).rejects.toThrow(/inside the project/)
+    await expect(tool.execute({ path: dir }, { conversationId: '1' })).rejects.toThrow(/inside the project/)
     await expect(tool.execute({ path: 'downloads/none.mp3' }, { conversationId: '1' })).rejects.toThrow(/No file/)
+    rmSync(dir, { recursive: true, force: true })
   })
 })
 
 describe("the user's own Chrome bsk (Settings → Browser)", () => {
   it('reports no daemon without starting one', async () => {
-    const home = mkdtempSync('/tmp/mhome-')
+    const home = mkdtempSync(join(tmpdir(), 'mhome-'))
     const s = await chromeBsk({ userHome: home, bundled: BSK_BIN, path: '' })
     expect(s).toEqual({ cli: null, daemon: false, browsers: [] })
     expect(existsSync(join(home, '.bsk', 'daemon.json'))).toBe(false)
     rmSync(home, { recursive: true, force: true })
+  })
+})
+
+describe('Windows browser environment', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('reads PATH case-insensitively and prefixes with the native delimiter', () => {
+    expect(environmentPath({ Path: 'C:\\Windows' }, 'win32')).toBe('C:\\Windows')
+    expect(agentEnv('chrome', { bundledDir: 'C:\\Manul\\bin', privateHome: 'C:\\data\\bsk', userHome: 'C:\\Users\\A',
+      userBsk: 'D:\\My Tools\\bsk.exe', path: 'C:\\Windows;C:\\Other' }, 'win32')).toEqual({
+      BSK_HOME: 'C:\\Users\\A\\.bsk', BSK_AUTO_START: '1', PATH: 'D:\\My Tools;C:\\Windows;C:\\Other',
+    })
+  })
+
+  it('overrides every inherited PATH spelling when Node merges environments', () => {
+    const inherited = { Path: 'old', PaTh: 'old' }
+    let path = 'C:\\Manul;C:\\Windows'
+    const env = liveEnv(() => ({ PATH: path }), 'win32', inherited)
+    expect({ ...inherited, ...env }).toMatchObject({ PATH: path, Path: path, PaTh: path })
+    path = 'D:\\User;C:\\Windows'
+    expect({ ...env }.Path).toBe(path)
+  })
+
+  it('tells the agent to translate browser skill examples without installing Bash', () => {
+    expect(browserPrompt('manul', 'win32')).toMatch(/powershell tool/)
+    expect(browserPrompt('chrome', 'win32')).toMatch(/no Git Bash/)
+  })
+})
+
+describe('daemon startup failure', () => {
+  it('rejects a spawn error promptly and can be stopped after failed startup', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mbsk-missing-'))
+    const d = new BskDaemon({ bin: join(home, 'missing.exe'), home })
+    const start = Date.now()
+    try {
+      await expect(d.start()).rejects.toThrow(/ENOENT/)
+      expect(Date.now() - start).toBeLessThan(2000)
+      expect(d.running).toBe(false)
+      await d.stop()
+    } finally { rmSync(home, { recursive: true, force: true }) }
   })
 })

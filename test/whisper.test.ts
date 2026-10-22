@@ -1,9 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { getConfig, setConfig } from '../src/main/config'
-import { findModels, groupWords, resolveEngine, setWhisper } from '../src/main/whisper'
+import { findBinaries, findModels, groupWords, resolveEngine, setWhisper } from '../src/main/whisper'
 
 const w = (word: string, s: number, e: number) => ({ w: word, s, e })
 
@@ -82,4 +82,19 @@ describe('whisper.cpp discovery', () => {
   })
 
   afterAll(() => rmSync(root, { recursive: true, force: true }))
+})
+
+describe('Windows whisper discovery', () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
+
+  it('finds .exe files through Path without executing which or requiring a shell', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'manul whisper-'))
+    const bin = join(root, 'whisper-cli.exe')
+    writeFileSync(bin, 'not an executable')
+    mkdirSync(join(root, 'whisper-cpp.exe')) // a directory is not a binary
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    vi.stubEnv('PATH', undefined)
+    vi.stubEnv('Path', root)
+    try { expect(await findBinaries()).toEqual([bin]) } finally { rmSync(root, { recursive: true, force: true }) }
+  })
 })

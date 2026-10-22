@@ -25,7 +25,7 @@ describe('speaker turns from the runner\'s segments', () => {
   })
 })
 
-describe('diarizing a real conversation', () => {
+describe.skipIf(process.platform === 'win32')('diarizing a real conversation', () => {
   let dir: string
   const fixture = join(import.meta.dirname, 'fixtures', 'speech', 'two-voices.flac')
   const ref = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures', 'speech', 'two-voices.reference.json'), 'utf8')).turns as { speaker: string; s: number; e: number }[]

@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { prepareElectron } from '../../scripts/run-electron.mjs'
+import { bundledBinary } from './helpers.mjs'
 import { dismissOnboarding } from './onboarding.mjs'
 
 const root = join(import.meta.dirname, '../..')
@@ -24,7 +25,7 @@ try {
     BrowserWindow.getAllWindows().find(w => w.isVisible()).webContents.send('agent:ready')
   })
   const video = join(tmp, 'Performance.mp4')
-  execFileSync(join(root, 'resources/bin', `${process.platform}-${process.arch}`, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=640x360:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
+  execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=640x360:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
   await app.evaluate(({ ipcMain }, video) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [video]) }, video)
   await win.click('[data-tour="import"]')
   await win.getByRole('button', { name: 'Start', exact: true }).click()

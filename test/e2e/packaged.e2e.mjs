@@ -9,13 +9,21 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..', '..')
-const exe = process.platform === 'darwin'
+const exe = process.env.MANUL_PACKAGED_EXE || (process.platform === 'darwin'
   ? join(root, 'dist', `mac-${process.arch}`, 'Manul.app', 'Contents', 'MacOS', 'Manul')
-  : join(root, 'dist', 'linux-unpacked', 'manul')
-if (!existsSync(exe)) { console.log(`packaged e2e: skipped (no ${exe}; run npm run package:dir)`); process.exit(0) }
-const BIN = join(root, 'resources', 'bin', `${process.platform}-${process.arch}`)
+  : process.platform === 'win32' ? join(root, 'dist', 'win-unpacked', 'Manul.exe')
+  : join(root, 'dist', process.arch === 'arm64' ? 'linux-arm64-unpacked' : 'linux-unpacked', 'manul'))
+assert.ok(existsSync(exe), `Packaged executable missing: ${exe}; run npm run package:dir`)
+const suffix = process.platform === 'win32' ? '.exe' : ''
+const bundle = process.platform === 'darwin' ? join(exe, '..', '..', 'Resources') : join(exe, '..', 'resources')
+const BIN = join(bundle, 'bin')
+for (const tool of ['ffmpeg', 'ffprobe', 'whisper-cli', 'bsk']) assert.ok(existsSync(join(BIN, tool + suffix)), `Bundled ${tool} missing`)
+if (process.platform === 'win32') assert.ok(existsSync(join(BIN, 'vcruntime140.dll')), 'Bundled BrowserSkill VC runtime missing')
+for (const tool of ['whisper-cli', 'bsk']) execFileSync(join(BIN, tool + suffix), ['--version'], { timeout: 30000, windowsHide: true })
+for (const file of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'bsk-ext/manifest.json', 'lib/fonts/Inter-Regular.ttf'])
+  assert.ok(existsSync(join(bundle, file)), `Bundled resource missing: ${file}`)
 const tmp = mkdtempSync(join(tmpdir(), 'manul-pkg-'))
-execFileSync(join(BIN, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=3', '-f', 'lavfi', '-i', 'sine=duration=3',
+execFileSync(join(BIN, 'ffmpeg' + suffix), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=3', '-f', 'lavfi', '-i', 'sine=duration=3',
   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(tmp, 'src.mp4')])
 
 const app = await electron.launch({ executablePath: exe, args: [`--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'projects') } })
@@ -25,7 +33,8 @@ try {
   await win.waitForSelector('text=What are we making?')
   // bundled tools answer from Resources/bin
   const tools = await win.evaluate(() => window.manul.tools.bundled())
-  for (const t of tools) { assert.ok(t.ok, `${t.name} works`); assert.match(t.path, /Contents\/Resources\/bin\/|resources\/bin\//) }
+  assert.deepEqual(tools.map(t => t.name).sort(), ['ffmpeg', 'ffprobe'])
+  for (const t of tools) { assert.ok(t.ok, `${t.name} works`); assert.match(t.path.replaceAll('\\', '/'), /Contents\/Resources\/bin\/|resources\/bin\//) }
   // import (ffprobe + thumbnail)
   const p = await win.evaluate(f => window.manul.project.create(f), join(tmp, 'src.mp4'))
   assert.equal(p.media['media/src.mp4'].width, 640)
@@ -35,16 +44,16 @@ try {
   assert.equal(r.frames, 60)
   // bundled skills are listed
   const skills = await win.evaluate(() => window.manul.skills.state())
-  assert.ok(skills.skills.some(k => k.id === 'motion-design' && /Contents\/Resources\/skills\//.test(k.path)), 'bundled skills found, read from the app')
+  assert.ok(skills.skills.some(k => k.id === 'motion-design' && /Contents\/Resources\/skills\/|resources\/skills\//.test(k.path.replaceAll('\\', '/'))), 'bundled skills found, read from the app')
   // export with the bundled fonts (captions .srt, even if empty without speech)
   await app.evaluate(({ dialog }, f) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }) }, join(tmp, 'out.mp4'))
   const ex = await win.evaluate(dir => window.manul.export.run(dir, { preset: 'square', captions: 'none' }), p.dir)
   assert.ok(existsSync(ex.file))
   // the updater is on for this kind of install and checking never crashes the app (the feed may not exist yet)
   const up = await win.evaluate(() => window.manul.updates.state())
-  assert.equal(up.mode, process.platform === 'darwin' ? 'self' : up.mode)
+  if (process.platform === 'darwin' || process.platform === 'win32') assert.equal(up.mode, 'self')
   const after = await win.evaluate(() => window.manul.updates.check())
-  assert.ok(['none', 'error', 'downloading', 'ready', 'checking'].includes(after.status), after.status)
+  assert.ok((up.mode === 'self' ? ['none', 'error', 'downloading', 'ready', 'checking'] : ['idle']).includes(after.status), after.status)
   console.log('update check:', after.status, after.error ? after.error.split('\n')[0].slice(0, 100) : '')
   console.log('packaged e2e: ok')
 } finally {

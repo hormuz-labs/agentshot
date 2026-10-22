@@ -42,18 +42,23 @@ describe('generated file delivery', () => {
     await writeFile(join(dir, 'renders', '.secret.pdf'), 'hidden')
     await mkdir(join(dir, '.private'))
     await writeFile(join(dir, '.private', 'secret.pdf'), 'hidden directory')
-    await symlink(join(parent, 'secret.pdf'), join(dir, 'renders', 'escape.pdf'))
-    await symlink(join(dir, 'renders', 'report.pdf'), join(dir, 'renders', 'alias.pdf'))
-    await symlink(join(dir, '.private'), join(dir, 'renders', 'private'))
+    let fileLinks = true
+    try {
+      await symlink(join(parent, 'secret.pdf'), join(dir, 'renders', 'escape.pdf'))
+      await symlink(join(dir, 'renders', 'report.pdf'), join(dir, 'renders', 'alias.pdf'))
+    } catch { fileLinks = false }
+    await symlink(join(dir, '.private'), join(dir, 'renders', 'private'), process.platform === 'win32' ? 'junction' : 'dir')
+    await symlink(parent, join(dir, 'renders', 'escape-dir'), process.platform === 'win32' ? 'junction' : 'dir')
     expect(await artifactPath(dir, 'renders/report.pdf')).toBe(await realpath(join(dir, 'renders', 'report.pdf')))
     await expect(artifactPath(dir, '../secret.pdf')).rejects.toThrow(/inside this project/)
-    await expect(artifactPath(dir, 'renders/escape.pdf')).rejects.toThrow(/inside this project/)
+    await expect(artifactPath(dir, 'renders/escape-dir/secret.pdf')).rejects.toThrow(/inside this project/)
+    if (fileLinks) await expect(artifactPath(dir, 'renders/escape.pdf')).rejects.toThrow(/inside this project/)
     await expect(artifactPath(dir, 'renders')).rejects.toThrow(/not a file/)
     await expect(artifactPath(dir, 'missing.pdf')).rejects.toThrow()
     await expect(artifactPath(dir, '.')).rejects.toThrow(/inside this project/)
     await expect(artifactPath(dir, 'renders/.secret.pdf')).rejects.toThrow(/inside this project/)
     await expect(artifactPath(dir, 'renders/private/secret.pdf')).rejects.toThrow(/inside this project/)
-    expect(await artifactPath(dir, 'renders/alias.pdf')).toBe(await realpath(join(dir, 'renders', 'report.pdf')))
+    if (fileLinks) expect(await artifactPath(dir, 'renders/alias.pdf')).toBe(await realpath(join(dir, 'renders', 'report.pdf')))
     expect(await artifactPath(dir, join(dir, 'renders', 'report.pdf'))).toBe(await realpath(join(dir, 'renders', 'report.pdf')))
   })
 

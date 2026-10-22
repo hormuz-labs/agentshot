@@ -8,10 +8,11 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-drag-'))
-const ffmpeg = args => execFileSync(join(root, 'resources', 'bin', `${process.platform}-${process.arch}`, 'ffmpeg'), ['-y', '-loglevel', 'error', ...args])
+const ffmpeg = args => execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', ...args])
 ffmpeg(['-f', 'lavfi', '-i', 'color=c=red:s=320x240:d=4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'film.mp4')])
 ffmpeg(['-f', 'lavfi', '-i', 'color=c=blue:s=320x240:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'b.mp4')])
 const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'p') } })

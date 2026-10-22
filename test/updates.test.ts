@@ -11,6 +11,9 @@ describe('who updates Manul', () => {
   it('an AppImage updates itself', () => {
     expect(updateMode({ packaged: true, platform: 'linux', exe: '/tmp/.mount_x/manul', env: { APPIMAGE: '/home/a/Manul.AppImage' } }).mode).toBe('self')
   })
+  it('the Windows NSIS installation updates itself', () => {
+    expect(updateMode({ packaged: true, platform: 'win32', exe: 'C:\\Users\\Alice\\AppData\\Local\\Programs\\Manul\\Manul.exe', env: {} }).mode).toBe('self')
+  })
   it('a .deb install is updated by apt, not by the app', () => {
     expect(updateMode({ packaged: true, platform: 'linux', exe: '/opt/Manul/manul', env: {} })).toEqual({ mode: 'package-manager', why: 'installed with apt: sudo apt upgrade manul' })
   })

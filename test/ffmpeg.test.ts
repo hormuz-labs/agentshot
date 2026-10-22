@@ -1,14 +1,16 @@
 // The bundled ffmpeg/ffprobe (fetched by scripts/fetch-ffmpeg.mjs): present, same version, and able to do what Manul needs.
 import { execFileSync } from 'node:child_process'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { FFMPEG, FFPROBE } from '../src/main/media'
+import { executableName } from '../src/main/paths'
 
 const out = (bin: string, ...args: string[]) => execFileSync(bin, ['-hide_banner', ...args], { encoding: 'utf8' })
 
 describe('bundled ffmpeg', () => {
   it('comes from resources/bin for this platform', () => {
-    expect(FFMPEG).toMatch(new RegExp(`resources/bin/${process.platform}-${process.arch}/ffmpeg$`))
-    expect(FFPROBE).toMatch(new RegExp(`resources/bin/${process.platform}-${process.arch}/ffprobe$`))
+    expect(FFMPEG.endsWith(join('resources', 'bin', `${process.platform}-${process.arch}`, executableName('ffmpeg')))).toBe(true)
+    expect(FFPROBE.endsWith(join('resources', 'bin', `${process.platform}-${process.arch}`, executableName('ffprobe')))).toBe(true)
   })
 
   it('ffmpeg and ffprobe are the same release', () => {
@@ -38,11 +40,17 @@ describe('bundled ffmpeg', () => {
 
 describe('pinned builds', async () => {
   const { BUILDS, RELEASE, VERSION } = await import('../scripts/fetch-ffmpeg.mjs')
-  it('covers every platform Manul ships for, with SHA-256 for both tools', () => {
-    expect(Object.keys(BUILDS).sort()).toEqual(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64'])
-    for (const b of Object.values(BUILDS) as { ffmpeg: string; ffprobe: string }[]) {
-      expect(b.ffmpeg).toMatch(/^[0-9a-f]{64}$/)
-      expect(b.ffprobe).toMatch(/^[0-9a-f]{64}$/)
+  it('covers every platform Manul ships for, with verified archives for both tools', () => {
+    expect(Object.keys(BUILDS).sort()).toEqual(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-x64'])
+    for (const b of Object.values(BUILDS)) {
+      if ('sha256' in b) {
+        expect(b.sha256).toMatch(/^[0-9a-f]{64}$/)
+        expect(b.url).toContain(`/download/${VERSION}/`)
+        expect(b.prefix).toContain(VERSION)
+      } else {
+        expect(b.ffmpeg).toMatch(/^[0-9a-f]{64}$/)
+        expect(b.ffprobe).toMatch(/^[0-9a-f]{64}$/)
+      }
     }
     expect(RELEASE.startsWith(`ffmpeg-${VERSION}-`)).toBe(true) // our own build of this FFmpeg version
   })

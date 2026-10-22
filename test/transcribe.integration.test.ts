@@ -1,31 +1,31 @@
-// Real speech → real whisper.cpp. Runs where `say` (macOS) and whisper-cli + a ggml model exist; skipped elsewhere.
+// Recorded speech -> real whisper.cpp. Runs where whisper-cli + a ggml base model exist.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { setConfig } from '../src/main/config'
 import { FFMPEG } from '../src/main/media'
 import { findBinaries, findModels, transcribe } from '../src/main/whisper'
 
-const has = (cmd: string) => { try { execFileSync('which', [cmd]); return true } catch { return false } }
-const bins = has('say') ? await findBinaries() : []
+const bins = await findBinaries()
 const model = findModels(bins).find(m => /base/.test(m))
 const ready = !!bins[0] && !!model
+const fixture = join(import.meta.dirname, 'fixtures', 'speech', 'narration-music.flac')
 
 describe.skipIf(!ready)('transcription with whisper.cpp', () => {
+  afterEach(() => { setConfig({ whisper: undefined }) })
   it('returns sentences with word timings', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'manul-stt-'))
-    execFileSync('say', ['-o', join(dir, 'speech.aiff'), 'Hello there. Today we are testing the Manul video editor.'])
-    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=320x240:d=6', '-i', join(dir, 'speech.aiff'),
-      '-shortest', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', join(dir, 'clip.mp4')])
+    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=320x240:d=14', '-i', fixture,
+      '-t', '14', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', join(dir, 'clip.mp4')])
     setConfig({ whisper: { engine: 'system', mode: 'custom', binary: bins[0], model } })
 
     const t = await transcribe(join(dir, 'clip.mp4'), join(dir, 'transcripts', 'clip.json'), 'Transcribing clip.mp4')
     const text = t.segments.map(s => s.text).join(' ').toLowerCase()
-    expect(text).toContain('hello')
-    expect(text).toMatch(/video editor/)
-    expect(t.segments.length).toBeGreaterThanOrEqual(2) // split after "there."
+    expect(text).toContain('welcome')
+    expect(text).toMatch(/short film/)
+    expect(t.segments.length).toBeGreaterThanOrEqual(2)
     const words = t.segments.flatMap(s => s.words)
     for (const w of words) expect(w.e).toBeGreaterThanOrEqual(w.s)
     expect(words.every((w, i) => i === 0 || w.s >= words[i - 1].s)).toBe(true) // in time order
@@ -42,7 +42,6 @@ describe.skipIf(!ready)('transcription with whisper.cpp', () => {
 // Narration over music, with pauses: where whisper.cpp's own word times drift by seconds (they spread words over pauses and music).
 // The reference is a forced alignment of the clean voice; the pauses are where the clean voice is silent.
 async function narrationOverMusic(model: string, maxMedian: number) {
-  const fixture = join(import.meta.dirname, 'fixtures', 'speech', 'narration-music.flac')
   const ref = JSON.parse(readFileSync(fixture.replace(/\.flac$/, '.reference.json'), 'utf8')) as { words: { w: string; s: number; e: number }[]; pauses: [number, number][] }
   const dir = mkdtempSync(join(tmpdir(), 'manul-stt-'))
   setConfig({ whisper: { engine: 'system', mode: 'custom', binary: bins[0], model } })

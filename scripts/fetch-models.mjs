@@ -6,7 +6,7 @@
 //   objects-yolox-tiny.onnx    YOLOX-Tiny, 80 COCO classes (Apache-2.0, github.com/Megvii-BaseDetection/YOLOX)
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -40,7 +40,7 @@ async function fetchOne(name, m) {
   const target = join(dir, name)
   const want = m.fileSha256 || m.sha256
   if (existsSync(target) && sha(readFileSync(target)) === want) return
-  const res = await fetch(m.url)
+  const res = await fetch(m.url, { signal: AbortSignal.timeout(120_000) })
   if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`)
   const buf = Buffer.from(await res.arrayBuffer())
   const got = sha(buf)
@@ -48,17 +48,19 @@ async function fetchOne(name, m) {
   mkdirSync(dir, { recursive: true })
   if (m.member) {
     const tmp = mkdtempSync(join(tmpdir(), 'manul-model-'))
+    const tar = process.platform === 'win32' ? join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
     writeFileSync(join(tmp, 'a.tar.bz2'), buf)
-    execFileSync('tar', ['-xjf', join(tmp, 'a.tar.bz2'), '-C', tmp, m.member])
+    execFileSync(tar, ['-xjf', 'a.tar.bz2', m.member], { cwd: tmp, timeout: 60_000, windowsHide: true })
     const inner = readFileSync(join(tmp, m.member))
     if (sha(inner) !== m.fileSha256) throw new Error(`${name}: unexpected file in the archive`)
-    renameSync(join(tmp, m.member), target)
+    copyFileSync(join(tmp, m.member), target)
     rmSync(tmp, { recursive: true, force: true })
   } else writeFileSync(target, buf)
   console.log(`  model ${name} (${(buf.length / 1e6).toFixed(1)} MB)`)
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  if (process.env.MANUL_SKIP_MODELS) process.exit(0)
+  mkdirSync(dir, { recursive: true })
+  if (process.env.MANUL_SKIP_MODELS || (process.platform === 'win32' && !process.argv.includes('--all'))) process.exit(0)
   for (const [name, m] of Object.entries(MODELS)) await fetchOne(name, m)
 }

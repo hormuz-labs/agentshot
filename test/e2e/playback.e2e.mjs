@@ -7,11 +7,12 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-playback-'))
 const source = join(tmp, 'footage.mp4')
-execFileSync(join(root, 'resources/bin', `${process.platform}-${process.arch}`, 'ffmpeg'), [
+execFileSync(bundledBinary('ffmpeg'), [
   '-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=red:s=640x360:r=60:d=2',
   '-f', 'lavfi', '-i', 'color=blue:s=640x360:r=60:d=4', '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0',
   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', source,

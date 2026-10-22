@@ -1,8 +1,18 @@
-import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { dtwFlags, dtwLag, dtwPreset, envelope, HOP, readWav, snapSegments, snapWords, whisperCppWords } from '../src/main/wordtimes'
+
+const { help } = vi.hoisted(() => ({ help: new Map<string, string>() }))
+vi.mock('node:child_process', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:child_process')>()
+  const { promisify } = await import('node:util')
+  const execFile = Object.assign(vi.fn(), { [promisify.custom]: vi.fn(async (bin: string, args: string[]) => {
+    expect(args).toEqual(['--help'])
+    if (!help.has(bin)) throw new Error('ENOENT')
+    return { stdout: '', stderr: help.get(bin)! }
+  }) })
+  return { ...actual, execFile }
+})
 
 const SR = 16000
 
@@ -35,12 +45,11 @@ describe('dtwLag', () => {
 })
 
 describe('dtwFlags', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'manul-dtw-'))
-  const fake = (name: string, help: string) => {
-    const f = join(dir, name)
-    writeFileSync(f, `#!/bin/sh\ncat <<'EOF'\n${help}\nEOF\n`)
-    chmodSync(f, 0o755)
-    return f
+  const dir = 'fake-binaries'
+  const fake = (name: string, text: string) => {
+    const bin = join(dir, name)
+    help.set(bin, text)
+    return bin
   }
   it('turns DTW on (and flash attention off) when the binary supports both', async () => {
     const bin = fake('new', '  -dtw MODEL --dtw MODEL   compute token-level timestamps\n  -nfa,  --no-flash-attn  disable flash attention')

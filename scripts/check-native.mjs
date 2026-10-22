@@ -41,6 +41,13 @@ export function checkNative(root, { platform = process.platform, arch = process.
 }
 export default async function beforePack(context) {
   const arch = context.arch === 3 ? 'arm64' : context.arch === 1 ? 'x64' : String(context.arch)
+  if (context.electronPlatformName !== process.platform || arch !== process.arch)
+    throw new Error('Manul packaging requires a native runner and Node architecture matching the target')
+  if (context.electronPlatformName === 'win32') {
+    const { checkPackaging } = await import('./check-packaging.mjs')
+    checkPackaging({ root: context.packager.projectDir, platform: context.electronPlatformName, arch })
+    return
+  }
   checkNative(context.packager.projectDir, { platform: context.electronPlatformName, arch })
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

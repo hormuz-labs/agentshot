@@ -10,9 +10,9 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const bin = join(root, 'resources', 'bin', `${process.platform}-${process.arch}`)
 const tmp = mkdtempSync('/tmp/mw-') // short: the bsk daemon's socket path must stay under macOS's limit
 const ud = join(tmp, 'ud'), projects = join(tmp, 'p'), out = process.argv.slice(2).find(a => !a.startsWith('--')) || tmp
 mkdirSync(ud, { recursive: true })
@@ -130,26 +130,26 @@ try {
 
   // bsk's overlay (its glow and "Agent controlling" pill) is never filmed, and comes back after the take
   const end = join(out, 'walkthrough-take-end.png')
-  execFileSync(join(bin, 'ffmpeg'), ['-v', 'error', '-y', '-sseof', '-0.3', '-i', join(dir, take.video), '-frames:v', '1', '-vf', 'crop=iw:ih/8:0:ih*7/8,scale=64:8,format=rgb24', '-f', 'rawvideo', end])
+  execFileSync(bundledBinary('ffmpeg'), ['-v', 'error', '-y', '-sseof', '-0.3', '-i', join(dir, take.video), '-frames:v', '1', '-vf', 'crop=iw:ih/8:0:ih*7/8,scale=64:8,format=rgb24', '-f', 'rawvideo', end])
   const px = readFileSync(end)
   let orange = 0
   for (let i = 0; i < px.length; i += 3) if (px[i] > 200 && px[i + 1] > 90 && px[i + 1] < 190 && px[i + 2] < 90) orange++
   assert.equal(orange, 0, 'no bsk pill or glow in the take')
   // it scrolled: the last frame no longer shows the form at the top
   const top = join(out, 'walkthrough-take-top.png')
-  execFileSync(join(bin, 'ffmpeg'), ['-v', 'error', '-y', '-sseof', '-0.3', '-i', join(dir, take.video), '-frames:v', '1', '-vf', 'scale=960:-1', top])
+  execFileSync(bundledBinary('ffmpeg'), ['-v', 'error', '-y', '-sseof', '-0.3', '-i', join(dir, take.video), '-frames:v', '1', '-vf', 'scale=960:-1', top])
 
   // the film: 1080p, shorter than the take (the sleeps are cut), and it shows the page
   const film = join(dir, p.versions.find(v => v.id === p.proposal).path)
-  const info = JSON.parse(execFileSync(join(bin, 'ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', film], { encoding: 'utf8' }))
+  const info = JSON.parse(execFileSync(bundledBinary('ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', film], { encoding: 'utf8' }))
   const v = info.streams.find(s => s.codec_type === 'video')
   // the take's shape, its long side at most 1920 (1080p for a 1280×720 page; the stand-in panel keeps its own shape)
   if (shots) assert.ok(Math.max(v.width, v.height) <= 1920 && Math.abs(v.width / v.height - take.width / take.height) < 0.02, `film ${v.width}×${v.height}`)
   else { assert.equal(v.width, 1920); assert.equal(v.height, 1080) }
   const seconds = Number(info.format.duration)
   assert.ok(seconds > 2 && seconds < take.duration - 2, `the film (${seconds} s) is shorter than the take (${take.duration} s)`)
-  for (const f of [0.3, 0.5, 0.8]) execFileSync(join(bin, 'ffmpeg'), ['-v', 'error', '-y', '-ss', String(seconds * f), '-i', film, '-frames:v', '1', join(out, `walkthrough-${f}.png`)])
-  const mean = execFileSync(join(bin, 'ffmpeg'), ['-v', 'error', '-i', film, '-vf', 'signalstats,metadata=print:key=lavfi.signalstats.YAVG', '-f', 'null', '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  for (const f of [0.3, 0.5, 0.8]) execFileSync(bundledBinary('ffmpeg'), ['-v', 'error', '-y', '-ss', String(seconds * f), '-i', film, '-frames:v', '1', join(out, `walkthrough-${f}.png`)])
+  const mean = execFileSync(bundledBinary('ffmpeg'), ['-v', 'error', '-i', film, '-vf', 'signalstats,metadata=print:key=lavfi.signalstats.YAVG', '-f', 'null', '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   assert.ok(!/YAVG=(0|1)\./.test(mean), 'no black frames')
   assert.deepEqual(calls.filter(c => c !== 'bash'), [...Array(9).fill('walkthrough_record'), 'compose_walkthrough'])
   console.log(`walkthrough e2e ok: take ${take.duration.toFixed(1)} s → film ${seconds.toFixed(1)} s, ${take.events.length} events; frames in ${out}`)

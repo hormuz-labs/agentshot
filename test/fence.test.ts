@@ -8,7 +8,7 @@ import { BIN } from '../src/main/media'
 
 // A project in a temp folder (temp is writable), Manul's resources inside the home folder (like a dev checkout in
 // ~/Documents/manul: readable, not writable), and a "secret" in the home folder (like ~/.claude) the agent must never reach.
-let root: string, project: string, resources: string, secretDir: string
+let root: string, project: string, resources: string, secretDir: string, secretLink: string
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'manul-fence-'))
   project = join(root, 'proj')
@@ -19,7 +19,13 @@ beforeAll(() => {
   resources = join(secretDir, 'res')
   mkdirSync(resources)
   writeFileSync(join(resources, 'tool.txt'), 'tool')
-  symlinkSync(join(secretDir, 'secret.txt'), join(project, 'link.txt'))
+  try {
+    symlinkSync(join(secretDir, 'secret.txt'), join(project, 'link.txt'))
+    secretLink = join(project, 'link.txt')
+  } catch {
+    symlinkSync(secretDir, join(project, 'link-dir'), 'junction')
+    secretLink = join(project, 'link-dir', 'secret.txt')
+  }
   mkdirSync(`${resources}-evil`) // a look-alike: its name starts with the allowed folder's
 })
 afterAll(() => { rmSync(root, { recursive: true, force: true }); rmSync(secretDir, { recursive: true, force: true }) })
@@ -32,13 +38,13 @@ describe('what the agent may touch', () => {
     expect(allowed(f, join(resources, 'tool.txt'), false)).toBe(true)
     expect(allowed(f, join(resources, 'tool.txt'), true)).toBe(false)
     expect(allowed(f, join(secretDir, 'secret.txt'), false)).toBe(false)
-    expect(allowed(f, join(project, 'link.txt'), false)).toBe(false) // points into the home folder
+    expect(allowed(f, secretLink, false)).toBe(false) // points into the home folder
     expect(allowed(f, join(`${resources}-evil`, 'x'), false)).toBe(false)
     expect(allowed(f, homedir(), false)).toBe(false)
   })
 
   it('realish follows symlinks even for files that don\'t exist yet', () => {
-    expect(realish(join(project, 'link.txt'))).toBe(realish(join(secretDir, 'secret.txt')))
+    expect(realish(secretLink)).toBe(realish(join(secretDir, 'secret.txt')))
     expect(realish(join(project, 'not', 'yet.txt'))).toBe(join(realish(project), 'not', 'yet.txt'))
   })
 })
@@ -53,7 +59,7 @@ describe('the fenced environment', () => {
     const outside = await e.readTextFile(join(secretDir, 'secret.txt'), ctx)
     expect(outside.ok).toBe(false)
     expect(!outside.ok && outside.error.code).toBe('permission_denied')
-    expect((await e.readTextFile('link.txt', ctx)).ok).toBe(false)
+    expect((await e.readTextFile(secretLink, ctx)).ok).toBe(false)
     expect((await e.listDir(homedir(), ctx)).ok).toBe(false)
     expect((await e.writeFile(join(resources, 'x'), 'x', ctx)).ok).toBe(false)
   })

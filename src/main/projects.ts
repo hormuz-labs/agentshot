@@ -8,22 +8,24 @@ import { app } from 'electron'
 import { execFile } from 'node:child_process'
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, extname, join, relative } from 'node:path'
+import { basename, extname, join, posix } from 'node:path'
 import { promisify } from 'node:util'
 import { FFMPEG, FONTS_DIR, probe } from './media'
 import * as Files from './files'
 import { kindByName } from '../shared/file-kinds'
 import { ASPECTS, type Aspect } from '../shared/motion-formats'
 import { example as galleryExample, exampleVideo } from './gallery'
-import { sameCut, timelineOfFile } from '../shared/timeline'
+import { sameCut, timelineOfFile, type Timeline } from '../shared/timeline'
 import { newestProjects } from '../shared/project-order'
+import { filesystemSlug, toPortablePath } from '../shared/paths'
+import { relativeProjectPath } from './paths'
 import type { MediaInfo, Note, Project, RecentProject, Version } from '../shared/types'
 
 const run = promisify(execFile)
 const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 /** Motion videos run at 60 fps: smooth motion is the point, and they have no footage to match. */
 const MOTION_FPS = 60
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'project'
+const slug = (s: string) => filesystemSlug(s)
 
 export const projectsRoot = () => process.env.MANUL_PROJECTS || join(app.getPath('videos'), 'Manul')
 const recentFile = () => join(app.getPath('userData'), 'recent.json')
@@ -73,6 +75,28 @@ export function accept(p: Project, versionId: string) {
 
 export async function load(dir: string): Promise<Project> {
   const p = JSON.parse(await readFile(join(dir, 'project.json'), 'utf8')) as Project
+  // Older Windows projects stored native separators in every path, including lookup keys and saved timelines.
+  if (process.platform === 'win32' || /^(?:[a-z]:[\\/]|\\\\)/i.test(p.dir)) {
+    const timeline = (tl?: Timeline) => {
+      if (!tl) return
+      for (const item of tl.items) if (item.kind === 'media') item.src = toPortablePath(item.src)
+      if (tl.mix?.music) tl.mix.music.src = toPortablePath(tl.mix.music.src)
+    }
+    p.media = Object.fromEntries(Object.entries(p.media).map(([key, value]) => [toPortablePath(key), value]))
+    for (const version of p.versions) {
+      version.path = toPortablePath(version.path)
+      if (version.dry) version.dry = toPortablePath(version.dry)
+      timeline(version.timeline)
+    }
+    for (const note of p.notes) if (note.still) note.still = toPortablePath(note.still)
+    for (const clip of Object.values(p.clips || {})) {
+      clip.video = toPortablePath(clip.video)
+      clip.poster = toPortablePath(clip.poster)
+    }
+    for (const key of ['proxies', 'transcripts', 'speakers'] as const) if (p[key]) p[key] = Object.fromEntries(Object.entries(p[key]).map(([k, v]) => [toPortablePath(k), toPortablePath(v)]))
+    if (p.files) p.files = Object.fromEntries(Object.entries(p.files).map(([k, v]) => [toPortablePath(k), v]))
+    timeline(p.timeline)
+  }
   p.dir = dir
   if (!p.timeline) { const v = p.versions.find(x => x.id === p.current)!; p.timeline = timelineOf(v.path, p.media[v.path]) }
   touchRecent(p)
@@ -117,7 +141,7 @@ export async function createFromFiles(files: string[], progress?: (done: number,
     p.versions = [v]
     p.current = v.id
     p.timeline = timelineOf(rel, info)
-    await run(FFMPEG, ['-y', '-ss', String(Math.min(1, info.duration / 2)), '-i', join(dir, rel), '-frames:v', '1', '-vf', 'scale=480:-2', join(dir, 'thumb.jpg')]).catch(() => {})
+    await run(FFMPEG, ['-y', '-ss', String(Math.min(1, info.duration / 2)), '-i', join(dir, rel), '-frames:v', '1', '-vf', 'scale=480:-2', join(dir, 'thumb.jpg')], { windowsHide: true }).catch(() => {})
     await save(p)
   } catch (e) {
     await rm(dir, { recursive: true, force: true })
@@ -147,7 +171,7 @@ export async function createMotion(o: { title?: string; aspect: Aspect; length?:
     for (const sub of ['media', 'renders', 'notes', 'clips']) await mkdir(join(dir, sub), { recursive: true })
     const canvas = 'media/canvas.mp4'
     await run(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=0x141312:s=${width}x${height}:r=${o.walkthrough ? 30 : MOTION_FPS}:d=1`,
-      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(dir, canvas)])
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(dir, canvas)], { windowsHide: true })
     await register(p, canvas)
     let reference: string | undefined
     const refSrc = o.reference || (ex ? await exampleVideo(ex.id) : undefined)
@@ -204,10 +228,10 @@ export const importMedia = async (p: Project, file: string) => (await addFiles(p
 /** Bring project.json's file list in line with media/ (files added or removed in Finder, projects made before the
  *  list existed). True when it changed. */
 export async function syncFiles(p: Project): Promise<boolean> {
-  const onDisk = new Set((await Files.walk(join(p.dir, 'media')).catch(() => [] as string[])).map(f => join('media', f)))
+  const onDisk = new Set((await Files.walk(join(p.dir, 'media')).catch(() => [] as string[])).map(f => posix.join('media', toPortablePath(f))))
   for (const folder of ['renders', 'exports', 'documents', 'outputs', 'downloads', 'generated']) {
     for (const file of await Files.walk(join(p.dir, folder)).catch(() => [] as string[])) {
-      if (/\.(png|jpe?g|webp|gif|svg|avif|pdf|docx?|xlsx?|pptx?|txt|md|csv|tsv|srt|vtt|ass|zip|mp4|mov|webm|mp3|wav|m4a|flac|html)$/i.test(file)) onDisk.add(join(folder, file))
+      if (/\.(png|jpe?g|webp|gif|svg|avif|pdf|docx?|xlsx?|pptx?|txt|md|csv|tsv|srt|vtt|ass|zip|mp4|mov|webm|mp3|wav|m4a|flac|html)$/i.test(file)) onDisk.add(posix.join(folder, toPortablePath(file)))
     }
   }
   for (const file of readdirSync(p.dir, { withFileTypes: true })) {
@@ -221,9 +245,9 @@ export async function syncFiles(p: Project): Promise<boolean> {
 }
 
 export async function addVersion(p: Project, absPath: string, title: string, by: Version['by'], timeline?: Version['timeline'], dry?: string) {
-  const rel = relative(p.dir, absPath)
+  const rel = relativeProjectPath(p.dir, absPath)
   p.media[rel] = await probe(absPath)
-  const v: Version = { id: id(), path: rel, title, createdAt: Date.now(), by, ...(timeline ? { timeline } : {}), ...(dry ? { dry: relative(p.dir, dry) } : {}) }
+  const v: Version = { id: id(), path: rel, title, createdAt: Date.now(), by, ...(timeline ? { timeline } : {}), ...(dry ? { dry: relativeProjectPath(p.dir, dry) } : {}) }
   p.versions.push(v)
   return v
 }
@@ -231,7 +255,7 @@ export async function addVersion(p: Project, absPath: string, title: string, by:
 export async function addNote(p: Project, note: Omit<Note, 'id' | 'createdAt' | 'status' | 'still'>, still?: Buffer) {
   const n: Note = { ...note, id: id(), createdAt: Date.now(), status: 'open' }
   if (still) {
-    n.still = join('notes', `${n.id}.jpg`)
+    n.still = posix.join('notes', `${n.id}.jpg`)
     await writeFile(join(p.dir, n.still), still)
   }
   p.notes.push(n)

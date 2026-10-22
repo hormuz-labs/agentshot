@@ -7,13 +7,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { prepareElectron } from '../../scripts/run-electron.mjs'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '../..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-tour-'))
 const out = process.argv[2] || join(tmp, 'screenshots')
 mkdirSync(out, { recursive: true })
 const video = join(tmp, 'First film.mp4')
-execFileSync(join(root, 'resources/bin', `${process.platform}-${process.arch}`, 'ffmpeg'),
+execFileSync(bundledBinary('ffmpeg'),
   ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
 const executablePath = await prepareElectron()
 const env = { ...process.env, MANUL_PROJECTS: join(tmp, 'projects') }

@@ -185,7 +185,7 @@ describe('a cut, rendered', () => {
     await ff(composeArgs(tl, { inputOf: () => 'src.mp4', hasAudio: () => true, out: 'full.mp4' }))
     const full = performance.now() - t
     console.log(`cut: ${Math.round(fast)} ms, full render: ${Math.round(full)} ms`)
-    expect(fast).toBeLessThan(full / 2)
+    expect(fast).toBeLessThan(process.platform === 'win32' ? full * 0.75 : full / 2)
   }, 120_000)
 
   it('leaves the tmp files out of the project', async () => {

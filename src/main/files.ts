@@ -4,10 +4,11 @@
 // Subtitles and text in another encoding are stored as UTF-8 (what ffmpeg's subtitles filter and the agent read).
 import { createWriteStream, existsSync } from 'node:fs'
 import { copyFile, lstat, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, extname, join, sep } from 'node:path'
+import { basename, dirname, extname, join, posix, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import yauzl from 'yauzl'
 import { extOf, kindByName } from '../shared/file-kinds'
+import { toPortablePath } from '../shared/paths'
 import { parseSubtitles, type Cue } from '../shared/subtitles'
 import type { FileInfo, FileKind, MediaInfo, Project, SubtitleLink } from '../shared/types'
 
@@ -174,7 +175,7 @@ export async function walk(dir: string, sub = ''): Promise<string[]> {
   const out: string[] = []
   for (const d of await readdir(join(dir, sub), { withFileTypes: true })) {
     if (hidden(d.name) || d.isSymbolicLink()) continue
-    const rel = sub ? join(sub, d.name) : d.name
+    const rel = sub ? posix.join(sub, d.name) : d.name
     if (d.isDirectory()) out.push(...(await walk(dir, rel)))
     else if (d.isFile()) out.push(rel)
     if (out.length > MAX_FILES) break
@@ -210,7 +211,7 @@ async function unzip(zip: string, dest: string): Promise<string[]> {
   const out: string[] = []
   try {
     for (const e of entries) {
-      const rel = e.fileName.slice(strip)
+      const rel = toPortablePath(e.fileName.slice(strip))
       const to = join(dest, rel)
       if (!to.startsWith(dest + sep)) continue
       await mkdir(dirname(to), { recursive: true })
@@ -234,15 +235,15 @@ export async function copyIn(projectDir: string, src: string): Promise<string[]>
       await mkdir(dirname(join(media, root, f)), { recursive: true })
       await copyFile(join(src, f), join(media, root, f))
     }
-    return files.map(f => join('media', root, f))
+    return files.map(f => posix.join('media', root, toPortablePath(f)))
   }
   if (extOf(src) === 'zip') {
     const root = freeName(media, basename(src, extname(src)), false)
-    return (await unzip(src, join(media, root))).map(f => join('media', root, f))
+    return (await unzip(src, join(media, root))).map(f => posix.join('media', root, toPortablePath(f)))
   }
   const name = freeName(media, basename(src), true)
   await copyFile(src, join(media, name))
-  return [join('media', name)]
+  return [posix.join('media', name)]
 }
 
 // ---------------------------------------------------------------- telling the agent

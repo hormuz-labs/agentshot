@@ -2,9 +2,10 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdir, stat, rename, rm } from 'node:fs/promises'
-import { join, resolve, sep } from 'node:path'
+import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { FFMPEG } from './media'
+import { isWithinDir } from './paths'
 
 const run = promisify(execFile)
 const pending = new Map<string, Promise<string>>()
@@ -24,7 +25,7 @@ async function limited<T>(work: () => Promise<T>): Promise<T> {
 
 export async function thumbnails(dir: string, src: string, duration: number, count: number, start = 0, end = duration, fps = 0): Promise<string[]> {
   const file = resolve(dir, src)
-  if (!file.startsWith(resolve(dir) + sep)) throw new Error('Media must be inside the project.')
+  if (!isWithinDir(dir, file)) throw new Error('Media must be inside the project.')
   if (!Number.isFinite(duration) || duration <= 0) return []
   if (!Number.isFinite(start) || !Number.isFinite(end)) return []
   start = Math.max(0, Math.min(start, duration))

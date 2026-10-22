@@ -1,11 +1,12 @@
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { captionCues, exportArgs, PRESETS, toSrt } from '../src/shared/export'
 import { FFMPEG, probe } from '../src/main/media'
 import type { Transcript } from '../src/shared/types'
+import { escapeFilterPath, escapeFilterValue } from '../src/shared/ffmpeg'
 
 const words = (text: string, start = 0, gap = 0.35) => text.split(' ').map((w, i) => ({ w, s: start + i * gap, e: start + i * gap + 0.3 }))
 const tr = (segs: { text: string; start: number }[]): Transcript => ({ media: 'a.mp4', language: 'en', model: 'm', createdAt: 0,
@@ -64,6 +65,59 @@ describe('export presets', () => {
     writeFileSync(join(dir, 'caps.srt'), toSrt([{ s: 0.2, e: 1.8, lines: ['Hello from Manul'] }]))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', ...exportArgs({ preset: 'vertical', input: 'in.mp4', out: 'out.mp4', source: { width: 640, height: 360 }, burnCaptions: 'caps.srt' })], { cwd: dir })
     expect(await probe(join(dir, 'out.mp4'))).toMatchObject({ width: 1080, height: 1920, hasAudio: true })
+  })
+})
+
+describe('filter path escaping', () => {
+  it('escapes drive colons for both FFmpeg parsers and normalizes Windows separators', () => {
+    expect(escapeFilterPath(String.raw`C:\My fonts\Inter`)).toBe(String.raw`C\\:/My\\\ fonts/Inter`)
+    expect(escapeFilterPath(String.raw`\\server\share\My fonts`)).toBe(String.raw`//server/share/My\\\ fonts`)
+    const options = { preset: 'original' as const, input: 'in.mp4', out: 'out.mp4', source: { width: 320, height: 180 },
+      burnCaptions: String.raw`D:\Captions\O'Brien [cut],;.srt`, fontsDir: String.raw`C:\My fonts` }
+    const args = exportArgs(options)
+    expect(args[args.indexOf('-filter_complex') + 1]).toContain(`subtitles=${escapeFilterPath(options.burnCaptions)}:fontsdir=${escapeFilterPath(options.fontsDir)}:`)
+    expect(escapeFilterValue('a:b')).toBe(String.raw`a\\:b`)
+    expect(escapeFilterValue("a'b")).toBe(String.raw`a\\\'b`)
+    expect(escapeFilterValue('a\\b')).toBe(String.raw`a\\\\b`)
+    expect(escapeFilterValue('a[b],;')).toBe(String.raw`a\[b\]\,\;`)
+  })
+
+  it('renders real captions and loads fonts from punctuation-heavy absolute paths', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'manul-escape-'))
+    try {
+      const fonts = join(dir, "My fonts [cut],; O'Brien %=set")
+      mkdirSync(fonts)
+      for (const file of ['Inter-Regular.ttf', 'Inter-Bold.ttf']) copyFileSync(join(import.meta.dirname, '..', 'resources', 'lib', 'fonts', file), join(fonts, file))
+      const captions = join(dir, "Captions [cut],; O'Brien %=set.srt")
+      writeFileSync(captions, toSrt([{ s: 0, e: 1, lines: ['Hello from Manul'] }]))
+      const input = join(dir, 'in.mp4'), output = join(dir, 'out.mp4')
+      execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=black:s=320x180:r=10:d=1', '-c:v', 'libx264', input])
+      const rendered = spawnSync(FFMPEG, ['-y', '-loglevel', 'info', ...exportArgs({ preset: 'original', input, out: output,
+        source: { width: 320, height: 180 }, burnCaptions: captions, fontsDir: fonts })], { encoding: 'utf8' })
+      expect(rendered.status, rendered.stderr).toBe(0)
+      expect(rendered.stderr).toMatch(/Loading font file.*Inter-Regular\.ttf/)
+      expect(rendered.stderr).toMatch(/Loading font file.*Inter-Bold\.ttf/)
+      expect(await probe(output)).toMatchObject({ width: 320, height: 180 })
+      const raw = execFileSync(FFMPEG, ['-loglevel', 'error', '-ss', '0.5', '-i', output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'gray', '-'])
+      expect(raw.some(pixel => pixel > 200)).toBe(true)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
+  it.skipIf(process.platform === 'win32')('passes drive-colon paths through real FFmpeg filter parsing on POSIX', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'manul-drive-filter-'))
+    try {
+      const fonts = 'C:/My fonts [cut],; O\'Brien'
+      const captions = 'D:/My captions [cut],; O\'Brien.srt'
+      mkdirSync(join(dir, fonts), { recursive: true })
+      mkdirSync(join(dir, 'D:'))
+      copyFileSync(join(import.meta.dirname, '..', 'resources', 'lib', 'fonts', 'Inter-Regular.ttf'), join(dir, fonts, 'Inter-Regular.ttf'))
+      writeFileSync(join(dir, captions), toSrt([{ s: 0, e: 1, lines: ['Windows drive path'] }]))
+      execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=black:s=320x180:r=10:d=1', '-c:v', 'libx264', join(dir, 'in.mp4')])
+      execFileSync(FFMPEG, ['-y', '-loglevel', 'error', ...exportArgs({ preset: 'original', input: 'in.mp4', out: 'out.mp4',
+        // Linux libavformat interprets a bare drive colon as a protocol; file: lets it open our simulated drive.
+        source: { width: 320, height: 180 }, burnCaptions: `file:${captions}`, fontsDir: fonts })], { cwd: dir })
+      expect(await probe(join(dir, 'out.mp4'))).toMatchObject({ width: 320, height: 180 })
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
 

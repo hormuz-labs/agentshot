@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { prepareElectron } from '../../scripts/run-electron.mjs'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '../..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-mascot-'))
@@ -51,7 +52,7 @@ try {
   await win.waitForTimeout(120)
   await mascot.screenshot({ path: join(out, 'paw-wave-large.png') })
   const video = join(tmp, 'A little film.mp4')
-  execFileSync(join(root, 'resources/bin', `${process.platform}-${process.arch}`, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=#ada48d:s=640x360:d=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
+  execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=#ada48d:s=640x360:d=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
   await app.evaluate(({ ipcMain }, video) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [video]) }, video)
   await win.click('[data-tour="import"]')
   await win.getByRole('button', { name: 'Start', exact: true }).click()

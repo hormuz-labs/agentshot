@@ -7,10 +7,11 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-start-'))
-const ffmpeg = (...args) => execFileSync(join(root, 'resources/bin', `${process.platform}-${process.arch}`, 'ffmpeg'), ['-y', '-loglevel', 'error', ...args])
+const ffmpeg = (...args) => execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', ...args])
 for (const name of ['film', 'second']) ffmpeg('-f', 'lavfi', '-i', 'testsrc2=size=320x240:r=25:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, `${name}.mp4`))
 ffmpeg('-f', 'lavfi', '-i', 'color=c=red:s=200x100', '-frames:v', '1', join(tmp, 'photo.png'))
 ffmpeg('-f', 'lavfi', '-i', 'sine=duration=2', join(tmp, 'song.mp3'))

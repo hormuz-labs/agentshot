@@ -104,7 +104,8 @@ describe('custom providers: stored, imported, used by the agent', () => {
 
   it('imports from omp with the key read from its file, never exposing the key', () => {
     writeFileSync(join(tmp, 'key'), 'secret-azure\n')
-    writeFileSync(join(tmp, 'models.yml'), `providers:\n  azure-foundry:\n    baseUrl: https://x.services.ai.azure.com/openai/v1\n    api: openai-responses\n    apiKey: "!cat ${join(tmp, 'key')}"\n    headers:\n      api-key: "!cat ${join(tmp, 'key')}"\n    models:\n      - id: gpt-5.6-terra\n      - id: gpt-5.6-luna\n`)
+    const keyCommand = JSON.stringify(`!cat ${join(tmp, 'key')}`)
+    writeFileSync(join(tmp, 'models.yml'), `providers:\n  azure-foundry:\n    baseUrl: https://x.services.ai.azure.com/openai/v1\n    api: openai-responses\n    apiKey: ${keyCommand}\n    headers:\n      api-key: ${keyCommand}\n    models:\n      - id: gpt-5.6-terra\n      - id: gpt-5.6-luna\n`)
     const added = importOmp(join(tmp, 'models.yml'))
     expect(added).toEqual([{ id: 'azure-foundry', name: 'Azure Foundry', models: 2, key: true }])
     expect(process.env.MANUL_PROVIDER_AZURE_FOUNDRY_KEY).toBe('secret-azure')

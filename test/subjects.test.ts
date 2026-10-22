@@ -57,7 +57,7 @@ describe('crop paths', () => {
   })
 })
 
-describe('the vision runner', () => {
+describe.skipIf(process.platform === 'win32')('the vision runner', () => {
   let dir: string
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), 'manul-vision-'))

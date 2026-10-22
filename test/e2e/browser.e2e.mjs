@@ -7,17 +7,18 @@ import assert from 'node:assert/strict'
 import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { join, sep } from 'node:path'
 import { promisify } from 'node:util'
+import { bundledBinary } from './helpers.mjs'
 
 const run = promisify(execFile)
 const root = join(import.meta.dirname, '..', '..')
-const bin = join(root, 'resources', 'bin', `${process.platform}-${process.arch}`)
-const tmp = mkdtempSync('/tmp/mb-') // short: the daemon's socket path must stay under macOS's limit
+// macOS's default temp directory is too long for the daemon's Unix socket.
+const tmp = mkdtempSync(join(process.platform === 'darwin' ? '/tmp' : tmpdir(), 'mb-'))
 const ud = join(tmp, 'ud'), home = join(ud, 'bsk')
 const bsk = async (...args) => {
-  const { stdout } = await run(join(bin, 'bsk'), [...args, '--json'], { env: { ...process.env, BSK_HOME: home, BSK_AUTO_START: '0' }, timeout: 60_000 })
+  const { stdout } = await run(bundledBinary('bsk'), [...args, '--json'], { env: { ...process.env, BSK_HOME: home, BSK_AUTO_START: '0' }, timeout: 60_000 })
   try { return JSON.parse(stdout) } catch { return stdout }
 }
 const until = async (what, fn, ms = 20_000) => {
@@ -32,14 +33,14 @@ const until = async (what, fn, ms = 20_000) => {
 // a page for the agent to read and click
 const page = `<!doctype html><title>Manul test page</title><h1>Hello from the test page</h1>
 <button onclick="document.querySelector('h1').textContent='Clicked by the agent'">Press me</button>`
-const srv = createServer((_q, r) => { r.setHeader('content-type', 'text/html'); r.end(page) }).listen(0, '127.0.0.1')
-await new Promise(r => srv.once('listening', r))
-const url = `http://127.0.0.1:${srv.address().port}/`
+const srv = createServer((_q, r) => { r.setHeader('content-type', 'text/html'); r.end(page) })
 
-execFileSync(join(bin, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=320x240:d=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'film.mp4')])
-const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${ud}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'p') } })
-let session
+let app, session
 try {
+  execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=320x240:d=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'film.mp4')])
+  await new Promise((resolve, reject) => { srv.once('error', reject); srv.listen(0, '127.0.0.1', resolve) })
+  const url = `http://127.0.0.1:${srv.address().port}/`
+  app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${ud}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'p') } })
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
   await dismissOnboarding(win)
@@ -57,7 +58,7 @@ try {
 
   // 2. the user's own bsk (if it is running) never sees Manul
   if (existsSync(join(homedir(), '.bsk', 'daemon.json'))) {
-    const user = await run(join(bin, 'bsk'), ['browsers', '--json'], { env: { ...process.env, BSK_HOME: join(homedir(), '.bsk'), BSK_AUTO_START: '0', BSK_BROWSER_WAIT_MS: '0' }, timeout: 10_000 })
+    const user = await run(bundledBinary('bsk'), ['browsers', '--json'], { env: { ...process.env, BSK_HOME: join(homedir(), '.bsk'), BSK_AUTO_START: '0', BSK_BROWSER_WAIT_MS: '0' }, timeout: 10_000 })
       .then(r => JSON.parse(r.stdout)).catch(() => [])
     assert.ok(!user.some(b => b.label === 'Manul'), "the user's own bsk daemon does not list Manul")
     console.log(`  user's own bsk lists ${user.length} browser(s), none of them Manul`)
@@ -118,11 +119,17 @@ try {
 
   await bsk('session', 'stop', session)
   session = null
+  // Closing only the visible window must also stop its hidden extension host and daemon.
+  const closed = new Promise(resolve => app.once('close', resolve))
+  await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find(w => w.isVisible()).close() })
+  let timer
+  try {
+    await Promise.race([closed, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Closing the main window did not quit Manul')), 15_000) })])
+  } finally { clearTimeout(timer) }
 } finally {
   if (session) await bsk('session', 'stop', session).catch(() => {})
   const pid = (() => { try { return JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')).pid } catch { return null } })()
-  await app.close()
-  srv.close()
+  try { await app?.close() } finally { srv.closeAllConnections(); srv.close() }
   if (pid) {
     await until('daemon stops with the app', async () => { try { process.kill(pid, 0); return false } catch { return true } }, 8000)
   }

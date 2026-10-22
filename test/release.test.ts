@@ -44,7 +44,7 @@ describe('Linux package', () => {
 })
 
 describe.each(['README.md', 'RELEASING.md', 'scripts/apt-repo.sh'])('APT install instructions in %s', (file) => {
-  const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
+  const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const command = (file.endsWith('.sh')
     ? source.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)![1].replaceAll('&amp;', '&')
     : source.match(/```bash\n(curl -fsSL https:\/\/apt\.manul\.si[\s\S]*?)\n```/)![1])

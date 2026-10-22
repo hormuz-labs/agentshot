@@ -1,7 +1,7 @@
 // A render owns its files until they are complete. Chat, Save version and Export can request the same edit together.
 import { randomUUID } from 'node:crypto'
 import { mkdir, rename, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, posix } from 'node:path'
 import { sameCut, type Timeline } from '../shared/timeline'
 import type { Project, Version } from '../shared/types'
 
@@ -10,11 +10,11 @@ type Output = { final: string; out: string }
 /** Encode privately, then publish to new immutable paths. Failed/cancelled renders leave no playable partial file. */
 export async function renderOutput(dir: string, kind: 'timeline' | 'mix', mixed: boolean, render: (o: Output) => Promise<void>) {
   const name = `${kind}-${randomUUID()}`
-  const temp = join('renders', `.${name}`)
-  const final = join('renders', `${name}.mp4`), dry = mixed ? join('renders', `${name}.dry.mp4`) : undefined
+  const temp = posix.join('renders', `.${name}`)
+  const final = posix.join('renders', `${name}.mp4`), dry = mixed ? posix.join('renders', `${name}.dry.mp4`) : undefined
   await mkdir(join(dir, temp), { recursive: true })
   try {
-    const pending = join(temp, 'film.mp4'), pendingDry = mixed ? join(temp, 'dry.mp4') : undefined
+    const pending = posix.join(temp, 'film.mp4'), pendingDry = mixed ? posix.join(temp, 'dry.mp4') : undefined
     await render({ final: pending, out: pendingDry || pending })
     if (dry) await rename(join(dir, pendingDry!), join(dir, dry))
     await rename(join(dir, pending), join(dir, final))

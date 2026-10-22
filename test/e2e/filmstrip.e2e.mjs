@@ -6,11 +6,12 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { bundledBinary, decodeMediaPath } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-filmstrip-'))
-const source = join(tmp, 'footage.mp4')
-execFileSync(join(root, 'resources', 'bin', `${process.platform}-${process.arch}`, 'ffmpeg'), [
+const source = join(tmp, 'footage #1.mp4')
+execFileSync(bundledBinary('ffmpeg'), [
   '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=red:s=640x360:r=60:d=2',
   '-f', 'lavfi', '-i', 'color=blue:s=640x360:r=60:d=2', '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0',
   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', source,
@@ -24,13 +25,16 @@ try {
   await win.click('[data-tour="import"]')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForFunction(() => document.querySelector('video')?.readyState >= 2)
+  await win.evaluate(() => document.querySelector('video').play())
+  await win.waitForFunction(() => document.querySelector('video').currentTime > 0.1)
+  await win.evaluate(() => document.querySelector('video').pause())
   await win.waitForFunction(() => {
     const images = [...document.querySelectorAll('[data-testid="timeline-filmstrip"] img')]
     return images.length >= 4 && images.every(img => img.complete && img.naturalWidth > 0)
   })
   const sources = await win.locator('[data-testid="timeline-filmstrip"] img').evaluateAll(images => images.map(img => img.src))
-  const pixels = sources.map(src => [...execFileSync(join(root, 'resources', 'bin', `${process.platform}-${process.arch}`, 'ffmpeg'), [
-    '-loglevel', 'error', '-i', decodeURIComponent(new URL(src).pathname), '-vf', 'scale=1:1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-',
+  const pixels = sources.map(src => [...execFileSync(bundledBinary('ffmpeg'), [
+    '-loglevel', 'error', '-i', decodeMediaPath(src), '-vf', 'scale=1:1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-',
   ])])
   assert.ok(pixels[0][0] > 200 && pixels[0][2] < 40, 'start shows the red scene')
   assert.ok(pixels.at(-1)[2] > 200 && pixels.at(-1)[0] < 40, 'end shows the blue scene')

@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
   test:
@@ -25,11 +26,12 @@ jobs:
         run: brew install cmake
       - run: npm ci
       - name: Build bundled whisper.cpp
-        run: ./scripts/build-whisper.sh
+        run: npm run build:whisper
       - name: Build the bundled beat tracker
         run: ./scripts/build-beats.sh
       - name: Build the bundled model runners (speakers, vision)
         run: ./scripts/build-ml.sh
+      - run: npm run test:packaging
       - run: npm run typecheck
       - run: npm test
       # Electron 44 downloads its executable lazily; do not let the E2E launch timeout include that download.
@@ -41,3 +43,49 @@ jobs:
       - name: End-to-end (Linux, virtual display)
         if: runner.os == 'Linux'
         run: npx electron-vite build && xvfb-run -a node test/e2e/filmstrip.e2e.mjs && xvfb-run -a node test/e2e/clips.e2e.mjs && xvfb-run -a node test/e2e/menu.e2e.mjs
+
+  windows-package:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          architecture: x64
+          cache: npm
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - run: npm ci
+      - run: npm run build:whisper
+      - run: ./scripts/check-windows-dependencies.ps1
+      - run: npm run typecheck
+      - run: npm run test:packaging
+      - run: npm test
+      - name: Windows runtime end-to-end
+        timeout-minutes: 20
+        run: |
+          node -e "require('electron')"
+          if ($LASTEXITCODE -ne 0) { throw 'Electron download failed' }
+          npx electron-vite build
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime build failed' }
+          foreach ($test in @('filmstrip', 'clips', 'browser', 'export', 'menu')) {
+            node "test/e2e/$test.e2e.mjs"
+            if ($LASTEXITCODE -ne 0) { throw "$test E2E failed" }
+          }
+      # Unsigned, test-only CI artifact. Public releases require signing in release.yml.
+      - run: npm run package
+      - run: node scripts/check-windows-feed.mjs
+      - run: node test/e2e/packaged.e2e.mjs
+      - run: ./scripts/smoke-windows-installer.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-unsigned-test-only
+          path: |
+            dist/*-windows-x64-Setup.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+          if-no-files-found: error

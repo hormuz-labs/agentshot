@@ -4,11 +4,11 @@
 // a complete `chrome` object (src/preload/chrome-shim.ts) whose calls land here: tabs, windows, debugger (CDP through
 // webContents.debugger), scripting, webNavigation, storage, downloads, notifications. Content scripts run in every
 // tab's isolated world (src/preload/ext-tab.ts). The extension is preset to Manul's private bsk daemon (src/main/bsk.ts).
-import { BrowserWindow, ipcMain, Notification, session as electronSession, WebContentsView, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents, type WebFrameMain } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, session as electronSession, WebContentsView, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents, type WebFrameMain } from 'electron'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { extname, join, normalize } from 'node:path'
+import { dirname, extname, join, normalize, resolve } from 'node:path'
+import { isWithinDir } from './paths'
 import { queryTabs, Store } from '../shared/ext-match'
 import { BINDING, matchExpression, type Cdp } from './cdp'
 import type { BrowserState } from '../shared/types'
@@ -497,8 +497,18 @@ export class Browser {
     this.ses.on('will-download', (_e, item) => {
       const want = this.wantDl.shift()
       const id = want?.id ?? this.nextDl++
-      const path = join(homedir(), 'Downloads', want?.filename || item.getFilename())
-      item.setSavePath(path)
+      const root = app.getPath('downloads')
+      const path = resolve(root, want?.filename || item.getFilename())
+      try {
+        if (!isWithinDir(root, path)) throw new Error('Download filename must stay inside Downloads.')
+        mkdirSync(dirname(path), { recursive: true })
+        item.setSavePath(path)
+      } catch (e) {
+        item.cancel()
+        console.warn('download destination', e)
+        this.o.send('notice', `The download could not be saved: ${(e as Error).message}`)
+        return
+      }
       const d: Any = { id, item, path, url: item.getURL(), state: 'in_progress', mime: item.getMimeType() }
       this.downloads.set(id, d)
       this.event('downloads.onCreated', this.dlObj(d))
@@ -522,6 +532,8 @@ export class Browser {
   }
 
   destroy() {
+    clearTimeout(this.saveT)
+    try { writeFileSync(this.storeFile, JSON.stringify(this.local.data)) } catch (e) { console.warn('browser storage', e) }
     for (const t of [...this.tabs.values()]) { try { t.view.webContents.close() } catch { /* gone */ } }
     this.tabs.clear()
     if (this.host && !this.host.isDestroyed()) this.host.destroy()

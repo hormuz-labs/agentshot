@@ -32,6 +32,8 @@ it('extracts different moments in order and reuses the disk cache', async () => 
 it('ignores invalid durations and rejects paths outside the project', async () => {
   expect(await thumbnails(dir, 'video.mp4', 0, 8)).toEqual([])
   await expect(thumbnails(dir, '../outside.mp4', 2, 8)).rejects.toThrow('inside the project')
+  await expect(thumbnails(dir, join(dir + '-outside', 'video.mp4'), 2, 8)).rejects.toThrow('inside the project')
+  await expect(thumbnails(dir, '.', 2, 8)).rejects.toThrow('inside the project')
 })
 
 it('samples only the requested zoomed range, aligned to source frames', async () => {

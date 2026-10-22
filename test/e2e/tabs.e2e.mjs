@@ -5,12 +5,14 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-tabs-'))
 for (const [name, color] of [['alpha', 'red'], ['beta', 'blue'], ['gamma', 'green']])
-  execFileSync(join(root, 'resources', 'bin', `${process.platform}-${process.arch}`, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=${color}:s=320x240:d=6`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, `${name}.mp4`)])
+  execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=${color}:s=320x240:d=6`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, `${name}.mp4`)])
+const row = name => `[data-project-row$=${JSON.stringify(`${sep}${name}`)}]`
 const launch = () => electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'p') } })
 const menu = (app, label) => app.evaluate(({ Menu }, l) => {
   const find = items => { for (const it of items) { if (it.label === l) return it; const s = it.submenu && find(it.submenu.items); if (s) return s } }
@@ -20,7 +22,7 @@ const menu = (app, label) => app.evaluate(({ Menu }, l) => {
 // open projects have a close button in the sidebar; the one on screen is aria-current
 const openCount = () => win.locator('[data-project-row] button[title="Close project"]').count()
 const shown = () => win.locator('[data-project-row][aria-current="true"]').getAttribute('data-project-row')
-const order = () => win.locator('[data-project-row]').evaluateAll(rows => rows.map(r => r.getAttribute('data-project-row').split('/').pop()))
+const order = () => win.locator('[data-project-row]').evaluateAll(rows => rows.map(r => r.getAttribute('data-project-row').split(/[/\\]/).pop()))
 
 let win
 let app = await launch()
@@ -48,7 +50,7 @@ try {
   assert.deepEqual(await order(), ['gamma', 'beta', 'alpha'], 'newest-created project is first')
 
   // each tab keeps its own playhead
-  await win.click('[data-project-row$="/alpha"]')
+  await win.click(row('alpha'))
   await win.getByRole('button', { name: 'Expand media', exact: true }).waitFor()
   assert.equal(await win.locator('[data-project-file="media/alpha.mp4"]').count(), 0, 'alpha keeps its own collapsed folder after switching projects')
   await win.waitForTimeout(300)
@@ -66,9 +68,9 @@ try {
   assert.equal(await openCount(), 2)
   assert.match(await shown(), /gamma$/)
   // delete gamma → its project folder moves to the Trash and alpha is selected
-  await win.click('[data-project-row$="/gamma"] button[title="Delete project (moves to the Trash)"]')
-  await win.click('[data-project-row$="/gamma"] button:has-text("Delete")')
-  await win.waitForSelector('[data-project-row$="/alpha"][aria-current="true"]')
+  await win.click(`${row('gamma')} button[title="Delete project (moves to the Trash)"]`)
+  await win.click(`${row('gamma')} button:has-text("Delete")`)
+  await win.waitForSelector(`${row('alpha')}[aria-current="true"]`)
   assert.equal(await openCount(), 1)
   await win.getByRole('button', { name: 'Expand media', exact: true }).waitFor()
   assert.equal(await win.locator('[data-project-file="media/alpha.mp4"]').count(), 0, 'per-project folder state survives app relaunch')
@@ -79,7 +81,7 @@ try {
   // relaunch: only alpha comes back
   app = await launch()
   win = await app.firstWindow()
-  await win.waitForSelector('[data-project-row$="/alpha"][aria-current="true"]')
+  await win.waitForSelector(`${row('alpha')}[aria-current="true"]`)
   assert.equal(await openCount(), 1)
   console.log('tabs e2e: ok')
 } finally {

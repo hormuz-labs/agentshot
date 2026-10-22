@@ -25,8 +25,10 @@ writeFileSync(join(home, '.omp/agent/models.yml'), `providers:
       - id: gpt-5.6-luna
         name: GPT-5.6 Luna (Azure AI Foundry)
 `)
-const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, HOME: home, MANUL_PROJECTS: join(tmp, 'p') } })
+const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`, ...(process.platform === 'linux' ? ['--password-store=basic'] : [])], env: { ...process.env, HOME: home, USERPROFILE: home, MANUL_PROJECTS: join(tmp, 'p') } })
 try {
+  // Fake keys in a disposable profile: Linux CI has no unlocked system keyring.
+  if (process.platform === 'linux') await app.evaluate(({ safeStorage }) => safeStorage.setUsePlainTextEncryption(true))
   const win = await app.firstWindow()
   await win.setViewportSize({ width: 1440, height: 900 }).catch(() => {})
   await win.waitForSelector('text=What are we making?')

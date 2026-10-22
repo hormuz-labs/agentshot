@@ -136,6 +136,12 @@ pro editors can take a Manul rough cut into their own editor.
 - **macOS:** Homebrew cask. Needs an **Apple Developer ID**, signing and notarization, because Homebrew is dropping apps
   that macOS Gatekeeper blocks.
 - **Linux:** `.deb` in our own apt repository (and AppImage).
+- **Windows x64:** native MSVC build and offline one-click per-user NSIS installer configured, not yet validated or published.
+  Signed public releases, clean Windows runtime acceptance and signed N-to-N+1 updates are required;
+  see RELEASING.md. Desktop/Start menu shortcuts and launch after install, no repository setup or developer
+  prerequisites. Windows 10 1903/build 18362 or newer / Windows 11; whisper embeds a UTF-8 process manifest.
+  Native Windows ARM64 is deferred until an architecture-specific toolchain and update flow are validated.
+  Windows 32-bit is out of scope for the current Electron stack. This release targets x64 only.
 - **Speech recognition:** whisper.cpp already on the computer is found and used (paths saved, changeable, "Detect again");
   otherwise Manul's own bundled whisper.cpp (static, Metal on macOS, ~4 MB) with the base model downloaded on first use
   (148 MB, SHA-256 pinned); faster-whisper (Python) only where there is no bundled build. One transcription at a time.
@@ -193,6 +199,7 @@ pro editors can take a Manul rough cut into their own editor.
 - ✅ Export: MP4 presets (16:9, 9:16, 1:1), captions burned in or as sidecar files
 - ✅ Skills bundled with the app, one per kind of video (the over-the-air feed was dropped: skills now always match the app's tools)
 - 🚧 macOS (signed + notarized) and Linux builds; Homebrew cask; apt repository (pipeline ready, see RELEASING.md; needs the accounts and secrets)
+  Windows x64 NSIS/native CI is also configured; signing and clean-Windows/update validation remain release gates, not completed support.
 - ⬜ driver.js first-run tour
 
 ### Phase 2: Generated shots, hand-off, publishing
@@ -256,7 +263,7 @@ Rules:
   2026-10-08; GPL-3.0 before that, and releases up to 0.1.1 and the code published before stay GPL). Contributors agree to the contributor agreement in CONTRIBUTING. The bundled GPL
   programs (ffmpeg, manul-beats, manul-speakers) stay separate programs with their source. The paid cloud parts (Manul
   key gateway, storage) stay closed as separate services.
-- **Windows:** when?
+- **Windows:** x64 build configured; native CI, clean-PC acceptance, certificate/publisher setup and signed-update validation are still pending. External manul.si pages need a manual update after those gates pass.
 - **Personality:** how much manul (mascot, warm colours, orbs) versus a quiet pro tool?
 - **Video models:** which to support first, and whether generation runs only through the Manul key (simpler billing) or also with users' own keys.
 - Pro price point and credit size.

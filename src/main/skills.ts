@@ -8,7 +8,10 @@ import { join } from 'node:path'
 export type Skill = { id: string; name: string; description: string; path: string }
 export type Profile = { id: string; name: string; /** when set, only these skills */ only?: string[]; disabled: string[] }
 
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+const slug = (s: string) => {
+  const n = s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+  return /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/.test(n) ? `${n}-profile` : n
+}
 
 export class Skills {
   constructor(private dirs: { bundled: string; profiles: string }) {
@@ -22,7 +25,7 @@ export class Skills {
     return readdirSync(dir).sort().flatMap(id => {
       const path = join(dir, id, 'SKILL.md')
       if (!existsSync(path)) return []
-      const head = /^---\n([\s\S]*?)\n---/.exec(readFileSync(path, 'utf8'))
+      const head = /^---\n([\s\S]*?)\n---/.exec(readFileSync(path, 'utf8').replace(/\r\n/g, '\n'))
       const field = (k: string) => {
         const m = head && new RegExp(`^${k}:[ \\t]*(.*)$((?:\\n[ \\t]+.*)*)`, 'm').exec(head[1])
         if (!m) return ''

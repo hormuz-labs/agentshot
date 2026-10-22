@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import type { MediaInfo, ToolStatus } from '../shared/types'
+import { executableName, withToolPath } from './paths'
 
 const run = promisify(execFile)
 // Manul's own pinned ffmpeg/ffprobe (scripts/fetch-ffmpeg.mjs): resources/bin/<platform>-<arch>/ in development,
@@ -13,15 +14,15 @@ export const BIN = app.isPackaged
   ? join(process.resourcesPath, 'bin')
   : join(import.meta.dirname, '../../resources/bin', `${process.platform}-${process.arch}`)
 
-export const FFMPEG = join(BIN, 'ffmpeg')
-export const FFPROBE = join(BIN, 'ffprobe')
+export const FFMPEG = join(BIN, executableName('ffmpeg'))
+export const FFPROBE = join(BIN, executableName('ffprobe'))
 /** Manul's own whisper.cpp (scripts/build-whisper.sh); its model is downloaded on demand. */
-export const WHISPER_CLI = join(BIN, 'whisper-cli')
+export const WHISPER_CLI = join(BIN, executableName('whisper-cli'))
 /** Manul's beat tracker on aubio (scripts/build-beats.sh): tempo, beats, onsets and energy of music, as JSON. */
-export const BEATS = join(BIN, 'manul-beats')
+export const BEATS = join(BIN, executableName('manul-beats'))
 /** Model runners (scripts/build-ml.sh): who speaks when, and faces/objects in frames. */
-export const SPEAKERS = join(BIN, 'manul-speakers')
-export const VISION = join(BIN, 'manul-vision')
+export const SPEAKERS = join(BIN, executableName('manul-speakers'))
+export const VISION = join(BIN, executableName('manul-vision'))
 /** Their models (scripts/fetch-models.mjs). */
 export const MODELS_DIR = app.isPackaged ? join(process.resourcesPath, 'models') : join(import.meta.dirname, '../../resources/models')
 
@@ -29,7 +30,7 @@ export const MODELS_DIR = app.isPackaged ? join(process.resourcesPath, 'models')
 export const FONTS_DIR = join(app.isPackaged ? join(process.resourcesPath, 'lib') : join(import.meta.dirname, '../../resources/lib'), 'fonts')
 
 /** PATH with the bundled tools first, for every process the agent starts. */
-export const toolPath = () => [dirname(FFMPEG), dirname(FFPROBE), process.env.PATH].join(':')
+export const toolPath = () => withToolPath([dirname(FFMPEG), dirname(FFPROBE)]).PATH!
 
 export async function probe(file: string): Promise<MediaInfo> {
   const { stdout } = await run(FFPROBE, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file])

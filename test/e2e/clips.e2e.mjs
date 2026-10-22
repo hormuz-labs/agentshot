@@ -7,16 +7,16 @@ import { execFileSync } from 'node:child_process'
 import { cpSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const BIN = join(root, 'resources', 'bin', `${process.platform}-${process.arch}`)
 const tmp = mkdtempSync(join(tmpdir(), 'manul-e2e-'))
 const video = join(tmp, 'src.mp4')
-execFileSync(join(BIN, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=640x360:r=30:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
+execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=640x360:r=30:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
 
 /** RGB of one pixel of the frame at time t. */
 const pixel = (file, t, x, y) => {
-  const raw = execFileSync(join(BIN, 'ffmpeg'), ['-loglevel', 'error', '-ss', String(t), '-i', file, '-frames:v', '1',
+  const raw = execFileSync(bundledBinary('ffmpeg'), ['-loglevel', 'error', '-ss', String(t), '-i', file, '-frames:v', '1',
     '-vf', `format=rgb24,crop=1:1:${x}:${y}`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
   return [...raw.subarray(0, 3)]
 }
@@ -35,7 +35,7 @@ try {
   const r = await win.evaluate(dir => window.manul.clips.render(dir, 'slide'), p.dir)
   console.log(`rendered ${r.frames} frames in ${Date.now() - t0} ms`)
   const out = join(p.dir, r.video)
-  const info = JSON.parse(execFileSync(join(BIN, 'ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', out], { encoding: 'utf8' }))
+  const info = JSON.parse(execFileSync(bundledBinary('ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', out], { encoding: 'utf8' }))
   const v = info.streams.find(s => s.codec_type === 'video')
 
   assert.equal(r.frames, 60, '2 s at 30 fps')
@@ -68,7 +68,7 @@ try {
   assert.equal(after.proposal, vid)
   assert.deepEqual(prop.timeline.items.map(i => i.kind), ['media', 'clip', 'media'])
   const film = join(p.dir, prop.path)
-  const filmInfo = JSON.parse(execFileSync(join(BIN, 'ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_format', film], { encoding: 'utf8' }))
+  const filmInfo = JSON.parse(execFileSync(bundledBinary('ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_format', film], { encoding: 'utf8' }))
   assert.ok(Math.abs(Number(filmInfo.format.duration) - 3.5) < 0.1, `film ${filmInfo.format.duration}`)
   assert.ok(pixel(film, 0.5, 320, 180)[2] > 180, 'before the clip: the blue source') // blue
   assert.ok(pixel(film, 2.0, 320, 180)[1] > 180, 'inside the clip: green card')
@@ -84,7 +84,7 @@ try {
   const ovVid = await win.evaluate(dir => window.manul.clips.overlay(dir, 'lower', 0.5, 'Name added'), p.dir)
   const withOv = (await win.evaluate(dir => window.manul.project.open(dir), p.dir)).versions.find(v => v.id === ovVid)
   const ovFilm = join(p.dir, withOv.path)
-  const ovDur = Number(JSON.parse(execFileSync(join(BIN, 'ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_format', ovFilm], { encoding: 'utf8' })).format.duration)
+  const ovDur = Number(JSON.parse(execFileSync(bundledBinary('ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_format', ovFilm], { encoding: 'utf8' })).format.duration)
   const baseDur = (before.timeline.items).reduce((s, i) => s + (i.kind === 'media' ? i.out - i.in : i.dur), 0)
   assert.ok(Math.abs(ovDur - baseDur) < 0.1, `an overlay does not change the length (${ovDur} vs ${baseDur})`)
   assert.ok(pixel(ovFilm, 0.8, 100, 300)[0] > 180, `overlay shows during its time: ${pixel(ovFilm, 0.8, 100, 300)}`)

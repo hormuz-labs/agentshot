@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -51,12 +51,15 @@ describe('the mix in a render', () => {
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=160x120:r=25:d=10',
       '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo:d=10', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(dir, 'film.mp4')])
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=1000:d=2:sample_rate=48000', join(dir, 'music.wav')])
-    writeFileSync(join(dir, 'duck.cmd'), mixCommands(duckEnvelope([[3, 5]], 12, 0.25)))
-    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', ...mixArgs({ dry: 'film.mp4', duration: 10, mix: { filmDb: 0, music: { src: 'music.wav', db: -6, duckDb: 12 } }, commands: 'duck.cmd', out: 'out.mp4' })], { cwd: dir })
+    const commands = join(dir, "duck [cut],; O'Brien %.cmd")
+    writeFileSync(commands, mixCommands(duckEnvelope([[3, 5]], 12, 0.25)))
+    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', ...mixArgs({ dry: 'film.mp4', duration: 10, mix: { filmDb: 0, music: { src: 'music.wav', db: -6, duckDb: 12 } }, commands, out: 'out.mp4' })], { cwd: dir })
     // loudness of the 1 kHz music alone (band-pass) in a window
     const db = (a: number, b: number) => {
-      const err = execFileSync('sh', ['-c', `"${FFMPEG}" -hide_banner -ss ${a} -t ${b - a} -i "${join(dir, 'out.mp4')}" -af bandpass=f=1000:w=100,volumedetect -f null - 2>&1`], { encoding: 'utf8' })
-      return Number(/mean_volume: (-?[\d.]+) dB/.exec(err)![1])
+      const result = spawnSync(FFMPEG, ['-hide_banner', '-ss', String(a), '-t', String(b - a), '-i', join(dir, 'out.mp4'),
+        '-af', 'bandpass=f=1000:w=100,volumedetect', '-f', 'null', '-'], { encoding: 'utf8' })
+      expect(result.status, result.stderr).toBe(0)
+      return Number(/mean_volume: (-?[\d.]+) dB/.exec(result.stderr)![1])
     }
     // windows clear of the 1 s fade-in, the ramps and the 2 s fade-out at the end
     const outside = db(1.2, 2.6), inside = db(3.4, 4.6)

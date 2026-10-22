@@ -7,9 +7,10 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..'), tmp = mkdtempSync(join(tmpdir(), 'manul-demo-e2e-'))
-const ffmpeg = join(root, 'resources', 'bin', `${process.platform}-${process.arch}`, 'ffmpeg')
+const ffmpeg = bundledBinary('ffmpeg')
 const ff = (...args) => execFileSync(ffmpeg, ['-y', '-v', 'error', ...args])
 ff('-f', 'lavfi', '-i', 'color=c=blue:s=640x360:r=25:d=24', '-f', 'lavfi', '-i', "anoisesrc=seed=42:d=24:r=16000,volume='0.2+0.15*sin(1.3*t)+0.05*sin(3.7*t)':eval=frame", '-c:v', 'libx264', '-c:a', 'aac', '-shortest', join(tmp, 'screen.mp4'))
 ff('-f', 'lavfi', '-i', 'color=c=red:s=320x240:r=30:d=18', '-ss', '2.13', '-t', '18', '-i', join(tmp, 'screen.mp4'), '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-c:a', 'aac', '-shortest', join(tmp, 'camera.mp4'))

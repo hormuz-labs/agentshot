@@ -6,10 +6,11 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-proxy-'))
-execFileSync(join(root, 'resources', 'bin', `${process.platform}-${process.arch}`, 'ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=25:duration=3',
+execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=25:duration=3',
   '-c:v', 'prores_ks', '-profile:v', '1', join(tmp, 'master.mov')])
 const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'p') } })
 try {
@@ -29,7 +30,7 @@ try {
   assert.equal(await win.locator('[data-preview-status]').count(), 0, 'a ready preview has no stuck status overlay')
   assert.equal(p.versions[0].path, 'media/master.mov', 'the original stays the source for renders and exports')
   // New high-resolution renders (not imported footage) must also schedule preview generation.
-  const ff = join(root, 'resources', 'bin', `${process.platform}-${process.arch}`, 'ffmpeg')
+  const ff = bundledBinary('ffmpeg')
   execFileSync(ff, ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=2560x1440:r=25:d=2', '-c:v', 'libx264', '-preset', 'ultrafast', join(p.dir, 'renders', 'big.mp4')])
   const dir = p.dir
     const project = JSON.parse(readFileSync(`${dir}/project.json`, 'utf8'))

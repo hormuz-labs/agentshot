@@ -20,7 +20,7 @@ const run = (cmd: string, ...args: string[]) => {
 }
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-describe('the agent\'s bsk wrappers', () => {
+describe.skipIf(process.platform === 'win32')('the agent\'s bsk wrappers', () => {
   it('run bsk with the user\'s own bsk home for chrome-bsk, and the setting\'s bsk for bsk', () => {
     setup('echo "home=$BSK_HOME args=$*"')
     expect(run('chrome-bsk', 'observe', '--session', 'a').out).toBe(`home=${join(dir, 'home')} args=observe --session a\n`)

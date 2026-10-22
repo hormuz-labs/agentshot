@@ -1,7 +1,7 @@
 // Manul's agent: a pi-durable Harness on SQLite, so conversations, tool calls and their output survive a crash or quit.
 // One durable conversation per project. Every view change goes through the AG-UI adapter to the renderer.
 // Extensions:
-//   coding   read / write / edit / bash in the project folder (bundled ffmpeg and ffprobe are on PATH)
+//   coding   read / write / edit / native shell in the project folder (bundled ffmpeg and ffprobe are on PATH)
 //   editor   Manul's own tools: project state, probe, ffmpeg, propose a version, seek, resolve a note, ask the user
 import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context'
 import { Type } from '@earendil-works/pi-ai'
@@ -11,13 +11,14 @@ import { googleProvider } from '@earendil-works/pi-ai/providers/google'
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
 import { createRegistry, defineExtension, defineTool, Harness, section } from '@earendil-works/pi-durable'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
-import { CodingTools } from '@earendil-works/pi-durable/tools'
+import { CodingTools, createPowerShellTool } from '@earendil-works/pi-durable/tools'
 import type { BaseEvent } from '@ag-ui/core'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { isAbsolute, resolve, sep } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { AguiAdapter } from './agui'
 import { liveEnv } from './bsk'
+import { isWithinDir } from './paths'
 import { chooseModel, describeModels } from './models'
 import { buildProviders, listProviders } from './providers'
 import { manulProvider } from './gateway'
@@ -25,6 +26,7 @@ import type { Memory } from './memory'
 import type { Skills } from './skills'
 import { BIN, FFMPEG, FONTS_DIR, MODELS_DIR, VISION, probe } from './media'
 import { FencedEnv, fencedArgv, fenceFor, realish, type Fence } from './fence'
+import { windowsPowerShell } from './tools'
 import { homedir } from 'node:os'
 import { analyze, contactSheet, report, sheetFrames } from './analysis'
 import { analyzeMusic, musicReport } from './music'
@@ -44,7 +46,6 @@ import { findSubjects, shotSubjects, subjectsReport, track } from './subjects'
 import { fileLine } from './files'
 import { ATTACHED } from '../shared/attached'
 import { mkdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { batch, duration as timelineDuration, sameCut, starts, timelineOfFile, type Edit, type Timeline } from '../shared/timeline'
 import type { ClipInfo, Project, Transcript } from '../shared/types'
 import { ASPECTS } from '../shared/motion-formats'
@@ -150,6 +151,12 @@ async function clipResult(p: Project, c: ClipInfo & { frames: number }) {
   }
 }
 
+export function codingExtension(platform = process.platform) {
+  return platform === 'win32' ? defineExtension({ ...CodingTools, tools: [
+    ...CodingTools.tools!.filter(t => t.name !== 'bash'), createPowerShellTool({ programs: [windowsPowerShell()] }),
+  ] }) : CodingTools
+}
+
 const Option = Type.Object({ label: Type.String(), description: Type.Optional(Type.String()) })
 const FramingSchema = Type.Object({ fit: Type.Optional(Type.Union([Type.Literal('contain'), Type.Literal('cover')])), zoom: Type.Optional(Type.Number({ minimum: 0.25, maximum: 4 })), x: Type.Optional(Type.Number({ minimum: -2, maximum: 2 })), y: Type.Optional(Type.Number({ minimum: -2, maximum: 2 })) })
 const CameraLayoutSchema = Type.Object({
@@ -197,8 +204,7 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
   }
   const inProject = (p: Project, path: string) => {
     const abs = isAbsolute(path) ? path : resolve(p.dir, path)
-    const real = realish(abs), root = realish(p.dir)
-    if (real !== root && !real.startsWith(root + sep)) throw new Error('Paths must stay inside the project folder.')
+    if (!isWithinDir(p.dir, abs) || !isWithinDir(realish(p.dir), realish(abs))) throw new Error('Paths must stay inside the project folder.')
     return abs
   }
   /** Run a bundled program inside the agent's fence (its paths come from the model). */
@@ -230,7 +236,8 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       `- Open-ended requests (make it cinematic, clean it up, fix it, turn it into a promo/short): analyze_video first, then say in 2–4 short lines what you found ` +
       `and offer the fixes you'd make as ask_user with multiple: true — one option per fix, its description saying what changes and where ` +
       `(e.g. "Stabilise shots 2 and 4 — strong handheld shake"). Apply the chosen ones together in one render. Precise requests ("cut the first 5 s") need no questions.\n` +
-      `- Edit with the ffmpeg tool (bundled; also on PATH for bash). Read the current version, write new files to renders/. Never overwrite media/.\n` +
+      `- Edit with the ffmpeg tool (bundled; also on PATH for the shell). Read the current version, write new files to renders/. Never overwrite media/.\n` +
+      (process.platform === 'win32' ? `- Shell commands use the powershell tool, not Bash. Use PowerShell syntax and built-in commands; translate Unix examples in skills. Do not require Git Bash, WSL, which, du or other Unix utilities. Quote paths with spaces; use & to run a quoted executable path. Python is optional, not assumed installed.\n` : '') +
       `- Files the user gives you (more footage, music, voice-over, logos, photos, subtitles, fonts, LUTs) are in media/ and listed ` +
       `in project_state under files, each with what it is; a message lists the ones attached to it under "${ATTACHED}" (files, and also ` +
       `versions of the film and motion clips the user pointed at; "@name" in the message means the attached one of that name). Use them when the request ` +
@@ -569,11 +576,11 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
         name: 'ffmpeg',
         description: 'Run the bundled ffmpeg in the project folder. Pass the arguments after "ffmpeg" (no shell quoting needed; -y is added). Paths are relative to the project folder; write outputs to renders/.',
         parameters: Type.Object({ args: Type.Array(Type.String(), { description: 'e.g. ["-i","media/a.mp4","-ss","5","-c:v","libx264","renders/cut.mp4"]' }) }),
-        execute: async (args: Any, api: Any) => {
+        execute: async (args: Any, api: Any, context) => {
           const p = proj(api)
           const out = await new Promise<string>((ok, fail) => {
             const [bin, argv] = fencedExec(p, FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error', ...args.args])
-            execFile(bin, argv, { cwd: p.dir, maxBuffer: 1 << 24, signal: api.signal },
+            execFile(bin, argv, { cwd: p.dir, maxBuffer: 1 << 24, signal: context?.abortSignal ?? api.signal, windowsHide: true },
               (err, _o, stderr) => (err ? fail(new Error(`ffmpeg failed: ${stderr.slice(-3000) || err.message}`)) : ok(stderr.slice(-1500))))
           })
           return text(out || 'done')
@@ -815,8 +822,8 @@ export function browserExtension(bridge: Bridge, dirOf: (convId: string) => stri
         execute: async (args: Any, api: Any) => {
           const dir = dirOf(api.conversationId)
           if (!dir || !bridge.project(dir)) throw new Error('This project is not open.')
-          const abs = isAbsolute(args.path) ? args.path : resolve(dir, args.path)
-          if (!abs.startsWith(dir + '/')) throw new Error('The file must be inside the project folder (download it to downloads/ first).')
+          const abs = resolve(dir, args.path)
+          if (!isWithinDir(dir, abs)) throw new Error('The file must be inside the project folder (download it to downloads/ first).')
           if (!existsSync(abs)) throw new Error(`No file at ${args.path}.`)
           return text(`Added:\n${(await bridge.importFiles(dir, abs)).join('\n')}`)
         },
@@ -948,7 +955,7 @@ export async function startAgent(opts: {
   const inspections = new InspectionGuard()
   const registry = createRegistry()
   const dirOf = (id: string) => convDir.get(String(id)) || ''
-  for (const ext of [CodingTools, editorExtension(opts.bridge, dirOf, opts.fence, demoBriefs, inspections), memoryExtension(opts.memory), skillsExtension(opts.skills),
+  for (const ext of [codingExtension(), editorExtension(opts.bridge, dirOf, opts.fence, demoBriefs, inspections), memoryExtension(opts.memory), skillsExtension(opts.skills),
     ...(opts.browserPrompt ? [browserExtension(opts.bridge, dirOf, opts.browserPrompt)] : [])]) registry.install(ext)
   const shellEnv = opts.shellEnv ? liveEnv(opts.shellEnv) : undefined
 

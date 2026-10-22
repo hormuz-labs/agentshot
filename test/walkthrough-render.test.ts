@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -50,7 +50,7 @@ describe('walkthrough rendering with the real bundled FFmpeg', () => {
       // the clicked button is zoomed in on: at the click, its blue fills more of the frame than in the take
       const at = outTime(r.plan.segments, 3.3)!
       ff('-ss', at.toFixed(2), '-i', join(dir, r.file), '-frames:v', '1', '-vf', 'scale=96:54,format=rgb24', '-f', 'rawvideo', join(dir, 'frame.rgb'))
-      const px = execFileSync('cat', [join(dir, 'frame.rgb')])
+      const px = readFileSync(join(dir, 'frame.rgb'))
       let blue = 0
       for (let i = 0; i < px.length; i += 3) if (px[i + 2] > 200 && px[i] < 80) blue++
       expect(blue / (96 * 54)).toBeGreaterThan((200 * 60) / (1280 * 720) * 1.5)

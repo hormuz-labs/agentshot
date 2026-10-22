@@ -1,11 +1,12 @@
 // The real pi-durable harness (no model needed): conversations per project, switching, and surviving a restart.
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { startAgent, type Bridge } from '../src/main/agent'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { codingExtension, editorExtension, startAgent, type Bridge } from '../src/main/agent'
 import { Memory } from '../src/main/memory'
 import { Skills } from '../src/main/skills'
+import { isWithinDir } from '../src/main/paths'
 
 const root = mkdtempSync(join(tmpdir(), 'manul-agent-'))
 const dir = join(root, 'project')
@@ -13,7 +14,86 @@ const bridge = { project: () => undefined } as unknown as Bridge
 const deps = () => ({
   dbPath: join(root, 'agent.sqlite'), bridge,
   memory: new Memory(join(root, 'memory')),
-  skills: new Skills({ bundled: join(root, 'none'), user: join(root, 'skills'), profiles: join(root, 'profiles') }),
+  skills: new Skills({ bundled: join(root, 'none'), profiles: join(root, 'profiles') }),
+})
+
+describe('native coding tools', () => {
+  afterEach(() => vi.unstubAllEnvs())
+  it('replaces Bash with PowerShell only on Windows, keeping the coding extension name', () => {
+    const windows = codingExtension('win32')
+    expect(windows.name).toBe('coding-tools')
+    expect(windows.tools?.map(t => t.name)).toEqual(['read', 'write', 'edit', 'powershell'])
+    expect(codingExtension('linux').tools?.map(t => t.name)).toEqual(['read', 'write', 'edit', 'bash'])
+  })
+
+  it('runs only absolute built-in PowerShell, ignoring cwd decoys and PATH', async () => {
+    vi.stubEnv('SystemRoot', 'D:\\Windows')
+    vi.stubEnv('PATH', dir)
+    mkdirSync(dir, { recursive: true })
+    for (const name of ['pwsh.exe', 'powershell.exe']) writeFileSync(join(dir, name), 'project decoy')
+    const tool = codingExtension('win32').tools!.find(t => t.name === 'powershell')!
+    const { BACKGROUND_CONTEXT } = await import('@earendil-works/chord/context')
+    const calls: unknown[] = []
+    const api = { env: { cwd: dir, exec: async (...args: unknown[]) => {
+      calls.push(args)
+      return { ok: true, value: { exitCode: 0 } }
+    } }, output: () => {}, diagnostic: () => {} }
+    await tool.execute({ command: 'bsk status' } as never, api as never, BACKGROUND_CONTEXT)
+    expect(calls).toHaveLength(1)
+    expect((calls[0] as unknown[])[0]).toEqual(['D:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', expect.stringContaining('bsk status')])
+    expect((calls[0] as unknown[])[2]).toBe(BACKGROUND_CONTEXT)
+  })
+
+  it('does not fall back to cwd or PATH when built-in PowerShell cannot start', async () => {
+    vi.stubEnv('SystemRoot', undefined)
+    vi.stubEnv('PATH', dir)
+    const tool = codingExtension('win32').tools!.find(t => t.name === 'powershell')!
+    const exec = vi.fn(async (_command: string[]) => ({ ok: false, error: { code: 'spawn_error', message: 'missing system executable' } }))
+    await expect(tool.execute({ command: 'Get-Location' } as never,
+      { env: { cwd: dir, exec }, output: () => {}, diagnostic: () => {} } as never, {} as never)).rejects.toMatchObject({ code: 'spawn_error' })
+    expect(exec).toHaveBeenCalledOnce()
+    expect(exec.mock.calls[0][0][0]).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+  })
+
+  it('rejects a relative SystemRoot rather than resolve it against the project', () => {
+    vi.stubEnv('SystemRoot', '.\\decoy')
+    expect(() => codingExtension('win32')).toThrow(/absolute Windows drive path/)
+  })
+
+  it('gives Windows shell and optional-Python instructions', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      const ext = editorExtension({} as never, () => dir)
+      const prompt = await ext.sections![0].render({} as never, {} as never)
+      expect(prompt).toMatch(/powershell tool, not Bash/)
+      expect(prompt).toMatch(/Python is optional/)
+    } finally { platform.mockRestore() }
+  })
+
+  it('rejects sibling-prefix paths in editor tools', async () => {
+    const ext = editorExtension({ project: () => ({ dir }) } as never, () => dir)
+    const tool = ext.tools!.find(t => t.name === 'probe')!
+    await expect(tool.execute({ path: `${dir}-sibling/film.mp4` }, { conversationId: '1' } as never, {} as never)).rejects.toThrow(/inside the project/)
+    await expect(tool.execute({ path: '../film.mp4' }, { conversationId: '1' } as never, {} as never)).rejects.toThrow(/inside the project/)
+  })
+
+  it('uses a relative-path boundary that handles Windows drives, casing, separators and siblings', () => {
+    expect(isWithinDir('C:\\Project', 'c:\\project\\downloads\\song.mp3', 'win32')).toBe(true)
+    expect(isWithinDir('C:\\Project', 'C:/Project/downloads/song.mp3', 'win32')).toBe(true)
+    expect(isWithinDir('C:\\Project', 'C:\\Project-other\\song.mp3', 'win32')).toBe(false)
+    expect(isWithinDir('C:\\Project', 'D:\\Project\\song.mp3', 'win32')).toBe(false)
+    expect(isWithinDir('C:\\Project', 'C:\\Project\\..\\song.mp3', 'win32')).toBe(false)
+    expect(isWithinDir('C:\\Project', 'C:\\Project', 'win32')).toBe(false)
+  })
+
+  it('passes the third context abortSignal to ffmpeg, not the API object', async () => {
+    const ext = editorExtension({ project: () => ({ dir: root }) } as never, () => root)
+    const tool = ext.tools!.find(t => t.name === 'ffmpeg')!
+    const controller = new AbortController()
+    controller.abort()
+    await expect(tool.execute({ args: ['-version'] }, { conversationId: '1' } as never, { abortSignal: controller.signal } as never)).rejects.toThrow(/abort/i)
+  })
 })
 
 describe('conversations', () => {

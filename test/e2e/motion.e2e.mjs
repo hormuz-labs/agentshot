@@ -9,11 +9,12 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync(join(tmpdir(), 'manul-motion-'))
 const shots = process.env.MANUL_E2E_SHOTS
-const ffmpeg = (...args) => execFileSync(join(root, 'resources/bin', `${process.platform}-${process.arch}`, 'ffmpeg'), ['-y', '-loglevel', 'error', ...args])
+const ffmpeg = (...args) => execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', ...args])
 ffmpeg('-f', 'lavfi', '-i', 'testsrc2=size=320x240:r=25:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'reference.mp4'))
 
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/_API_KEY$|_TOKEN$/.test(k)))

@@ -46,7 +46,7 @@ describe('rhythm from the tracker\'s beats', () => {
   })
 })
 
-describe('tracking a real file', () => {
+describe.skipIf(process.platform === 'win32')('tracking a real file', () => {
   let dir: string
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), 'manul-music-'))

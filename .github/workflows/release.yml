@@ -1,4 +1,4 @@
-# A tag like v0.2.0 → build, sign and notarize (macOS) on four runners, then publish ONE GitHub release
+# A tag like v0.2.0 → build, sign and notarize (macOS) on five native runners, then publish ONE GitHub release
 # (the auto-update feed) with every build's files and generated notes, and rebuild the apt repository (apt.yml).
 # Runs when a tag is pushed by hand, or when tag.yml tags a merge to main and calls it with that tag (a tag pushed by a
 # workflow doesn't start other workflows).
@@ -27,11 +27,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-14, arch: arm64, target: --mac }
-          - { os: macos-15-intel, arch: x64, target: --mac }
-          - { os: ubuntu-24.04, arch: x64, target: --linux }
-          - { os: ubuntu-24.04-arm, arch: arm64, target: --linux }
+          - { os: macos-14, arch: arm64, shell: bash }
+          - { os: macos-15-intel, arch: x64, shell: bash }
+          - { os: ubuntu-24.04, arch: x64, shell: bash }
+          - { os: ubuntu-24.04-arm, arch: arm64, shell: bash }
+          - { os: windows-2022, arch: x64, shell: pwsh }
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,15 +50,48 @@ jobs:
       - name: Install build tools (macOS)
         if: runner.os == 'macOS'
         run: brew install cmake
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
+      - name: Require public Windows signing configuration
+        if: runner.os == 'Windows'
+        env:
+          WIN_CSC_LINK: ${{ secrets.WINDOWS_CERT_P12_BASE64 }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
+          MANUL_PUBLIC_RELEASE: '1'
+        run: node --input-type=module -e "import { windowsSigning } from './scripts/package.mjs'; windowsSigning()"
       - run: npm ci
-      - run: ./scripts/build-whisper.sh
-      - run: ./scripts/build-beats.sh
-      - run: ./scripts/build-ml.sh
+      - run: npm run build:whisper
+      - name: Build the bundled beat tracker and model runners (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ./scripts/build-beats.sh
+          ./scripts/build-ml.sh
       - name: Verify target-native tools and models before release
+        if: runner.os != 'Windows'
         run: npm run check:native
+      - name: Inspect bundled Windows executable dependencies
+        if: runner.os == 'Windows'
+        run: ./scripts/check-windows-dependencies.ps1
       - name: Version from the tag
-        run: npm version --no-git-tag-version --allow-same-version "${TAG#v}"
+        run: npm run version:tag
+      - run: npm run test:packaging
+      - run: npm run typecheck
       - run: npm test
+      - name: Windows runtime end-to-end
+        if: runner.os == 'Windows'
+        timeout-minutes: 20
+        run: |
+          node -e "require('electron')"
+          if ($LASTEXITCODE -ne 0) { throw 'Electron download failed' }
+          npx electron-vite build
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime build failed' }
+          foreach ($test in @('filmstrip', 'clips', 'browser', 'export', 'menu')) {
+            node "test/e2e/$test.e2e.mjs"
+            if ($LASTEXITCODE -ne 0) { throw "$test E2E failed" }
+          }
       - name: Build, sign, notarize
         env:
           # crash reports and usage statistics, both opt-in (telemetry/README.md); unset, the build has neither
@@ -65,13 +102,24 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WIN_CSC_LINK: ${{ secrets.WINDOWS_CERT_P12_BASE64 }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
+          MANUL_PUBLIC_RELEASE: '1'
+        run: npm run package
+      - name: Verify Windows signatures and update feed
+        if: runner.os == 'Windows'
+        env:
+          WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
         run: |
-          npx electron-vite build
-          # an empty CSC_LINK makes electron-builder read the project folder as the certificate: unset what isn't configured
-          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do [ -n "${!v}" ] || unset "$v"; done
-          NOTARIZE=false
-          if [ "$RUNNER_OS" = macOS ] && [ -n "$APPLE_ID" ]; then NOTARIZE=true; fi
-          npx electron-builder ${{ matrix.target }} --${{ matrix.arch }} --publish never -c.mac.notarize=$NOTARIZE
+          ./scripts/check-windows-signatures.ps1
+          node scripts/check-windows-feed.mjs
+      - name: Windows packaged app and installer smoke
+        if: runner.os == 'Windows'
+        run: |
+          node test/e2e/packaged.e2e.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Unpacked app E2E failed' }
+          ./scripts/smoke-windows-installer.ps1
       - name: Rename the Mac feed so the two architectures don't collide
         if: runner.os == 'macOS'
         run: mv dist/latest-mac.yml "dist/latest-mac-${{ matrix.arch }}.part.yml"
@@ -84,7 +132,8 @@ jobs:
             dist/*.blockmap
             dist/*.deb
             dist/*.AppImage
-            dist/*.yml
+            dist/*.exe
+            dist/latest*.yml
           if-no-files-found: error
 
   publish:
@@ -99,11 +148,14 @@ jobs:
           pattern: dist-*
           merge-multiple: true
           path: out
-      - name: One Mac feed for both architectures
+      - name: One Mac feed for both architectures and stable download names for manul.si
         run: |
           node scripts/merge-mac-feed.mjs out/latest-mac-*.part.yml > out/latest-mac.yml
           rm out/latest-mac-*.part.yml out/builder-debug.yml 2>/dev/null || true
           cat out/latest-mac.yml
+          cp out/Manul-*-windows-x64-Setup.exe out/Manul-windows-x64-Setup.exe
+          cp out/Manul-*-arm64.dmg out/Manul-arm64.dmg
+          cp out/Manul-*-x64.dmg out/Manul-x64.dmg
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

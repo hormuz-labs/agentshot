@@ -1,5 +1,6 @@
 // Exporting a film: size presets (original, 16:9, 9:16, 1:1) and captions from the transcript (SRT, or burned in).
 import { isFiller } from './fillers'
+import { escapeFilterPath } from './ffmpeg'
 import type { Transcript } from './types'
 
 export type Cue = { s: number; e: number; lines: string[] }
@@ -57,7 +58,7 @@ export type ExportOptions = {
   input: string
   out: string
   source: { width: number; height: number }
-  /** an .srt to burn into the picture (path relative to the cwd ffmpeg runs in) */
+  /** an .srt to burn into the picture (absolute, or relative to ffmpeg's cwd) */
   burnCaptions?: string
   /** folder with fonts for burned captions (Inter ships with Manul) */
   fontsDir?: string
@@ -94,7 +95,7 @@ export function exportArgs(o: ExportOptions): string[] {
       `Outline=${Math.max(1, Math.round(fontSize / 10))}`, `Shadow=0`, `Bold=1`,
       // vertical: well above the bottom, clear of the platform's buttons and caption area
       `MarginV=${unit(tall ? 0.2 : 0.07)}`, `Alignment=2`].join(',')
-    filters.push(`[${label}]subtitles=${o.burnCaptions}${o.fontsDir ? `:fontsdir=${o.fontsDir}` : ''}:force_style='${style}'[cap]`)
+    filters.push(`[${label}]subtitles=${escapeFilterPath(o.burnCaptions)}${o.fontsDir ? `:fontsdir=${escapeFilterPath(o.fontsDir)}` : ''}:force_style='${style}'[cap]`)
     label = 'cap'
   }
   return [
