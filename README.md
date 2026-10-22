@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="build/icons/256x256.png" width="88" alt="Manul">
+</p>
+
 <h1 align="center">Manul: the video editor you talk to</h1>
 
 <p align="center">
@@ -15,7 +19,7 @@
 <p align="center">
   <a href="https://github.com/hormuz-labs/manul/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/hormuz-labs/manul?style=flat&color=262626&label=release"></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-262626?style=flat"></a>
-  <img alt="macOS · Linux" src="https://img.shields.io/badge/macOS%20·%20Linux-262626?style=flat">
+  <img alt="macOS · Windows · Linux" src="https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-262626?style=flat">
   <a href="https://github.com/hormuz-labs/manul/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/hormuz-labs/manul?style=flat&color=f2a541&label=stars"></a>
 </p>
 
@@ -246,7 +250,7 @@ brew install hormuz-labs/tap/manul     # macOS
 Or hand it to your coding agent (Claude Code, Cursor, Codex…) and let it do the install:
 
 ```text
-Install Manul from https://github.com/hormuz-labs/manul. On macOS run `brew install hormuz-labs/tap/manul`. On Debian or Ubuntu, add the apt repository at https://apt.manul.si (the three commands are on that page) and run `sudo apt install manul`; on other Linux, download the AppImage for this machine's architecture from https://github.com/hormuz-labs/manul/releases/latest. Then open Manul.
+Install Manul from https://github.com/hormuz-labs/manul. On macOS run `brew install hormuz-labs/tap/manul`. On Windows, download `Manul-windows-x64-Setup.exe` from https://github.com/hormuz-labs/manul/releases/latest and run it. On Debian or Ubuntu, add the apt repository at https://apt.manul.si (the three commands are on that page) and run `sudo apt install manul`; on other Linux, download the AppImage for this machine's architecture from https://github.com/hormuz-labs/manul/releases/latest. Then open Manul.
 ```
 
 On Debian or Ubuntu, add the signed apt repository once and apt keeps Manul up to date:
@@ -259,14 +263,13 @@ sudo apt update && sudo apt install manul
 
 Other Linux: grab the AppImage from the [latest release](https://github.com/hormuz-labs/manul/releases/latest). More at **[manul.si](https://manul.si)**.
 
-**Windows x64:** a native build and per-user NSIS installer are configured, but have not yet been validated or published.
-Do not treat CI's unsigned test artifacts as public releases. After the signing and clean-Windows gates in
-[RELEASING.md](RELEASING.md) pass, the release installer will be named `Manul-<version>-windows-x64-Setup.exe`.
-Open that single offline installer: no wizard, repositories, package manager, Node, Git, Git Bash, Python,
-FFmpeg or developer tools to install. It installs for your account, creates Desktop and Start menu shortcuts,
-and opens Manul. The app and core tool executables are bundled; speech models and optional heavier tools
-still download inside Manul when requested. Requires **Windows 10 version 1903 (build 18362) or newer,
-or Windows 11, x64**. Windows ARM64 and 32-bit installers are not configured.
+**Windows x64:** from the [latest release](https://github.com/hormuz-labs/manul/releases/latest), download `Manul-windows-x64-Setup.exe` and run it.
+It is a single offline installer: no wizard, package manager, Node, Git, Git Bash, Python, FFmpeg or developer tools to install.
+It installs for your account, creates Desktop and Start menu shortcuts, and opens Manul; later versions update themselves inside the app.
+The app and core tool executables are bundled; speech models and optional heavier tools still download inside Manul when requested.
+Requires **Windows 10 version 1903 (build 18362) or newer, or Windows 11, x64**. Windows ARM64 and 32-bit are not built.
+
+It is signed with Hormuz Labs' own certificate rather than a public one, so SmartScreen may ask once: **More info → Run anyway**.
 
 It's free and open source under the [Apache License 2.0](LICENSE): use it, change it, ship it, edit paid work with it.
 Keep the [NOTICE](NOTICE) attribution when you redistribute it. No AI key of your own? Sign in under **Settings → Keys → Manul key**: new accounts start with 1,000 credits, and Pro and Max plans (shared with Pitch: same email, same plan) add more every month. Or bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain); your own keys are used first.
