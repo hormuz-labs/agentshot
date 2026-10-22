@@ -30,7 +30,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if git tag --points-at "$GITHUB_SHA" | grep -q '^v[0-9]'; then echo "Already tagged: $(git tag --points-at "$GITHUB_SHA")"; exit 0; fi
-          labels=",$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[].labels[].name] | join(",")'),"
+          # Labels only choose major/minor/skip. A flaky API reply must never block a release:
+          # the call returns an empty body now and then, and gh fails to parse it.
+          labels=""
+          for attempt in 1 2 3; do
+            if prs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[].labels[].name] | join(",")' 2>&1); then
+              labels=",$prs,"
+              break
+            fi
+            echo "::warning::label lookup failed (attempt $attempt): $prs"
+            sleep $((attempt * 3))
+          done
+          [ -n "$labels" ] || echo "::warning::could not read labels for $GITHUB_SHA; assuming none"
           case "$labels" in *,release:skip,*) echo "Labelled release:skip"; exit 0 ;; esac
           last=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
           IFS=. read -r major minor patch <<< "${last:-v0.0.0}"; major=${major#v}
