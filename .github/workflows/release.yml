@@ -148,11 +148,14 @@ jobs:
           pattern: dist-*
           merge-multiple: true
           path: out
-      - name: One Mac feed for both architectures
+      - name: One Mac feed for both architectures and stable download names for manul.si
         run: |
           node scripts/merge-mac-feed.mjs out/latest-mac-*.part.yml > out/latest-mac.yml
           rm out/latest-mac-*.part.yml out/builder-debug.yml 2>/dev/null || true
           cat out/latest-mac.yml
+          cp out/Manul-*-windows-x64-Setup.exe out/Manul-windows-x64-Setup.exe
+          cp out/Manul-*-arm64.dmg out/Manul-arm64.dmg
+          cp out/Manul-*-x64.dmg out/Manul-x64.dmg
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

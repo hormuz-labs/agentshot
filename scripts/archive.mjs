@@ -7,7 +7,7 @@ import { dirname, resolve, sep } from 'node:path'
 export const sha256 = data => createHash('sha256').update(data).digest('hex')
 
 export async function download(url, expected) {
-  const res = await fetch(url)
+  const res = await fetch(url, { signal: AbortSignal.timeout(180_000) })
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`)
   const buf = Buffer.from(await res.arrayBuffer())
   const got = sha256(buf)
