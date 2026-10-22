@@ -7,8 +7,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Bundled whisper UTF-8 manifest verification fa
 $runtime = Join-Path $Bin 'vcruntime140.dll'
 if (!(Test-Path -LiteralPath $runtime -PathType Leaf)) { throw 'Bundled BrowserSkill VC runtime missing' }
 $signature = Get-AuthenticodeSignature -LiteralPath $runtime
+# Microsoft ships the redistributable CRT under CN=Microsoft Windows Software
+# Compatibility Publisher, O=Microsoft Corporation (and older builds as
+# CN=Microsoft Corporation), so match the Organization, not the SimpleName/CN.
+$signerSubject = ''
+if ($signature.SignerCertificate) { $signerSubject = $signature.SignerCertificate.Subject }
 if ($signature.Status -ne 'Valid' -or
-    $signature.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) -cne 'Microsoft Corporation') {
+    $signerSubject -notmatch '(?:^|,\s*)O=Microsoft Corporation(?:\s*,|$)') {
     throw 'Bundled VCRUNTIME140.dll must have a valid Microsoft signature'
 }
 foreach ($name in @('ffmpeg.exe', 'ffprobe.exe', 'bsk.exe', 'whisper-cli.exe')) {
