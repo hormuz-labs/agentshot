@@ -239,6 +239,14 @@ filmed again, and lines you kept keep their voice.
 
 ## Get Manul
 
+### Mobile companion (in development)
+
+The Flutter Android/iOS companion lives in [`mobile_app/`](mobile_app/README.md).
+Enable **Settings → Mobile** on the desktop to pair a phone on the same network.
+The computer runs the editing engine; the phone sends footage, directs edits,
+reviews proposals and downloads exports. See the [feature coverage](mobile_app/FEATURES.md)
+for implemented controls and remaining native mobile work.
+
 > **Manul is in early days.**
 
 ```bash

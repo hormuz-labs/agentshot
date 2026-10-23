@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { BrowserMode, WhisperConfig } from '../shared/types'
 
 export type Config = {
+  mobile?: { enabled: boolean }
   whisper?: WhisperConfig
   /** open project tabs, restored on launch */
   tabs?: { open: string[]; active: string | null }
