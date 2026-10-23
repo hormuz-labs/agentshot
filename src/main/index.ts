@@ -1,10 +1,6 @@
 // Manul's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
 import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
-import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
-import { MobileBridge } from './mobile-bridge'
-import { mobileAccount, mobileAccessToken, mobileSignIn, mobileSignOut } from './mobile-account'
-import { clerkIdentity } from '../../relay/server'
-import { AUTH } from './account'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { copyFile, readFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
@@ -87,25 +83,6 @@ let shutdownTask: Promise<void> | null = null
 let quitting = false
 let quitRequested = false
 let allowQuit = false
-// Register once: desktop IPC and validated mobile calls share application operations.
-const handlers = new Map<string, Parameters<typeof electronIpcMain.handle>[1]>()
-const ipcMain = {
-  handle(channel: string, listener: Parameters<typeof electronIpcMain.handle>[1]) { handlers.set(channel, listener); electronIpcMain.handle(channel, listener) },
-  on: electronIpcMain.on.bind(electronIpcMain),
-}
-const mobile = new MobileBridge({
-  account: { current: mobileAccount, token: mobileAccessToken, identity: token => clerkIdentity(AUTH.issuer(), token) },
-  invoke: async (method, args) => {
-    const handler = handlers.get(method)
-    if (!handler) throw new Error('Operation unavailable')
-    return handler(undefined as unknown as Electron.IpcMainInvokeEvent, ...args)
-  },
-  projects: () => Projects.recent(),
-  importFile: async (file, dir) => dir
-    ? handlers.get('project:import')!(undefined as unknown as Electron.IpcMainInvokeEvent, dir, file)
-    : handlers.get('project:create')!(undefined as unknown as Electron.IpcMainInvokeEvent, [file]),
-  galleryFile: (url, range) => serveMedia(new Request(url, { headers: range ? { range } : {} })),
-})
 const browserMode = (): BrowserMode => getConfig().browser?.mode ?? 'manul'
 
 function shutdown() {
@@ -119,7 +96,6 @@ function shutdown() {
       done()
     }, 10_000)
     void (async () => {
-      await mobile.stop()
       await startup.catch(e => console.warn('startup', e))
       await browserStartup
       await takes.stopAll().catch(e => console.warn('takes shutdown', e))
@@ -129,7 +105,7 @@ function shutdown() {
   })
 }
 
-const send = (ch: string, ...args: unknown[]) => { win?.webContents.send(ch, ...args); mobile.publish(ch, ...args) }
+const send = (ch: string, ...args: unknown[]) => win?.webContents.send(ch, ...args)
 const projectOf = (dir: string) => {
   const p = open.get(dir)
   if (!p) throw new Error('This project is not open.')
@@ -636,19 +612,6 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
 
 // ---------------------------------------------------------------- IPC
 function wire() {
-  ipcMain.handle('mobile:status', () => mobile.status())
-  ipcMain.handle('mobile:signIn', async () => { await mobile.stop(); await mobileSignIn(url => shell.openExternal(url)); setConfig({ mobile: { enabled: true } }); return mobile.start() })
-  ipcMain.handle('mobile:signOut', async () => { setConfig({ mobile: { enabled: false } }); await mobile.stop(); mobileSignOut(); return mobile.status() })
-  ipcMain.handle('mobile:start', () => { setConfig({ mobile: { enabled: true } }); return mobile.start() })
-  ipcMain.handle('mobile:stop', () => { setConfig({ mobile: { enabled: false } }); return mobile.stop() })
-  ipcMain.handle('mobile:revoke', (_e, id: string) => mobile.revoke(id))
-  ipcMain.handle('mobile:export', async (_e, dir: string, req: ExportRequest) => {
-    const p = projectOf(dir)
-    await mkdir(join(p.dir, 'exports'), { recursive: true })
-    const version = await renderEdit(p)
-    const result = await exportFilm(p, req, join(p.dir, 'exports', `mobile-${randomUUID()}.mp4`), 'user', version)
-    return { file: relativeProjectPath(p.dir, result.file), ...(result.srt ? { srt: relativeProjectPath(p.dir, result.srt) } : {}) }
-  })
   const onboarding = new OnboardingStore()
   ipcMain.handle('onboarding:settings-opened', () => onboarding.opened())
   ipcMain.handle('onboarding:settings-finish', (_e, status: 'completed' | 'skipped') => onboarding.finish(status))
@@ -710,7 +673,7 @@ function wire() {
     return s
   })
   ipcMain.handle('account:cancel', () => cancelSignIn())
-  ipcMain.handle('account:signOut', async () => { await mobile.stop(); mobileSignOut(); const s = signOut(); agent?.keysChanged(); return s })
+  ipcMain.handle('account:signOut', () => { const s = signOut(); agent?.keysChanged(); return s })
   ipcMain.handle('account:balance', () => balance())
   ipcMain.handle('account:checkout', (_e, what: { plan: string } | { topup: string }) => checkout(url => shell.openExternal(url), what))
   ipcMain.handle('account:billing', () => manageBilling(url => shell.openExternal(url)))
@@ -974,7 +937,6 @@ const startup = app.whenReady().then(async () => {
   // skills come only from the bundle now: drop what the old over-the-air feed downloaded (a cache, never the user's)
   rmSync(join(app.getPath('userData'), 'skill-updates'), { recursive: true, force: true })
   wire()
-  if (getConfig().mobile?.enabled && mobileAccount()) void mobile.start().catch(() => console.warn('Mobile connection could not start'))
   buildMenu(() => win)
   updates = startUpdates(st => send('update', st), shutdown)
   onJobs(jobs => send('jobs', jobs))

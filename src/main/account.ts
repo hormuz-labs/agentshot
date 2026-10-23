@@ -32,16 +32,6 @@ let pending: { server: Server; cancel: () => void } | null = null
 
 /** Sign in: opens the browser, waits for the way back, stores the key. Resolves with who signed in. */
 export async function signIn(open: (url: string) => Promise<void> | void, timeoutMs = 5 * 60_000): Promise<AccountStatus> {
-  const { access_token } = await oauthLogin(open, timeoutMs)
-  const got = await fetch(`${AUTH.account()}/v1/key`, { method: 'POST', headers: { authorization: `Bearer ${access_token}` } })
-  const body = await got.json().catch(() => ({})) as { key?: string; key_id?: string; email?: string; error?: string }
-  if (!got.ok || !body.key) throw new Error(body.error || 'Could not get your Manul key. Try again in a moment.')
-  setKey(MANUL_KEY, body.key)
-  setConfig({ account: { email: body.email, keyId: body.key_id } })
-  return accountStatus()
-}
-
-export async function oauthLogin(open: (url: string) => Promise<void> | void, timeoutMs = 5 * 60_000, offline = false): Promise<{ access_token: string; refresh_token?: string; expires_in?: number }> {
   if (!AUTH.clientId()) throw new Error('Signing in isn’t available in this build.')
   pending?.cancel()
   const verifier = b64url(randomBytes(32))
@@ -50,7 +40,7 @@ export async function oauthLogin(open: (url: string) => Promise<void> | void, ti
     const server = createServer((req, res) => {
       const u = new URL(req.url || '/', REDIRECT)
       if (u.pathname !== '/oauth/callback') { res.writeHead(404).end(); return }
-      const ok = u.searchParams.get('state') === state && u.searchParams.get('code') && (!u.searchParams.has('iss') || u.searchParams.get('iss') === AUTH.issuer())
+      const ok = u.searchParams.get('state') === state && u.searchParams.get('code')
       res.writeHead(ok ? 200 : 400, { 'content-type': 'text/html; charset=utf-8' })
         .end(PAGE(ok ? 'Signed in. You can close this tab and go back to Manul.' : 'Signing in didn’t finish. Go back to Manul and try again.'))
       if (!ok) return
@@ -62,7 +52,7 @@ export async function oauthLogin(open: (url: string) => Promise<void> | void, ti
     server.on('error', e => { done(); reject((e as NodeJS.ErrnoException).code === 'EADDRINUSE' ? new Error(`Port ${CALLBACK_PORT} is busy: close what uses it and try again.`) : e) })
     server.listen(CALLBACK_PORT, '127.0.0.1', async () => {
       const q = new URLSearchParams({
-        response_type: 'code', client_id: AUTH.clientId(), redirect_uri: REDIRECT, scope: offline ? 'openid email profile offline_access' : 'openid email profile',
+        response_type: 'code', client_id: AUTH.clientId(), redirect_uri: REDIRECT, scope: 'openid email profile',
         state, code_challenge: b64url(createHash('sha256').update(verifier).digest()), code_challenge_method: 'S256',
       })
       try { await open(`${AUTH.issuer()}/oauth/authorize?${q}`) } catch (e) { done(); reject(e) }
@@ -70,14 +60,18 @@ export async function oauthLogin(open: (url: string) => Promise<void> | void, ti
   })
 
   const tok = await fetch(`${AUTH.issuer()}/oauth/token`, {
-    signal: AbortSignal.timeout(20_000), redirect: 'error',
     method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT, client_id: AUTH.clientId(), code_verifier: verifier }),
   })
   if (!tok.ok) throw new Error('Signing in didn’t finish. Try again.')
-  const body = await tok.json() as { access_token: string; refresh_token?: string; expires_in?: number }
-  if (typeof body.access_token !== 'string' || !body.access_token) throw new Error('Signing in did not return an access token')
-  return body
+  const { access_token } = await tok.json() as { access_token: string }
+
+  const got = await fetch(`${AUTH.account()}/v1/key`, { method: 'POST', headers: { authorization: `Bearer ${access_token}` } })
+  const body = await got.json().catch(() => ({})) as { key?: string; key_id?: string; email?: string; error?: string }
+  if (!got.ok || !body.key) throw new Error(body.error || 'Could not get your Manul key. Try again in a moment.')
+  setKey(MANUL_KEY, body.key)
+  setConfig({ account: { email: body.email, keyId: body.key_id } })
+  return accountStatus()
 }
 
 /** The account service, as the signed-in key. */
