@@ -1,15 +1,25 @@
 name: Mobile checks
 on:
   pull_request:
-    paths: ['mobile_app/**', 'src/main/mobile-*.ts', 'test/mobile-bridge.test.ts', '.github/workflows/mobile.yml']
+    paths: ['mobile_app/**', 'src/main/mobile-*.ts', 'src/main/account.ts', 'src/preload/index.ts', 'src/renderer/src/views/MobilePanel.tsx', 'relay/**', 'test/mobile-*.test.ts', 'test/e2e/mobile.e2e.mjs', 'test/fixtures/mobile-relay.ts', 'package*.json', '.github/workflows/mobile.yml']
   push:
-    paths: ['mobile_app/**', 'src/main/mobile-*.ts', 'test/mobile-bridge.test.ts', '.github/workflows/mobile.yml']
+    paths: ['mobile_app/**', 'src/main/mobile-*.ts', 'src/main/account.ts', 'src/preload/index.ts', 'src/renderer/src/views/MobilePanel.tsx', 'relay/**', 'test/mobile-*.test.ts', 'test/e2e/mobile.e2e.mjs', 'test/fixtures/mobile-relay.ts', 'package*.json', '.github/workflows/mobile.yml']
   workflow_dispatch:
 jobs:
   flutter:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node node_modules/electron/install.js
+      - run: npm run typecheck
+      - run: npm run build
+      - run: xvfb-run -a node test/e2e/mobile.e2e.mjs
+      - run: npx vitest run test/mobile-relay.test.ts test/mobile-bridge.test.ts test/account.test.ts
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

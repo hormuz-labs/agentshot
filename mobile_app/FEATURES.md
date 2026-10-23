@@ -5,6 +5,7 @@ not shipped on desktop are not counted as existing features.
 
 | Desktop feature | Mobile implementation | Remaining mobile-specific work |
 | --- | --- | --- |
+| Anywhere connection | Manul account sign-in, online computer discovery, outbound WSS relay with desktop-pinned TLS, automatic reconnect | Public relay/DNS deployment, Clerk callback registration, cellular-device verification |
 | Projects / search / delete | Project list, search, import, Trash action | Desktop folder picker/reveal is desktop-only |
 | Video, audio, images, subtitles, fonts, LUTs, ZIP import | Native file picker → streaming upload → same desktop importer | Directory-picker parity, resumable/background transfer |
 | Phone video capture | System camera → project upload | Incoming OS share extensions, interrupted Android camera recovery |
@@ -26,7 +27,7 @@ not shipped on desktop are not counted as existing features.
 | Transcript | Read/transcribe; source-scoped instructions | Word selection/highlighting UI |
 | Tools / install consent / jobs | Status, install/remove, progress, accept/decline | Custom binary/model paths configured on desktop |
 | Skills / profiles / memory | List, toggle, profiles, memory CRUD | — |
-| Keys / account | Configure keys on desktop store; account and balance display | Sign-in, billing and purchases remain desktop-managed |
+| Keys / account | Manul sign-in for device connection; configure keys on desktop store; account and balance display | Billing and purchases remain desktop-managed |
 | Browser / tabs / mode | Navigate/back/forward/reload/new/select/close, own/Chrome mode | Interactive remote browser takeover |
 | Appearance / brand | Light/dark/system, canonical artwork, fonts, launch and store icons | Animated 3D mascot and sound reactions |
 | Menu / shortcuts / command palette | Touch navigation and project menu | Searchable mobile action palette |

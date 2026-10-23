@@ -75,7 +75,7 @@ describe('mobile TLS bridge', () => {
     const event = await new Promise<Record<string, any>>((ok, fail) => {
       const req = request(`https://127.0.0.1:${f.port}/events`, { rejectUnauthorized: false, headers: { authorization: `Bearer ${f.token}` } }, res => {
         let content = ''
-        res.on('data', chunk => { content += chunk; if (content.includes('\n\n')) { ok(JSON.parse(content.split('\n')[0].slice(6))); res.destroy(); req.destroy() } })
+        res.on('data', chunk => { content += chunk; const line = content.split('\n').find(line => line.startsWith('data: ')); if (line && content.includes('\n\n')) { ok(JSON.parse(line.slice(6))); res.destroy(); req.destroy() } })
       }); req.on('error', fail); req.end()
     })
     expect(event.channel).toBe('agent:state'); expect(event.args[1].messages[0].content).toBe('Cut the ums'); expect(event.args[1].streaming.text).toBe('Working'); expect(event.args[1].busy).toBe(true)

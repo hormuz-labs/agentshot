@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'client.dart';
 
 class AgentState {
+  bool loaded = false;
   List<Json> messages = [];
   String streaming = '';
   bool busy = false;
@@ -10,6 +11,7 @@ class AgentState {
   double cost = 0;
   Map<String, String> tools = {};
   void snapshot(Json state) {
+    loaded = true;
     messages = objects(state['messages']);
     streaming = state['streaming']?['text'] as String? ?? '';
     busy = state['busy'] == true;
@@ -36,6 +38,7 @@ class AgentState {
         streaming = '';
         tools.clear();
       case 'MESSAGES_SNAPSHOT':
+        loaded = true;
         messages = objects(event['messages']);
       case 'TEXT_MESSAGE_START':
         streaming = '';
@@ -88,7 +91,11 @@ class BridgeStore extends ChangeNotifier {
   Future<void> open(String directory) async {
     project = object(await client.call('project:open', [directory]));
     _notify();
-    await client.call('agent:attach', [directory]);
+    final state = await client.call('agent:attach', [directory]);
+    if (state is Map && state['messages'] is List) {
+      agent(directory).snapshot(object(state));
+      _notify();
+    }
   }
 
   void useProject(Json value) {

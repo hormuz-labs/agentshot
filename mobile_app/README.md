@@ -6,9 +6,8 @@ desktop editing engine. This is an initial implementation, not a published store
 ## Run
 
 1. From the repository root: `npm install`, then `npm run dev`.
-2. On the desktop, open **Settings → Mobile → Enable mobile connection**.
-3. Put the computer and phone on the same network. Copy a connection code for the
-   computer's reachable network address.
+2. Configure and deploy the account relay as described in [relay/README.md](../relay/README.md).
+3. On the desktop, open **Settings → Mobile → Sign in to Manul**.
 4. Run the Flutter app:
 
    ```sh
@@ -17,13 +16,13 @@ desktop editing engine. This is an initial implementation, not a published store
    flutter run
    ```
 
-5. Paste the connection code into the mobile app. It expires after five minutes
-   and can pair one device. Generate another code to pair another device.
+5. Sign in to the same Manul account in the mobile app and select your computer.
+   Wi-Fi and mobile data work; the devices can be on different networks anywhere.
 
-Keep desktop Manul running. If the computer sleeps, the app reconnects when it
-returns. Quitting Manul or disabling the bridge revokes all pairings; pair again
-after restarting it. This version supports a reachable local network, not an
-internet relay or cloud account-based device discovery.
+Keep desktop Manul running and awake. The app retries when the computer or relay
+returns. Enabled account connections restart with the desktop and rediscover its
+new certificate. Both apps use account sign-in and computer selection. Public relay
+deployment and the mobile OAuth redirect registration are required before pairing works.
 
 Flutter is installed at `/home/adnan/flutter-sdk/bin/flutter` in the development
 environment used to start this project. Android requires Java 17 or newer; use
@@ -77,9 +76,11 @@ save them to Files/your preferred app.
 ## Transport
 
 `src/main/mobile-bridge.ts` starts only when explicitly enabled on the desktop.
-Each bridge lifetime gets a new TLS certificate. The pairing payload includes its
-SHA-256 fingerprint and a one-use 256-bit secret. The Flutter client pins that
-certificate before sending the pairing secret. Session credentials stay in OS
+Each bridge lifetime gets a new TLS certificate. Account connections discover its
+fingerprint through the authenticated relay directory, then use end-to-end TLS
+inside outbound WSS tunnels. The relay directory is trusted for initial identity;
+see its README for the trust boundary. The Flutter client pins the desktop
+certificate before sending account credentials. Session credentials stay in OS
 secure storage; provider keys stay in the desktop key store.
 
 Network calls use an explicit validated allowlist (`mobile-contract.ts`), not

@@ -1,0 +1,25 @@
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: relay/Dockerfile
+    environment:
+      CLERK_ISSUER: ${CLERK_ISSUER:-https://clerk.manul.si}
+    restart: unless-stopped
+    expose: ["8091"]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+  https:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      RELAY_HOST: ${RELAY_HOST:-relay.manul.si}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - caddy-config:/config
+volumes:
+  certificates:
+  caddy-config:

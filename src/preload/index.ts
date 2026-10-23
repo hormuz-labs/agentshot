@@ -30,6 +30,8 @@ const on = <T extends unknown[]>(ch: string) => (fn: (...args: T) => void) => {
 
 const api = {
   mobile: {
+    signIn: () => ipcRenderer.invoke('mobile:signIn') as Promise<import('../main/mobile-bridge').MobileStatus>,
+    signOut: () => ipcRenderer.invoke('mobile:signOut') as Promise<import('../main/mobile-bridge').MobileStatus>,
     status: () => ipcRenderer.invoke('mobile:status') as Promise<import('../main/mobile-bridge').MobileStatus>,
     start: () => ipcRenderer.invoke('mobile:start') as Promise<import('../main/mobile-bridge').MobileStatus>,
     stop: () => ipcRenderer.invoke('mobile:stop') as Promise<import('../main/mobile-bridge').MobileStatus>,

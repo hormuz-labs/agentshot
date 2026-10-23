@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
+import 'account.dart';
+import 'tunnel.dart';
 
 typedef Json = Map<String, dynamic>;
 Json object(dynamic value) => Map<String, dynamic>.from(value as Map);
@@ -52,6 +54,13 @@ class Connection {
 class BridgeClient {
   static const _storageKey = 'manul.desktop.connection.v1';
   final FlutterSecureStorage storage;
+  final MobileAccount account;
+  final Uri relayAddress;
+  final HttpClient? relayClient;
+  RelayTunnel? _tunnel;
+  String? _desktopId;
+  Future<void>? _cloudConnecting;
+  int _cloudGeneration = 0;
   Connection? connection;
   HttpClient? _http;
   HttpServer? _relay;
@@ -63,9 +72,22 @@ class BridgeClient {
   Stream<Json> get events => _events.stream;
   int _generation = 0;
   bool _disposed = false;
-  BridgeClient({this.storage = const FlutterSecureStorage()});
+  BridgeClient({
+    this.storage = const FlutterSecureStorage(),
+    MobileAccount? account,
+    Uri? relay,
+    this.relayClient,
+  }) : account = account ?? MobileAccount(storage),
+       relayAddress = relay ?? Uri.parse(relayUrl);
 
   Future<bool> restore() async {
+    await account.restore();
+    final desktop = await storage.read(key: 'manul.desktop.cloud.v1');
+    if (desktop != null && account.signedIn) {
+      _desktopId = desktop;
+      // Reconnect is handled by listen(), including an offline desktop at startup.
+      return true;
+    }
     final saved = await storage.read(key: _storageKey);
     if (saved == null) return false;
     try {
@@ -89,6 +111,88 @@ class BridgeClient {
           sha256.convert(certificate.der).toString() == value.fingerprint;
   }
 
+  Future<void> connectDesktop(String id) async {
+    _cloudGeneration++;
+    _desktopId = id;
+    try {
+      await _connectCloud();
+      await storage.write(key: 'manul.desktop.cloud.v1', value: id);
+      await storage.delete(key: _storageKey);
+    } catch (_) {
+      _desktopId = null;
+      _http?.close(force: true);
+      connection = null;
+      await _tunnel?.close();
+      rethrow;
+    }
+  }
+
+  Future<void> _connectCloud() => _cloudConnecting ??= _openCloud()
+      .whenComplete(() => _cloudConnecting = null);
+  Future<void> _openCloud() async {
+    final generation = _cloudGeneration;
+    final id = _desktopId;
+    final desktops = await account.desktops();
+    void check() {
+      if (_disposed || generation != _cloudGeneration || id != _desktopId) {
+        throw BridgeException('Connection cancelled');
+      }
+    }
+
+    check();
+    final desktop = desktops.where((d) => d['id'] == id).firstOrNull;
+    if (desktop == null) {
+      throw BridgeException(
+        'Your computer is offline. Keep Manul running and connected to the internet.',
+      );
+    }
+    final fingerprint = desktop['fingerprint'] as String;
+    if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(fingerprint)) {
+      throw BridgeException('Invalid desktop certificate');
+    }
+    _http?.close(force: true);
+    await _tunnel?.close();
+    check();
+    final tunnel = RelayTunnel(
+      relayAddress,
+      id!,
+      account.token,
+      webSocketClient: relayClient,
+    );
+    await tunnel.start();
+    if (_disposed || generation != _cloudGeneration) {
+      await tunnel.close();
+      throw BridgeException('Connection cancelled');
+    }
+    _tunnel = tunnel;
+    final target = Connection(
+      Uri.parse('https://desktop.manul.invalid'),
+      fingerprint,
+      await account.token(),
+    );
+    check();
+    connection = target;
+    _http = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 25)
+      ..connectionFactory = (uri, proxyHost, proxyPort) async {
+        if (uri.host != target.url.host || proxyHost != null) {
+          throw BridgeException('Invalid tunnel destination');
+        }
+        return tunnel.secureConnection(fingerprint);
+      };
+    final result = object(
+      await _post('/account/pair', {
+        'id': account.deviceId,
+        'name': Platform.isIOS ? 'iPhone / iPad' : 'Android',
+      }),
+    );
+    check();
+    if (result['protocol'] != 1) {
+      throw BridgeException('Update Manul to connect.');
+    }
+    connection = Connection(target.url, fingerprint, result['token'] as String);
+  }
+
   Future<void> pair(String code) async {
     final Json input;
     try {
@@ -102,6 +206,11 @@ class BridgeClient {
     if (input['code'] is! String) {
       throw BridgeException('Connection code is missing.');
     }
+    _cloudGeneration++;
+    _desktopId = null;
+    await _tunnel?.close();
+    _tunnel = null;
+    await storage.delete(key: 'manul.desktop.cloud.v1');
     _configure(target);
     try {
       final result = object(
@@ -191,8 +300,14 @@ class BridgeClient {
 
   Future<void> _listen(int generation) async {
     var delay = 1;
-    while (!_disposed && generation == _generation && connection != null) {
+    var reconnect = connection == null;
+    while (!_disposed &&
+        generation == _generation &&
+        (connection != null || _desktopId != null)) {
+      String? failure;
       try {
+        if (_desktopId != null && reconnect) await _connectCloud();
+        if (_disposed || generation != _generation) return;
         final response = await (await _request('GET', '/events')).close();
         if (response.statusCode != 200) {
           await _decode(response);
@@ -215,16 +330,22 @@ class BridgeClient {
         }
       } catch (error) {
         if (_disposed || generation != _generation) return;
-        _events.add({
-          'channel': 'connection',
-          'args': [false, error.toString()],
-        });
-        if (error is BridgeException && error.status == 401) return;
+        failure = error.toString();
+        if (_desktopId == null &&
+            error is BridgeException &&
+            error.status == 401) {
+          _events.add({
+            'channel': 'connection',
+            'args': [false, failure],
+          });
+          return;
+        }
       }
       if (_disposed || generation != _generation) return;
+      reconnect = true;
       _events.add({
         'channel': 'connection',
-        'args': [false, 'Reconnecting to your desktop…'],
+        'args': [false, failure ?? 'Connection interrupted. Reconnecting…'],
       });
       await Future<void>.delayed(Duration(seconds: delay));
       delay = min(delay * 2, 15);
@@ -362,6 +483,11 @@ class BridgeClient {
   }
 
   Future<void> disconnect() async {
+    _cloudGeneration++;
+    _desktopId = null;
+    await storage.delete(key: 'manul.desktop.cloud.v1');
+    await _tunnel?.close();
+    _tunnel = null;
     _generation++;
     _http?.close(force: true);
     _http = null;
@@ -372,9 +498,11 @@ class BridgeClient {
   }
 
   Future<void> dispose() async {
+    _cloudGeneration++;
     _disposed = true;
     _generation++;
     _http?.close(force: true);
+    await _tunnel?.close();
     await _relay?.close(force: true);
     await _events.close();
   }

@@ -56,6 +56,7 @@ void main() {
         'files': {},
         'timeline': {'items': []},
       };
+      store.agent('/fixture').loaded = true;
       store.agent('/fixture').messages = [
         {
           'id': '1',

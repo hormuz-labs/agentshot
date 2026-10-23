@@ -1,4 +1,4 @@
-# The account-service build only needs its source and npm manifests.
+# Service builds only need their source and npm manifests.
 **
 !package.json
 !package-lock.json
@@ -7,3 +7,5 @@
 !account/local.mjs
 !account/src/
 !account/src/**
+!relay/
+!relay/*.ts

@@ -5,23 +5,25 @@ import { randomBytes, timingSafeEqual, X509Certificate } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { join, extname } from 'node:path'
-import { tmpdir, networkInterfaces } from 'node:os'
+import { tmpdir, networkInterfaces, hostname } from 'node:os'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { generate } from 'selfsigned'
 import { artifactPath } from './artifacts'
 import { mobileArgs, mobileSchemas, projectArgument } from './mobile-contract'
 import { emptyAgentState, reduce, type AgentState } from '../shared/agui-state'
+import { DesktopRelay } from './mobile-relay'
 type Options = {
   invoke(method: string, args: unknown[]): Promise<unknown>
   projects(): { dir: string }[]
   importFile(file: string, dir?: string): Promise<unknown>
   galleryFile(url: string, range?: string): Response
+  account?: { current(): { id: string; sub: string; email: string } | undefined; token(): Promise<string>; identity(token: string): Promise<{ sub: string }> }
 }
 const secret = () => randomBytes(32).toString('base64url')
 const equal = (a: string, b: string) => Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b))
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message) } }
-export type MobileStatus = { running: boolean; addresses: string[]; fingerprint?: string; code?: string; expiresAt?: number; devices: { id: string; name: string }[] }
+export type MobileStatus = { running: boolean; addresses: string[]; fingerprint?: string; code?: string; expiresAt?: number; devices: { id: string; name: string }[]; email?: string; relay?: string }
 export class MobileBridge {
   private server?: Server
   private fingerprint?: string
@@ -34,10 +36,12 @@ export class MobileBridge {
   private failures = new Map<string, { count: number; until: number }>()
   private activeUploads = 0
   private starting?: Promise<MobileStatus>
+  private relay?: DesktopRelay
+  private blocked = new Set<string>()
   constructor(private options: Options) {}
   status(): MobileStatus {
     const addresses = Object.values(networkInterfaces()).flat().filter(n => n?.family === 'IPv4' && !n.internal).map(n => `https://${n!.address}:${this.port}`)
-    return { running: !!this.server, addresses: this.server ? addresses : [], fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: [...this.devices.values()].map(({ id, name }) => ({ id, name })) }
+    return { running: !!this.server, addresses: this.server ? addresses : [], fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: [...this.devices.values()].map(({ id, name }) => ({ id, name })), email: this.options.account?.current()?.email, relay: this.relay?.state }
   }
   start(): Promise<MobileStatus> {
     if (this.starting) return this.starting
@@ -45,7 +49,7 @@ export class MobileBridge {
     return this.starting
   }
   private async listen() {
-    if (this.server) { this.code = secret(); this.expiresAt = Date.now() + 5 * 60_000; return this.status() }
+    if (this.server) { this.code = secret(); this.expiresAt = Date.now() + 5 * 60_000; this.startRelay(); return this.status() }
     const pem = await generate([{ name: 'commonName', value: 'Manul Mobile Bridge' }], { keySize: 2048, algorithm: 'sha256', notAfterDate: new Date(Date.now() + 30 * 86400_000) })
     const server = createServer({ key: pem.private, cert: pem.cert, minVersion: 'TLSv1.2' }, (req, res) => {
       void this.handle(req, res).catch(error => {
@@ -61,10 +65,18 @@ export class MobileBridge {
     this.server = server; this.port = (server.address() as { port: number }).port
     this.fingerprint = new X509Certificate(pem.cert).fingerprint256.replaceAll(':', '').toLowerCase()
     this.code = secret(); this.expiresAt = Date.now() + 5 * 60_000
+    this.startRelay()
     return this.status()
+  }
+  private startRelay() {
+    const account = this.options.account?.current()
+    if (!account || this.relay) return
+    this.relay = new DesktopRelay({ url: process.env.MANUL_RELAY || 'https://relay.manul.si', id: account.id, name: hostname().slice(0, 80), port: this.port, fingerprint: this.fingerprint!, token: () => this.options.account!.token() })
+    this.relay.start()
   }
   async stop() {
     if (this.starting) await this.starting
+    this.relay?.stop(); this.relay = undefined; this.blocked.clear()
     this.code = undefined; this.devices.clear()
     for (const res of this.clients.keys()) res.end()
     this.clients.clear()
@@ -74,6 +86,7 @@ export class MobileBridge {
     return this.status()
   }
   revoke(id: string) {
+    this.blocked.add(id)
     for (const [token, d] of this.devices) if (d.id === id) { this.devices.delete(token); for (const [res, t] of this.clients) if (t === token) res.end() }
     return this.status()
   }
@@ -100,6 +113,26 @@ export class MobileBridge {
     if (req.headers.origin) throw new HttpError(403, 'Native clients only')
     const url = new URL(req.url || '/', 'https://localhost')
     const reply = (value: unknown) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(value ?? null)) }
+    if (url.pathname === '/account/pair' && req.method === 'POST') {
+      const server = this.server
+      const account = this.options.account?.current()
+      if (!account) throw new HttpError(403, 'Enable account connection on the desktop')
+      const body = await this.json(req)
+      if (!/^[a-f0-9]{32}$/.test(body.id) || this.blocked.has(body.id)) throw new HttpError(403, 'Device disconnected on desktop')
+      const ip = req.socket.remoteAddress || ''
+      const attempt = this.failures.get(ip)
+      if (attempt && attempt.until > Date.now() && attempt.count >= 20) throw new HttpError(429, 'Try again in a minute')
+      this.failures.set(ip, { count: (attempt && attempt.until > Date.now() ? attempt.count : 0) + 1, until: Date.now() + 60_000 })
+      let who: { sub: string }
+      try { who = await this.options.account!.identity(req.headers.authorization?.replace(/^Bearer /, '') || '') } catch { throw new HttpError(401, 'Sign in to Manul again') }
+      if (who.sub !== account.sub || this.options.account?.current()?.sub !== account.sub || this.server !== server || this.blocked.has(body.id)) throw new HttpError(403, 'Connection no longer available')
+      // Reconnect replaces this device's old token and event stream.
+      for (const [token, d] of this.devices) if (d.id === body.id) { this.devices.delete(token); for (const [res, t] of this.clients) if (t === token) res.end() }
+      if (this.devices.size >= 10) throw new HttpError(409, 'Remove a paired device first')
+      const token = secret()
+      this.devices.set(token, { id: body.id, name: String(body.name || 'Phone').slice(0, 80), expiresAt: Date.now() + 60 * 60_000 })
+      return reply({ token, protocol: 1 })
+    }
     if (url.pathname === '/pair' && req.method === 'POST') {
       const ip = req.socket.remoteAddress || ''; const attempt = this.failures.get(ip)
       if (attempt && attempt.until > Date.now() && attempt.count >= 5) throw new HttpError(429, 'Try pairing again in a minute')
@@ -119,11 +152,17 @@ export class MobileBridge {
     if (url.pathname === '/rpc' && req.method === 'POST') {
       const body = await this.json(req); const args = mobileArgs(body.method, body.args)
       if (projectArgument(body.method) && args.length) this.authorizeProject(args[0])
-      return reply(await this.options.invoke(body.method, args))
+      const result = await this.options.invoke(body.method, args)
+      // Existing clients ignore the attach result; mobile can hydrate saved
+      // history immediately even while its live stream is reconnecting.
+      if (body.method === 'agent:attach') return reply(this.states.get(args[0] as string) || emptyAgentState())
+      return reply(result)
     }
     if (url.pathname === '/events' && req.method === 'GET') {
       if (this.clients.size >= 20) throw new HttpError(429, 'Too many live connections')
       res.writeHead(200, { 'content-type': 'text/event-stream', connection: 'keep-alive' }); this.clients.set(res, token)
+      res.flushHeaders()
+      res.write(': connected\n\n')
       for (const [dir, state] of this.states) res.write(`data: ${JSON.stringify({ channel: 'agent:state', args: [dir, state] })}\n\n`)
       const heartbeat = setInterval(() => { if (!this.devices.has(token) || device.expiresAt < Date.now()) res.end(); else res.write(': heartbeat\n\n') }, 15_000)
       res.on('close', () => { clearInterval(heartbeat); this.clients.delete(res) }); return

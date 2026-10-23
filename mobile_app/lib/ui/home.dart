@@ -201,12 +201,12 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               if (!store.connected)
                 Material(
-                  color: Theme.of(context).colorScheme.errorContainer,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(
                       children: [
-                        const Icon(Icons.wifi_off, size: 20),
+                        const Icon(Icons.sync, size: 20),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(

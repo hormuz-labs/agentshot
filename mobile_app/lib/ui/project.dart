@@ -309,7 +309,14 @@ class _ProjectScreenState extends State<ProjectScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 ConsentCards(store: store),
-                if (messages.isEmpty && state.streaming.isEmpty)
+                if (!state.loaded &&
+                    messages.isEmpty &&
+                    state.streaming.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('Loading conversation…'),
+                  ),
+                if (state.loaded && messages.isEmpty && state.streaming.isEmpty)
                   const EmptyMessage(
                     Icons.chat_bubble_outline,
                     'Give notes. Get cuts.',

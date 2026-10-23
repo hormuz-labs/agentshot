@@ -2,6 +2,9 @@
 import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
 import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
 import { MobileBridge } from './mobile-bridge'
+import { mobileAccount, mobileAccessToken, mobileSignIn, mobileSignOut } from './mobile-account'
+import { clerkIdentity } from '../../relay/server'
+import { AUTH } from './account'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { copyFile, readFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
@@ -91,6 +94,7 @@ const ipcMain = {
   on: electronIpcMain.on.bind(electronIpcMain),
 }
 const mobile = new MobileBridge({
+  account: { current: mobileAccount, token: mobileAccessToken, identity: token => clerkIdentity(AUTH.issuer(), token) },
   invoke: async (method, args) => {
     const handler = handlers.get(method)
     if (!handler) throw new Error('Operation unavailable')
@@ -633,8 +637,10 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
 // ---------------------------------------------------------------- IPC
 function wire() {
   ipcMain.handle('mobile:status', () => mobile.status())
-  ipcMain.handle('mobile:start', () => mobile.start())
-  ipcMain.handle('mobile:stop', () => mobile.stop())
+  ipcMain.handle('mobile:signIn', async () => { await mobile.stop(); await mobileSignIn(url => shell.openExternal(url)); setConfig({ mobile: { enabled: true } }); return mobile.start() })
+  ipcMain.handle('mobile:signOut', async () => { setConfig({ mobile: { enabled: false } }); await mobile.stop(); mobileSignOut(); return mobile.status() })
+  ipcMain.handle('mobile:start', () => { setConfig({ mobile: { enabled: true } }); return mobile.start() })
+  ipcMain.handle('mobile:stop', () => { setConfig({ mobile: { enabled: false } }); return mobile.stop() })
   ipcMain.handle('mobile:revoke', (_e, id: string) => mobile.revoke(id))
   ipcMain.handle('mobile:export', async (_e, dir: string, req: ExportRequest) => {
     const p = projectOf(dir)
@@ -704,7 +710,7 @@ function wire() {
     return s
   })
   ipcMain.handle('account:cancel', () => cancelSignIn())
-  ipcMain.handle('account:signOut', () => { const s = signOut(); agent?.keysChanged(); return s })
+  ipcMain.handle('account:signOut', async () => { await mobile.stop(); mobileSignOut(); const s = signOut(); agent?.keysChanged(); return s })
   ipcMain.handle('account:balance', () => balance())
   ipcMain.handle('account:checkout', (_e, what: { plan: string } | { topup: string }) => checkout(url => shell.openExternal(url), what))
   ipcMain.handle('account:billing', () => manageBilling(url => shell.openExternal(url)))
@@ -968,6 +974,7 @@ const startup = app.whenReady().then(async () => {
   // skills come only from the bundle now: drop what the old over-the-air feed downloaded (a cache, never the user's)
   rmSync(join(app.getPath('userData'), 'skill-updates'), { recursive: true, force: true })
   wire()
+  if (getConfig().mobile?.enabled && mobileAccount()) void mobile.start().catch(() => console.warn('Mobile connection could not start'))
   buildMenu(() => win)
   updates = startUpdates(st => send('update', st), shutdown)
   onJobs(jobs => send('jobs', jobs))

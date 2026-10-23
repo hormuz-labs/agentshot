@@ -178,7 +178,7 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: gce
     kubernetes.io/ingress.global-static-ip-name: manul-gateway
-    networking.gke.io/managed-certificates: manul,manul-admin
+    networking.gke.io/managed-certificates: manul,manul-admin,manul-relay
     networking.gke.io/v1beta1.FrontendConfig: manul
 spec:
   defaultBackend:                 # anything else gets the account service's 404
@@ -197,3 +197,7 @@ spec:
       http:
         paths:
           - { path: /, pathType: Prefix, backend: { service: { name: account, port: { number: 8080 } } } }
+    - host: relay.manul.si
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: relay, port: { number: 8091 } } } }

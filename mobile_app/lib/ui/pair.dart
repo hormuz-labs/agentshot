@@ -10,29 +10,33 @@ class PairScreen extends StatefulWidget {
 }
 
 class _PairScreenState extends State<PairScreen> {
-  final code = TextEditingController();
   bool busy = false;
   String? error;
+  List<Json> computers = [];
   @override
-  void dispose() {
-    code.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    if (widget.client.account.signedIn) refresh();
   }
 
-  Future<void> pair() async {
+  Future<void> run(Future<void> Function() action) async {
     setState(() {
       busy = true;
       error = null;
     });
     try {
-      await widget.client.pair(code.text);
-      if (mounted) widget.onPaired();
+      await action();
     } catch (e) {
       if (mounted) setState(() => error = '$e');
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
+
+  Future<void> refresh() => run(() async {
+    final found = await widget.client.account.desktops();
+    if (mounted) setState(() => computers = found);
+  });
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -51,7 +55,7 @@ class _PairScreenState extends State<PairScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Your film.\nYour notes.\nAnywhere at home.',
+                  'Your film.\nYour notes.\nAnywhere.',
                   style: Theme.of(context).textTheme.headlineLarge,
                 ),
                 const SizedBox(height: 16),
@@ -59,39 +63,104 @@ class _PairScreenState extends State<PairScreen> {
                   'Connect to Manul on your computer. Send footage, ask for edits, and keep the cuts you love.',
                 ),
                 const SizedBox(height: 28),
-                const Text(
-                  '1. Open Manul on your computer.\n2. Open Mobile in Settings and enable the connection.\n3. Copy the connection code and paste it here.',
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: code,
-                  minLines: 3,
-                  maxLines: 5,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  decoration: InputDecoration(
-                    labelText: 'Connection code',
-                    alignLabelWithHint: true,
-                    errorText: error,
-                    errorMaxLines: 5,
+                if (!widget.client.account.signedIn)
+                  FilledButton.icon(
+                    onPressed: busy
+                        ? null
+                        : () => run(() async {
+                            await widget.client.account.signIn();
+                            final found = await widget.client.account
+                                .desktops();
+                            if (mounted) setState(() => computers = found);
+                          }),
+                    icon: const Icon(Icons.login),
+                    label: Text(busy ? 'Signing in…' : 'Sign in to Manul'),
+                  )
+                else ...[
+                  Text(widget.client.account.email ?? 'Manul account'),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Your computers',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                ),
+                  if (computers.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'No computers online yet. Open Manul → Settings → Mobile on your computer and sign in to this account.',
+                      ),
+                    ),
+                  for (final computer in computers)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Icon(Icons.computer),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${computer['name']}',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: busy
+                                  ? null
+                                  : () => run(() async {
+                                      await widget.client.connectDesktop(
+                                        computer['id'] as String,
+                                      );
+                                      if (mounted) widget.onPaired();
+                                    }),
+                              child: const Text('Connect'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  Wrap(
+                    spacing: 12,
+                    children: [
+                      TextButton.icon(
+                        onPressed: busy ? null : refresh,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Refresh'),
+                      ),
+                      TextButton(
+                        onPressed: busy
+                            ? null
+                            : () => run(() async {
+                                await widget.client.account.signOut();
+                                if (mounted) setState(() => computers = []);
+                              }),
+                        child: const Text('Sign out'),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: busy ? null : pair,
-                  icon: busy
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.link),
-                  label: Text(busy ? 'Connecting…' : 'Connect to desktop'),
-                ),
-                const SizedBox(height: 20),
                 const Text(
-                  'Both devices must be on the same network. Your computer runs the editing tools; this app connects through encrypted, certificate-pinned TLS.',
-                  style: TextStyle(fontSize: 13),
+                  'Use Wi-Fi or mobile data, wherever you are. Sign in to the same account on both devices. Your computer needs to stay awake with Manul running.',
                 ),
+                if (busy)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
