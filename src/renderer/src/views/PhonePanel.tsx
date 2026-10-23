@@ -2,7 +2,7 @@
 // phone (good for five minutes, one phone each); paired phones can be removed. Development builds only for now.
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
-import { RefreshCw, Smartphone } from 'lucide-react'
+import { Check, Copy, RefreshCw, Smartphone } from 'lucide-react'
 import { PanelHeader } from '@/components/ui/panel-header'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ export function PhonePanel() {
   const [pairing, setPairing] = useState<(PhonePairing & { qr: string }) | null>(null)
   const [now, setNow] = useState(Date.now())
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     window.manul.phone.state().then(setSt)
@@ -31,6 +32,7 @@ export function PhonePanel() {
 
   const newCode = async () => {
     setError(null)
+    setCopied(false)
     try {
       const p = await window.manul.phone.pair()
       setPairing({ ...p, qr: await QRCode.toDataURL(p.url, { margin: 1, width: 360, errorCorrectionLevel: 'M' }) })
@@ -76,7 +78,12 @@ export function PhonePanel() {
                   <div className="min-w-0 space-y-2 text-[13px]">
                     <p>Open the Manul app on your phone and scan this code.</p>
                     <p className="text-xs text-dim">It works once, for {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} more. Your phone needs to be on the same Wi-Fi as {pairing.name}{st.tailscale ? ', or on Tailscale' : ''}.</p>
-                    <Button size="sm" variant="ghost" onClick={newCode}><RefreshCw />New code</Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button size="sm" variant="ghost" onClick={newCode}><RefreshCw />New code</Button>
+                      <Button size="sm" variant="ghost" onClick={() => { void navigator.clipboard.writeText(pairing.url); setCopied(true) }}>
+                        {copied ? <><Check />Copied</> : <><Copy />Copy link</>}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ) : (
