@@ -123,12 +123,14 @@ try {
 
   // history: every step is a point; going back before the drag undoes it (HTML and version)
   // A version is published before checkpoint() finishes writing its history commit.
-  // Wait for that commit, rather than treating the earlier project update as completion.
-  await win.waitForFunction(async dir => {
-    const entries = await window.manul.history.log(dir)
-    return entries[0]?.message === 'Moved title in card'
-  }, p.dir, { timeout: 15000 })
-  const log = await win.evaluate(dir => window.manul.history.log(dir), p.dir)
+  // Poll in Node: waitForFunction treats an async predicate's Promise as truthy,
+  // even when it resolves to false, so it does not wait for the history commit.
+  let log = []
+  for (let i = 0; i < 60; i++) {
+    log = await win.evaluate(dir => window.manul.history.log(dir), p.dir)
+    if (log[0]?.message === 'Moved title in card') break
+    await win.waitForTimeout(250)
+  }
   const msgs = log.map(e => e.message)
   assert.equal(msgs[0], 'Moved title in card')
   for (const m of ['Imported src.mp4', 'Made clip “Card”', 'Proposed “Card added”', 'Accepted “Card added”']) assert.ok(msgs.includes(m), `history has ${m}: ${msgs}`)

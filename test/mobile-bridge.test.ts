@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { request } from 'node:https'
 import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { MobileBridge } from '../src/main/mobile-bridge'
 import { mobileArgs } from '../src/main/mobile-contract'
@@ -14,7 +14,7 @@ async function fixture() {
   const dir = await mkdtemp(join(tmpdir(), 'manul-bridge-test-')); folders.push(dir)
   await writeFile(join(dir, 'film.mp4'), '0123456789')
   const invoke = vi.fn(async (method: string, args: unknown[]) => ({ method, args }))
-  const importFile = vi.fn(async (file: string) => ({ name: file.split('/').pop(), content: await readFile(file, 'utf8') }))
+  const importFile = vi.fn(async (file: string) => ({ name: basename(file), content: await readFile(file, 'utf8') }))
   const bridge = new MobileBridge({ invoke, projects: () => [{ dir }], importFile, galleryFile: () => new Response('gallery') }); bridges.push(bridge)
   const status = await bridge.start()
   const base = status.addresses[0] || ''
