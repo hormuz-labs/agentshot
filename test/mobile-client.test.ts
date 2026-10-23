@@ -3,7 +3,7 @@
 import type { BaseEvent } from '@ag-ui/core'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { PhoneServer, type Device } from '../src/main/remote'
 import { MacClient, MacError, pair, reach, type Follow, type Source } from '../mobile/src/mac'
@@ -33,7 +33,7 @@ function mac() {
     stop: async () => {},
     subscribe: (_dir, emit) => { subs.add(emit); emit({ type: 'MESSAGES_SNAPSHOT', messages: [] } as BaseEvent); return () => subs.delete(emit) },
     uploads: mkdtempSync(join(tmpdir(), 'manul-uploads-')),
-    addFile: async (_dir, abs) => { const name = abs.split('/').pop()!; added.push({ name, bytes: readFileSync(abs) }); return [`media/${name}`] },
+    addFile: async (_dir, abs) => { const name = basename(abs); added.push({ name, bytes: readFileSync(abs) }); return [`media/${name}`] },
   }, () => hosts.now)
   return { server, devices, sent, attached, added, subs, hosts, emit: (e: BaseEvent) => subs.forEach(s => s(e)) }
 }

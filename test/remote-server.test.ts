@@ -3,7 +3,7 @@ import type { BaseEvent } from '@ag-ui/core'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { request } from 'node:http'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { PhoneServer, reachableHosts, safeName, type Device, type PhoneDeps } from '../src/main/remote'
 import {
@@ -30,7 +30,7 @@ function setup(over: Partial<PhoneDeps> = {}) {
     },
     uploads: mkdtempSync(join(tmpdir(), 'manul-uploads-')),
     addFile: async (dir, abs, from) => {
-      const name = abs.split('/').pop()!
+      const name = basename(abs)
       added.push({ dir, name, bytes: readFileSync(abs, 'latin1'), from })
       return [`media/${name}`]
     },
