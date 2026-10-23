@@ -1,3 +1,0 @@
-{$RELAY_HOST} {
-    reverse_proxy relay:8091
-}

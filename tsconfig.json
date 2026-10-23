@@ -16,5 +16,5 @@
     "baseUrl": ".",
     "paths": { "@/*": ["src/renderer/src/*"] }
   },
-  "include": ["src", "telemetry", "account", "relay", "electron.vite.config.ts"]
+  "include": ["src", "telemetry", "account", "electron.vite.config.ts"]
 }
