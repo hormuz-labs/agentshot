@@ -22,6 +22,8 @@ export async function startMeshNode(opts: {
   ephemeral?: boolean
   forwardPort?: number
   meshPort?: number
+  /** Called if the helper exits after it came up (crash, kill, mesh logout). */
+  onExit?: () => void
 }): Promise<MeshNode | null> {
   const bin = meshBinPath()
   if (!existsSync(bin)) return null
@@ -50,6 +52,7 @@ export async function startMeshNode(opts: {
     clearTimeout(timer)
     return null
   }
+  let ready = false
   let buf = ''
   child.stdout?.setEncoding('utf8')
   child.stdout?.on('data', (chunk: string) => {
@@ -60,6 +63,7 @@ export async function startMeshNode(opts: {
     try {
       const parsed = JSON.parse(line) as { ip?: string }
       if (parsed.ip) {
+        ready = true
         clearTimeout(timer)
         resolve({
           ip: parsed.ip,
@@ -74,6 +78,7 @@ export async function startMeshNode(opts: {
   })
   child.on('exit', () => {
     clearTimeout(timer)
+    if (ready) opts.onExit?.()
     resolve(null)
   })
   child.on('error', () => {

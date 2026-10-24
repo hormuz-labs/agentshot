@@ -204,7 +204,7 @@ class _PairScreenState extends State<PairScreen> {
                         size: 18,
                       ),
                       label: const Text(
-                        'Connecting over Tailscale? Enter computer IP',
+                        'Away from home? Enter an address',
                       ),
                     ),
                   ),
@@ -217,14 +217,14 @@ class _PairScreenState extends State<PairScreen> {
                       enableSuggestions: false,
                       keyboardType: TextInputType.url,
                       decoration: const InputDecoration(
-                        labelText: 'Computer IP or Tailscale address',
+                        labelText: 'Computer IP, Tailscale or mesh address',
                         hintText: '100.x.y.z or 192.168.x.y',
                       ),
                     ),
                   ],
                   const SizedBox(height: 12),
                   const Text(
-                    'Connects automatically on the same Wi-Fi, or over Tailscale from anywhere, using encrypted certificate-pinned TLS.',
+                    'Connects automatically on the same Wi-Fi, or from anywhere over Tailscale or your AgentShot mesh, using encrypted certificate-pinned TLS.',
                     style: TextStyle(fontSize: 13),
                   ),
                 ],

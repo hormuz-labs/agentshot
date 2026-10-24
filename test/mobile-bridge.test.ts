@@ -34,6 +34,19 @@ async function fixture() {
 }
 
 describe('mobile TLS bridge', () => {
+  it('reports the Headscale mesh IP apart from Tailscale and the port it bound', async () => {
+    let mesh: string | undefined = '100.64.0.9'
+    const bridge = new MobileBridge({ invoke: async () => null, projects: () => [], importFile: async () => null, galleryFile: () => new Response(''), meshIp: () => mesh }, () => ['192.168.1.4', '100.64.0.9']); bridges.push(bridge)
+    expect(bridge.listenPort()).toBeUndefined()
+    const st = await bridge.start()
+    expect(st.mesh).toBe('100.64.0.9')
+    expect(st.tailscale).toBeUndefined()
+    expect(st.addresses).toContain('https://100.64.0.9:47821')
+    mesh = undefined
+    expect(bridge.status().tailscale).toBe('100.64.0.9')
+    await bridge.stop()
+    expect(bridge.listenPort()).toBeUndefined()
+  })
   it('requires a one-use pairing code and authenticates every route', async () => {
     const f = await fixture()
     expect(f.status.fingerprint).toMatch(/^[a-f0-9]{64}$/)

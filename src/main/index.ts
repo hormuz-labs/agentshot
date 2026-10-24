@@ -146,6 +146,7 @@ const mobile = new MobileBridge(
       ? handlers.get('project:import')!(undefined as unknown as Electron.IpcMainInvokeEvent, dir, file)
       : handlers.get('project:create')!(undefined as unknown as Electron.IpcMainInvokeEvent, [file]),
     galleryFile: (url, range) => mediaResponse(new Request(url, { headers: range ? { range } : {} }), LIB, [Projects.projectsRoot(), ...open.keys()], Gallery.GALLERY),
+    meshIp: () => meshIp,
   },
   () => {
     const ips = reachableIps()
@@ -153,28 +154,50 @@ const mobile = new MobileBridge(
   },
 )
 
-async function startBridgeAndMesh() {
-  const st = await mobile.start()
+let meshJoining: Promise<void> | undefined
+// joins Headscale in the background: the pairing code must not wait on the mesh (up to ~90 s when the control server is slow)
+function joinMesh() {
   const poolSecret = process.env.MANUL_POOL_SECRET
-  if (!meshNode && (poolSecret || getConfig().account?.keyId)) {
+  if (meshNode || meshJoining || !(poolSecret || getConfig().account?.keyId)) return meshJoining
+  meshJoining = (async () => {
     const joined = await meshJoin('worker', poolSecret).catch(() => null)
-    if (joined) {
-      meshNode = await startMeshNode({
-        stateDir: join(app.getPath('userData'), 'mesh-worker'),
-        hostname: `manul-${(hostname() || 'worker').replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`,
-        controlUrl: joined.controlUrl,
-        authKey: joined.authKey,
-        forwardPort: DEFAULT_MOBILE_PORT,
-      })
-      if (meshNode?.ip) meshIp = meshNode.ip
-    }
-  }
+    const port = mobile.listenPort()
+    if (!joined || !port) return
+    const node = await startMeshNode({
+      stateDir: join(app.getPath('userData'), 'mesh-worker'),
+      hostname: `manul-${(hostname() || 'worker').replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`,
+      controlUrl: joined.controlUrl,
+      authKey: joined.authKey,
+      // mesh peers dial 47821 (the only port the Headscale ACL allows), forwarded to wherever the bridge actually bound
+      forwardPort: port,
+      meshPort: DEFAULT_MOBILE_PORT,
+      onExit: () => { if (meshNode === node) { meshNode = null; meshIp = undefined } },
+    })
+    // the bridge was turned off while the mesh was coming up
+    if (!mobile.listenPort()) { node?.stop(); return }
+    meshNode = node
+    meshIp = node?.ip
+  })().finally(() => { meshJoining = undefined })
+  return meshJoining
+}
+function stopMesh() {
   stopHeartbeat?.()
-  stopHeartbeat = startWorkerHeartbeat({
+  stopHeartbeat = null
+  meshNode?.stop()
+  meshNode = null
+  meshIp = undefined
+}
+
+async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
+  await mobile.start()
+  const joining = joinMesh()
+  if (opts.waitForMesh) await joining
+  // "New code" calls this again; keep the one heartbeat
+  stopHeartbeat ??= startWorkerHeartbeat({
     bridge: mobile,
     workerId: process.env.MANUL_WORKER_ID || `worker-${(hostname() || 'host').replace(/[^a-zA-Z0-9._-]/g, '-')}`,
     workerName: process.env.MANUL_WORKER_NAME || hostname() || 'AgentShot Worker',
-    poolSecret,
+    poolSecret: process.env.MANUL_POOL_SECRET,
     priority: process.env.MANUL_WORKER_PRIORITY ? Number(process.env.MANUL_WORKER_PRIORITY) : undefined,
     projects: () => Projects.recent().map(r => r.id),
     sendHeartbeat: workerHeartbeat,
@@ -194,10 +217,7 @@ function shutdown() {
       done()
     }, 10_000)
     void (async () => {
-      stopHeartbeat?.()
-      stopHeartbeat = null
-      meshNode?.stop()
-      meshNode = null
+      stopMesh()
       workerClient.disconnect()
       await mobile.stop()
       await startup.catch(e => console.warn('startup', e))
@@ -732,7 +752,7 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
 function wire() {
   ipcMain.handle('mobile:status', () => mobile.status())
   ipcMain.handle('mobile:start', () => startBridgeAndMesh())
-  ipcMain.handle('mobile:stop', () => { stopHeartbeat?.(); stopHeartbeat = null; meshNode?.stop(); meshNode = null; return mobile.stop() })
+  ipcMain.handle('mobile:stop', () => { stopMesh(); return mobile.stop() })
   ipcMain.handle('worker:status', () => workerClient.status())
   ipcMain.handle('worker:discover', () => accountWorkers())
   ipcMain.handle('worker:lease', async (_e, opts?: { projectId?: string; workerId?: string }) => {
@@ -1107,7 +1127,7 @@ const startup = app.whenReady().then(async () => {
   onJobs(jobs => send('jobs', jobs))
   if (!WORKER_MODE) createWindow()
   else {
-    void startBridgeAndMesh().then(st => {
+    void startBridgeAndMesh({ waitForMesh: true }).then(st => {
       console.log(JSON.stringify({ worker: 'ready', addresses: st.addresses, tailscale: st.tailscale, code: st.code, fingerprint: st.fingerprint }))
     })
   }
