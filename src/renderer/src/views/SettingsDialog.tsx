@@ -1,6 +1,7 @@
 // Settings: one place for the look, keys, models, skills, memory, the agent's browser and tools.
 import * as D from '@radix-ui/react-dialog'
-import { Brain, Globe, Info, KeyRound, Package, Palette, Sparkles, X } from 'lucide-react'
+import { Brain, Globe, Info, KeyRound, Package, Palette, Smartphone, Sparkles, X } from 'lucide-react'
+import { MobilePanel } from './MobilePanel'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { KeysPanel } from './KeysPanel'
@@ -13,7 +14,7 @@ import { AppearancePanel } from './AppearancePanel'
 import { SettingsTour } from '@/components/SettingsTour'
 import { SETTINGS_TOUR_STEPS } from '@/lib/settings-tour'
 
-export type Section = 'appearance' | 'keys' | 'skills' | 'memory' | 'browser' | 'tools' | 'about'
+export type Section = 'appearance' | 'keys' | 'skills' | 'memory' | 'browser' | 'tools' | 'mobile' | 'about'
 const SECTIONS: { id: Section; label: string; icon: ReactNode; panel: () => ReactNode }[] = [
   { id: 'appearance', label: 'Appearance', icon: <Palette />, panel: () => <AppearancePanel /> },
   { id: 'keys', label: 'Keys', icon: <KeyRound />, panel: () => <KeysPanel /> },
@@ -21,6 +22,7 @@ const SECTIONS: { id: Section; label: string; icon: ReactNode; panel: () => Reac
   { id: 'memory', label: 'Memory', icon: <Brain />, panel: () => <MemoryPanel /> },
   { id: 'browser', label: 'Browser', icon: <Globe />, panel: () => <BrowserSettingsPanel /> },
   { id: 'tools', label: 'Tools', icon: <Package />, panel: () => <ToolsPanel /> },
+  { id: 'mobile', label: 'Mobile', icon: <Smartphone />, panel: () => <MobilePanel /> },
   { id: 'about', label: 'About', icon: <Info />, panel: () => <AboutPanel /> },
 ]
 

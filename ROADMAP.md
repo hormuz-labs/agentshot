@@ -235,8 +235,9 @@ pro editors can take a Manul rough cut into their own editor.
 
 ### Phase 4: Cloud, mobile, teams
 - ⬜ **Manul Cloud storage** (Cloudflare R2): base amount included in Pro, add-on blocks, pooled for teams
-- ⬜ **Mobile app** (React Native/Expo): record → footage lands in the project; "Send to Manul" share option; talk
-      to the agent over AG-UI
+- 🚧 **Mobile app** ([Flutter, Android/iOS](mobile/README.md)): desktop-paired capture/import, AG-UI conversations,
+      proposal review, notes and export download over local Wi-Fi or Tailscale. Native share extensions, full interaction parity,
+      device QA and store releases remain; see [coverage](mobile/FEATURES.md).
 - ⬜ **Team plan:** shared projects, **review links** where clients comment on the frame, shared brand kits and skills
 - ⬜ Recording integrations: Zoom, Riverside, Loom, Google Meet → auto-import
 - ⬜ Stock media: Pexels, Pixabay, Unsplash, Giphy; licensed music (Epidemic Sound, Artlist)

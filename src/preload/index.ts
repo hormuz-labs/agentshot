@@ -29,6 +29,12 @@ const on = <T extends unknown[]>(ch: string) => (fn: (...args: T) => void) => {
 }
 
 const api = {
+  mobile: {
+    status: () => ipcRenderer.invoke('mobile:status') as Promise<import('../main/mobile-bridge').MobileStatus>,
+    start: () => ipcRenderer.invoke('mobile:start') as Promise<import('../main/mobile-bridge').MobileStatus>,
+    stop: () => ipcRenderer.invoke('mobile:stop') as Promise<import('../main/mobile-bridge').MobileStatus>,
+    revoke: (id: string) => ipcRenderer.invoke('mobile:revoke', id) as Promise<import('../main/mobile-bridge').MobileStatus>,
+  },
   onboarding: {
     settingsOpened: () => ipcRenderer.invoke('onboarding:settings-opened') as Promise<SettingsOpened>,
     finishSettings: (status: 'completed' | 'skipped') => ipcRenderer.invoke('onboarding:settings-finish', status) as Promise<void>,
