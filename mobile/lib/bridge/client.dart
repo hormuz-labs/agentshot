@@ -38,7 +38,7 @@ class Connection {
         url.hasFragment ||
         (url.path.isNotEmpty && url.path != '/')) {
       throw BridgeException(
-        'Paste the complete connection code from Manul → Settings → Mobile.',
+        'Paste the complete connection code from AgentShot → Settings → Mobile.',
       );
     }
     return url;
@@ -49,7 +49,7 @@ class Connection {
     final fingerprint = json['fingerprint'] as String;
     if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(fingerprint)) {
       throw BridgeException(
-        'Paste the complete connection code from Manul → Settings → Mobile.',
+        'Paste the complete connection code from AgentShot → Settings → Mobile.',
       );
     }
     final extra = <Uri>[];
@@ -223,7 +223,7 @@ class BridgeClient {
       }
     }
     throw BridgeException(
-      'Could not find your computer on the network. Enable Mobile in Manul → Settings on your computer, and make sure both devices are on the same Wi-Fi (or enter your computer’s Tailscale IP).',
+      'Could not find your computer on the network. Enable Mobile in AgentShot → Settings on your computer, and make sure both devices are on the same Wi-Fi (or enter your computer’s Tailscale IP).',
     );
   }
 
@@ -237,7 +237,7 @@ class BridgeClient {
         input = object(jsonDecode(trimmed));
       } catch (_) {
         throw BridgeException(
-          'Enter the 6-digit code from Manul → Settings → Mobile.',
+          'Enter the 6-digit code from AgentShot → Settings → Mobile.',
         );
       }
       target = Connection.fromJson(input);
@@ -253,7 +253,7 @@ class BridgeClient {
       final digits = trimmed.replaceAll(RegExp(r'\D'), '');
       if (digits.length != 6) {
         throw BridgeException(
-          'Enter the 6-digit code from Manul → Settings → Mobile.',
+          'Enter the 6-digit code from AgentShot → Settings → Mobile.',
         );
       }
       target = await _discover(host: host);

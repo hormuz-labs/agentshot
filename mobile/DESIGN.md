@@ -1,6 +1,6 @@
 # Mobile design lock
 
-Target: Manul's existing product, adapted for a desktop-connected Android/iOS client.
+Target: AgentShot's existing product, adapted for a desktop-connected Android/iOS client.
 References inspected: `docs/start.png`, `docs/dark.png`, `src/renderer/src/styles.css`,
 `README.md` journeys, and Refero's bundled `craft-details.md` (no Refero MCP available).
 
@@ -15,7 +15,7 @@ References inspected: `docs/start.png`, `docs/dark.png`, `src/renderer/src/style
 | Canonical cat artwork | `src/renderer/public/manul.png`, `build/icons/1024x1024.png` | Native launch, in-app identity and store icons; Android foreground stays inside the mask safe zone |
 | Consistent Material glyphs with visible labels/tooltips | Refero `icons.md`, native Flutter controls | Functional actions; cat artwork owns brand recognition |
 
-Use code-native Material controls and the existing Manul icon. Keep media at its real
+Use code-native Material controls and the existing AgentShot icon. Keep media at its real
 aspect ratio and normalize frame boxes to 0–1. No decorative stock footage or fake jobs.
 
 Regenerate assets with `python3 mobile/scripts/brand.py` (Pillow; fontTools and

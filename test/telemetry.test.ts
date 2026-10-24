@@ -214,7 +214,7 @@ describe('GitHub stats', () => {
       '/traffic/clones': { count: 12, uniques: 5 },
     }
     const fetchImpl = vi.fn(async (url: string) => {
-      const path = url.replace('https://api.github.com/repos/hormuz-labs/manul', '')
+      const path = url.replace('https://api.github.com/repos/hormuz-labs/agentshot', '')
       return new Response(JSON.stringify(responses[path]), { status: 200 })
     })
     const stats = await githubStats({ token: 't', fetchImpl })

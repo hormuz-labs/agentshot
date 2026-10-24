@@ -30,18 +30,18 @@ test('builder configuration is valid and explicitly offline one-click per-user W
   const { validateConfiguration } = require('app-builder-lib/out/util/config/config.js')
   await validateConfiguration(config)
   assert.deepEqual(config.win.target, [{ target: 'nsis', arch: ['x64'] }])
-  assert.equal(config.win.artifactName, 'Manul-${version}-windows-${arch}-Setup.exe')
-  assert.equal(config.win.executableName, 'Manul')
+  assert.equal(config.win.artifactName, 'AgentShot-${version}-windows-${arch}-Setup.exe')
+  assert.equal(config.win.executableName, 'AgentShot')
   assert.equal(config.nsis.perMachine, false)
   assert.equal(config.nsis.allowElevation, false)
   assert.equal(config.nsis.oneClick, true)
   assert.equal(config.nsis.runAfterFinish, true)
   assert.equal(config.nsis.createDesktopShortcut, 'always')
   assert.equal(config.nsis.createStartMenuShortcut, true)
-  assert.equal(config.nsis.shortcutName, 'Manul')
+  assert.equal(config.nsis.shortcutName, 'AgentShot')
   assert.equal(config.nsis.allowToChangeInstallationDirectory, undefined)
   assert.equal(config.nsis.deleteAppDataOnUninstall, false)
-  assert.equal(config.nsis.uninstallDisplayName, 'Manul')
+  assert.equal(config.nsis.uninstallDisplayName, 'AgentShot')
   assert.equal(config.nsis.license, undefined, 'no licence acceptance page in the one-click install')
   assert.ok(config.extraResources.some(r => r.from === 'LICENSE' && r.to === 'LICENSE'))
   const filter = config.extraResources.find(r => r.to === 'bin').filter
@@ -263,7 +263,7 @@ test('packaged E2E fails rather than skipping when package is missing', t => {
 test('Windows latest.yml must reference the actual installer bytes, name and size', t => {
   const dir = temp(t)
   const exe = Buffer.from('MZ test installer')
-  const name = 'Manul-0.0.1-windows-x64-Setup.exe'
+  const name = 'AgentShot-0.0.1-windows-x64-Setup.exe'
   const hash = createHash('sha512').update(exe).digest('base64')
   writeFileSync(join(dir, name), exe)
   const feed = { version: '0.0.1', path: name, sha512: hash, files: [{ url: name, sha512: hash, size: exe.length }] }
@@ -289,7 +289,7 @@ test('CI builds Windows natively; public uploads include installer, blockmap and
   for (const glob of ['dist/*.exe', 'dist/*.blockmap', 'dist/latest*.yml']) assert.ok(upload.with.path.includes(glob))
   const smoke = readFileSync(join(root, 'scripts/smoke-windows-installer.ps1'), 'utf8')
   assert.match(smoke, /RUNNER_ENVIRONMENT -ne 'github-hosted'/)
-  assert.match(smoke, /Refusing to touch an existing Manul installation/)
+  assert.match(smoke, /Refusing to touch an existing AgentShot installation/)
   const dependencies = readFileSync(join(root, 'scripts/check-windows-dependencies.ps1'), 'utf8')
   assert.match(dependencies, /Get-AuthenticodeSignature/)
   assert.match(dependencies, /Microsoft Corporation/)

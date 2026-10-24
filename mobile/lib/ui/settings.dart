@@ -78,7 +78,7 @@ class SettingsScreen extends StatelessWidget {
       ),
       ListTile(
         leading: const Icon(Icons.account_circle_outlined),
-        title: const Text('Manul account'),
+        title: const Text('AgentShot account'),
         onTap: () => panel(
           context,
           'Desktop account',
@@ -88,7 +88,7 @@ class SettingsScreen extends StatelessWidget {
             children: [
               Text(
                 data['email'] == null
-                    ? 'Sign in through Manul on your desktop.'
+                    ? 'Sign in through AgentShot on your desktop.'
                     : 'Signed in as ${data['email']}',
               ),
               const SizedBox(height: 12),
@@ -140,10 +140,10 @@ class SettingsScreen extends StatelessWidget {
       ),
       ListTile(
         leading: const Icon(Icons.info_outline),
-        title: const Text('About Manul'),
+        title: const Text('About AgentShot'),
         onTap: () => showAboutDialog(
           context: context,
-          applicationName: 'Manul',
+          applicationName: 'AgentShot',
           applicationIcon: Image.asset(
             'assets/manul.png',
             width: 48,
@@ -153,7 +153,7 @@ class SettingsScreen extends StatelessWidget {
           applicationLegalese: '© Hormuz Labs · Apache-2.0',
           children: [
             const Text(
-              'A video editor you direct by talking. Mobile companion for Android and iOS.\nmanul.si',
+              'A video editor you direct by talking. Mobile companion for Android and iOS.\nagentshot.si',
             ),
           ],
         ),
@@ -286,7 +286,7 @@ class SettingsScreen extends StatelessWidget {
       guard(context, () async {
         final description = await askText(
           context,
-          'What should Manul remember?',
+          'What should AgentShot remember?',
           initial: fact?['description'] as String? ?? '',
         );
         if (description == null || description.isEmpty || !context.mounted) {
@@ -401,7 +401,7 @@ class SettingsScreen extends StatelessWidget {
             'Browser',
             value as String,
             const {
-              'manul': 'Manul’s own browser',
+              'manul': 'AgentShot’s own browser',
               'chrome': 'Your desktop Chrome',
             },
             (mode) => guard(context, () async {

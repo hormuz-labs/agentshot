@@ -22,7 +22,7 @@ export function chooseModel(all: Available[], pick?: ModelRef | null): ModelRef 
   return available[0] ? { provider: available[0].provider, modelId: available[0].id } : undefined
 }
 
-const LABEL: Record<string, string> = { anthropic: 'Anthropic', google: 'Google', openai: 'OpenAI', manul: 'Manul' }
+const LABEL: Record<string, string> = { anthropic: 'Anthropic', google: 'Google', openai: 'OpenAI', manul: 'AgentShot' }
 
 // Not chat models an editing agent can use: research agents, computer use, speech, embeddings, image-only, live audio.
 const NOT_AGENT = /deep-research|computer-use|tts|embedding|-image\b|image-generation|\blive\b|audio|transcribe|realtime/i

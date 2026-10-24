@@ -11,8 +11,8 @@ export function buildMenu(win: () => BrowserWindow | null) {
     else win()?.webContents.send('menu', what)
   }
   const template: MenuItemConstructorOptions[] = [
-    ...(mac ? [{ label: 'Manul', submenu: [
-      cmd('about', 'About Manul'), cmd('update.check', 'Check for Updates…'), { type: 'separator' },
+    ...(mac ? [{ label: 'AgentShot', submenu: [
+      cmd('about', 'About AgentShot'), cmd('update.check', 'Check for Updates…'), { type: 'separator' },
       cmd('settings', 'Settings…', 'CmdOrCtrl+,'), cmd('settings.tools', 'Tools…'), { type: 'separator' },
       { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' },
     ] } as MenuItemConstructorOptions] : []),
@@ -46,7 +46,7 @@ export function buildMenu(win: () => BrowserWindow | null) {
     ] },
     { label: 'Agent', submenu: [
       cmd('agent.new', 'New Conversation', 'CmdOrCtrl+Shift+N'),
-      cmd('agent.focus', 'Ask Manul', 'CmdOrCtrl+L'),
+      cmd('agent.focus', 'Ask AgentShot', 'CmdOrCtrl+L'),
       cmd('agent.stop', 'Stop', 'CmdOrCtrl+.'),
       { type: 'separator' },
       cmd('settings.skills', 'Skills…'), cmd('settings.memory', 'Memory…'), cmd('settings.keys', 'Keys…'), cmd('settings.browser', 'Browser…'),
@@ -58,8 +58,8 @@ export function buildMenu(win: () => BrowserWindow | null) {
     ] },
     { role: 'help', submenu: [
       cmd('tour', 'Product Tour'),
-      { label: 'Roadmap', click: () => shell.openExternal('https://github.com/hormuz-labs/manul/blob/main/ROADMAP.md') },
-      { label: 'Report a Problem', click: () => shell.openExternal('https://github.com/hormuz-labs/manul/issues/new') },
+      { label: 'Roadmap', click: () => shell.openExternal('https://github.com/hormuz-labs/agentshot/blob/main/ROADMAP.md') },
+      { label: 'Report a Problem', click: () => shell.openExternal('https://github.com/hormuz-labs/agentshot/issues/new') },
     ] },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))

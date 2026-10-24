@@ -10,8 +10,8 @@ import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..', '..')
 const exe = process.env.MANUL_PACKAGED_EXE || (process.platform === 'darwin'
-  ? join(root, 'dist', `mac-${process.arch}`, 'Manul.app', 'Contents', 'MacOS', 'Manul')
-  : process.platform === 'win32' ? join(root, 'dist', 'win-unpacked', 'Manul.exe')
+  ? join(root, 'dist', `mac-${process.arch}`, 'AgentShot.app', 'Contents', 'MacOS', 'AgentShot')
+  : process.platform === 'win32' ? join(root, 'dist', 'win-unpacked', 'AgentShot.exe')
   : join(root, 'dist', process.arch === 'arm64' ? 'linux-arm64-unpacked' : 'linux-unpacked', 'manul'))
 assert.ok(existsSync(exe), `Packaged executable missing: ${exe}; run npm run package:dir`)
 const suffix = process.platform === 'win32' ? '.exe' : ''

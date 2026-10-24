@@ -93,9 +93,9 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
     try { choose(await window.manul.project.pick()) } catch (e) { setError(message(e)) }
   }
 
-  const placeholder = footage || files.length ? 'Tell Manul what to do with it…'
+  const placeholder = footage || files.length ? 'Tell AgentShot what to do with it…'
     : example ? 'What’s your video about?'
-      : reference ? 'What should it be about? Manul takes the look, not the content…'
+      : reference ? 'What should it be about? AgentShot takes the look, not the content…'
         : 'Describe a motion video or a product walkthrough, or drop footage to edit…'
 
   return (
@@ -193,12 +193,12 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
             </div>
           </div>
 
-          {walkthrough && <p data-walkthrough className="mt-2.5 w-full px-1 text-[12px] text-faint">Manul will try the product in its browser, show you the plan, then film it and narrate it.</p>}
-          {asks && !footage && <p className="mt-2.5 w-full px-1 text-[12px] text-faint">Manul will ask you for {asks.charAt(0).toLowerCase() + asks.slice(1)}.</p>}
+          {walkthrough && <p data-walkthrough className="mt-2.5 w-full px-1 text-[12px] text-faint">AgentShot will try the product in its browser, show you the plan, then film it and narrate it.</p>}
+          {asks && !footage && <p className="mt-2.5 w-full px-1 text-[12px] text-faint">AgentShot will ask you for {asks.charAt(0).toLowerCase() + asks.slice(1)}.</p>}
           {error && <p className="mt-3 text-bad">{error}</p>}
           {!ready && (
             <button onClick={onKeys} className="mt-3 inline-flex items-center gap-1.5 text-xs text-amber hover:underline">
-              <KeyRound className="size-3.5" />Add an API key so Manul can edit (Gemini, Anthropic or OpenAI)
+              <KeyRound className="size-3.5" />Add an API key so AgentShot can edit (Gemini, Anthropic or OpenAI)
             </button>
           )}
 

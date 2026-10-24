@@ -1,10 +1,10 @@
 # Crash reports and usage statistics
 
-Manul asks once, on first run, with two boxes that start **unticked**:
+AgentShot asks once, on first run, with two boxes that start **unticked**:
 
-- **Send crash reports**: crashes and errors go to [PostHog](https://posthog.com)'s error tracking through Manul's
+- **Send crash reports**: crashes and errors go to [PostHog](https://posthog.com)'s error tracking through AgentShot's
   proxy.
-- **Share usage statistics**: a short, fixed list of events goes to [PostHog](https://posthog.com) through Manul's
+- **Share usage statistics**: a short, fixed list of events goes to [PostHog](https://posthog.com) through AgentShot's
   proxy.
 
 Closing the dialog counts as no to both. Either can be changed at any time in **Settings → About**, and the change
@@ -54,14 +54,14 @@ you said yes is never sent later. See [`src/main/crash.ts`](../src/main/crash.ts
 ## How the pieces fit
 
 ```
-Manul ── usage batches, crash reports ──▶ telemetry.manul.si (Cloudflare Worker, telemetry/proxy) ──▶ PostHog
+AgentShot ── usage batches, crash reports ──▶ telemetry.agentshot.si (Cloudflare Worker, telemetry/proxy) ──▶ PostHog
 GitHub Actions, daily (telemetry/github-stats.mjs) ── downloads, stars, forks, clones ──▶ PostHog
 ```
 
 - **PostHog** is the same project as Pitch's (one place for both apps), on its free tier: usage events, error
   tracking and the account service's events all fit well inside the free monthly allowances for now. Keep billing
   limits at $0 in PostHog (Billing → each product) so nothing is ever charged.
-- **Proxy** ([`proxy/worker.ts`](proxy/worker.ts)), on Cloudflare Workers' free plan. It accepts only `POST /batch/` for Manul's PostHog project,
+- **Proxy** ([`proxy/worker.ts`](proxy/worker.ts)), on Cloudflare Workers' free plan. It accepts only `POST /batch/` for AgentShot's PostHog project,
   limits each IP to 30 batches a minute, and passes on nothing from the request but the cleaned events.
 - **Dashboards** are made in PostHog. There is no server of ours to run.
 - **GitHub numbers** come from [`.github/workflows/github-stats.yml`](../.github/workflows/github-stats.yml) as one
@@ -74,9 +74,9 @@ GitHub Actions, daily (telemetry/github-stats.mjs) ── downloads, stars, fork
 1. **PostHog.** Create a project. Note its project token (`phc_…`, public by design: it can only send events) and its
    region's capture host (`https://us.i.posthog.com` or `https://eu.i.posthog.com`).
 2. **Proxy.** Put the token and host in [`proxy/wrangler.toml`](proxy/wrangler.toml). Then, from `telemetry/proxy`,
-   run `npx wrangler deploy`. It serves `telemetry.manul.si` (`analytics.manul.si` is the separate Manul analytics dashboard).
+   run `npx wrangler deploy`. It serves `telemetry.agentshot.si` (`analytics.agentshot.si` is the separate AgentShot analytics dashboard).
 3. **GitHub repository settings.**
-   - Variables: `MANUL_TELEMETRY_URL=https://telemetry.manul.si`, `MANUL_POSTHOG_TOKEN`, and for the daily snapshot
+   - Variables: `MANUL_TELEMETRY_URL=https://telemetry.agentshot.si`, `MANUL_POSTHOG_TOKEN`, and for the daily snapshot
      `POSTHOG_TOKEN` and `POSTHOG_HOST`.
    - Secret, optional: `GH_TRAFFIC_TOKEN` for clone counts.
 

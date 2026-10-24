@@ -41,7 +41,7 @@ export function InlineAsk({ label, onSend, onCancel }: {
           placeholder="What should change here?"
           className="max-h-32 min-h-8 flex-1 resize-none bg-transparent px-1.5 py-1.5 text-[13px] outline-none placeholder:text-faint [field-sizing:content]"
         />
-        <Button size="iconSm" variant="primary" className="mb-0.5 rounded-lg" disabled={!text.trim()} onClick={send} aria-label="Send to Manul"><ArrowUp /></Button>
+        <Button size="iconSm" variant="primary" className="mb-0.5 rounded-lg" disabled={!text.trim()} onClick={send} aria-label="Send to AgentShot"><ArrowUp /></Button>
       </div>
       <div className="px-1.5 pb-0.5 text-[10.5px] text-faint">↵ to send · Esc to cancel · it shows in the chat</div>
     </div>

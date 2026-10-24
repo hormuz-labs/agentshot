@@ -6,7 +6,7 @@ import yaml from 'js-yaml'
 
 const dir = process.argv[2] || 'dist'
 const feed = yaml.load(readFileSync(join(dir, 'latest.yml'), 'utf8'))
-const expected = `Manul-${feed.version}-windows-x64-Setup.exe`
+const expected = `AgentShot-${feed.version}-windows-x64-Setup.exe`
 assert.equal(feed.path, expected)
 assert.equal(basename(feed.path), feed.path)
 assert.equal(feed.files.length, 1)

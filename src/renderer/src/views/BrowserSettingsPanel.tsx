@@ -33,8 +33,8 @@ export function BrowserSettingsPanel() {
     <div>
       <PanelHeader title="Browser" description="Where the agent goes when it needs the web: research, references, footage or music, uploads." />
       <div className="space-y-2" role="radiogroup">
-        {option('manul', <AppWindow />, "Manul's own browser (recommended)",
-          <>The Browser panel inside Manul. Separate from your personal browsers: sign in there only to sites you want the agent to use. Your Chrome, and any bsk you installed in it, are never touched.</>)}
+        {option('manul', <AppWindow />, "AgentShot's own browser (recommended)",
+          <>The Browser panel inside AgentShot. Separate from your personal browsers: sign in there only to sites you want the agent to use. Your Chrome, and any bsk you installed in it, are never touched.</>)}
         {option('chrome', <MonitorSmartphone />, 'Your Chrome',
           <>The agent uses your own Chrome through the bsk extension you installed there, with everything you are already signed in to. It acts in your real accounts, so it asks before posting, buying or uploading.</>)}
       </div>

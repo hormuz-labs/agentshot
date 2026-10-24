@@ -35,7 +35,7 @@ services:
       WALLET_CREATE_TABLES: "1"
       BIFROST_URL: http://bifrost:8080
       BIFROST_PROVIDERS: anthropic,gemini,openai
-      CLERK_ISSUER: ${CLERK_ISSUER:-https://clerk.manul.si}
+      CLERK_ISSUER: ${CLERK_ISSUER:-https://clerk.agentshot.si}
       PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:8090}
       ACCOUNT_METADATA_KEY: manul_local
     healthcheck:

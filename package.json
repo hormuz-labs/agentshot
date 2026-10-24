@@ -1,6 +1,6 @@
 {
   "name": "manul",
-  "productName": "Manul",
+  "productName": "AgentShot",
   "version": "0.0.1",
   "private": true,
   "license": "Apache-2.0",
@@ -97,5 +97,5 @@
     "name": "Hormuz Labs",
     "email": "hello@hormuz-labs.dev"
   },
-  "homepage": "https://github.com/hormuz-labs/manul"
+  "homepage": "https://github.com/hormuz-labs/agentshot"
 }

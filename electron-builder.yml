@@ -1,6 +1,6 @@
 # Native packaging: macOS (.dmg + .zip), Linux (.deb + AppImage), Windows x64 (per-user NSIS).
 appId: com.hormuzlabs.manul
-productName: Manul
+productName: AgentShot
 copyright: Copyright © 2026 Hormuz Labs
 directories:
   buildResources: build
@@ -55,15 +55,15 @@ mac:
   icon: build/icon.icns
   minimumSystemVersion: "12.0"
 dmg:
-  title: Manul
-  artifactName: Manul-${version}-${arch}.dmg
+  title: AgentShot
+  artifactName: AgentShot-${version}-${arch}.dmg
 win:
-  executableName: Manul
+  executableName: AgentShot
   icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64]
-  artifactName: Manul-${version}-windows-${arch}-Setup.exe
+  artifactName: AgentShot-${version}-windows-${arch}-Setup.exe
   verifyUpdateCodeSignature: true
   signtoolOptions:
     signingHashAlgorithms: [sha256]
@@ -75,16 +75,16 @@ nsis:
   runAfterFinish: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  shortcutName: Manul
+  shortcutName: AgentShot
   deleteAppDataOnUninstall: false
-  uninstallDisplayName: Manul
+  uninstallDisplayName: AgentShot
   # No acceptance page or directory wizard. LICENSE still ships in extraResources.
 linux:
   category: AudioVideo
   icon: build/icons
   maintainer: Hormuz Labs <hello@hormuz-labs.dev>
   synopsis: An agentic video editor
-  description: Drop in a video, say what you want, and Manul does the edit.
+  description: Drop in a video, say what you want, and AgentShot does the edit.
   target:
     - target: deb
     - target: AppImage
@@ -98,5 +98,5 @@ deb:
 publish:
   provider: github
   owner: hormuz-labs
-  repo: manul
+  repo: agentshot
   releaseType: release

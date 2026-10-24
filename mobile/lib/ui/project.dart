@@ -348,7 +348,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                m['role'] == 'user' ? 'You' : 'Manul',
+                                m['role'] == 'user' ? 'You' : 'AgentShot',
                                 style: Theme.of(context).textTheme.labelMedium,
                               ),
                               const SizedBox(height: 8),
@@ -550,7 +550,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                           final reply = await askText(
                             context,
                             'What should change?',
-                            hint: 'Optional feedback for Manul',
+                            hint: 'Optional feedback for AgentShot',
                           );
                           if (reply == null) return;
                           await store.update('project:decide', [dir, false]);
@@ -585,7 +585,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
           const EmptyMessage(
             Icons.movie_outlined,
             'Your film starts here',
-            'Ask Manul to create the first scene.',
+            'Ask AgentShot to create the first scene.',
           ),
         if (version != null)
           Text(
@@ -751,7 +751,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                     final info = object(project['media'] ?? {})[entry.key];
                     if (info == null) {
                       throw BridgeException(
-                        'Ask Manul how to use this file in the film.',
+                        'Ask AgentShot how to use this file in the film.',
                       );
                     }
                     await store.update('timeline:edit', [

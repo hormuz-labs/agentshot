@@ -152,7 +152,7 @@ export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onDele
 
       <div className="flex h-12 shrink-0 items-center gap-2 border-t border-line px-3">
         <img src="./manul.png" alt="" className="size-7 object-contain" draggable={false} />
-        <span className="flex-1 text-[13px] font-medium">Manul</span>
+        <span className="flex-1 text-[13px] font-medium">AgentShot</span>
         <Tip label="Product tour" side="top">
           <button onClick={() => runCommand('tour')} className="flex size-7 items-center justify-center rounded-md text-dim hover:bg-hover hover:text-fg" aria-label="Product tour">
             <CircleHelp className="size-4" />

@@ -68,7 +68,7 @@ Use a new test email. Local Clerk links/payments live under `private_metadata.ma
 
 Before setting up the dashboard, the account service can use `BIFROST_SETUP_TOKEN`. After you create the admin login, set `BIFROST_AUTH` in `gateway/.env` to `Basic <base64(username:password)>` and recreate the account container.
 
-Follow the manual sign-in/AI/payment steps below using local account/gateway URLs. For Dodo payment delivery, expose local port 8090 through an HTTPS tunnel, set `PUBLIC_URL` in `gateway/.env`, create a separate test webhook targeting `<tunnel>/v1/dodo/webhook`, and use that endpoint's signing secret. Recreate the account container to reload `.env`. The existing `account.manul.si` webhook targets the deployed service.
+Follow the manual sign-in/AI/payment steps below using local account/gateway URLs. For Dodo payment delivery, expose local port 8090 through an HTTPS tunnel, set `PUBLIC_URL` in `gateway/.env`, create a separate test webhook targeting `<tunnel>/v1/dodo/webhook`, and use that endpoint's signing secret. Recreate the account container to reload `.env`. The existing `account.agentshot.si` webhook targets the deployed service.
 
 To reset this local stack again (Bifrost plus local credit journal):
 
@@ -90,7 +90,7 @@ This does not reset Clerk users or the desktop profile. Use a new test email/pro
 - The deployment secret-update script reads `gateway/.env`. Copy the template's structure from `gateway/.env.example`; provide the actual server keys there for an authorized deployment.
 - Root `.env` changes do not alter a remote account service or gateway. `gateway/k8s/set-secrets.sh` updates the current cluster and restarts services; running it requires deployment permissions.
 - Root and gateway `.env` files are ignored by Git.
-- The desktop defaults to `https://clerk.manul.si`, `https://account.manul.si`, and `https://gateway.manul.si`. Its OAuth client ID is `cYz60VvV9IL4cGH5`.
+- The desktop defaults to `https://clerk.agentshot.si`, `https://account.agentshot.si`, and `https://gateway.agentshot.si`. Its OAuth client ID is `cYz60VvV9IL4cGH5`.
 - For another deployment, configure `MANUL_AUTH_ISSUER`, `MANUL_AUTH_CLIENT_ID`, `MANUL_ACCOUNT`, and `MANUL_GATEWAY` together. The account service's `CLERK_ISSUER` and `CLERK_SECRET_KEY` must target the same Clerk instance; its `BIFROST_URL` must target the gateway that accepts the resulting keys.
 - Compose now starts Bifrost, the account service, and its Postgres journal.
 
@@ -110,18 +110,18 @@ Do not load provider keys for this test. Your own Gemini/Anthropic/OpenAI keys c
 
 ### 2. Verify Clerk and account provisioning
 
-1. Open **Settings → Keys → Manul key** (`⌘,`).
-2. Click **Sign in to Manul**.
+1. Open **Settings → Keys → AgentShot key** (`⌘,`).
+2. Click **Sign in to AgentShot**.
 3. Complete email-code sign-in in the system browser. Test Google sign-in separately if you intend to support it.
 4. The browser returns to `http://127.0.0.1:47619/oauth/callback`.
 5. Return to the app. It should show the email and **$2.00 credit left** for a genuinely new account with no usage.
-6. In Clerk Dashboard → Manul → **Production** → Users, locate that email. Its private metadata should contain:
+6. In Clerk Dashboard → AgentShot → **Production** → Users, locate that email. Its private metadata should contain:
 
    ```json
    { "bifrost": { "customer_id": "...", "virtual_key_id": "..." } }
    ```
 
-7. In `https://admin.manul.si`, inspect that Bifrost customer and virtual key. The key name should be the Clerk user ID, its description the email, its initial budget $2, its reset duration `100Y`, and its request rate 300/hour.
+7. In `https://admin.agentshot.si`, inspect that Bifrost customer and virtual key. The key name should be the Clerk user ID, its description the email, its initial budget $2, its reset duration `100Y`, and its request rate 300/hour.
 8. Sign out and sign back in. The virtual-key ID and budget should be reused. No extra $2 or duplicate customer/key should appear.
 9. Restart the app and check that the sign-in/key persists.
 
@@ -129,12 +129,12 @@ If callback port 47619 is busy, close the other app instance using it. The callb
 
 ### 3. Verify Bifrost with real AI traffic
 
-1. Confirm the app's selected model is **Manul**.
+1. Confirm the app's selected model is **AgentShot**.
 2. Create a project with a short disposable video.
 3. Ask: **“Describe this video briefly without changing it.”**
 4. Expect a real streamed reply. In Bifrost request logs, match the test user's key/customer, selected provider, routed model, token usage, and cost. The current production and local configurations route `manul` to Gemini.
 5. Ask: **“Trim the timeline to the first five seconds.”** Expect a tool call, completed edit, and follow-up reply. This tests multi-step agent traffic.
-6. Reopen/focus Settings → Keys → Manul key. Credit should decrease by the logged usage. Use the dashboard or balance API for precision: the UI rounds the displayed balance.
+6. Reopen/focus Settings → Keys → AgentShot key. Credit should decrease by the logged usage. Use the dashboard or balance API for precision: the UI rounds the displayed balance.
 
 For a direct route check, set these variables to the test user's virtual-key **value** and **ID** from the Bifrost dashboard:
 
@@ -142,12 +142,12 @@ For a direct route check, set these variables to the test user's virtual-key **v
 export MANUL_KEY='your-test-virtual-key-value'
 export MANUL_KEY_ID='your-test-virtual-key-id'
 
-curl -i https://gateway.manul.si/openai/responses \
+curl -i https://gateway.agentshot.si/openai/responses \
   -H "Authorization: Bearer $MANUL_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"model":"manul","input":"Reply with OK only.","max_output_tokens":256}'
 
-curl -sS https://account.manul.si/v1/balance \
+curl -sS https://account.agentshot.si/v1/balance \
   -H "Authorization: Bearer $MANUL_KEY" \
   -H "X-Manul-Key-Id: $MANUL_KEY_ID"
 ```

@@ -1,7 +1,7 @@
 // Live checks against the real services (costs a few cents; skipped unless MANUL_LIVE=1). The agent's models are set
 // up as the app does (agent.ts), and for each way of paying the app picks a model and runs a two-step tool call with an
 // image in the tool result, as an editing turn does:
-//   - a Manul key only            → "manul" through gateway.manul.si (MANUL_LIVE_KEY_FILE: {"key","id"} of a test key)
+//   - a Manul key only            → "manul" through gateway.agentshot.si (MANUL_LIVE_KEY_FILE: {"key","id"} of a test key)
 //   - the user's own Gemini key   → Google directly, chosen over the Manul key
 //   - the user's own Azure        → the custom provider imported from omp (~/.omp/agent/models.yml)
 // and voice with the user's own key and with the Manul key. Vendor keys come from gateway/.env; nothing is printed.
@@ -74,7 +74,7 @@ async function toolTurn(models: any, ref: { provider: string; modelId: string })
 }
 
 describe.skipIf(!LIVE)('live: the agent with each kind of key', () => {
-  it('a Manul key only: the app picks "manul", and a tool turn with an image works through gateway.manul.si', async () => {
+  it('a Manul key only: the app picks "manul", and a tool turn with an image works through gateway.agentshot.si', async () => {
     expect(manul, 'MANUL_LIVE_KEY_FILE').toBeDefined()
     const models = agentModels({ MANUL_KEY: manul!.key })
     const ref = chooseModel(await models.getAvailable())

@@ -27,7 +27,7 @@ function SpeechSection({ onChange }: { onChange(): void }) {
       <div className="mb-2 flex items-center gap-2">
         <AudioLines className="size-4 text-amber" />
         <span className="flex-1 font-medium">Speech recognition</span>
-        <span className="rounded bg-bg px-1.5 py-0.5 text-[10.5px] text-dim">{!st.active ? 'not set up' : custom && sys ? 'your paths' : sys ? 'found on this computer' : st.active.engine === 'bundled' ? 'built into Manul' : 'Python engine'}</span>
+        <span className="rounded bg-bg px-1.5 py-0.5 text-[10.5px] text-dim">{!st.active ? 'not set up' : custom && sys ? 'your paths' : sys ? 'found on this computer' : st.active.engine === 'bundled' ? 'built into AgentShot' : 'Python engine'}</span>
       </div>
       {st.active ? (
         <div className="space-y-1 text-xs">
@@ -39,8 +39,8 @@ function SpeechSection({ onChange }: { onChange(): void }) {
         </div>
       ) : (
         <p className="text-xs text-dim">{st.bundledBinary
-          ? 'Manul has whisper.cpp built in; it needs its model (148 MB, below). Or point Manul at your own whisper-cli and model.'
-          : 'No whisper.cpp found on this computer. Install the Python engine below, or point Manul at your own whisper-cli and model.'}</p>
+          ? 'AgentShot has whisper.cpp built in; it needs its model (148 MB, below). Or point AgentShot at your own whisper-cli and model.'
+          : 'No whisper.cpp found on this computer. Install the Python engine below, or point AgentShot at your own whisper-cli and model.'}</p>
       )}
       {sys && st.found.models.length > 1 && (
         <label className="mt-2 flex items-center gap-2 text-xs text-dim">
@@ -81,7 +81,7 @@ export function ToolsPanel() {
 
   return (
     <div>
-      <PanelHeader title="Tools" description="Manul ships with ffmpeg and whisper.cpp. Heavier tools download only when you need them, into Manul's own folder." />
+      <PanelHeader title="Tools" description="AgentShot ships with ffmpeg and whisper.cpp. Heavier tools download only when you need them, into AgentShot's own folder." />
       <div className="mb-2 text-xs font-medium uppercase tracking-wider text-faint">Built in</div>
       <div className="mb-5 space-y-1.5">
         {bundled.map(t => (

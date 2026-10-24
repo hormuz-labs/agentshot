@@ -7,7 +7,7 @@ for (const [name, value] of Object.entries({
   WALLET_CREATE_TABLES: '1',
   BIFROST_URL: 'http://127.0.0.1:8089',
   BIFROST_PROVIDERS: Object.keys(config.providers).join(','),
-  CLERK_ISSUER: 'https://clerk.manul.si',
+  CLERK_ISSUER: 'https://clerk.agentshot.si',
   ACCOUNT_METADATA_KEY: 'manul_local',
   PUBLIC_URL: 'http://127.0.0.1:8090',
   PORT: '8090',

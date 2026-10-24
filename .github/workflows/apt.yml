@@ -1,5 +1,5 @@
 # Build the signed apt repository for a release and push it to the `apt` branch, which Cloudflare Pages serves
-# at apt.manul.si. Only small files go there; the .deb downloads redirect to GitHub Releases (see scripts/apt-repo.sh).
+# at apt.agentshot.si. Only small files go there; the .deb downloads redirect to GitHub Releases (see scripts/apt-repo.sh).
 # Called by release.yml after publishing; "Run workflow" with a tag rebuilds it for an existing release.
 name: apt
 on:

@@ -30,7 +30,7 @@ export function DemoToolbox({ project: p, attached, onClose, onSubmit }: { proje
     finally { setBusy(false) }
   }
   return <section data-demo-toolbox className="space-y-3 rounded-xl border border-amber/30 bg-surface p-4" aria-label="Auto Demo toolbox">
-    <div className="flex items-start gap-3"><div className="flex-1"><h3 className="font-medium">Auto Demo Edit</h3><p className="mt-1 text-xs text-dim">Choose your look here in chat. Manul will sync, edit and show the result beside the conversation.</p></div><Button size="sm" variant="ghost" disabled={busy} onClick={onClose}>Close</Button></div>
+    <div className="flex items-start gap-3"><div className="flex-1"><h3 className="font-medium">Auto Demo Edit</h3><p className="mt-1 text-xs text-dim">Choose your look here in chat. AgentShot will sync, edit and show the result beside the conversation.</p></div><Button size="sm" variant="ghost" disabled={busy} onClick={onClose}>Close</Button></div>
     <fieldset disabled={busy} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         {([['Screen recording', screen, setScreen], ['Face camera', camera, setCamera]] as const).map(([label, value, set]) => <label key={label} className="text-xs text-dim">{label}

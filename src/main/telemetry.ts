@@ -20,7 +20,7 @@ export class UsageTelemetry {
 
   constructor(private opts: {
     file: string
-    /** the proxy's origin, e.g. https://t.manul.si; empty in builds without telemetry */
+    /** the proxy's origin, e.g. https://telemetry.agentshot.si; empty in builds without telemetry */
     endpoint: string
     /** the PostHog project token (public: it can only send events) */
     token: string

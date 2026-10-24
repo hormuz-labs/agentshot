@@ -38,7 +38,7 @@ try {
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForSelector('video')
   await click('Command Palette…')
-  const search = win.getByPlaceholder('Type a command, or ask Manul…')
+  const search = win.getByPlaceholder('Type a command, or ask AgentShot…')
   await search.fill('vertical')
   const first = await win.locator('[role="dialog"] button').first().textContent()
   assert.match(first, /Export/, `'vertical' finds Export by keyword (got ${first})`)

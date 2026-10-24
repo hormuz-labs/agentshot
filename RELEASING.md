@@ -1,4 +1,4 @@
-# Releasing Manul
+# Releasing AgentShot
 
 Merge to `main` and CI does the rest. `.github/workflows/tag.yml` tags the next version, a patch release unless the merged
 pull request is labelled `release:minor` or `release:major` (or `release:skip` to merge without releasing), and the
@@ -23,7 +23,7 @@ together with the tools it relies on.
 
 | What | Where | Why |
 |---|---|---|
-| The `hormuz-labs/manul` repository | GitHub | code, releases (the update feed) |
+| The `hormuz-labs/agentshot` repository | GitHub | code, releases (the update feed) |
 | Apple Developer Program ($99/yr) | developer.apple.com | signing + notarization; Homebrew drops casks Gatekeeper blocks |
 | `MAC_CERT_P12_BASE64`, `MAC_CERT_PASSWORD` | repo secrets | "Developer ID Application" certificate (.p12, base64) |
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | repo secrets | notarization |
@@ -32,7 +32,7 @@ together with the tools it relies on.
 | `hormuz-labs/homebrew-tap` repository | GitHub | `brew install hormuz-labs/tap/manul`. Its own workflow checks Manul's releases hourly and rewrites the cask with `scripts/homebrew-cask.mjs` from the release tag, so no token is shared ("Run workflow" there to update at once) |
 | Cloudflare Pages project tracking the `apt` branch | Cloudflare | Only package lists, signatures, public key and redirects are stored in git; large `.deb` files stay on GitHub Releases |
 | `APT_GPG_KEY_ID` (variable), `APT_GPG_PRIVATE_KEY` (secret) | repo settings | apt metadata signing; no R2 bucket/access-key configuration is used by the current workflow |
-| `apt.manul.si` custom domain on that Pages project | DNS | the line users add to their sources |
+| `apt.agentshot.si` custom domain on that Pages project | DNS | the line users add to their sources |
 
 Without the Apple secrets, releases still build but the Mac app is unsigned: the cask clears the quarantine flag for Homebrew users, and anyone downloading the .dmg directly must right-click → Open.
 
@@ -42,13 +42,13 @@ Windows requires a **native x64 Windows runner** and Node >=22.19.0, not Linux c
 electron-builder's `${platform}` macro selects host resources. `beforePack` rejects mismatched targets.
 The **offline one-click NSIS installer** is per-user, cannot elevate or switch to per-machine, and has no
 licence-acceptance or directory-selection wizard. Users open one `.exe`; it installs to their per-user
-Programs directory, creates Desktop/Start menu shortcuts, and launches Manul. No repository setup,
+Programs directory, creates Desktop/Start menu shortcuts, and launches AgentShot. No repository setup,
 package manager or developer prerequisites are required. `LICENSE` remains bundled, not an installer page.
 The app and core tool executables are in the installer, not fetched by a web bootstrapper; speech models
 and optional heavier tools are downloaded inside the app on request. App data survives uninstall.
 Silent `/S` installs do not auto-launch; `/D=<path>` remains available for isolated CI installation.
 Requires **Windows 10 version 1903 (build 18362) or newer / Windows 11 x64**.
-Artifact: `Manul-${version}-windows-x64-Setup.exe`; updater feed: `latest.yml`, with its `.exe.blockmap`.
+Artifact: `AgentShot-${version}-windows-x64-Setup.exe`; updater feed: `latest.yml`, with its `.exe.blockmap`.
 
 ```powershell
 npm ci
@@ -110,7 +110,7 @@ Never run it against a developer profile. The workflow has not been exercised ye
 - Signed staging build trusted on a clean VM: inspect publisher and timestamp, verify both app and installer signatures and installer UX. SmartScreen reputation may still warn even with a valid signature; do not promise its absence.
 - Two **signed** versions using a private/staging GitHub update feed: installed N discovers N+1 through `latest.yml`, downloads correct x64 installer, verifies publisher, applies update, restarts and preserves projects/settings. A tampered installer or a valid signature from a different publisher must be rejected. Feed existence or an update-check error alone is not update acceptance.
 - Preserve corresponding source and third-party notices for the exact Gyan FFmpeg build (including library versions/configuration in the bundled `bin/ffmpeg-README.txt`) before public distribution.
-- Manually update the external **manul.si** download/install/support pages only after acceptance. Its source is absent from this repository and was not updated here.
+- Manually update the external **agentshot.si** download/install/support pages only after acceptance. Its source is absent from this repository and was not updated here.
 
 ## Installing
 
@@ -119,8 +119,8 @@ brew install hormuz-labs/tap/manul
 ```
 
 ```bash
-curl -fsSL https://apt.manul.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &&
-echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &&
+curl -fsSL https://apt.agentshot.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &&
+echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.agentshot.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &&
 sudo apt update && sudo apt install manul
 ```
 

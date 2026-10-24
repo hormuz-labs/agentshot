@@ -13,11 +13,11 @@ type Any = Record<string, any> // pi-durable's view is plain JSON; only the fiel
 const textOf = (c: unknown): string =>
   typeof c === 'string' ? c : Array.isArray(c) ? c.map((x: Any) => (x.type === 'text' ? x.text : '')).join('') : ''
 
-/** Manul's gateway's refusals, said so the person knows what to do. */
+/** AgentShot's gateway's refusals, said so the person knows what to do. */
 export function friendly(error: string) {
-  if (/budget exceeded/i.test(error)) return 'You’re out of Manul credits. Get a plan or more credits in Settings → Keys → Manul key.'
-  if (/model_blocked|is not allowed for virtual key/i.test(error)) return 'Manul Max and Ultra come with a Pro or Max plan. Get one in Settings → Keys → Manul key, or pick Manul High.'
-  if (/access not found|virtual key is required/i.test(error)) return 'Your Manul key isn’t valid any more. Sign in again in Settings → Keys → Manul key.'
+  if (/budget exceeded/i.test(error)) return 'You’re out of AgentShot credits. Get a plan or more credits in Settings → Keys → AgentShot key.'
+  if (/model_blocked|is not allowed for virtual key/i.test(error)) return 'AgentShot Max and Ultra come with a Pro or Max plan. Get one in Settings → Keys → AgentShot key, or pick AgentShot High.'
+  if (/access not found|virtual key is required/i.test(error)) return 'Your AgentShot key isn’t valid any more. Sign in again in Settings → Keys → AgentShot key.'
   return error
 }
 

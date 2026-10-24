@@ -82,7 +82,7 @@ export function BrowserPanel({ visible, onClose }: { visible: boolean; onClose()
             </button>
           )}
           {tab?.recording
-            ? <span data-recording className="flex shrink-0 items-center gap-1.5 text-[10.5px] text-bad" title="Manul is filming this tab for a walkthrough. The time it spends thinking is cut later."><span className="size-1.5 animate-pulse rounded-full bg-bad" />Recording</span>
+            ? <span data-recording className="flex shrink-0 items-center gap-1.5 text-[10.5px] text-bad" title="AgentShot is filming this tab for a walkthrough. The time it spends thinking is cut later."><span className="size-1.5 animate-pulse rounded-full bg-bad" />Recording</span>
             : agentHere && <span className="flex shrink-0 items-center gap-1 text-[10.5px] text-amber"><Bot className="size-3" />Agent</span>}
           {tab && s.tabs.length > 1 && !editing && (
             <button type="button" className="shrink-0 rounded text-faint opacity-0 hover:text-fg group-hover/addr:opacity-100" onClick={() => window.manul.browser.close(tab.id)} title="Close this tab"><X className="size-3" /></button>

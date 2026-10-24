@@ -68,7 +68,7 @@ import { serveMedia as mediaResponse } from './media-protocol'
 declare const __MANUL_TELEMETRY_URL__: string
 declare const __MANUL_POSTHOG_TOKEN__: string
 
-app.setName('Manul')
+app.setName('AgentShot')
 process.env.PATH = toolPath() // the agent's shell and tools find bundled executables first
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'manul', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, bypassCSP: true, corsEnabled: true } }])
@@ -173,7 +173,7 @@ async function startBridgeAndMesh() {
   stopHeartbeat = startWorkerHeartbeat({
     bridge: mobile,
     workerId: process.env.MANUL_WORKER_ID || `worker-${(hostname() || 'host').replace(/[^a-zA-Z0-9._-]/g, '-')}`,
-    workerName: process.env.MANUL_WORKER_NAME || hostname() || 'Manul Worker',
+    workerName: process.env.MANUL_WORKER_NAME || hostname() || 'AgentShot Worker',
     poolSecret,
     priority: process.env.MANUL_WORKER_PRIORITY ? Number(process.env.MANUL_WORKER_PRIORITY) : undefined,
     projects: () => Projects.recent().map(r => r.id),
@@ -1221,7 +1221,7 @@ async function startBrowser(resources: string) {
     await browser.startHost()
   } catch (e) {
     console.warn('browser', e)
-    send('notice', `Manul's browser could not start: ${(e as Error).message}`)
+    send('notice', `AgentShot's browser could not start: ${(e as Error).message}`)
   }
 }
 

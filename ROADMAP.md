@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="build/icons/256x256.png" width="88" alt="Manul">
+  <img src="build/icons/256x256.png" width="88" alt="AgentShot">
 </p>
 
-<h1 align="center">Manul Roadmap</h1>
+<h1 align="center">AgentShot Roadmap</h1>
 
 <p align="center">
-  <b>Where Manul is going, and what's done so far.</b><br>
+  <b>Where AgentShot is going, and what's done so far.</b><br>
   This is the shared plan: anyone can add to it. <a href="#how-to-contribute">How to contribute ↓</a>
 </p>
 
@@ -13,7 +13,7 @@
   <a href="README.md">README</a> &nbsp;·&nbsp; <a href="#1-vision">Vision</a> &nbsp;·&nbsp; <a href="#5-phases">Phases</a> &nbsp;·&nbsp; <a href="#6-business-model">Business model</a> &nbsp;·&nbsp; <a href="#7-open-questions-">Open questions</a>
 </p>
 
-> **Manul** is an agentic video editor, named after the Pallas cat.
+> **AgentShot** is an agentic video editor.
 > Drop in a video, say what you want, and it does it. Then you leave notes right on the picture and it fixes them.
 
 ## At a glance
@@ -23,8 +23,8 @@
 | [**0 · Foundations**](#phase-0-foundations) | `██████░░░░` 55% | 5 | 1 | 4 |
 | [**1 · MVP (v0.1)**](#phase-1-mvp-v01) | `████████░░` 77% | 15 | 4 | 3 |
 | [**2 · Generated shots, hand-off, publishing**](#phase-2-generated-shots-hand-off-publishing) | `░░░░░░░░░░` 0% | 0 | 0 | 9 |
-| [**3 · Manul key and Pro**](#phase-3-manul-key-and-pro) | `░░░░░░░░░░` 0% | 0 | 0 | 5 |
-| [**4 · Cloud, mobile, teams**](#phase-4-cloud-mobile-teams) | `░░░░░░░░░░` 0% | 0 | 0 | 7 |
+| [**3 · AgentShot key and Pro**](#phase-3-agentshot-key-and-pro) | `███░░░░░░░` 30% | 1 | 1 | 3 |
+| [**4 · Cloud, mobile, teams**](#phase-4-cloud-mobile-teams) | `███░░░░░░░` 31% | 1 | 1 | 6 |
 
 <sub>✅ done &nbsp;·&nbsp; 🚧 in progress &nbsp;·&nbsp; ⬜ not started &nbsp;·&nbsp; 💬 open question &nbsp;·&nbsp; progress counts 🚧 as half</sub>
 
@@ -32,13 +32,13 @@
 
 ## 1. Vision
 
-Most editing time is spent **watching, reacting and fixing**, not dragging clips on tracks. Manul makes that loop the
+Most editing time is spent **watching, reacting and fixing**, not dragging clips on tracks. AgentShot makes that loop the
 whole product:
 
 **Drop a video → say what you want → watch it happen → comment on the picture → export.**
 
 Who it's for: anyone who makes video (creators, podcasters, marketers, small teams). It is not only for professional editors, although
-pro editors can take a Manul rough cut into their own editor.
+pro editors can take an AgentShot rough cut into their own editor.
 
 ## 2. Product principles
 
@@ -218,12 +218,12 @@ pro editors can take a Manul rough cut into their own editor.
 - ⬜ Spending view in Settings (from the usage meter)
 - ⬜ Manul key early-access sign-up live
 
-### Phase 3: Manul key and Pro
-- 🚧 **Manul gateway** ([gateway/](gateway/README.md)): [Bifrost](https://github.com/maximhq/bifrost) holds our provider
-      keys; a Manul key is one of its virtual keys (budget, rate limit, allowed models). The app's side is done: with a
-      Manul key the agent uses one model, "Manul", and the gateway's routing rule picks the real one (Claude, Gemini or
+### Phase 3: AgentShot key and Pro
+- 🚧 **AgentShot gateway** ([gateway/](gateway/README.md)): [Bifrost](https://github.com/maximhq/bifrost) holds our provider
+      keys; an AgentShot key is one of its virtual keys (budget, rate limit, allowed models). The app's side is done: with an
+      AgentShot key the agent uses one model, "AgentShot", and the gateway's routing rule picks the real one (Claude, Gemini or
       GPT), changeable without an app release. Signing in (Clerk, [account/](account/README.md)) gives each person their own
-      key under their own Bifrost customer. Gateway and account service run on the silverfish cluster (manul.si), Clerk in production. New
+      key under their own Bifrost customer. Gateway and account service run on the silverfish cluster (agentshot.si), Clerk in production. New
       accounts get $2 of credit; Dodo Payments top-ups raise it (Test Mode). Left: Dodo Live Mode, and voice and images
       through the gateway
 - ⬜ Optional accounts, licence check (works offline for a month), credits, top-ups
@@ -234,11 +234,11 @@ pro editors can take a Manul rough cut into their own editor.
 - ⬜ Phone capture over **local Wi-Fi** (QR pairing, free)
 
 ### Phase 4: Cloud, mobile, teams
-- ⬜ **Manul Cloud storage** (Cloudflare R2): base amount included in Pro, add-on blocks, pooled for teams
-- 🚧 **Mobile app** ([Flutter, Android/iOS](mobile/README.md)): desktop-paired capture/import, AG-UI conversations,
+- ⬜ **AgentShot Cloud storage** (Cloudflare R2): base amount included in Pro, add-on blocks, pooled for teams
+- ✅ **Cloud &amp; home worker mesh** (`manul --worker`, `manul-mesh` userspace Headscale/WireGuard tunnel, cloud worker pool leasing, and peer-to-peer project delta-sync)
+- 🚧 **Mobile app** ([Flutter, Android/iOS](mobile/README.md)): desktop-paired capture/import with 6-digit OTP, AG-UI conversations,
       proposal review, notes and export download over local Wi-Fi or Tailscale. Native share extensions, full interaction parity,
       device QA and store releases remain; see [coverage](mobile/FEATURES.md).
-- ⬜ **Team plan:** shared projects, **review links** where clients comment on the frame, shared brand kits and skills
 - ⬜ Recording integrations: Zoom, Riverside, Loom, Google Meet → auto-import
 - ⬜ Stock media: Pexels, Pixabay, Unsplash, Giphy; licensed music (Epidemic Sound, Artlist)
 - ⬜ Brand sources: Canva, Figma

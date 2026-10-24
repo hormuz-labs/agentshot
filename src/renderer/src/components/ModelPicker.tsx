@@ -31,8 +31,8 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
   if (dir && !info?.current) return null
   const current = onPick ? picked ?? info?.current : info?.current
   const cur = info?.models.find(m => m.provider === current?.provider && m.modelId === current?.modelId)
-  // only the Manul key: the gateway picks the model, there's nothing to choose
-  if (dir && info?.models.length === 1 && info.current?.provider === 'manul') return <span className="inline-flex h-6 items-center px-1.5 text-[11px] text-dim" title="Manul picks the model">{cur?.name || 'Manul'}</span>
+  // only the AgentShot key: the gateway picks the model, there's nothing to choose
+  if (dir && info?.models.length === 1 && info.current?.provider === 'manul') return <span className="inline-flex h-6 items-center px-1.5 text-[11px] text-dim" title="AgentShot picks the model">{cur?.name || 'AgentShot'}</span>
   const choose = async (m: { provider: string; modelId: string } | null) => {
     if (disabled) return
     if (onPick) { onPick(m ?? undefined); setOpen(false); setQ(''); return }

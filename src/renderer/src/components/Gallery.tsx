@@ -126,7 +126,7 @@ function Viewer({ list, index, onIndex, onClose, onUse, onTag }: {
               ) : (
                 <p className="mx-6 text-[12.5px] leading-[1.6] text-dim">
                   This one was made with {e.skill ? <a href={e.skill} target="_blank" rel="noreferrer" className="text-fg hover:underline">a skill</a> : 'a skill'} rather
-                  than a prompt. Manul can still match its look from the video.
+                  than a prompt. AgentShot can still match its look from the video.
                 </p>
               )}
             </div>

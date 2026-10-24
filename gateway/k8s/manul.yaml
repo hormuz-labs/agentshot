@@ -1,7 +1,7 @@
-# Manul's gateway (Bifrost) and account service, in namespace manul on the silverfish cluster. Applied by deploy.sh.
-# Public: gateway.manul.si (/openai, /v1: the models, Manul keys only) and account.manul.si (signing in, credit,
+# AgentShot's gateway (Bifrost) and account service, in namespace manul on the silverfish cluster. Applied by deploy.sh.
+# Public: gateway.agentshot.si (/openai, /v1: the models, AgentShot keys only) and account.agentshot.si (signing in, credit,
 # Dodo Payments' webhook, voice and music).
-# Admin: admin.manul.si is Bifrost's dashboard and admin API, behind its admin login (manul-secrets).
+# Admin: admin.agentshot.si is Bifrost's dashboard and admin API, behind its admin login (manul-secrets).
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -85,7 +85,7 @@ spec:
           command: [node, /app/server.mjs]
           ports: [{ name: http, containerPort: 8080 }]
           env:
-            - { name: CLERK_ISSUER, value: https://clerk.manul.si }          # Clerk production
+            - { name: CLERK_ISSUER, value: https://clerk.agentshot.si }          # Clerk production
             - { name: BIFROST_URL, value: "http://bifrost:8080" }   # the admin API, over the cluster network
             - { name: BIFROST_PROVIDERS, value: "anthropic,gemini,openai,azure" }
             - { name: CLERK_SECRET_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: CLERK_SECRET_KEY } } }
@@ -114,7 +114,7 @@ spec:
             - { name: ELEVENLABS_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: ELEVENLABS_API_KEY, optional: true } } }
             - { name: OPENAI_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: OPENAI_API_KEY, optional: true } } }
             - { name: HEADSCALE_URL, value: "http://headscale:8080" }
-            - { name: HEADSCALE_PUBLIC_URL, value: "https://mesh.manul.si" }
+            - { name: HEADSCALE_PUBLIC_URL, value: "https://mesh.agentshot.si" }
             - { name: HEADSCALE_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: HEADSCALE_API_KEY, optional: true } } }
             - { name: WORKER_POOL_SECRET, valueFrom: { secretKeyRef: { name: manul-secrets, key: WORKER_POOL_SECRET, optional: true } } }
           volumeMounts:
@@ -157,7 +157,7 @@ metadata:
   namespace: manul
 data:
   config.yaml: |
-    server_url: https://mesh.manul.si
+    server_url: https://mesh.agentshot.si
     listen_addr: 0.0.0.0:8080
     metrics_listen_addr: 127.0.0.1:9090
     grpc_listen_addr: 127.0.0.1:50443
@@ -279,7 +279,7 @@ metadata:
   name: manul
   namespace: manul
 spec:
-  domains: [gateway.manul.si, account.manul.si]
+  domains: [gateway.agentshot.si, account.agentshot.si, gateway.manul.si, account.manul.si]
 ---
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
@@ -287,7 +287,7 @@ metadata:
   name: manul-admin
   namespace: manul
 spec:
-  domains: [admin.manul.si]
+  domains: [admin.agentshot.si, admin.manul.si]
 ---
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
@@ -295,7 +295,7 @@ metadata:
   name: manul-mesh
   namespace: manul
 spec:
-  domains: [mesh.manul.si]
+  domains: [mesh.agentshot.si, mesh.manul.si]
 ---
 apiVersion: networking.gke.io/v1beta1
 kind: FrontendConfig
@@ -319,19 +319,43 @@ spec:
   defaultBackend:                 # anything else gets the account service's 404
     service: { name: account, port: { number: 8080 } }
   rules:
+    - host: gateway.agentshot.si
+      http:
+        paths:
+          - { path: /openai, pathType: Prefix, backend: { service: { name: bifrost, port: { number: 8080 } } } }
+          - { path: /v1, pathType: Prefix, backend: { service: { name: bifrost, port: { number: 8080 } } } }
     - host: gateway.manul.si
       http:
         paths:
           - { path: /openai, pathType: Prefix, backend: { service: { name: bifrost, port: { number: 8080 } } } }
           - { path: /v1, pathType: Prefix, backend: { service: { name: bifrost, port: { number: 8080 } } } }
-    - host: admin.manul.si          # the dashboard: Bifrost's admin login
+    - host: admin.agentshot.si          # the dashboard: Bifrost's admin login
       http:
         paths:
           - { path: /, pathType: Prefix, backend: { service: { name: bifrost, port: { number: 8080 } } } }
+    - host: admin.manul.si
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: bifrost, port: { number: 8080 } } } }
+    - host: account.agentshot.si
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: account, port: { number: 8080 } } } }
     - host: account.manul.si
       http:
         paths:
           - { path: /, pathType: Prefix, backend: { service: { name: account, port: { number: 8080 } } } }
+    - host: mesh.agentshot.si
+      http:
+        paths:
+          - { path: /key, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /ts2021, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /machine, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /register, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /noise, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /a/, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /d/, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /health, pathType: Exact, backend: { service: { name: headscale, port: { number: 8080 } } } }
     - host: mesh.manul.si
       http:
         paths:

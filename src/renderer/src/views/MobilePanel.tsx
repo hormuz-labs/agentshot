@@ -40,7 +40,7 @@ export function MobilePanel() {
     <div>
       <PanelHeader
         title="Mobile"
-        description="Direct Manul from Android or iPhone. Your computer edits and renders; your phone sends footage, gives notes and reviews the film over the same Wi-Fi or Tailscale."
+        description="Direct AgentShot from Android or iPhone. Your computer edits and renders; your phone sends footage, gives notes and reviews the film over the same Wi-Fi or Tailscale."
       />
       <div className="space-y-4">
         <div className="flex items-start gap-3 rounded-lg border border-line bg-raised/60 px-3 py-2.5">
@@ -60,8 +60,8 @@ export function MobilePanel() {
               {state.running
                 ? state.devices.length
                   ? `${state.devices.length === 1 ? '1 device' : `${state.devices.length} devices`} paired. Connections are encrypted and pinned to this computer’s certificate.`
-                  : 'On. Enter the 6-digit code below in the Manul mobile app to pair.'
-                : 'Off. Nothing on the network can reach Manul.'}
+                  : 'On. Enter the 6-digit code below in the AgentShot mobile app to pair.'
+                : 'Off. Nothing on the network can reach AgentShot.'}
             </p>
           </div>
         </div>

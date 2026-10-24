@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="build/icons/256x256.png" width="72" alt="Manul">
+  <img src="build/icons/256x256.png" width="72" alt="AgentShot">
 </p>
 
-<h1 align="center">Contributing to Manul</h1>
+<h1 align="center">Contributing to AgentShot</h1>
 
 <p align="center">
-  How to run Manul from source, how it fits together, and how to send a change.<br>
+  How to run AgentShot from source, how it fits together, and how to send a change.<br>
   <a href="README.md">README</a> &nbsp;·&nbsp; <a href="ROADMAP.md">Roadmap</a> &nbsp;·&nbsp; <a href="RELEASING.md">Releasing</a>
 </p>
 
@@ -21,11 +21,11 @@ Use **Node >=22.19.0**, npm, Git, CMake and a native C/C++ compiler. On macOS: `
 on Debian/Ubuntu: `sudo apt install cmake build-essential`.
 
 ```bash
-git clone git@github.com:hormuz-labs/manul.git && cd manul
+git clone git@github.com:hormuz-labs/agentshot.git && cd agentshot
 npm install                  # also fetches the pinned ffmpeg/ffprobe and BrowserSkill for this machine
 npm run setup:native         # builds whisper, beats, speakers and vision; checks tools/models (needs cmake + a C/C++ compiler)
 npm run build:whisper        # builds the bundled whisper-cli (macOS/Linux/Windows)
-npm run dev                  # Manul, with hot reload
+npm run dev                  # AgentShot, with hot reload
 ```
 
 ### Windows x64 (configured, not yet validated)
@@ -36,8 +36,8 @@ Git for source checkout, CMake, and **Visual Studio 2022 Build Tools** with
 Git Bash is not an end-user requirement. CMake uses the Visual Studio generator, not MinGW.
 
 ```powershell
-git clone https://github.com/hormuz-labs/manul.git
-Set-Location manul
+git clone https://github.com/hormuz-labs/agentshot.git
+Set-Location agentshot
 npm ci
 npm run build:whisper
 npm run dev
@@ -55,7 +55,7 @@ Visual Studio's `VC/Redist/MSVC` (or `VCToolsRedistDir`), and CI verifies its Mi
 
 Add a key in **Settings → Keys** (⌘,), drop a video on the start screen, and ask for something.
 
-On macOS, `npm run dev` and `npm start` use a cached `Manul.app` development launcher so the Dock shows Manul's name and icon. It refreshes automatically when Electron or the icon changes.
+On macOS, `npm run dev` and `npm start` use a cached `AgentShot.app` development launcher so the Dock shows AgentShot's name and icon. It refreshes automatically when Electron or the icon changes.
 
 | Command | What it does |
 |---|---|
@@ -118,7 +118,7 @@ flowchart LR
 
 ## Tests
 
-Manul is **test-driven**: every change comes with tests, and the suites run before each commit.
+AgentShot is **test-driven**: every change comes with tests, and the suites run before each commit.
 
 ```bash
 npm test           # unit + integration (Vitest); Electron is stubbed, ffmpeg is real
@@ -130,7 +130,7 @@ MANUL_TEST_TOOLS=<tools folder with whisper installed> npm test   # also runs th
 
 Tests that need something this machine lacks (whisper.cpp, a speech model, an installed tool, an API key) skip themselves.
 The packaged E2E is different: a missing package is an error, never a skip. On Windows it verifies
-`dist/win-unpacked/Manul.exe` and its bundled `.exe` tools, fonts, skills, import, motion rendering and export.
+`dist/win-unpacked/AgentShot.exe` and its bundled `.exe` tools, fonts, skills, import, motion rendering and export.
 Do not run `scripts/smoke-windows-installer.ps1` locally: it is restricted to disposable GitHub-hosted runners,
 whose real per-user registry and shell folders are isolated from developer installations.
 The one-click smoke still overrides its temporary path with NSIS `/D` (no directory-selection wizard),
@@ -155,7 +155,7 @@ Releases (signing, Windows NSIS, Homebrew, apt) are covered in [RELEASING.md](RE
 
 ## License
 
-Manul is open source under the [Apache License 2.0](LICENSE); redistributions keep the attribution in [NOTICE](NOTICE). A few parts carry their own licence, marked at the top of the file:
+AgentShot is open source under the [Apache License 2.0](LICENSE); redistributions keep the attribution in [NOTICE](NOTICE). A few parts carry their own licence, marked at the top of the file:
 programs built together with GPL code (`scripts/beats/manul-beats.c`, `scripts/ml/manul-speakers.c`) are
 GPL-3.0-or-later, and the ffmpeg build modules are Apache-2.0 (texts in [LICENSES](LICENSES)).
 

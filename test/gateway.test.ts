@@ -24,7 +24,7 @@ describe('the Manul key', () => {
     keyed.setProvider(manulProvider('https://gw.test') as any)
     const avail = (await keyed.getAvailable()) as any[]
     const described = describeModels(avail)
-    expect(described[0]).toEqual(expect.objectContaining({ provider: 'manul', providerLabel: 'Manul', modelId: 'manul', name: 'Manul', price: undefined, images: true }))
+    expect(described[0]).toEqual(expect.objectContaining({ provider: 'manul', providerLabel: 'AgentShot', modelId: 'manul', name: 'AgentShot', price: undefined, images: true }))
     expect(described.map(m => m.modelId)).toEqual(['manul', 'manul-low', 'manul-medium', 'manul-high', 'manul-max', 'manul-ultra'])
     expect(chooseModel(avail)).toEqual({ provider: 'manul', modelId: 'manul' })
   })

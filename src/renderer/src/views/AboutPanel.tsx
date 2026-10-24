@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 type St = Awaited<ReturnType<typeof window.manul.updates.state>>
 type Tel = Awaited<ReturnType<typeof window.manul.telemetry.state>>
 
-const README = 'https://github.com/hormuz-labs/manul/blob/main/telemetry/README.md'
+const README = 'https://github.com/hormuz-labs/agentshot/blob/main/telemetry/README.md'
 
 /** The two opt-ins, shown on first run and in About. */
 export function TelemetryChoices({ available, usage, crashes, onUsage, onCrashes }: {
@@ -16,7 +16,7 @@ export function TelemetryChoices({ available, usage, crashes, onUsage, onCrashes
       {available.crashes && <label className="flex items-start gap-2">
         <input type="checkbox" className="mt-0.5" checked={crashes} onChange={e => onCrashes(e.target.checked)} />
         <span><span className="font-medium text-fg">Send crash reports</span>
-          <span className="block text-dim">When Manul crashes or hits an error: what failed, where in Manul's code, and your OS and app version. File names and paths are removed.</span></span>
+          <span className="block text-dim">When AgentShot crashes or hits an error: what failed, where in AgentShot's code, and your OS and app version. File names and paths are removed.</span></span>
       </label>}
       {available.usage && <label className="flex items-start gap-2">
         <input type="checkbox" className="mt-0.5" checked={usage} onChange={e => onUsage(e.target.checked)} />
@@ -35,15 +35,15 @@ export function AboutPanel() {
   useEffect(() => { window.manul.info().then(setInfo); window.manul.updates.state().then(setSt); window.manul.telemetry.state().then(setTel); return window.manul.updates.onChange(setSt) }, [])
   const line = !st ? '' : st.mode === 'off' ? `Updates are off (${st.why}).` : st.mode === 'package-manager' ? `Updates come from your package manager (${st.why?.replace(/^installed with apt: /, '')}).`
     : st.status === 'checking' ? 'Checking for updates…' : st.status === 'downloading' ? `Downloading ${st.version ?? 'an update'}… ${Math.round((st.progress || 0) * 100)}%`
-    : st.status === 'ready' ? `Manul ${st.version} is ready.` : st.status === 'none' ? 'Manul is up to date.' : st.status === 'error' ? `Couldn't check: ${st.error}` : 'Manul checks for updates in the background.'
+    : st.status === 'ready' ? `AgentShot ${st.version} is ready.` : st.status === 'none' ? 'AgentShot is up to date.' : st.status === 'error' ? `Couldn't check: ${st.error}` : 'AgentShot checks for updates in the background.'
   return (
     <div>
       <div className="mb-6 flex items-center gap-4">
         <img src="./manul.png" className="size-20 object-contain" alt="" />
         <div>
-          <div className="text-[18px] font-semibold">Manul</div>
+          <div className="text-[18px] font-semibold">AgentShot</div>
           <div className="text-dim">Version {info?.version} · {info?.platform === 'darwin' ? 'macOS' : info?.platform}</div>
-          <div className="text-xs text-faint">An agentic video editor, named after the Pallas cat.</div>
+          <div className="text-xs text-faint">An agentic video editor.</div>
         </div>
       </div>
       <div className="mb-3 rounded-lg border border-line bg-raised/60 p-3">

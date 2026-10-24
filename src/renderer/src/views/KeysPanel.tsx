@@ -34,11 +34,11 @@ export function KeysPanel({ tourTab }: { tourTab?: 'own' | 'manul' } = {}) {
 
   return (
     <div>
-      <PanelHeader title="Keys" description="Manul talks to AI models with your keys. They are stored encrypted in your system keychain." />
+      <PanelHeader title="Keys" description="AgentShot talks to AI models with your keys. They are stored encrypted in your system keychain." />
       <Tabs value={tourTab ?? tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger data-tour="own-key-tab" value="own"><KeyRound className="size-3.5" />Your own keys</TabsTrigger>
-          <TabsTrigger data-tour="manul-key-tab" value="manul"><Sparkles className="size-3.5" />Manul key{manul?.set && <span className="size-1.5 rounded-full bg-ok" />}</TabsTrigger>
+          <TabsTrigger data-tour="manul-key-tab" value="manul"><Sparkles className="size-3.5" />AgentShot key{manul?.set && <span className="size-1.5 rounded-full bg-ok" />}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="own" className="space-y-2">
@@ -115,7 +115,7 @@ function ManulKey({ manul, onKeys }: { manul?: KeyInfo; onKeys(k: KeyInfo[]): vo
       <div className="text-center">
         <div className="orb mx-auto mb-3 size-10 rounded-full" />
         <div className="text-[15px] font-semibold">One key for everything</div>
-        <p className="mx-auto mt-1 max-w-sm text-dim">Manul picks the best model for the job and keeps it current. New accounts start with 1,000 credits; Pro and Max plans add more every month and unlock the Max and Ultra models. Your own keys, when set, are used first. On Pitch? Sign in with the same email: your plan and credits are here.</p>
+        <p className="mx-auto mt-1 max-w-sm text-dim">AgentShot picks the best model for the job and keeps it current. New accounts start with 1,000 credits; Pro and Max plans add more every month and unlock the Max and Ultra models. Your own keys, when set, are used first. On Pitch? Sign in with the same email: your plan and credits are here.</p>
       </div>
       {account.email && manul.set ? (
         <>
@@ -129,13 +129,13 @@ function ManulKey({ manul, onKeys }: { manul?: KeyInfo; onKeys(k: KeyInfo[]): vo
       ) : manul.set && !pasting ? (
         <div className={row}>
           <span className="size-2 rounded-full bg-ok" />
-          <span className="flex-1 text-[13px]">Manul key added</span>
+          <span className="flex-1 text-[13px]">AgentShot key added</span>
           <Button size="sm" variant="ghost" onClick={remove}>Remove</Button>
           <Button size="sm" onClick={() => setPasting(true)}>Replace</Button>
         </div>
       ) : pasting ? (
         <form className="mx-auto mt-4 flex max-w-md gap-2" onSubmit={e => { e.preventDefault(); if (value.trim()) paste() }}>
-          <input autoFocus type="password" value={value} onChange={e => setValue(e.target.value)} placeholder="Paste your Manul key" aria-label="Manul key"
+          <input autoFocus type="password" value={value} onChange={e => setValue(e.target.value)} placeholder="Paste your AgentShot key" aria-label="AgentShot key"
             className="h-8 flex-1 rounded-lg border border-line bg-bg px-2.5 font-mono text-xs outline-none placeholder:font-sans placeholder:text-faint focus:border-amber/60" />
           <Button size="md" variant="primary" type="submit">Save</Button>
           <Button size="md" variant="ghost" type="button" onClick={() => setPasting(false)}>Cancel</Button>
@@ -148,7 +148,7 @@ function ManulKey({ manul, onKeys }: { manul?: KeyInfo; onKeys(k: KeyInfo[]): vo
               <Button size="sm" variant="ghost" onClick={() => window.manul.account.cancel()}>Cancel</Button>
             </div>
           ) : (
-            <Button size="md" variant="primary" disabled={!account.available} onClick={signIn}>Sign in to Manul</Button>
+            <Button size="md" variant="primary" disabled={!account.available} onClick={signIn}>Sign in to AgentShot</Button>
           )}
           {error && <p className="max-w-sm text-center text-xs text-bad">{error}</p>}
           {!account.available && <p className="text-xs text-faint">Signing in isn’t available in this build.</p>}
@@ -207,7 +207,7 @@ function Credit() {
       ) : b && (
         <>
           <div className="mt-2 flex items-center gap-2 text-xs text-dim">
-            <span className="flex-1">Plans add credits every month and unlock Manul Max and Ultra.</span>
+            <span className="flex-1">Plans add credits every month and unlock AgentShot Max and Ultra.</span>
             <button className="underline-offset-2 hover:text-fg hover:underline" onClick={() => setYearly(!yearly)}>{yearly ? 'Monthly' : 'Yearly'}</button>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">

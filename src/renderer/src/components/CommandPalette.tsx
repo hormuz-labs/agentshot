@@ -11,7 +11,7 @@ export function CommandPalette({ open, onOpenChange, onAsk }: { open: boolean; o
   const [i, setI] = useState(0)
   const list = useMemo(() => rank(all, q), [all, q])
   const rows = [...list.map(c => ({ key: c.id, title: c.title, shortcut: c.shortcut, run: c.run, ask: false })),
-    ...(q.trim() && onAsk ? [{ key: '__ask', title: `Ask Manul: “${q.trim()}”`, shortcut: undefined, run: () => onAsk(q.trim()), ask: true }] : [])]
+    ...(q.trim() && onAsk ? [{ key: '__ask', title: `Ask AgentShot: “${q.trim()}”`, shortcut: undefined, run: () => onAsk(q.trim()), ask: true }] : [])]
   useEffect(() => { setI(0) }, [q])
   useEffect(() => { if (!open) setQ('') }, [open])
   const go = (r?: typeof rows[number]) => { if (!r) return; onOpenChange(false); setTimeout(() => r.run?.(), 0) }
@@ -24,7 +24,7 @@ export function CommandPalette({ open, onOpenChange, onAsk }: { open: boolean; o
           <D.Title className="sr-only">Command palette</D.Title>
           <div className="flex items-center gap-2 bg-bg/40 px-3">
             <Search className="size-4 text-faint" />
-            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Type a command, or ask Manul…"
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Type a command, or ask AgentShot…"
               onKeyDown={e => {
                 if (e.key === 'ArrowDown') { e.preventDefault(); setI(x => Math.min(rows.length - 1, x + 1)) }
                 if (e.key === 'ArrowUp') { e.preventDefault(); setI(x => Math.max(0, x - 1)) }

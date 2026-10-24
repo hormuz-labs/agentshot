@@ -27,7 +27,7 @@ const server = createServer((req, res) => {
     }
     if (req.url === '/v1/mesh/join') {
       seen['/v1/mesh/join'] = { auth: req.headers.authorization, pool: req.headers['x-manul-pool-secret'], body }
-      return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-123', tag: 'tag:client' }))
+      return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ controlUrl: 'https://mesh.agentshot.si', authKey: 'tskey-123', tag: 'tag:client' }))
     }
     if (req.url === '/v1/workers/heartbeat') {
       seen['/v1/workers/heartbeat'] = { auth: req.headers.authorization, pool: req.headers['x-manul-pool-secret'], body: JSON.parse(body) }
@@ -55,7 +55,7 @@ beforeAll(async () => {
 })
 afterAll(() => { server.close(); delete process.env.MANUL_AUTH_ISSUER; delete process.env.MANUL_ACCOUNT; delete process.env.MANUL_AUTH_CLIENT_ID })
 
-describe('signing in to Manul', () => {
+describe('signing in to AgentShot', () => {
   it('opens Clerk with PKCE, comes back on the callback, and stores the person’s key', async () => {
     let authorize: URL | undefined
     const status = await signIn(async url => {
@@ -89,10 +89,10 @@ describe('signing in to Manul', () => {
   })
 
   it('joins the Headscale mesh, sends worker heartbeats, and discovers/leases/releases workers', async () => {
-    expect(await meshJoin('client')).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-123', tag: 'tag:client' })
+    expect(await meshJoin('client')).toEqual({ controlUrl: 'https://mesh.agentshot.si', authKey: 'tskey-123', tag: 'tag:client' })
     expect(seen['/v1/mesh/join']).toMatchObject({ auth: 'Bearer sk-bf-ada' })
 
-    expect(await meshJoin('worker', 'pool-sec')).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-123', tag: 'tag:client' })
+    expect(await meshJoin('worker', 'pool-sec')).toEqual({ controlUrl: 'https://mesh.agentshot.si', authKey: 'tskey-123', tag: 'tag:client' })
     expect(seen['/v1/mesh/join']).toMatchObject({ pool: 'pool-sec' })
 
     await workerHeartbeat({ id: 'w1', name: 'Home Mac' })
@@ -113,7 +113,7 @@ describe('signing in to Manul', () => {
   })
 
   it('says what to do when the gateway refuses', () => {
-    expect(friendly('manul API error (402): {"type":"budget_exceeded","error":{"message":"Budget exceeded: …"}}')).toMatch(/out of Manul credits/)
+    expect(friendly('manul API error (402): {"type":"budget_exceeded","error":{"message":"Budget exceeded: …"}}')).toMatch(/out of AgentShot credits/)
     expect(friendly('401 {"error":{"message":"access not found. The provided credential does not exist"}}')).toMatch(/Sign in again/)
     expect(friendly('403 {"type":"model_blocked","error":{"message":"Model \'gpt-6-astra\' is not allowed for virtual key \'user_1\'"}}')).toMatch(/Pro or Max plan/)
     expect(friendly('something else')).toBe('something else')

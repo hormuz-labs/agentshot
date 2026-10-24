@@ -14,7 +14,7 @@ export function SkillsPanel() {
   if (!st) return null
   return (
     <div>
-      <PanelHeader title="Skills" description="How Manul does each kind of work, built into the app and updated with it. Manul reads a skill before the work it covers; when you correct it for good, it remembers (Memory)." />
+      <PanelHeader title="Skills" description="How AgentShot does each kind of work, built into the app and updated with it. AgentShot reads a skill before the work it covers; when you correct it for good, it remembers (Memory)." />
       <div className="mb-3 flex items-center gap-2">
         <span className="text-xs text-dim">Profile</span>
         <select value={st.profile.id} onChange={async e => setSt(await window.manul.skills.useProfile(e.target.value))}

@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>NSCameraUsageDescription</key>
-    <string>Record footage to send to your Manul project.</string>
+    <string>Record footage to send to your AgentShot project.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Include audio when recording project footage.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Choose footage and images for your Manul project.</string>
+    <string>Choose footage and images for your AgentShot project.</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Connect securely to Manul on your computer to edit and review your films.</string>
+    <string>Connect securely to AgentShot on your computer to edit and review your films.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>
@@ -27,7 +27,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Manul</string>
+	<string>AgentShot</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -35,7 +35,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Manul</string>
+	<string>AgentShot</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

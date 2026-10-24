@@ -1,6 +1,6 @@
-# Manul mobile
+# AgentShot mobile
 
-Flutter companion for **Android and iPhone/iPad**, connected to the existing Manul
+Flutter companion for **Android and iPhone/iPad**, connected to the existing AgentShot
 desktop editing engine. This is an initial implementation, not a published store release.
 
 ## Run
@@ -19,8 +19,8 @@ desktop editing engine. This is an initial implementation, not a published store
 5. Paste the connection code into the mobile app. It expires after five minutes
    and can pair one device. Generate another code to pair another device.
 
-Keep desktop Manul running. If the computer sleeps, the app reconnects when it
-returns. Quitting Manul or disabling the bridge revokes all pairings; pair again
+Keep desktop AgentShot running. If the computer sleeps, the app reconnects when it
+returns. Quitting AgentShot or disabling the bridge revokes all pairings; pair again
 after restarting it. This version supports a reachable local network, not an
 internet relay or cloud account-based device discovery.
 
@@ -49,7 +49,7 @@ iOS builds require a Mac with Xcode. The iOS deployment target is 14.0.
 - Desktop API keys, skills/profiles, memory, tools installation/removal, account
   balance, provider inspection, browser navigation/tab management.
 - System/light/dark themes, phone/tablet layouts, scrollable keyboard-aware forms.
-- Actual Manul launcher icons, Android adaptive/themed icons, native launch
+- Actual AgentShot launcher icons, Android adaptive/themed icons, native launch
   artwork, and bundled desktop fonts. See `DESIGN.md` and `scripts/brand.py`.
 
 ## Feature parity and remaining work

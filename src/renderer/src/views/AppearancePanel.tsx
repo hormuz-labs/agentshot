@@ -14,7 +14,7 @@ export function AppearancePanel() {
   const [theme, setTheme] = useTheme()
   return (
     <div>
-      <PanelHeader title="Appearance" description="How Manul looks. The film always plays on black." />
+      <PanelHeader title="Appearance" description="How AgentShot looks. The film always plays on black." />
       <div className="grid grid-cols-3 gap-3">
         {CHOICES.map(({ id, label, icon: Icon, swatch }) => (
           <button key={id} onClick={() => setTheme(id)} aria-pressed={theme === id}

@@ -188,7 +188,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     { id: 'box', title: 'Draw a box on the picture', shortcut: 'B', run: () => { stage.current?.video?.pause(); setDrawing(true) } },
     { id: 'play', title: 'Play or pause', shortcut: 'Space', run: playPause },
     { id: 'agent.new', title: 'New conversation', run: () => window.manul.agent.newConversation(p.dir) },
-    { id: 'agent.focus', title: 'Ask Manul', shortcut: `${mod}L`, run: () => ask() },
+    { id: 'agent.focus', title: 'Ask AgentShot', shortcut: `${mod}L`, run: () => ask() },
     { id: 'agent.panel', title: 'Show or hide the conversation', keywords: 'chat collapse film', run: () => { setChatShut(x => !x); setPreview(true) } },
     { id: 'agent.stop', title: 'Stop the agent', run: () => window.manul.agent.stop(p.dir) },
     { id: 'browser', title: 'Show or hide the browser', keywords: 'web internet bsk sign in google youtube', shortcut: `${mod}⇧B`, run: () => setBrowsing(x => !x) },
@@ -395,7 +395,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         <JobsTray />
         <HistoryButton project={p} open={historyOpen} onOpenChange={setHistoryOpen} onRestored={np => { setP(np); setEditing(null) }} />
         <Tip label="Show in Finder" side="bottom"><Button className="no-drag" size="iconSm" variant="ghost" onClick={() => window.manul.project.reveal(p.dir)}><FolderOpen /></Button></Tip>
-        <Tip label="Manul's browser (the agent uses it for the web)" side="bottom">
+        <Tip label="AgentShot's browser (the agent uses it for the web)" side="bottom">
           <Button className="no-drag" size="iconSm" variant={browsing ? 'secondary' : 'ghost'} onClick={() => setBrowsing(x => !x)} aria-label="Browser"><Globe /></Button>
         </Tip>
         <Tip label={chatShut ? 'Show the conversation' : 'Hide the conversation'} side="bottom">

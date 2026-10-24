@@ -9,22 +9,22 @@ describe('Homebrew cask', () => {
 
   it('points each Mac at its own build, with checksums', () => {
     expect(cask).toContain('version "0.3.0"')
-    expect(cask).toMatch(/on_arm do\s+sha256 "a{64}"\s+url "https:\/\/github\.com\/hormuz-labs\/manul\/releases\/download\/v#\{version\}\/Manul-#\{version\}-arm64\.dmg"/)
-    expect(cask).toMatch(/on_intel do\s+sha256 "b{64}"\s+url "[^"]+Manul-#\{version\}-x64\.dmg"/)
+    expect(cask).toMatch(/on_arm do\s+sha256 "a{64}"\s+url "https:\/\/github\.com\/hormuz-labs\/agentshot\/releases\/download\/v#\{version\}\/AgentShot-#\{version\}-arm64\.dmg"/)
+    expect(cask).toMatch(/on_intel do\s+sha256 "b{64}"\s+url "[^"]+AgentShot-#\{version\}-x64\.dmg"/)
   })
 
   it('lets the app update itself and needs macOS 12+', () => {
     expect(cask).toContain('auto_updates true')
     expect(cask).toContain('depends_on macos: :monterey')
-    expect(cask).toContain('app "Manul.app"')
+    expect(cask).toContain('app "AgentShot.app"')
   })
 
   it('opens without a Gatekeeper block while builds are unsigned', () => {
-    expect(cask).toMatch(/postflight_steps do\s+run "\/usr\/bin\/xattr",\s+args: +\["-dr", "com\.apple\.quarantine", "Manul\.app"\],\s+chdir: +"\{\{appdir\}\}"/)
+    expect(cask).toMatch(/postflight_steps do\s+run "\/usr\/bin\/xattr",\s+args: +\["-dr", "com\.apple\.quarantine", "AgentShot\.app"\],\s+chdir: +"\{\{appdir\}\}"/)
   })
 
   it('cleans up on zap', () => {
-    expect(cask).toContain('~/Library/Application Support/Manul')
+    expect(cask).toContain('~/Library/Application Support/AgentShot')
     expect(cask).toMatch(/zap trash:/)
   })
 
@@ -47,7 +47,7 @@ describe.each(['README.md', 'RELEASING.md', 'scripts/apt-repo.sh'])('APT install
   const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const command = (file.endsWith('.sh')
     ? source.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)![1].replaceAll('&amp;', '&')
-    : source.match(/```bash\n(curl -fsSL https:\/\/apt\.manul\.si[\s\S]*?)\n```/)![1])
+    : source.match(/```bash\n(curl -fsSL https:\/\/apt\.agentshot\.si[\s\S]*?)\n```/)![1])
   // Run the published command without network access, sudo or changes to the host's APT configuration.
   const shell = `
 curl() { printf 'public key\\n'; }
@@ -63,7 +63,7 @@ gpg() {
 tee() {
   [ "$*" = /etc/apt/sources.list.d/manul.list ] || return 2
   read -r source
-  [ "$source" = 'deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.manul.si stable main' ] || return 2
+  [ "$source" = 'deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.agentshot.si stable main' ] || return 2
   printf 'source\\n'
 }
 apt() { printf '%s\\n' "$*"; [ "$FAIL_AT" != "$1" ]; }

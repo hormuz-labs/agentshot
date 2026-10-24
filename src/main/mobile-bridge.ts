@@ -117,7 +117,7 @@ export class MobileBridge {
     if (this.server) { this.code = String(randomInt(100_000, 1_000_000)); this.codeTries = 0; this.expiresAt = Date.now() + 5 * 60_000; return this.status() }
     this.loadState()
     if (!this.pem) {
-      const generated = await generate([{ name: 'commonName', value: 'Manul Mobile Bridge' }], { keySize: 2048, algorithm: 'sha256', notAfterDate: new Date(Date.now() + 365 * 86400_000) })
+      const generated = await generate([{ name: 'commonName', value: 'AgentShot Mobile Bridge' }], { keySize: 2048, algorithm: 'sha256', notAfterDate: new Date(Date.now() + 365 * 86400_000) })
       this.pem = { private: generated.private, cert: generated.cert }
     }
     const pem = this.pem
@@ -194,7 +194,7 @@ export class MobileBridge {
     return JSON.parse(Buffer.concat(parts).toString('utf8'))
   }
   private authorizeProject(dir: unknown) {
-    if (typeof dir !== 'string' || !this.options.projects().some(p => p.dir === dir)) throw new HttpError(403, 'Open a known Manul project')
+    if (typeof dir !== 'string' || !this.options.projects().some(p => p.dir === dir)) throw new HttpError(403, 'Open a known AgentShot project')
     return dir
   }
   private async handle(req: IncomingMessage, res: ServerResponse) {

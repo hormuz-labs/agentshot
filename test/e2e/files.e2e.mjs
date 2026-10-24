@@ -43,7 +43,7 @@ try {
   await app.evaluate(({ ipcMain }, fs) => { ipcMain.removeHandler('project:pickFiles'); ipcMain.handle('project:pickFiles', () => fs) },
     [join(tmp, 'film.srt'), join(tmp, 'notes.md'), join(tmp, 'Brand Kit')])
   await win.click('[data-project-tree] [aria-label="Add files"]')
-  const composer = win.locator('textarea[placeholder="What should Manul do with these?"]')
+  const composer = win.locator('textarea[placeholder="What should AgentShot do with these?"]')
   await composer.waitFor()
   for (const chip of ['film.srt', 'notes.md', 'Brand Kit/colours.txt', 'Brand Kit/Brand-Bold.ttf']) await win.locator(`span:has(> span.truncate:text-is("${chip}"))`).first().waitFor()
 
@@ -99,7 +99,7 @@ try {
   for (const chip of ['film.srt', 'Brand Kit/colours.txt', 'Brand Kit/Brand-Bold.ttf']) await bubble.locator(`span.truncate:text-is("${chip}")`).waitFor()
   assert.equal(await bubble.locator('text=[attached files]').count(), 0, 'the raw list is not shown')
   assert.equal(await bubble.locator('span.truncate:text-is("notes.md")').count(), 0, 'a removed chip is not sent')
-  assert.equal(await win.locator('textarea[placeholder="What should Manul do with these?"]').count(), 0, 'the input has no chips after sending')
+  assert.equal(await win.locator('textarea[placeholder="What should AgentShot do with these?"]').count(), 0, 'the input has no chips after sending')
   if (shots) await win.screenshot({ path: join(shots, 'files-sent.png') })
 
   // more in the project, for @ below

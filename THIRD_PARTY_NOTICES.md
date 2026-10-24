@@ -1,6 +1,6 @@
-# Third-party software shipped with Manul
+# Third-party software shipped with AgentShot
 
-Manul's own code is open source under the Apache License 2.0 ([LICENSE](LICENSE), [NOTICE](NOTICE)). The programs below ship with it and keep their own licences. The GPL ones run as separate programs
+AgentShot's own code is open source under the Apache License 2.0 ([LICENSE](LICENSE), [NOTICE](NOTICE)). The programs below ship with it and keep their own licences. The GPL ones run as separate programs
 (Manul starts them; it doesn't link them): `ffmpeg`/`ffprobe`, and Manul's `manul-beats` and `manul-speakers`, which are
 themselves GPL-3.0-or-later because they are built together with GPL code — their sources are in this repository
 (`scripts/beats`, `scripts/ml`, `scripts/ffmpeg`) and the GPL text in [LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt).

@@ -31,7 +31,7 @@ import { planOf, type Wallet, type WorkerCapabilities, type WorkerRecord } from 
 import { checkMusic, checkVoice, compose, KEY_ENV, MediaError, speak, VENDOR_NAME, VOICES, type Choice, type MusicRequest, type Voice, type VoiceRequest } from './media.ts'
 
 export interface Env {
-  /** Clerk's Frontend API, e.g. https://clerk.manul.si (the OAuth issuer) */
+  /** Clerk's Frontend API, e.g. https://clerk.agentshot.si (the OAuth issuer) */
   CLERK_ISSUER: string
   /** Clerk Backend API secret (sk_…) */
   CLERK_SECRET_KEY: string
@@ -58,7 +58,7 @@ export interface Env {
   DODO_API_KEY?: string
   /** and its products, as Pitch names them: DODO_PRODUCT_PRO_LIVE, DODO_PRODUCT_FLEX_TEST, … */
   [product: `DODO_PRODUCT_${string}`]: string | undefined
-  /** where the account service is reached, for the checkout's return page; default https://account.manul.si */
+  /** where the account service is reached, for the checkout's return page; default https://account.agentshot.si */
   PUBLIC_URL?: string
   /** PostHog (Pitch's project, so a person's events in both apps are one person's): account events only */
   POSTHOG_KEY?: string
@@ -68,7 +68,7 @@ export interface Env {
   GEMINI_API_KEY?: string
   ELEVENLABS_API_KEY?: string
   OPENAI_API_KEY?: string
-  /** Headscale control server inside the cluster (e.g. http://headscale:8080) and its public URL (https://mesh.manul.si) */
+  /** Headscale control server inside the cluster (e.g. http://headscale:8080) and its public URL (https://mesh.agentshot.si) */
   HEADSCALE_URL?: string
   HEADSCALE_PUBLIC_URL?: string
   HEADSCALE_API_KEY?: string
@@ -257,7 +257,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
   }
   if (url.pathname === '/v1/voice' && req.method === 'POST') return generate('voice')
   if (url.pathname === '/v1/music' && req.method === 'POST') return generate('music')
-  if (url.pathname === '/paid') return page('Payment received. Your plan and credits show up in a moment: go back to Manul.')
+  if (url.pathname === '/paid') return page('Payment received. Your plan and credits show up in a moment: go back to AgentShot.')
   if (url.pathname === '/v1/mesh/join' && req.method === 'POST') return joinMesh()
   if (url.pathname === '/v1/workers/heartbeat' && req.method === 'POST') return heartbeatWorker()
   if (url.pathname === '/v1/workers' && req.method === 'GET') return listWorkers()
@@ -363,7 +363,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       body: JSON.stringify({
         product_cart: [{ product_id: product, quantity: 1 }],
         customer: { email: account?.email || vk.description },
-        return_url: `${(env.PUBLIC_URL || 'https://account.manul.si').replace(/\/+$/, '')}/paid`,
+        return_url: `${(env.PUBLIC_URL || 'https://account.agentshot.si').replace(/\/+$/, '')}/paid`,
         // what Pitch's webhook reads to grant the plan or the top-up
         metadata: { clerk_user_id: userId, credits: String((plan || topup)!.credits), pack: (plan || topup)!.key, type: plan ? 'subscription' : 'topup', affiliate_cookie: '', source: 'manul' },
         billing_currency: 'USD',

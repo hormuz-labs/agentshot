@@ -89,11 +89,11 @@ class _PairScreenState extends State<PairScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Connect to Manul on your computer. Send footage, ask for edits, and keep the cuts you love.',
+                    'Connect to AgentShot on your computer. Send footage, ask for edits, and keep the cuts you love.',
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    '1. Open Manul → Settings → Mobile on your computer.\n2. Turn on “Let my phone connect”.\n3. Enter the 6-digit verification code below.',
+                    '1. Open AgentShot → Settings → Mobile on your computer.\n2. Turn on “Let my phone connect”.\n3. Enter the 6-digit verification code below.',
                   ),
                   const SizedBox(height: 20),
                   LayoutBuilder(

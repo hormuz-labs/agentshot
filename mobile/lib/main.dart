@@ -134,7 +134,7 @@ class _ManulAppState extends State<ManulApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Manul',
+    title: 'AgentShot',
     debugShowCheckedModeBanner: false,
     theme: manulTheme(Brightness.light),
     darkTheme: manulTheme(Brightness.dark),

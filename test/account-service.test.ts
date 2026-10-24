@@ -8,7 +8,7 @@ import { memoryWallet } from '../account/src/wallet'
 const env: Env = {
   CLERK_ISSUER: 'https://clerk.test', CLERK_SECRET_KEY: 'sk_clerk', BIFROST_URL: 'https://gw.test', BIFROST_AUTH: 'Basic YWRtaW46cHc=',
   DODO_API: 'https://dodo.test', DODO_API_KEY: 'dodo_key', DODO_PRODUCT_PRO_TEST: 'pdt_pro', DODO_PRODUCT_MAX_TEST: 'pdt_max', DODO_PRODUCT_FLEX_TEST: 'pdt_flex',
-  HEADSCALE_URL: 'https://hs.test', HEADSCALE_PUBLIC_URL: 'https://mesh.manul.si', HEADSCALE_API_KEY: 'hs_secret', WORKER_POOL_SECRET: 'pool_secret_123',
+  HEADSCALE_URL: 'https://hs.test', HEADSCALE_PUBLIC_URL: 'https://mesh.agentshot.si', HEADSCALE_API_KEY: 'hs_secret', WORKER_POOL_SECRET: 'pool_secret_123',
 }
 let metadata: any
 let keys: Record<string, any>
@@ -187,7 +187,7 @@ describe('the account service: credits and plans', () => {
     expect(calls.find(c => c.url === 'https://dodo.test/checkouts')!.body).toEqual({
       product_cart: [{ product_id: 'pdt_pro', quantity: 1 }],
       customer: { email: 'ada@example.com' },
-      return_url: 'https://account.manul.si/paid',
+      return_url: 'https://account.agentshot.si/paid',
       metadata: { clerk_user_id: 'manul_user_1', credits: '10000', pack: 'pro', type: 'subscription', affiliate_cookie: '', source: 'manul' },
       billing_currency: 'USD',
       feature_flags: { allow_currency_selection: false },
@@ -248,10 +248,10 @@ describe('the account service: headscale mesh and worker pool', () => {
   it('mints Headscale pre-auth keys for clients and workers', async () => {
     await ask('good')
     const clientJoin = await (await call('/v1/mesh/join', { method: 'POST', headers: asKey(), body: JSON.stringify({ role: 'client' }) })).json()
-    expect(clientJoin).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-tag:client-eph', tag: 'tag:client' })
+    expect(clientJoin).toEqual({ controlUrl: 'https://mesh.agentshot.si', authKey: 'tskey-tag:client-eph', tag: 'tag:client' })
 
     const poolJoin = await (await call('/v1/mesh/join', { method: 'POST', headers: { 'x-manul-pool-secret': 'pool_secret_123' }, body: '{}' })).json()
-    expect(poolJoin).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-tag:worker-perm', tag: 'tag:worker' })
+    expect(poolJoin).toEqual({ controlUrl: 'https://mesh.agentshot.si', authKey: 'tskey-tag:worker-perm', tag: 'tag:worker' })
   })
 
   it('registers personal and pooled workers, prefers sticky/priority workers on lease, and signs stateless tokens', async () => {
@@ -306,7 +306,7 @@ describe('the account service: headscale mesh and worker pool', () => {
     hsUsers = []
     hsRejectIdPreauth = true
     const joined = await (await call('/v1/mesh/join', { method: 'POST', headers: asKey(), body: JSON.stringify({ role: 'worker' }) })).json()
-    expect(joined).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-tag:worker-perm', tag: 'tag:worker' })
+    expect(joined).toEqual({ controlUrl: 'https://mesh.agentshot.si', authKey: 'tskey-tag:worker-perm', tag: 'tag:worker' })
     expect(hsUsers).toEqual([{ id: '99', name: 'manul' }])
   })
 

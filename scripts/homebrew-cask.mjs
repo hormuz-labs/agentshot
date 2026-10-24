@@ -1,12 +1,12 @@
-// Render Manul's Homebrew cask. The hormuz-labs/homebrew-tap repository runs this from each release tag itself.
+// Render AgentShot's Homebrew cask. The hormuz-labs/homebrew-tap repository runs this from each release tag itself.
 //   node scripts/homebrew-cask.mjs <version> <arm64 dmg sha256> <x64 dmg sha256>  > Casks/manul.rb
-// auto_updates: Manul updates itself (electron-updater), so `brew upgrade` leaves it alone.
+// auto_updates: AgentShot updates itself (electron-updater), so `brew upgrade` leaves it alone.
 import { fileURLToPath } from 'node:url'
 
 export function renderCask({ version, arm64, x64 }) {
   if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) throw new Error(`bad version "${version}"`)
   for (const [k, v] of Object.entries({ arm64, x64 })) if (!/^[0-9a-f]{64}$/.test(v)) throw new Error(`bad sha256 for ${k}`)
-  const url = arch => `https://github.com/hormuz-labs/manul/releases/download/v#{version}/Manul-#{version}-${arch}.dmg`
+  const url = arch => `https://github.com/hormuz-labs/agentshot/releases/download/v#{version}/AgentShot-#{version}-${arch}.dmg`
   return `cask "manul" do
   version "${version}"
 
@@ -21,28 +21,28 @@ export function renderCask({ version, arm64, x64 }) {
     url "${url('x64')}"
   end
 
-  name "Manul"
+  name "AgentShot"
   desc "Agentic video editor: drop in a video, say what you want, and it does the edit"
-  homepage "https://github.com/hormuz-labs/manul"
+  homepage "https://github.com/hormuz-labs/agentshot"
 
   auto_updates true
   depends_on macos: :monterey
 
-  app "Manul.app"
+  app "AgentShot.app"
 
   # Not notarized yet: without this, macOS calls the downloaded app "damaged". Drop once releases are signed.
   postflight_steps do
     run "/usr/bin/xattr",
-        args:           ["-dr", "com.apple.quarantine", "Manul.app"],
+        args:           ["-dr", "com.apple.quarantine", "AgentShot.app"],
         chdir:          "{{appdir}}",
-        writable_paths: ["Manul.app"],
+        writable_paths: ["AgentShot.app"],
         writable_base:  :appdir
   end
 
   zap trash: [
-    "~/Library/Application Support/Manul",
+    "~/Library/Application Support/AgentShot",
     "~/Library/Caches/manul-updater",
-    "~/Library/Logs/Manul",
+    "~/Library/Logs/AgentShot",
     "~/Library/Preferences/com.hormuzlabs.manul.plist",
     "~/Library/Saved Application State/com.hormuzlabs.manul.savedState",
   ]

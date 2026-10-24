@@ -15,7 +15,7 @@ export function TelemetryConsent({ onSettled }: { onSettled?(settled: boolean): 
   if (!st || st.asked || (!st.available.usage && !st.available.crashes)) return null
   const answer = (c: { usage: boolean; crashes: boolean }) => window.manul.telemetry.set(c).then(setSt)
   return (
-    <Dialog open onOpenChange={o => { if (!o) answer({ usage: false, crashes: false }) }} title="Help improve Manul?"
+    <Dialog open onOpenChange={o => { if (!o) answer({ usage: false, crashes: false }) }} title="Help improve AgentShot?"
       description="Both are off unless you tick them. You can change your mind anytime in Settings → About.">
       <TelemetryChoices available={st.available} usage={usage} crashes={crashes} onUsage={setUsage} onCrashes={setCrashes} />
       <div className="mt-4 flex justify-end gap-2">

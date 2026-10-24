@@ -96,7 +96,7 @@ export function App() {
     { id: 'settings.memory', title: 'Settings: Memory', keywords: 'remember', run: () => setSettings('memory') },
     { id: 'settings.browser', title: 'Settings: Browser', keywords: 'chrome bsk web sign in agent browser', run: () => setSettings('browser') },
     { id: 'update.check', title: 'Check for updates', run: () => { setSettings('about'); window.manul.updates.check() } },
-    { id: 'about', title: 'About Manul and updates', keywords: 'version update', run: () => setSettings('about') },
+    { id: 'about', title: 'About AgentShot and updates', keywords: 'version update', run: () => setSettings('about') },
     { id: 'settings.tools', title: 'Settings: Tools', keywords: 'whisper ffmpeg download', run: () => setSettings('tools') },
   ], [close])
 
@@ -147,7 +147,7 @@ export function App() {
       {ready2update && (
         <div className="fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-xl border border-amber/30 bg-surface px-3 py-2 shadow-xl shadow-shade">
           <img src="./manul.png" className="size-7 object-contain" alt="" />
-          <span className="text-xs">Manul {ready2update} is ready.</span>
+          <span className="text-xs">AgentShot {ready2update} is ready.</span>
           <button className="rounded-md bg-amber px-2 py-1 text-xs font-medium text-on-amber" onClick={() => window.manul.updates.install()}>Restart</button>
           <button className="text-xs text-faint hover:text-fg" onClick={() => setReady2update(null)}>Later</button>
         </div>

@@ -14,7 +14,7 @@ export function MemoryPanel() {
 
   return (
     <div>
-      <PanelHeader title="Memory" description="What Manul has learned about your taste and rules. It uses these in every project; change or delete anything." />
+      <PanelHeader title="Memory" description="What AgentShot has learned about your taste and rules. It uses these in every project; change or delete anything." />
       <div className="mb-3 flex justify-end"><Button size="sm" onClick={() => setEdit({ name: '', description: '', body: '' })}><Plus />Add</Button></div>
       {edit && (
         <div className="mb-3 space-y-2 rounded-lg border border-amber/30 bg-raised/60 p-3">
@@ -25,7 +25,7 @@ export function MemoryPanel() {
         </div>
       )}
       {items.length === 0 && !edit && (
-        <div className="rounded-lg border border-dashed border-line p-6 text-center text-dim"><Brain className="mx-auto mb-2 size-5" />Nothing yet. Tell Manul “remember that…” and it will keep it here.</div>
+        <div className="rounded-lg border border-dashed border-line p-6 text-center text-dim"><Brain className="mx-auto mb-2 size-5" />Nothing yet. Tell AgentShot “remember that…” and it will keep it here.</div>
       )}
       <div className="space-y-1.5">
         {items.map(m => (

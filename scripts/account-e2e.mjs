@@ -9,7 +9,7 @@ import { postgresWallet } from '../account/src/wallet.ts'
 
 const env = process.env
 const ACCOUNT = 'http://account:8080', GATEWAY = 'http://bifrost:8080'
-const email = `e2e-${Date.now()}@manul.si`, sub = 'e2e_' + Date.now()
+const email = `e2e-${Date.now()}@agentshot.si`, sub = 'e2e_' + Date.now()
 const manulDb = `postgresql://${encodeURIComponent(env.PG_USER)}:${encodeURIComponent(env.PG_PASSWORD)}@${env.PG_HOST}:5432/bifrost?sslmode=require&uselibpqcompat=true`
 const wallet = await postgresWallet(env.WALLET_DATABASE_URL, manulDb)
 const pitch = new pg.Pool({ connectionString: env.WALLET_DATABASE_URL, max: 2 })
@@ -68,7 +68,7 @@ try {
 
   // Headscale mesh pre-auth key & worker pool lifecycle
   const meshClient = await (await fetch(`${ACCOUNT}/v1/mesh/join`, { method: 'POST', headers: as, body: JSON.stringify({ role: 'client' }) })).json()
-  check(meshClient.controlUrl === 'https://mesh.manul.si' && meshClient.tag === 'tag:client' && typeof meshClient.authKey === 'string' && meshClient.authKey.length > 20, 'mesh: client pre-auth key minted', meshClient.tag)
+  check(meshClient.controlUrl === 'https://mesh.agentshot.si' && meshClient.tag === 'tag:client' && typeof meshClient.authKey === 'string' && meshClient.authKey.length > 20, 'mesh: client pre-auth key minted', meshClient.tag)
 
   const workerId = `e2e-worker-${Date.now()}`
   const fp = 'e'.repeat(64)

@@ -2,7 +2,7 @@
 // dashboard shows downloads and stars next to usage. Run by hand: POSTHOG_TOKEN=phc_… node telemetry/github-stats.mjs
 // Installer downloads are GitHub's download_count: requests for an installer, not people or completed installs.
 // Auto-update .zip files, feeds and blockmaps are left out: running apps fetch those, not people.
-const REPO = 'https://api.github.com/repos/hormuz-labs/manul'
+const REPO = 'https://api.github.com/repos/hormuz-labs/agentshot'
 const INSTALLERS = { '.dmg': 'mac', '.deb': 'deb', '.AppImage': 'appimage' }
 
 export async function githubStats({ token, fetchImpl = fetch } = {}) {

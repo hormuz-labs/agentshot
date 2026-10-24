@@ -1,10 +1,10 @@
-# Manul's gateway
+# AgentShot's gateway
 
-A Manul key lets the app use AI without the user's own vendor accounts. The user never chooses a model: the app asks
+An AgentShot key lets the app use AI without the user's own vendor accounts. The user never chooses a model: the app asks
 for one model, `manul`, and **we** decide on the gateway which real model answers (Claude, Gemini, GPT…). We can
 change it any time without an app release.
 
-The gateway is [Bifrost](https://github.com/maximhq/bifrost). It holds the vendor keys. A Manul key is a Bifrost
+The gateway is [Bifrost](https://github.com/maximhq/bifrost). It holds the vendor keys. An AgentShot key is a Bifrost
 **virtual key** with its own budget, rate limit and allowed models.
 
 ## How a request goes
@@ -47,8 +47,8 @@ added needs it added in the dashboard (Virtual Keys → the key → providers) b
 
 ## Voice and music
 
-Bifrost has no music, and every vendor names its voices differently, so voice and music for Manul keys go through the
-account service instead (`account.manul.si/v1/voice` and `/v1/music`). It makes them with our vendor keys and takes
+Bifrost has no music, and every vendor names its voices differently, so voice and music for AgentShot keys go through the
+account service instead (`account.agentshot.si/v1/voice` and `/v1/music`). It makes them with our vendor keys and takes
 the price off the person's credit. The app never learns which vendor made it. People with their own ElevenLabs,
 Gemini or OpenAI key still use it directly from the app.
 
@@ -81,7 +81,7 @@ MANUL_GATEWAY=http://localhost:8089 npm run dev
 ```
 
 The app finds the gateway at `MANUL_GATEWAY`, else at `gateway` in the app's config.json, else at
-`https://gateway.manul.si`.
+`https://gateway.agentshot.si`.
 
 Compose also starts the account service on port 8090 and a dedicated credit-journal Postgres database on port 55439.
 For local Clerk sign-in and payments, set `MANUL_ACCOUNT=http://127.0.0.1:8090` alongside the gateway override.
@@ -127,9 +127,9 @@ Everything runs in namespace `manul` ([k8s/manul.yaml](k8s/manul.yaml)):
 - **The account service** ([account/](../account/README.md)): two replicas of a small Node 24
   service. It reaches Bifrost's admin API inside the cluster.
 - **One Google load balancer**, static IP `manul-gateway`, with a Google-managed certificate:
-  - `gateway.manul.si` serves `/openai` and `/v1` (the models, with a Manul key);
-  - `account.manul.si` serves signing in, credit, payments, and voice and music;
-  - `admin.manul.si` serves Bifrost's dashboard, behind its admin login;
+  - `gateway.agentshot.si` serves `/openai` and `/v1` (the models, with an AgentShot key);
+  - `account.agentshot.si` serves signing in, credit, payments, and voice and music;
+  - `admin.agentshot.si` serves Bifrost's dashboard, behind its admin login;
   - everything else is a 404.
 
 Steps:
@@ -143,7 +143,7 @@ Steps:
 2. **Deploy:** `gateway/k8s/deploy.sh`. It reserves the static IP, loads the config and the account code as config
    maps, applies the manifests and restarts the pods. Run it again after changing config.json, media.json or the
    account code.
-3. **DNS (once):** in Cloudflare, add `A` records for `gateway.manul.si` and `account.manul.si` pointing at the
+3. **DNS (once):** in Cloudflare, add `A` records for `gateway.agentshot.si` and `account.agentshot.si` pointing at the
    static IP. Set them to **DNS only** (grey cloud), so Google can issue the certificate (this takes up to about an
    hour).
 4. **Dashboard:** run the command below, open http://localhost:8089 and sign in as `admin`. To read the password:

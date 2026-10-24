@@ -87,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> createMotion({Json? example, bool walkthrough = false}) async {
     final title = await askText(
       context,
-      walkthrough ? 'What should Manul film?' : 'What are we making?',
+      walkthrough ? 'What should AgentShot film?' : 'What are we making?',
       hint: walkthrough
           ? 'A walkthrough of my product at https://…'
           : 'Describe your video…',
@@ -185,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 excludeFromSemantics: true,
               ),
               const SizedBox(width: 10),
-              const Flexible(child: Text('Manul')),
+              const Flexible(child: Text('AgentShot')),
             ],
           ),
           actions: [
@@ -280,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
-          const Text('Bring your footage. Tell Manul what should change.'),
+          const Text('Bring your footage. Tell AgentShot what should change.'),
           const SizedBox(height: 24),
           Wrap(
             spacing: 12,

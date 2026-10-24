@@ -409,7 +409,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
             if (e.key === 'Escape') { (e.target as HTMLTextAreaElement).blur(); onClearAnchor() }
           }}
-          placeholder={anchor ? 'What should change here?' : attached.length ? 'What should Manul do with these?' : agent.busy ? 'Steer the edit…' : 'Ask for an edit, or @ a file, version or clip…'}
+          placeholder={anchor ? 'What should change here?' : attached.length ? 'What should AgentShot do with these?' : agent.busy ? 'Steer the edit…' : 'Ask for an edit, or @ a file, version or clip…'}
           className="max-h-60 min-h-12 w-full resize-none bg-transparent px-1.5 py-1.5 text-[15px] outline-none placeholder:text-faint [field-sizing:content]"
         />
       </div>

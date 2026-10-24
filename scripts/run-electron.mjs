@@ -19,7 +19,7 @@ export async function prepareElectron() {
   const source = join(dirname(electron), '../..')
   const icon = join(root, 'build/icon.icns')
   const cache = join(root, 'node_modules/.cache/manul')
-  const bundle = join(cache, 'Manul.app')
+  const bundle = join(cache, 'AgentShot.app')
   const executable = join(bundle, 'Contents/MacOS/Electron')
   const stamp = join(cache, 'branding.sha256')
   // Refresh after an Electron upgrade, icon change, or change to this launcher.
@@ -33,13 +33,13 @@ export async function prepareElectron() {
   await mkdir(cache, { recursive: true })
   await rm(bundle, { recursive: true, force: true })
   await cp(source, bundle, { recursive: true, verbatimSymlinks: true, mode: constants.COPYFILE_FICLONE })
-  await copyFile(icon, join(bundle, 'Contents/Resources/Manul.icns'))
+  await copyFile(icon, join(bundle, 'Contents/Resources/AgentShot.icns'))
   const plist = join(bundle, 'Contents/Info.plist')
   for (const [key, value] of Object.entries({
-    CFBundleDisplayName: 'Manul',
-    CFBundleName: 'Manul',
+    CFBundleDisplayName: 'AgentShot',
+    CFBundleName: 'AgentShot',
     CFBundleIdentifier: 'com.hormuzlabs.manul.dev',
-    CFBundleIconFile: 'Manul.icns',
+    CFBundleIconFile: 'AgentShot.icns',
   })) {
     execFileSync('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${value}`, plist])
   }

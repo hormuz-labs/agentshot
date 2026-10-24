@@ -15,9 +15,9 @@ import { brandPage } from '../shared/brand-page'
  *  account service. For the development instance: MANUL_AUTH_ISSUER=https://good-wildcat-5360.clerk.accounts.dev
  *  MANUL_AUTH_CLIENT_ID=5E3y3JppmCuVr1UD (and an account service pointed at it). */
 export const AUTH = {
-  issuer: () => (process.env.MANUL_AUTH_ISSUER || 'https://clerk.manul.si').replace(/\/+$/, ''),
+  issuer: () => (process.env.MANUL_AUTH_ISSUER || 'https://clerk.agentshot.si').replace(/\/+$/, ''),
   clientId: () => process.env.MANUL_AUTH_CLIENT_ID ?? 'cYz60VvV9IL4cGH5',
-  account: () => (process.env.MANUL_ACCOUNT || 'https://account.manul.si').replace(/\/+$/, ''),
+  account: () => (process.env.MANUL_ACCOUNT || 'https://account.agentshot.si').replace(/\/+$/, ''),
 }
 /** Registered in the Clerk OAuth app as the redirect URI. */
 export const CALLBACK_PORT = 47619
@@ -42,7 +42,7 @@ export async function signIn(open: (url: string) => Promise<void> | void, timeou
       if (u.pathname !== '/oauth/callback') { res.writeHead(404).end(); return }
       const ok = u.searchParams.get('state') === state && u.searchParams.get('code')
       res.writeHead(ok ? 200 : 400, { 'content-type': 'text/html; charset=utf-8' })
-        .end(PAGE(ok ? 'Signed in. You can close this tab and go back to Manul.' : 'Signing in didn’t finish. Go back to Manul and try again.'))
+        .end(PAGE(ok ? 'Signed in. You can close this tab and go back to AgentShot.' : 'Signing in didn’t finish. Go back to AgentShot and try again.'))
       if (!ok) return
       done(); resolve(u.searchParams.get('code')!)
     })
@@ -68,7 +68,7 @@ export async function signIn(open: (url: string) => Promise<void> | void, timeou
 
   const got = await fetch(`${AUTH.account()}/v1/key`, { method: 'POST', headers: { authorization: `Bearer ${access_token}` } })
   const body = await got.json().catch(() => ({})) as { key?: string; key_id?: string; email?: string; error?: string }
-  if (!got.ok || !body.key) throw new Error(body.error || 'Could not get your Manul key. Try again in a moment.')
+  if (!got.ok || !body.key) throw new Error(body.error || 'Could not get your AgentShot key. Try again in a moment.')
   setKey(MANUL_KEY, body.key)
   setConfig({ account: { email: body.email, keyId: body.key_id } })
   return accountStatus()
@@ -78,11 +78,11 @@ export async function signIn(open: (url: string) => Promise<void> | void, timeou
 async function asKeyRaw(path: string, init: RequestInit = {}) {
   const keyId = getConfig().account?.keyId
   const key = process.env[MANUL_KEY]
-  if (!keyId || !key) throw new Error('Sign in to Manul first.')
+  if (!keyId || !key) throw new Error('Sign in to AgentShot first.')
   const r = await fetch(`${AUTH.account()}${path}`, { ...init, headers: { authorization: `Bearer ${key}`, 'x-manul-key-id': keyId, 'content-type': 'application/json' } })
   if (!r.ok) {
     const body = await r.json().catch(() => ({})) as Record<string, unknown>
-    throw new Error((body.error as string) || 'Could not reach Manul. Try again in a moment.')
+    throw new Error((body.error as string) || 'Could not reach AgentShot. Try again in a moment.')
   }
   return r
 }

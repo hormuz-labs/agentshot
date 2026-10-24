@@ -1,12 +1,12 @@
-# Manul accounts
+# AgentShot accounts
 
-When a person signs in, the account service gives them their own Manul key. It's a small Node service, `server.mjs`
+When a person signs in, the account service gives them their own AgentShot key. It's a small Node service, `server.mjs`
 running [src/index.ts](src/index.ts), deployed in the cluster next to the gateway
 ([gateway/README.md](../gateway/README.md)).
 
 ```
-App ──(Sign in to Manul: system browser, OAuth + PKCE)──▶ Clerk
-App ──POST https://account.manul.si/v1/key, Bearer <Clerk access token>──▶ account service
+App ──(Sign in to AgentShot: system browser, OAuth + PKCE)──▶ Clerk
+App ──POST https://account.agentshot.si/v1/key, Bearer <Clerk access token>──▶ account service
         ──/oauth/userinfo──▶ Clerk                               who is it?
         ──/v1/users/<id>──▶ Clerk Backend API                    do they have a key already?
         ──/api/governance/customers, virtual-keys──▶ Bifrost     first time: their customer and key (inside the cluster)
@@ -79,9 +79,9 @@ container. The existing production-domain webhook does not deliver to localhost.
 
 ## Clerk
 
-Clerk application **Manul** runs on its **production** instance, `clerk.manul.si`. Its DNS records (`clerk`,
+Clerk application **AgentShot** runs on its **production** instance, `clerk.agentshot.si`. Its DNS records (`clerk`,
 `accounts`, `clkmail`, `clk._domainkey`, `clk2._domainkey`) are in Cloudflare, DNS only. The OAuth application
-**Manul desktop** is set up like this:
+**AgentShot desktop** is set up like this:
 
 - Client ID: `cYz60VvV9IL4cGH5`
 - Type: public client (PKCE, no secret)
@@ -92,7 +92,7 @@ The account service needs that instance's secret key in `manul-secrets` as `CLER
 
 Google sign-in in production uses our own Google OAuth client. That's Google Cloud project **Manul**
 (`manul-511207`), whose consent screen is set to External, with redirect URI
-`https://clerk.manul.si/v1/oauth_callback`. Its client ID and secret go in Clerk → SSO connections → Google.
+`https://clerk.agentshot.si/v1/oauth_callback`. Its client ID and secret go in Clerk → SSO connections → Google.
 
 The development instance (`good-wildcat-5360.clerk.accounts.dev`, client `5E3y3JppmCuVr1UD`) stays available for
 local work. Point the app at it with `MANUL_AUTH_ISSUER` and `MANUL_AUTH_CLIENT_ID`.
