@@ -41,7 +41,7 @@ describe('mobile TLS bridge', () => {
     const st = await bridge.start()
     expect(st.mesh).toBe('100.64.0.9')
     expect(st.tailscale).toBeUndefined()
-    expect(st.addresses).toContain(`https://100.64.0.9:${bridge.listenPort()}`)
+    expect(st.addresses).toContain('https://100.64.0.9:47821')
     mesh = undefined
     expect(bridge.status().tailscale).toBe('100.64.0.9')
     await bridge.stop()

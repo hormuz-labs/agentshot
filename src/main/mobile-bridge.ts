@@ -63,8 +63,9 @@ export class MobileBridge {
   constructor(private options: Options, private ips: () => string[] = reachableIps) {}
   status(): MobileStatus {
     const list = this.ips()
-    const addresses = this.server ? list.map(ip => `https://${ip}:${this.port}`) : []
     const mesh = this.server ? this.options.meshIp?.() : undefined
+    // the mesh node always listens on 47821 (the Headscale ACL allows only that port) and forwards to wherever we bound
+    const addresses = this.server ? list.map(ip => `https://${ip}:${ip === mesh ? DEFAULT_MOBILE_PORT : this.port}`) : []
     return { running: !!this.server, addresses, tailscale: list.find(ip => isTailscale(ip) && ip !== mesh), mesh, fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: [...this.devices.values()].map(({ id, name }) => ({ id, name })) }
   }
   /** The port the bridge actually bound (47821 unless that was taken). */

@@ -168,9 +168,9 @@ function joinMesh() {
       hostname: `manul-${(hostname() || 'worker').replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`,
       controlUrl: joined.controlUrl,
       authKey: joined.authKey,
-      // mesh peers dial the same port the bridge advertises, forwarded to wherever it actually bound
+      // mesh peers dial 47821 (the only port the Headscale ACL allows), forwarded to wherever the bridge actually bound
       forwardPort: port,
-      meshPort: port,
+      meshPort: DEFAULT_MOBILE_PORT,
       onExit: () => { if (meshNode === node) { meshNode = null; meshIp = undefined } },
     })
     // the bridge was turned off while the mesh was coming up
