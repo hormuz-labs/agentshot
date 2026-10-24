@@ -19,8 +19,9 @@ describe('Homebrew cask', () => {
     expect(cask).toContain('app "AgentShot.app"')
   })
 
-  it('opens without a Gatekeeper block while builds are unsigned', () => {
-    expect(cask).toMatch(/postflight_steps do\s+run "\/usr\/bin\/xattr",\s+args: +\["-dr", "com\.apple\.quarantine", "AgentShot\.app"\],\s+chdir: +"\{\{appdir\}\}"/)
+  it('leaves Gatekeeper on: releases are notarized, so nothing strips the quarantine flag', () => {
+    expect(cask).not.toContain('com.apple.quarantine')
+    expect(cask).not.toContain('postflight')
   })
 
   it('cleans up on zap', () => {
