@@ -38,7 +38,7 @@
     "fetch:bsk": "node scripts/fetch-bsk.mjs",
     "build:whisper": "node scripts/build-whisper.mjs",
     "version:tag": "node scripts/version-from-tag.mjs",
-    "test:packaging": "node --test test/packaging/windows.test.mjs",
+    "test:packaging": "node --test test/packaging/windows.test.mjs test/packaging/mac.test.mjs",
     "test:e2e": "electron-vite build && node test/e2e/start.e2e.mjs && node test/e2e/playback.e2e.mjs && node test/e2e/filmstrip.e2e.mjs && node test/e2e/clips.e2e.mjs && node test/e2e/export.e2e.mjs && node test/e2e/delivery.e2e.mjs && node test/e2e/menu.e2e.mjs && node test/e2e/proxy.e2e.mjs && node test/e2e/tabs.e2e.mjs && node test/e2e/resize.e2e.mjs && node test/e2e/inline.e2e.mjs && node test/e2e/drag.e2e.mjs && node test/e2e/files.e2e.mjs && node test/e2e/browser.e2e.mjs && node test/e2e/conversations.e2e.mjs && node test/e2e/tools.e2e.mjs && node test/e2e/providers.e2e.mjs && node test/e2e/manul-key.e2e.mjs",
     "package": "node scripts/check-packaging.mjs && electron-vite build && node scripts/package.mjs",
     "package:dir": "node scripts/check-packaging.mjs && electron-vite build && node scripts/package.mjs --dir"

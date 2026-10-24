@@ -12,7 +12,7 @@ git tag v0.1.0 && git push origin v0.1.0
 
 Either way, `.github/workflows/release.yml` then:
 1. builds on five native runners (macOS arm64 + Intel, Linux x64 + arm64, Windows x64): bundled whisper.cpp, pinned ffmpeg, packaging tests, typecheck and runtime unit tests; Windows also runs selected runtime E2E and the native whisper Unicode-path regression;
-2. packages, **signs and notarizes** the Mac app (when the Apple secrets exist); then one job merges the two Mac update feeds and publishes `.dmg`, `.zip`,
+2. packages, **signs and notarizes** the Mac app, then checks every bundled binary's Developer ID signature, the stapled ticket and Gatekeeper's verdict (`scripts/check-mac-signature.sh`); then one job merges the two Mac update feeds and publishes `.dmg`, `.zip`,
    `.deb`, AppImage, signed Windows NSIS `.exe`, blockmaps and the `latest*.yml` update files to **GitHub Releases** — this is what installed apps update from;
 3. rebuilds and signs the **apt repository** and pushes its small metadata files to the `apt` branch (when `APT_GPG_KEY_ID` is set). Cloudflare Pages serves that branch; `.deb` downloads redirect to GitHub Releases.
 
@@ -25,8 +25,9 @@ together with the tools it relies on.
 |---|---|---|
 | The `hormuz-labs/agentshot` repository | GitHub | code, releases (the update feed) |
 | Apple Developer Program ($99/yr) | developer.apple.com | signing + notarization; Homebrew drops casks Gatekeeper blocks |
-| `MAC_CERT_P12_BASE64`, `MAC_CERT_PASSWORD` | repo secrets | "Developer ID Application" certificate (.p12, base64) |
-| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | repo secrets | notarization |
+| `MAC_CERT_P12_BASE64`, `MAC_CERT_PASSWORD` | repo secrets | "Developer ID Application" certificate (.p12, base64) and its export password |
+| `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | repo secrets | notarization with an App Store Connect API key (Users and Access → Integrations → Team Keys, role Developer): the .p8 file's contents, its key ID and the issuer ID. Preferred: no Apple ID password, no 2FA |
+| or `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | repo secrets | notarization with an Apple ID and an app-specific password from account.apple.com |
 | `WINDOWS_CERT_P12_BASE64`, `WINDOWS_CERT_PASSWORD` | repo secrets | Windows Authenticode certificate (.p12/.pfx, base64) and password, passed as `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` |
 | `WINDOWS_PUBLISHER_NAME` | repo variable | Exact certificate publisher common name, case-sensitive. Injected into `win.signtoolOptions.publisherName` and the packaged updater configuration; do not guess it from the product or company name |
 | `hormuz-labs/homebrew-tap` repository | GitHub | `brew install hormuz-labs/tap/manul`. Its own workflow checks Manul's releases hourly and rewrites the cask with `scripts/homebrew-cask.mjs` from the release tag, so no token is shared ("Run workflow" there to update at once) |
@@ -34,7 +35,17 @@ together with the tools it relies on.
 | `APT_GPG_KEY_ID` (variable), `APT_GPG_PRIVATE_KEY` (secret) | repo settings | apt metadata signing; no R2 bucket/access-key configuration is used by the current workflow |
 | `apt.agentshot.si` custom domain on that Pages project | DNS | the line users add to their sources |
 
-Without the Apple secrets, releases still build but the Mac app is unsigned: the cask clears the quarantine flag for Homebrew users, and anyone downloading the .dmg directly must right-click → Open.
+Mac releases are always signed and notarized: without the certificate and one set of notarization secrets the release fails before building, like Windows, and nothing unsigned is published. The Homebrew cask therefore leaves Gatekeeper alone (it no longer strips the quarantine flag).
+
+### Getting the Mac certificate (once)
+
+1. In Keychain Access → Certificate Assistant → **Request a Certificate From a Certificate Authority**, save the request to disk.
+2. At developer.apple.com → Certificates → **+** → **Developer ID Application** (G2 Sub-CA), upload the request, download the `.cer` and double-click it. Only the Account Holder can create this one.
+3. In Keychain Access → My Certificates, right-click **Developer ID Application: …** → Export as `.p12` with a strong password.
+4. `base64 -i DeveloperID.p12 | gh secret set MAC_CERT_P12_BASE64 --repo hormuz-labs/agentshot`, and `gh secret set MAC_CERT_PASSWORD` with that password.
+5. Create the App Store Connect API key, then `gh secret set APPLE_API_KEY_P8 < AuthKey_XXXX.p8`, `gh secret set APPLE_API_KEY_ID`, `gh secret set APPLE_API_ISSUER`.
+
+Keep the `.p12` and `.p8` in a password manager; Apple shows the `.p8` only once.
 
 ## Windows packaging
 
