@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:flutter_zxing/flutter_zxing.dart';
 import '../bridge/client.dart';
 
 class PairScreen extends StatefulWidget {
@@ -241,13 +241,14 @@ class ScanScreen extends StatefulWidget {
 }
 
 class _ScanScreenState extends State<ScanScreen> {
-  final controller = MobileScannerController(formats: const [BarcodeFormat.qrCode]);
   bool done = false;
+  String? cameraError;
 
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
+  void found(Code code) {
+    final value = code.text ?? '';
+    if (done || !code.isValid || !value.startsWith('agentshot://pair')) return;
+    done = true;
+    Navigator.of(context).pop(value);
   }
 
   @override
@@ -256,47 +257,34 @@ class _ScanScreenState extends State<ScanScreen> {
     appBar: AppBar(
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
-      title: const Text('Scan the code on your computer'),
+      title: const Text('Scan to pair'),
     ),
-    body: Stack(
-      fit: StackFit.expand,
-      children: [
-        MobileScanner(
-          controller: controller,
-          onDetect: (capture) {
-            for (final code in capture.barcodes) {
-              final value = code.rawValue ?? '';
-              if (!done && value.startsWith('agentshot://pair')) {
-                done = true;
-                Navigator.of(context).pop(value);
-                return;
-              }
-            }
-          },
-          errorBuilder: (context, error) => Center(
+    body: cameraError != null
+        ? Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                error.errorCode == MobileScannerErrorCode.permissionDenied
-                    ? 'Allow camera access in Settings to scan the code.'
-                    : 'The camera is not available.',
+                cameraError!,
                 style: const TextStyle(color: Colors.white),
                 textAlign: TextAlign.center,
               ),
             ),
+          )
+        : ReaderWidget(
+            codeFormat: Format.qrCode,
+            onScan: found,
+            // the code is on a bright screen: scan often, no flash, camera flip or photo import needed
+            scanDelay: const Duration(milliseconds: 250),
+            scanDelaySuccess: const Duration(milliseconds: 250),
+            showFlashlight: false,
+            showToggleCamera: false,
+            showGallery: false,
+            cropPercent: 0.7,
+            onControllerCreated: (_, error) {
+              if (error != null && mounted) {
+                setState(() => cameraError = 'Allow camera access in Settings to scan the code, or scan it with your phone’s camera app.');
+              }
+            },
           ),
-        ),
-        Center(
-          child: Container(
-            width: 240,
-            height: 240,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white70, width: 2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-          ),
-        ),
-      ],
-    ),
   );
 }

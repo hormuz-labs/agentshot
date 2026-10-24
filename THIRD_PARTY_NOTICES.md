@@ -119,9 +119,10 @@ listed in `scripts/mesh/go.sum`). Log upload to Tailscale is switched off; the n
 ## Pairing QR codes
 
 - **node-qrcode 1.5.4** (desktop, draws the pairing QR): MIT, Copyright (c) 2012 Ryan Day, https://github.com/soldair/node-qrcode.
-- **mobile_scanner 7.4.2** (phone app, reads it): BSD 3-Clause, Copyright (c) 2022 Julian Steenbakker,
-  https://github.com/juliansteenbakker/mobile_scanner. On Android it uses Google's ML Kit barcode scanning, which is
-  distributed under Google's ML Kit terms (https://developers.google.com/ml-kit/terms), not an open-source licence.
+- **flutter_zxing 3.1.0** (phone app, reads it): MIT, Copyright (c) Khoren Markosyan,
+  https://github.com/khoren93/flutter_zxing; it compiles in **zxing-cpp** (Apache-2.0, https://github.com/zxing-cpp/zxing-cpp)
+  and **libzint** (BSD 3-Clause, Copyright Robin Stuart and the Zint contributors, https://zint.org.uk), and uses
+  Flutter's `camera` plugin (BSD 3-Clause). Scanning runs entirely on the phone, with no Google services.
 
 ## GCC-PHAT audio synchronization reference
 
