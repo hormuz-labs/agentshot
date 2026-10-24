@@ -1,9 +1,9 @@
 name: Mobile checks
 on:
   pull_request:
-    paths: ['mobile/**', 'src/main/mobile-*.ts', 'test/mobile-bridge.test.ts', '.github/workflows/mobile.yml']
+    paths: ['mobile/**', 'scripts/mesh/**', 'scripts/build-mesh.sh', 'src/main/mobile-*.ts', 'test/mobile-bridge.test.ts', '.github/workflows/mobile.yml']
   push:
-    paths: ['mobile/**', 'src/main/mobile-*.ts', 'test/mobile-bridge.test.ts', '.github/workflows/mobile.yml']
+    paths: ['mobile/**', 'scripts/mesh/**', 'scripts/build-mesh.sh', 'src/main/mobile-*.ts', 'test/mobile-bridge.test.ts', '.github/workflows/mobile.yml']
   workflow_dispatch:
 jobs:
   flutter:
@@ -14,6 +14,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: scripts/mesh/go.mod
+          cache-dependency-path: scripts/mesh/go.sum
+      - name: Build the embedded mesh node (gomobile)
+        run: ./scripts/build-mesh.sh android
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.2'

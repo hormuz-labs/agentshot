@@ -54,3 +54,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // the embedded Headscale/Tailscale node, built from scripts/mesh/mobile by scripts/build-mesh.sh
+    implementation(files("libs/agentshotmesh.aar"))
+}

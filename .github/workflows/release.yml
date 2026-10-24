@@ -64,11 +64,17 @@ jobs:
         run: node --input-type=module -e "import { windowsSigning } from './scripts/package.mjs'; windowsSigning()"
       - run: npm ci
       - run: npm run build:whisper
-      - name: Build the bundled beat tracker and model runners (Unix)
+      - uses: actions/setup-go@v5
+        if: runner.os != 'Windows'
+        with:
+          go-version-file: scripts/mesh/go.mod
+          cache-dependency-path: scripts/mesh/go.sum
+      - name: Build the bundled beat tracker, model runners and mesh node (Unix)
         if: runner.os != 'Windows'
         run: |
           ./scripts/build-beats.sh
           ./scripts/build-ml.sh
+          ./scripts/build-mesh.sh
       - name: Verify target-native tools and models before release
         if: runner.os != 'Windows'
         run: npm run check:native

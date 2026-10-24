@@ -109,6 +109,20 @@ licence text in [LICENSES/driver-MIT.txt](LICENSES/driver-MIT.txt).
 - **yauzl 3.4.0** (unpacking .zip files): MIT, Copyright (c) 2014 Josh Wolfe, https://github.com/thejoshwolfe/yauzl;
   with pend (MIT).
 
+## Tailscale 1.76.6 (manul-mesh and the phone app's mesh node)
+
+BSD 3-Clause licence, Copyright (c) 2020 Tailscale Inc & AUTHORS, https://github.com/tailscale/tailscale.
+Its `tsnet` userspace node is compiled into `manul-mesh` (desktop) and the Android app's mesh library
+(`scripts/mesh`, built by `scripts/build-mesh.sh`), with its Go dependencies (BSD, MIT and Apache-2.0 licences,
+listed in `scripts/mesh/go.sum`). Log upload to Tailscale is switched off; the nodes talk only to AgentShot's Headscale.
+
+## Pairing QR codes
+
+- **node-qrcode 1.5.4** (desktop, draws the pairing QR): MIT, Copyright (c) 2012 Ryan Day, https://github.com/soldair/node-qrcode.
+- **mobile_scanner 7.4.2** (phone app, reads it): BSD 3-Clause, Copyright (c) 2022 Julian Steenbakker,
+  https://github.com/juliansteenbakker/mobile_scanner. On Android it uses Google's ML Kit barcode scanning, which is
+  distributed under Google's ML Kit terms (https://developers.google.com/ml-kit/terms), not an open-source licence.
+
 ## GCC-PHAT audio synchronization reference
 
 The frequency-domain GCC-PHAT formulation in `src/main/sync.ts` is adapted into TypeScript from
