@@ -223,7 +223,7 @@ class BridgeClient {
       }
     }
     throw BridgeException(
-      'Could not find your computer on the network. Enable Mobile in AgentShot → Settings on your computer, and make sure both devices are on the same Wi-Fi (or enter your computer’s Tailscale IP).',
+      'Could not find your computer on the network. Enable Mobile in AgentShot → Settings on your computer, and make sure both devices are on the same Wi-Fi (or enter your computer’s Tailscale or mesh address).',
     );
   }
 

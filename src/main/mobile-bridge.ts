@@ -1,4 +1,4 @@
-// Optional TLS bridge. Pairing is explicit on the desktop; tokens expire on stop/quit.
+// Optional TLS bridge. Pairing is explicit on the desktop; paired devices persist (30 days) until revoked.
 import { createServer, type Server } from 'node:https'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createHmac, randomBytes, randomInt, timingSafeEqual, X509Certificate } from 'node:crypto'
@@ -21,6 +21,8 @@ type Options = {
   stateFile?: string
   projectsRoot?: () => string
   onProjectSynced?: (dir: string) => Promise<void> | void
+  /** This computer's Headscale mesh IP, when the userspace mesh node is up. */
+  meshIp?: () => string | undefined
 }
 type PersistedBridgeState = {
   key: string
@@ -40,7 +42,7 @@ export function reachableIps(ifaces = networkInterfaces()) {
   const ips = Object.values(ifaces).flat().filter(n => n?.family === 'IPv4' && !n.internal && !n.address.startsWith('169.254.')).map(n => n!.address)
   return [...new Set([...ips.filter(ip => !isTailscale(ip)), ...ips.filter(isTailscale)])]
 }
-export type MobileStatus = { running: boolean; addresses: string[]; tailscale?: string; fingerprint?: string; code?: string; expiresAt?: number; devices: { id: string; name: string }[] }
+export type MobileStatus = { running: boolean; addresses: string[]; tailscale?: string; mesh?: string; fingerprint?: string; code?: string; expiresAt?: number; devices: { id: string; name: string }[] }
 export class MobileBridge {
   private server?: Server
   private udp?: UdpSocket
@@ -62,7 +64,12 @@ export class MobileBridge {
   status(): MobileStatus {
     const list = this.ips()
     const addresses = this.server ? list.map(ip => `https://${ip}:${this.port}`) : []
-    return { running: !!this.server, addresses, tailscale: list.find(isTailscale), fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: [...this.devices.values()].map(({ id, name }) => ({ id, name })) }
+    const mesh = this.server ? this.options.meshIp?.() : undefined
+    return { running: !!this.server, addresses, tailscale: list.find(ip => isTailscale(ip) && ip !== mesh), mesh, fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: [...this.devices.values()].map(({ id, name }) => ({ id, name })) }
+  }
+  /** The port the bridge actually bound (47821 unless that was taken). */
+  listenPort() {
+    return this.server ? this.port : undefined
   }
   workerCredentials() {
     return { fingerprint: this.fingerprint, secret: this.workerSecret, urls: this.status().addresses }
@@ -106,7 +113,7 @@ export class MobileBridge {
     const payload = `${m[1]}.${m[2]}`
     const expected = createHmac('sha256', this.workerSecret).update(payload).digest('base64url')
     if (Buffer.byteLength(m[3]) !== Buffer.byteLength(expected) || !timingSafeEqual(Buffer.from(m[3]), Buffer.from(expected))) return undefined
-    return { id: `lease:${m[2]}`, name: 'Cloud Client', expiresAt }
+    return { id: `lease:${m[2]}`, name: 'Leased client', expiresAt }
   }
   start(): Promise<MobileStatus> {
     if (this.starting) return this.starting
