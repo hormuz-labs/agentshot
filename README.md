@@ -1,20 +1,10 @@
 <p align="center">
-  <img src="build/icons/256x256.png" width="88" alt="AgentShot">
+  <img src="build/icons/256x256.png" width="96" alt="AgentShot">
 </p>
 
-<h1 align="center">AgentShot: the video editor you talk to</h1>
+<h1 align="center">AgentShot</h1>
 
-<p align="center">
-  <img src="docs/readme-hero.webp" alt="AgentShot, give notes, get cuts: the conversation with the agent's steps and reply, and the film beside it with a lower third boxed on the frame and a before / after proposal to keep or reject" width="100%">
-</p>
-
-<p align="center">
-  <a href="https://agentshot.si">Website</a> ·
-  <a href="#get-agentshot">Download</a> ·
-  <a href="ROADMAP.md">Roadmap</a> ·
-  <a href="CONTRIBUTING.md">Contribute</a> ·
-  <a href="https://github.com/hormuz-labs/agentshot/releases">Releases</a>
-</p>
+<h3 align="center">The video editor you talk to.<br><sub>Give notes. Point at the frame. Get the cut.</sub></h3>
 
 <p align="center">
   <a href="https://github.com/hormuz-labs/agentshot/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/hormuz-labs/agentshot?style=flat&color=262626&label=release"></a>
@@ -23,13 +13,29 @@
   <a href="https://github.com/hormuz-labs/agentshot/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/hormuz-labs/agentshot?style=flat&color=f2a541&label=stars"></a>
 </p>
 
+<p align="center">
+  <a href="#get-agentshot"><b>Download</b></a> ·
+  <a href="https://agentshot.si">Website</a> ·
+  <a href="#what-a-session-feels-like">See a session</a> ·
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
+
+<p align="center">
+  <img src="docs/readme-hero.webp" alt="AgentShot, give notes, get cuts: the conversation with the agent's steps and reply, and the film beside it with a lower third boxed on the frame and a before / after proposal to keep or reject" width="100%">
+</p>
+
+<p align="center">
+  <code>brew install hormuz-labs/tap/manul</code>
+  <br>
+  <sub>macOS · <a href="#get-agentshot">Windows, Linux and phones below</a> · free and open source, forever</sub>
+</p>
+
 ---
 
 ## What is AgentShot
 
-AgentShot is **a video editor you direct by talking**. Drop in your footage, say what you want, and point at the frame when something's off. It makes the cut on your own computer and shows you a before / after of every change, to keep or send back. You never have to touch a timeline.
-
-It's **free and open source** under GPLv3, and stays free. If you like where it's going, a star (top right of this page) helps other people find it.
+AgentShot is **a video editor you direct by talking**. Drop in your footage, say what you want, and point at the frame when something's off. It makes the cut **on your own computer** and shows you a before / after of every change, to keep or send back. You never have to touch a timeline.
 
 <p align="center">
   <img src="docs/point.webp" alt="A box drawn around the cat's face with the note “zoom in on this grumpy face”, then AgentShot's before / after of the zoom, ready to keep or send back" width="100%">
@@ -38,6 +44,23 @@ It's **free and open source** under GPLv3, and stays free. If you like where it'
 https://github.com/user-attachments/assets/084276fb-6129-47e2-9cba-4724c1432990
 
 <p align="center"><sub>90 seconds with AgentShot, starring the grumpiest cat on Earth. Pallas's cat footage: BBC, <i>Frozen Planet II</i>.</sub></p>
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<h3>① Drop</h3>
+<sub>Footage, a folder, a zip, or nothing at all: start from an example or have your product filmed.</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<h3>② Point &amp; say</h3>
+<sub>Box the frame, drag across the timeline, or just type. “Cut the ums.” “Blur this.” “Name on screen here.”</sub>
+</td>
+<td width="33%" align="center" valign="top">
+<h3>③ Keep or send back</h3>
+<sub>Every edit is a proposal you scrub before and after. Nothing is ever overwritten.</sub>
+</td>
+</tr>
+</table>
 
 ---
 
@@ -86,71 +109,6 @@ No upload queue, no cloud project, no waiting for a render farm. The editing and
 
 ---
 
-## Point, then say it
-
-The conversation fills the window, and your film plays beside it with each proposal ready to compare. To point at something, draw a box on the picture (<kbd>B</kbd>), drag across the timeline, or press <kbd>N</kbd> at a moment, and a message box opens right there: say what should change and press <kbd>↵</kbd>. It goes to AgentShot with what you pointed at, and shows in the conversation like anything else you send.
-
-<p align="center">
-  <img src="docs/inline.png" alt="A box drawn around the lower third on the frame, with a message box open just under it: “make the name bigger”" width="100%">
-</p>
-
-Your projects are in the sidebar, the one on screen opened up into its chats and its files: click a file to attach it to your next message, or drag footage onto the timeline to put it in the film. Hover a project to close it or move its whole folder to the Trash. Drag a piece by its name to move it somewhere else; <kbd>⌘Z</kbd> takes any of it back. Drag a divider to give the film more room, or keep dragging to fold a pane away.
-
-<table>
-<tr>
-<td width="50%"><img src="docs/start.png" alt="The start screen: drop a video and say what you want in one box, or start from an idea"></td>
-<td width="50%"><img src="docs/dark.png" alt="The same project in the dark theme"></td>
-</tr>
-</table>
-
-<sub>Light by default, dark if you prefer, or follow the system: <b>Settings → Appearance</b>.</sub>
-
-The little mascot beside your message follows your cursor, blinks, and reacts when you pet it. The three small icons under
-its status give you a high-five, a throaty growl, and a sound toggle; hover for a tooltip. It waves when an edit is finished,
-and takes a catnap when you leave it alone. The full-body 3D cat is also AgentShot’s app logo.
-
----
-
-## No footage? Start from an example
-
-Under the message box are 233 motion videos people made with Claude, each with the prompt that made it, collected by
-[prompt-motion.com](https://prompt-motion.com) and filed under the same tags. Hover one to watch it; open it for the
-whole video with sound, who made it and their prompt.
-
-<p align="center">
-  <img src="docs/gallery.png" alt="The gallery under the message box: tags to filter by, and a grid of motion videos, each credited to its maker" width="100%">
-</p>
-
-Pick **Use this example**, say what yours is about, and AgentShot makes your video the way that one was made: it reads the
-prompt, studies the video, asks for what it needs (your words, your logo, a track), and shows you a storyboard before it
-makes a frame. The scenes are real motion graphics, so a note like “the title lands late” changes one scene, not the film.
-Or skip the gallery: describe a motion video in the box, or give it a video of your own whose look to match.
-
-<p align="center">
-  <img src="docs/example.png" alt="An example opened: the whole video playing with sound, its maker and a link to their post, the prompt that made it, and Use this example" width="100%">
-</p>
-
-<sub>Every video and prompt belongs to the person credited on it; the app links to their post. The videos stream when you watch them, so they don’t add to the download.</sub>
-
----
-
-## No video yet? Have it filmed
-
-Ask for a walkthrough of your product in the message box (“a walkthrough of app.example.com: sign up and make a first
-project”). There's nothing to set up. AgentShot tries the product in its browser first, without filming, then shows you a
-storyboard, one line per step: what it will do and what the voice will say. Say “film it” and it films the whole thing
-in one take: real clicks, typing you can watch, smooth scrolling. Then it cuts the time it spent thinking, speeds
-through slow loads, holds each step until its line is said, zooms in on what's being done, and draws a cursor gliding
-into each click. Ask for changes in your own words (“tighter”, “less zoom”, “say it differently in step 3”): nothing is
-filmed again, and lines you kept keep their voice.
-
-<sub>Filmed in your own Chrome, where you're already signed in, through <a href="https://github.com/Tencent/BrowserSkill">BrowserSkill</a>
-(without it, in AgentShot's own browser). Nothing to set up; if you turn on Chrome's remote debugging
-(chrome://inspect/#remote-debugging), the motion gets smoother: up to 60 frames a second instead of about 10. The agent's
-“controlling” overlay never shows on film, and filming stops while you sign in.</sub>
-
----
-
 ## What a session feels like
 
 > **You:** cut the ums, and the bit where I lose my train of thought
@@ -171,6 +129,55 @@ filmed again, and lines you kept keep their voice.
 
 ---
 
+## Point, then say it
+
+The conversation fills the window, and your film plays beside it with each proposal ready to compare. To point at something, draw a box on the picture (<kbd>B</kbd>), drag across the timeline, or press <kbd>N</kbd> at a moment, and a message box opens right there: say what should change and press <kbd>↵</kbd>.
+
+<p align="center">
+  <img src="docs/inline.png" alt="A box drawn around the lower third on the frame, with a message box open just under it: “make the name bigger”" width="100%">
+</p>
+
+Your projects live in the sidebar, the one on screen opened up into its chats and its files: click a file to attach it to your next message, or drag footage onto the timeline to put it in the film. <kbd>⌘Z</kbd> takes any of it back. Drag a divider to give the film more room, or keep dragging to fold a pane away.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/start.png" alt="The start screen: drop a video and say what you want in one box, or start from an idea"></td>
+<td width="50%"><img src="docs/dark.png" alt="The same project in the dark theme"></td>
+</tr>
+</table>
+
+<sub>Light by default, dark if you prefer, or follow the system: <b>Settings → Appearance</b>. The little cat beside your message follows your cursor, waves when an edit is finished, takes a catnap when you leave it alone, and reacts when you pet it.</sub>
+
+---
+
+## No footage? Start from an example
+
+Under the message box are **233 motion videos** people made with Claude, each with the prompt that made it, collected by [prompt-motion.com](https://prompt-motion.com). Hover one to watch it; open it for the whole video with sound, who made it and their prompt.
+
+<p align="center">
+  <img src="docs/gallery.png" alt="The gallery under the message box: tags to filter by, and a grid of motion videos, each credited to its maker" width="100%">
+</p>
+
+Pick **Use this example**, say what yours is about, and AgentShot makes your video the way that one was made: it reads the prompt, studies the video, asks for what it needs (your words, your logo, a track), and shows you a storyboard before it makes a frame. The scenes are real motion graphics, so a note like “the title lands late” changes one scene, not the film.
+
+<p align="center">
+  <img src="docs/example.png" alt="An example opened: the whole video playing with sound, its maker and a link to their post, the prompt that made it, and Use this example" width="100%">
+</p>
+
+<sub>Every video and prompt belongs to the person credited on it; the app links to their post. The videos stream when you watch them, so they don’t add to the download.</sub>
+
+---
+
+## No video yet? Have it filmed
+
+Ask for *“a walkthrough of app.example.com: sign up and make a first project”*. AgentShot tries the product in a browser first, without filming, then shows you a storyboard: one line per step, what it will do and what the voice will say. Say **“film it”** and it films the whole thing in one take: real clicks, typing you can watch, smooth scrolling.
+
+Then it edits like a pro would: cuts the time it spent thinking, speeds through slow loads, holds each step until its line is said, zooms in on what's being done, and draws a cursor gliding into each click. Ask for changes in your own words (“tighter”, “less zoom”, “say it differently in step 3”): nothing is filmed again, and lines you kept keep their voice.
+
+<sub>Filmed in your own Chrome, where you're already signed in, through <a href="https://github.com/Tencent/BrowserSkill">BrowserSkill</a> (without it, in AgentShot's own browser). Nothing to set up; turn on Chrome's remote debugging (chrome://inspect/#remote-debugging) for up to 60 frames a second instead of about 10. The agent's overlay never shows on film, and filming stops while you sign in.</sub>
+
+---
+
 ## What's in the box
 
 <table>
@@ -180,7 +187,7 @@ filmed again, and lines you kept keep their voice.
 </tr>
 <tr>
 <td width="56" align="center"><img src="docs/icons/scan-eye.svg" width="36" alt=""></td>
-<td><b>It watches the whole film first</b><br>Before it edits, AgentShot measures your footage on your computer: who speaks when, every shot, camera shake, exposure, frozen and black frames, where the faces and objects are, loudness and pauses, and the music's tempo, bars and drops. So "keep only Ravi's answers", "lose the shaky bits" and "cut on the beat after the drop" all mean something exact</td>
+<td><b>It watches the whole film first</b><br>Who speaks when, every shot, camera shake, exposure, frozen and black frames, faces and objects, loudness and pauses, and the music's tempo, bars and drops, all measured on your computer. So "keep only Ravi's answers", "lose the shaky bits" and "cut on the beat after the drop" mean something exact</td>
 </tr>
 <tr>
 <td width="56" align="center"><img src="docs/icons/type.svg" width="36" alt=""></td>
@@ -196,11 +203,11 @@ filmed again, and lines you kept keep their voice.
 </tr>
 <tr>
 <td width="56" align="center"><img src="docs/icons/paperclip.svg" width="36" alt=""></td>
-<td><b>Your files, put to use</b><br>Drop in subtitles, music, your logo, fonts and LUTs, or a whole folder or zip of them. AgentShot says what each one is, they sit under the project in the sidebar, and the edit uses them</td>
+<td><b>Your files, put to use</b><br>Drop in subtitles, music, your logo, fonts and LUTs, or a whole folder or zip of them. AgentShot says what each one is and the edit uses them</td>
 </tr>
 <tr>
 <td width="56" align="center"><img src="docs/icons/at-sign.svg" width="36" alt=""></td>
-<td><b>Point at anything by name</b><br>Type @ in your message and pick a file, a version you kept or a title AgentShot made: "put @logo.png bottom right and @song.mp3 under the intro"</td>
+<td><b>Point at anything by name</b><br>Type @ and pick a file, a version you kept or a title AgentShot made: "put @logo.png bottom right and @song.mp3 under the intro"</td>
 </tr>
 <tr>
 <td width="56" align="center"><img src="docs/icons/globe.svg" width="36" alt=""></td>
@@ -208,13 +215,48 @@ filmed again, and lines you kept keep their voice.
 </tr>
 <tr>
 <td width="56" align="center"><img src="docs/icons/brain.svg" width="36" alt=""></td>
-<td><b>A memory for taste, and the craft</b><br>Say "captions are always yellow" once and every project after that knows it. It also knows how each kind of film is cut: talking heads, tutorials, Shorts and Reels, promos and montages, motion graphics, cleanup and repair</td>
+<td><b>A memory for taste, and the craft</b><br>Say "captions are always yellow" once and every project after knows it. It also knows how each kind of film is cut: talking heads, tutorials, Shorts and Reels, promos, montages, motion graphics, cleanup and repair</td>
 </tr>
 <tr>
 <td width="56" align="center"><img src="docs/icons/layers-2.svg" width="36" alt=""></td>
-<td><b>Every film in the sidebar, and any model</b><br>Your projects in one list, searchable, the one on screen opened up into its chats and its files; open ones keep working in the background. Claude, Gemini or GPT, or any OpenAI- or Anthropic-compatible endpoint, picked per project</td>
+<td><b>Every film in the sidebar, and any model</b><br>Open projects keep working in the background. Claude, Gemini or GPT, or any OpenAI- or Anthropic-compatible endpoint, picked per project</td>
 </tr>
 </table>
+
+---
+
+## Your phone, from anywhere
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+<img src="docs/icons/qr-code.svg" width="44" alt="">
+
+### Scan once
+Turn on **Settings → Mobile** and AgentShot shows a QR code. Scan it with the [companion app](mobile/README.md) and you're paired, pinned to your computer's certificate.
+
+</td>
+<td width="33%" valign="top">
+
+<img src="docs/icons/smartphone.svg" width="44" alt="">
+
+### Direct on the go
+Shoot and send clips, ask for edits, draw boxes on the frame, review before / after proposals and share the export, all from your phone.
+
+</td>
+<td width="33%" valign="top">
+
+<img src="docs/icons/server.svg" width="44" alt="">
+
+### Heavy lifting elsewhere
+Hand renders and agent edits to a **Cloud Worker**, or your own workstation running `manul --worker`. Projects sync peer to peer.
+
+</td>
+</tr>
+</table>
+
+Away from home, the phone and your computer meet over AgentShot's own private mesh (Headscale/WireGuard, built into the app; no Tailscale install, no IP addresses, no port forwarding). Traffic stays end-to-end encrypted and pinned. <sub>Pairing from anywhere is on Android today; iOS pairs on the same Wi-Fi, with the code shown under the QR.</sub>
 
 ---
 
@@ -235,32 +277,53 @@ filmed again, and lines you kept keep their voice.
 </tr>
 </table>
 
+On first run AgentShot asks whether to send crash reports and usage statistics. **Both start unticked.** It never sends your footage, file or project names, prompts, transcripts or keys: [exactly what is sent](telemetry/README.md).
+
 ---
 
 ## Get AgentShot
 
-### Mobile companion &amp; Cloud/Home workers
+> [!NOTE]
+> AgentShot is in early days. Expect rough edges, and please [open an issue](https://github.com/hormuz-labs/agentshot/issues) when you hit one.
 
-The Flutter Android/iOS companion lives in [`mobile/`](mobile/README.md).
-Enable **Settings → Mobile** on the desktop to pair a phone with a 6-digit code over the same Wi-Fi or Tailscale (pinned to your computer's TLS certificate).
-Your phone shoots and uploads clips, directs edits, draws frame boxes, reviews before/after proposals and shares exports.
+| Platform | Install |
+| --- | --- |
+| **macOS** | `brew install hormuz-labs/tap/manul` |
+| **Windows 10 (1903+) / 11, x64** | [`AgentShot-windows-x64-Setup.exe`](https://github.com/hormuz-labs/agentshot/releases/latest) |
+| **Debian / Ubuntu** | signed apt repository, [three commands below](#debian--ubuntu) |
+| **Other Linux** | AppImage from the [latest release](https://github.com/hormuz-labs/agentshot/releases/latest) |
+| **Android / iOS** | the companion app in [`mobile/`](mobile/README.md) |
 
-In the same **Settings → Mobile** panel, you can also offload heavy rendering and agent edits to a **Cloud Worker** (leased with your AgentShot key) or your own workstation running `manul --worker`. Both connect over a built-in userspace Headscale/WireGuard mesh (`manul-mesh`, no OS Tailscale install required) with automatic peer-to-peer project delta-sync.
+<details>
+<summary><b>macOS: never used Terminal?</b></summary>
+<br>
 
-> **AgentShot is in early days.**
+Press <kbd>⌘</kbd> <kbd>Space</kbd>, type **Terminal**, press <kbd>↵</kbd>, paste the line below and press <kbd>↵</kbd> again.
+
 ```bash
-brew install hormuz-labs/tap/manul     # macOS
+brew install hormuz-labs/tap/manul
 ```
 
-<sub>Never used Terminal? Press <kbd>⌘</kbd> <kbd>Space</kbd>, type <b>Terminal</b>, press <kbd>↵</kbd>, paste the line above and press <kbd>↵</kbd> again. If it says <code>brew: command not found</code>, install <a href="https://brew.sh">Homebrew</a> first (one line, same window), then paste it again.</sub>
+If it says `brew: command not found`, install [Homebrew](https://brew.sh) first (one line, same window), then paste it again.
 
-Or hand it to your coding agent (Claude Code, Cursor, Codex…) and let it do the install:
+</details>
 
-```text
-Install AgentShot from https://github.com/hormuz-labs/agentshot. On macOS run `brew install hormuz-labs/tap/manul`. On Windows, download `AgentShot-windows-x64-Setup.exe` from https://github.com/hormuz-labs/agentshot/releases/latest and run it. On Debian or Ubuntu, add the apt repository at https://apt.agentshot.si (the three commands are on that page) and run `sudo apt install manul`; on other Linux, download the AppImage for this machine's architecture from https://github.com/hormuz-labs/agentshot/releases/latest. Then open AgentShot.
-```
+<details>
+<summary><b>Windows</b></summary>
+<br>
 
-On Debian or Ubuntu, add the signed apt repository once and apt keeps AgentShot up to date:
+From the [latest release](https://github.com/hormuz-labs/agentshot/releases/latest), download `AgentShot-windows-x64-Setup.exe` and run it. It is a single offline installer: no wizard, and no Node, Git, Python, FFmpeg or developer tools to install. It installs for your account, adds Desktop and Start menu shortcuts, opens AgentShot, and later versions update themselves inside the app. Speech models and optional heavier tools download inside AgentShot when needed.
+
+Requires Windows 10 version 1903 (build 18362) or newer, or Windows 11, x64. Windows ARM64 and 32-bit are not built. The installer is signed with Hormuz Labs' own certificate rather than a public one, so SmartScreen may ask once: **More info → Run anyway**.
+
+</details>
+
+<a name="debian--ubuntu"></a>
+<details>
+<summary><b>Debian / Ubuntu</b></summary>
+<br>
+
+Add the signed apt repository once and apt keeps AgentShot up to date:
 
 ```bash
 curl -fsSL https://apt.agentshot.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &&
@@ -268,31 +331,25 @@ echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.agentshot.si sta
 sudo apt update && sudo apt install manul
 ```
 
-Other Linux: grab the AppImage from the [latest release](https://github.com/hormuz-labs/agentshot/releases/latest). More at **[agentshot.si](https://agentshot.si)**.
+</details>
 
-**Windows x64:** from the [latest release](https://github.com/hormuz-labs/agentshot/releases/latest), download `AgentShot-windows-x64-Setup.exe` and run it.
-It is a single offline installer: no wizard, package manager, Node, Git, Git Bash, Python, FFmpeg or developer tools to install.
-It installs for your account, creates Desktop and Start menu shortcuts, and opens AgentShot; later versions update themselves inside the app.
-The app and core tool executables are bundled; speech models and optional heavier tools still download inside AgentShot when requested.
-Requires **Windows 10 version 1903 (build 18362) or newer, or Windows 11, x64**. Windows ARM64 and 32-bit are not built.
+<details>
+<summary><b>Let your coding agent install it</b></summary>
+<br>
 
-It is signed with Hormuz Labs' own certificate rather than a public one, so SmartScreen may ask once: **More info → Run anyway**.
+Hand this to Claude Code, Cursor, Codex or any other coding agent:
 
-It's free and open source under the [GNU GPL v3](LICENSE): use it, change it, ship it, edit paid work with it. If you distribute a changed version, share its source under the same licence.
-Keep the [NOTICE](NOTICE) attribution when you redistribute it. No AI key of your own? Sign in under **Settings → Keys → AgentShot key**: new accounts start with 1,000 credits, and Pro and Max plans (shared with Pitch: same email, same plan) add more every month. Or bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain); your own keys are used first.
+```text
+Install AgentShot from https://github.com/hormuz-labs/agentshot. On macOS run `brew install hormuz-labs/tap/manul`. On Windows, download `AgentShot-windows-x64-Setup.exe` from https://github.com/hormuz-labs/agentshot/releases/latest and run it. On Debian or Ubuntu, add the apt repository at https://apt.agentshot.si (the three commands are on that page) and run `sudo apt install manul`; on other Linux, download the AppImage for this machine's architecture from https://github.com/hormuz-labs/agentshot/releases/latest. Then open AgentShot.
+```
 
-On first run AgentShot asks whether to send crash reports and usage statistics. Both boxes start unticked, and you can change them anytime in Settings → About. It never sends your footage, file or project names, prompts, transcripts or keys. [Exactly what is sent](telemetry/README.md).
+</details>
 
-A first-run walkthrough shows you how to connect a key, add footage and give your first direction. After you open your
-first video, the editor tour covers notes, boxes, files, proposals, versions and export. Replay it anytime using the
-sidebar’s **Product tour** button, **Help → Product Tour**, or by searching “tour” in the command palette (**⌘K** on Mac,
-**Ctrl+K** on Linux/Windows). The walkthrough remembers completion or dismissal on this computer.
+### First run
 
-The first time you open Settings, a short Keys and Browser tour explains **AgentShot key**, **your own provider keys
-(BYOK)**, and which browser the assistant uses. AgentShot records that first open and remembers completion or dismissal in
-its local onboarding database.
-
-Want to hack on it? Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+- **An AI key.** Sign in under **Settings → Keys → AgentShot key**: new accounts start with 1,000 credits, and Pro and Max plans (shared with Pitch: same email, same plan) add more every month. Or bring your own Claude, Gemini or OpenAI key, kept in your system's keychain; your own keys are used first.
+- **A guided start.** A first-run walkthrough connects a key, adds footage and gives your first direction; the editor tour then covers notes, boxes, files, proposals, versions and export. Replay it from the sidebar's **Product tour**, **Help → Product Tour**, or the command palette (<kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd>).
+- **Hack on it.** Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ---
 
@@ -301,7 +358,7 @@ Want to hack on it? Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)
 <table>
 <tr>
 <td width="72"><b>Now</b></td>
-<td>Directing by talking and pointing, titles, music, every export shape, mobile companion, cloud &amp; home workers</td>
+<td>Directing by talking and pointing, titles, music, every export shape, mobile companion with pairing from anywhere, cloud &amp; home workers</td>
 <td width="40" align="center"><img src="docs/icons/circle-dot.svg" width="20" alt=""></td>
 </tr>
 <tr>
@@ -317,6 +374,14 @@ Want to hack on it? Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)
 </table>
 
 <p align="center"><b><a href="ROADMAP.md">See the full roadmap →</a></b></p>
+
+---
+
+## Free, open, and yours
+
+AgentShot is free and open source under the [GNU GPL v3](LICENSE) (or later): use it, change it, ship it, edit paid work with it. If you distribute a changed version, share its source under the same licence, and keep the [NOTICE](NOTICE) attribution.
+
+If you like where it's going, **a ⭐ helps other people find it.**
 
 <br>
 
