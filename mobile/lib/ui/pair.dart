@@ -204,7 +204,7 @@ class _PairScreenState extends State<PairScreen> {
                         size: 18,
                       ),
                       label: const Text(
-                        'Away from home? Enter your computer’s address',
+                        'Away from home? Enter an address',
                       ),
                     ),
                   ),
