@@ -1,0 +1,34 @@
+name: manul_mobile
+description: Desktop-connected Manul video editor for Android and iOS.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ^3.11.0
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_secure_storage: ^11.2.0
+  crypto: ^3.0.7
+  file_picker: ^13.1.0
+  image_picker: ^1.2.4
+  video_player: ^2.11.1
+  path_provider: ^2.1.6
+  share_plus: ^13.3.1
+  shared_preferences: ^2.5.6
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/manul.png
+    - assets/fonts/Inter-OFL.txt
+    - assets/fonts/SourceSerif4-OFL.txt
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+    - family: SourceSerif4
+      fonts:
+        - asset: assets/fonts/SourceSerif4.ttf
