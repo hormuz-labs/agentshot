@@ -6,23 +6,19 @@ desktop editing engine. This is an initial implementation, not a published store
 ## Run
 
 1. From the repository root: `npm install`, then `npm run dev`.
-2. On the desktop, open **Settings → Mobile → Enable mobile connection**.
-3. Put the computer and phone on the same network (or on the same [Tailscale](https://tailscale.com) network).
-   Copy a connection code for the computer's reachable address.
-4. Run the Flutter app:
+2. On the desktop, open **Settings → Mobile** and turn on **Let my phone connect**.
+3. Build the Android mesh library once (needs Go, the Android NDK and Java 17), then run the app:
 
    ```sh
+   ./scripts/build-mesh.sh android
    cd mobile
    flutter pub get
    flutter run
    ```
-5. Paste the connection code into the mobile app. It expires after five minutes
-   and can pair one device. Generate another code to pair another device.
+4. Scan the QR code on the desktop with the phone's camera or **Scan QR code** in the app. On the same Wi-Fi
+   the 6-digit code works too. A code expires after five minutes and pairs one device.
 
-Keep desktop AgentShot running. If the computer sleeps, the app reconnects when it
-returns. Quitting AgentShot or disabling the bridge revokes all pairings; pair again
-after restarting it. This version supports a reachable local network, not an
-internet relay or cloud account-based device discovery.
+Pairings last 30 days, across restarts of AgentShot, until removed in **Settings → Mobile**.
 
 Flutter is installed at `/home/adnan/flutter-sdk/bin/flutter` in the development
 environment used to start this project. Android requires Java 17 or newer; use
@@ -72,6 +68,16 @@ transfers, incoming share extensions, QR scanning/discovery, offline project
 cache, and push notifications are follow-up work. Downloaded exports remain in
 the app's temporary directory until the OS clears them; use the share sheet to
 save them to Files/your preferred app.
+
+## Pairing from anywhere (Headscale mesh)
+
+When the desktop is signed in to AgentShot it joins AgentShot's Headscale mesh (`manul-mesh`, a userspace
+Tailscale node; no VPN app or root). Its pairing QR is an `agentshot://pair` link carrying the code, the
+certificate fingerprint, every address and a single-use key for the mesh. Scanning it, the Android app starts
+its embedded mesh node (`scripts/mesh/mobile`, via gomobile), joins with that key, and reaches the desktop at
+its mesh address through a local CONNECT proxy, so TLS stays end to end and pinned. The node is kept on the
+phone and rejoins on launch. The iOS app scans the QR but doesn't embed the mesh yet: it pairs over Wi-Fi or
+Tailscale.
 
 ## Transport
 

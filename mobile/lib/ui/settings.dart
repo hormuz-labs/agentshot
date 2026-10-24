@@ -150,7 +150,7 @@ class SettingsScreen extends StatelessWidget {
             height: 48,
           ),
           applicationVersion: '0.1.0',
-          applicationLegalese: '© Hormuz Labs · Apache-2.0',
+          applicationLegalese: '© 2026 agenthormuz@proton.me · GPL-3.0-or-later',
           children: [
             const Text(
               'A video editor you direct by talking. Mobile companion for Android and iOS.\nagentshot.si',

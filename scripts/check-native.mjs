@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-export const NATIVE_TOOLS = ['ffmpeg', 'ffprobe', 'whisper-cli', 'manul-beats', 'manul-speakers', 'manul-vision', 'bsk']
+export const NATIVE_TOOLS = ['ffmpeg', 'ffprobe', 'whisper-cli', 'manul-beats', 'manul-speakers', 'manul-vision', 'manul-mesh', 'bsk']
 export const NATIVE_MODELS = ['speaker-segmentation.onnx', 'speaker-embedding.onnx', 'faces-yunet.onnx', 'objects-yolox-tiny.onnx']
 export function checkNative(root, { platform = process.platform, arch = process.arch, packaged = false, runChecks = true } = {}) {
   if (!['darwin', 'linux'].includes(platform) || !['arm64', 'x64'].includes(arch)) throw new Error(`Unsupported native target: ${platform}-${arch}`)

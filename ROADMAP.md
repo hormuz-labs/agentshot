@@ -261,8 +261,8 @@ Rules:
 
 ## 7. Open questions 💬
 
-- **Licence:** the editor is open source under Apache-2.0 with attribution in NOTICE since 2026-10-12 (FSL-1.1-ALv2 from
-  2026-10-08; GPL-3.0 before that, and releases up to 0.1.1 and the code published before stay GPL). Contributors agree to the contributor agreement in CONTRIBUTING. The bundled GPL
+- **Licence:** the editor is open source under GPL-3.0-or-later, copyright agenthormuz@proton.me (Apache-2.0 from 2026-10-12,
+  FSL-1.1-ALv2 from 2026-10-08; GPL-3.0 before that, and releases up to 0.1.1 and the code published before stay GPL). Contributors agree to the contributor agreement in CONTRIBUTING. The bundled GPL
   programs (ffmpeg, manul-beats, manul-speakers) stay separate programs with their source. The paid cloud parts (Manul
   key gateway, storage) stay closed as separate services.
 - **Windows signing:** stay on the self-signed certificate (SmartScreen warns once) or move to a public CA, SignPath or

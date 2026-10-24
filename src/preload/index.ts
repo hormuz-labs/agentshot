@@ -37,6 +37,7 @@ const api = {
     start: () => ipcRenderer.invoke('mobile:start') as Promise<MobileStatus>,
     stop: () => ipcRenderer.invoke('mobile:stop') as Promise<MobileStatus>,
     revoke: (id: string) => ipcRenderer.invoke('mobile:revoke', id) as Promise<MobileStatus>,
+    qr: () => ipcRenderer.invoke('mobile:qr') as Promise<{ link: string; svg: string; mesh: boolean } | null>,
   },
   worker: {
     status: () => ipcRenderer.invoke('worker:status') as Promise<WorkerClientStatus>,

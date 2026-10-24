@@ -1,6 +1,6 @@
 # Third-party software shipped with AgentShot
 
-AgentShot's own code is open source under the Apache License 2.0 ([LICENSE](LICENSE), [NOTICE](NOTICE)). The programs below ship with it and keep their own licences. The GPL ones run as separate programs
+AgentShot's own code is open source under the GNU General Public License v3.0 or later ([LICENSE](LICENSE), [NOTICE](NOTICE)). The programs below ship with it and keep their own licences. The GPL ones run as separate programs
 (Manul starts them; it doesn't link them): `ffmpeg`/`ffprobe`, and Manul's `manul-beats` and `manul-speakers`, which are
 themselves GPL-3.0-or-later because they are built together with GPL code — their sources are in this repository
 (`scripts/beats`, `scripts/ml`, `scripts/ffmpeg`) and the GPL text in [LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt).
@@ -108,6 +108,21 @@ licence text in [LICENSES/driver-MIT.txt](LICENSES/driver-MIT.txt).
 
 - **yauzl 3.4.0** (unpacking .zip files): MIT, Copyright (c) 2014 Josh Wolfe, https://github.com/thejoshwolfe/yauzl;
   with pend (MIT).
+
+## Tailscale 1.76.6 (manul-mesh and the phone app's mesh node)
+
+BSD 3-Clause licence, Copyright (c) 2020 Tailscale Inc & AUTHORS, https://github.com/tailscale/tailscale.
+Its `tsnet` userspace node is compiled into `manul-mesh` (desktop) and the Android app's mesh library
+(`scripts/mesh`, built by `scripts/build-mesh.sh`), with its Go dependencies (BSD, MIT and Apache-2.0 licences,
+listed in `scripts/mesh/go.sum`). Log upload to Tailscale is switched off; the nodes talk only to AgentShot's Headscale.
+
+## Pairing QR codes
+
+- **node-qrcode 1.5.4** (desktop, draws the pairing QR): MIT, Copyright (c) 2012 Ryan Day, https://github.com/soldair/node-qrcode.
+- **flutter_zxing 3.1.0** (phone app, reads it): MIT, Copyright (c) Khoren Markosyan,
+  https://github.com/khoren93/flutter_zxing; it compiles in **zxing-cpp** (Apache-2.0, https://github.com/zxing-cpp/zxing-cpp)
+  and **libzint** (BSD 3-Clause, Copyright Robin Stuart and the Zint contributors, https://zint.org.uk), and uses
+  Flutter's `camera` plugin (BSD 3-Clause). Scanning runs entirely on the phone, with no Google services.
 
 ## GCC-PHAT audio synchronization reference
 

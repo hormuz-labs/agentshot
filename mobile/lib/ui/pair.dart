@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_zxing/flutter_zxing.dart';
 import '../bridge/client.dart';
 
 class PairScreen extends StatefulWidget {
   final BridgeClient client;
   final VoidCallback onPaired;
-  const PairScreen({super.key, required this.client, required this.onPaired});
+
+  /// An agentshot://pair link the phone's camera opened the app with; pairing starts right away.
+  final String? link;
+  const PairScreen({
+    super.key,
+    required this.client,
+    required this.onPaired,
+    this.link,
+  });
   @override
   State<PairScreen> createState() => _PairScreenState();
 }
@@ -13,10 +22,15 @@ class PairScreen extends StatefulWidget {
 class _PairScreenState extends State<PairScreen> {
   final digits = List.generate(6, (_) => TextEditingController());
   final nodes = List.generate(6, (_) => FocusNode());
-  final host = TextEditingController();
-  bool showHost = false;
   bool busy = false;
   String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    final link = widget.link;
+    if (link != null) WidgetsBinding.instance.addPostFrameCallback((_) => pair(link));
+  }
 
   @override
   void dispose() {
@@ -26,7 +40,6 @@ class _PairScreenState extends State<PairScreen> {
     for (final n in nodes) {
       n.dispose();
     }
-    host.dispose();
     super.dispose();
   }
 
@@ -46,13 +59,14 @@ class _PairScreenState extends State<PairScreen> {
     }
   }
 
-  Future<void> pair() async {
+  /// Pairs with a scanned or pasted QR payload, or with the 6-digit code typed below.
+  Future<void> pair([String? payload]) async {
     setState(() {
       busy = true;
       error = null;
     });
     try {
-      await widget.client.pair(currentCode, host: host.text);
+      await widget.client.pair(payload ?? currentCode);
       if (mounted) widget.onPaired();
     } catch (e) {
       if (mounted) setState(() => error = '$e');
@@ -61,9 +75,26 @@ class _PairScreenState extends State<PairScreen> {
     }
   }
 
+  Future<void> scan() async {
+    final value = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const ScanScreen()),
+    );
+    if (value != null && mounted) pair(value);
+  }
+
+  Future<void> paste() async {
+    final text = (await Clipboard.getData('text/plain'))?.text?.trim() ?? '';
+    if (text.startsWith('agentshot://') || text.startsWith('{')) {
+      pair(text);
+    } else if (text.isNotEmpty) {
+      fillDigits(text);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
     return Scaffold(
       body: SafeArea(
         child: LayoutBuilder(
@@ -85,7 +116,7 @@ class _PairScreenState extends State<PairScreen> {
                   const SizedBox(height: 24),
                   Text(
                     'Your film.\nYour notes.\nAnywhere.',
-                    style: Theme.of(context).textTheme.headlineLarge,
+                    style: text.headlineLarge,
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -93,9 +124,36 @@ class _PairScreenState extends State<PairScreen> {
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    '1. Open AgentShot → Settings → Mobile on your computer.\n2. Turn on “Let my phone connect”.\n3. Enter the 6-digit verification code below.',
+                    '1. Open AgentShot → Settings → Mobile on your computer.\n2. Turn on “Let my phone connect”.\n3. Scan the QR code it shows.',
                   ),
                   const SizedBox(height: 20),
+                  SizedBox(
+                    height: 52,
+                    child: FilledButton.icon(
+                      key: const ValueKey('scan'),
+                      onPressed: busy ? null : scan,
+                      icon: busy
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.qr_code_scanner),
+                      label: Text(busy ? 'Connecting…' : 'Scan QR code'),
+                    ),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      error!,
+                      style: TextStyle(color: scheme.error, fontSize: 13),
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+                  Text(
+                    'On the same Wi-Fi? Enter the 6-digit code instead.',
+                    style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
                   LayoutBuilder(
                     builder: (context, box) {
                       final gap = box.maxWidth < 340 ? 6.0 : 8.0;
@@ -119,8 +177,7 @@ class _PairScreenState extends State<PairScreen> {
                                 enabled: !busy,
                                 keyboardType: TextInputType.number,
                                 textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w600),
+                                style: text.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                                 inputFormatters: [
                                   FilteringTextInputFormatter.digitsOnly,
                                 ],
@@ -152,79 +209,18 @@ class _PairScreenState extends State<PairScreen> {
                       );
                     },
                   ),
-                  if (error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      error!,
-                      style: TextStyle(color: scheme.error, fontSize: 13),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: busy ? null : pair,
-                          icon: busy
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.link),
-                          label: Text(
-                            busy ? 'Connecting…' : 'Connect to desktop',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      OutlinedButton.icon(
-                        onPressed: busy
-                            ? null
-                            : () async {
-                                final clip = await Clipboard.getData(
-                                  'text/plain',
-                                );
-                                final text = clip?.text?.trim() ?? '';
-                                if (text.isNotEmpty) fillDigits(text);
-                              },
-                        icon: const Icon(Icons.content_paste, size: 18),
-                        label: const Text('Paste'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
-                      onPressed: () => setState(() => showHost = !showHost),
-                      icon: Icon(
-                        showHost ? Icons.expand_less : Icons.expand_more,
-                        size: 18,
-                      ),
-                      label: const Text(
-                        'Away from home? Enter an address',
-                      ),
+                      onPressed: busy ? null : paste,
+                      icon: const Icon(Icons.content_paste, size: 18),
+                      label: const Text('Paste code'),
                     ),
                   ),
-                  if (showHost) ...[
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: host,
-                      enabled: !busy,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(
-                        labelText: 'Computer IP, Tailscale or mesh address',
-                        hintText: '100.x.y.z or 192.168.x.y',
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 12),
                   const Text(
-                    'Connects automatically on the same Wi-Fi, or from anywhere over Tailscale or your AgentShot mesh, using encrypted certificate-pinned TLS.',
+                    'The QR code works anywhere: away from home, AgentShot connects through its own private mesh. Every connection is encrypted and pinned to your computer.',
                     style: TextStyle(fontSize: 13),
                   ),
                 ],
@@ -235,4 +231,60 @@ class _PairScreenState extends State<PairScreen> {
       ),
     );
   }
+}
+
+/// Full-screen camera that returns the first AgentShot pairing QR it sees.
+class ScanScreen extends StatefulWidget {
+  const ScanScreen({super.key});
+  @override
+  State<ScanScreen> createState() => _ScanScreenState();
+}
+
+class _ScanScreenState extends State<ScanScreen> {
+  bool done = false;
+  String? cameraError;
+
+  void found(Code code) {
+    final value = code.text ?? '';
+    if (done || !code.isValid || !value.startsWith('agentshot://pair')) return;
+    done = true;
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      title: const Text('Scan to pair'),
+    ),
+    body: cameraError != null
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                cameraError!,
+                style: const TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        : ReaderWidget(
+            codeFormat: Format.qrCode,
+            onScan: found,
+            // the code is on a bright screen: scan often, no flash, camera flip or photo import needed
+            scanDelay: const Duration(milliseconds: 250),
+            scanDelaySuccess: const Duration(milliseconds: 250),
+            showFlashlight: false,
+            showToggleCamera: false,
+            showGallery: false,
+            cropPercent: 0.7,
+            onControllerCreated: (_, error) {
+              if (error != null && mounted) {
+                setState(() => cameraError = 'Allow camera access in Settings to scan the code, or scan it with your phone’s camera app.');
+              }
+            },
+          ),
+  );
 }

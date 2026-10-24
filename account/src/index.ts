@@ -452,8 +452,10 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       if (vk instanceof Response) return vk
     }
     if (!env.HEADSCALE_URL || !env.HEADSCALE_API_KEY) return fail(503, 'Mesh is not configured yet.')
-    const body = (await req.json().catch(() => ({}))) as { role?: 'client' | 'worker' }
+    const body = (await req.json().catch(() => ({}))) as { role?: 'client' | 'worker'; persistent?: boolean }
     const role = isPoolWorker || body.role === 'worker' ? 'worker' : 'client'
+    // a paired phone keeps its node: an ephemeral one is deleted after 30 min offline and could never rejoin
+    const ephemeral = role === 'client' && body.persistent !== true
     const hs = (path: string, init: RequestInit = {}) =>
       fetch(`${env.HEADSCALE_URL!.replace(/\/+$/, '')}${path}`, {
         signal: AbortSignal.timeout(10_000),
@@ -476,12 +478,12 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     // Headscale v0.23 takes user by name; v0.24+ takes user by id. Try id first if present, fall back to 'manul'.
     let keyRes = await hs('/api/v1/preauthkey', {
       method: 'POST',
-      body: JSON.stringify({ user: meshUser?.id || 'manul', reusable: false, ephemeral: role === 'client', expiration, aclTags: [tag] }),
+      body: JSON.stringify({ user: meshUser?.id || 'manul', reusable: false, ephemeral, expiration, aclTags: [tag] }),
     })
     if (!keyRes.ok && meshUser?.id) {
       keyRes = await hs('/api/v1/preauthkey', {
         method: 'POST',
-        body: JSON.stringify({ user: 'manul', reusable: false, ephemeral: role === 'client', expiration, aclTags: [tag] }),
+        body: JSON.stringify({ user: 'manul', reusable: false, ephemeral, expiration, aclTags: [tag] }),
       })
     }
     const keyOut = (await keyRes.json().catch(() => ({}))) as { preAuthKey?: { key?: string } }
