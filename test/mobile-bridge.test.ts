@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { request } from 'node:https'
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { isTailscale, MobileBridge, reachableIps } from '../src/main/mobile-bridge'
 import { mobileArgs } from '../src/main/mobile-contract'
-
+import { WorkerClient } from '../src/main/worker-client'
+import { signWorkerToken } from '../account/src/index'
 const bridges: MobileBridge[] = []
 const folders: string[] = []
 afterEach(async () => { await Promise.all(bridges.splice(0).map(b => b.stop())); await Promise.all(folders.splice(0).map(d => rm(d, { recursive: true, force: true }))) })
@@ -105,4 +106,218 @@ it('validates anchors and rejects path-bearing or unknown fields', () => {
   expect(() => mobileArgs('project:createMotion', [{ aspect: '16:9', files: ['/etc/passwd'] }])).toThrow()
   expect(() => mobileArgs('browser:navigate', ['file:///etc/passwd'])).toThrow()
   expect(() => mobileArgs('__proto__', [])).toThrow()
+  expect(mobileArgs('clip:save', ['/project', 'intro', 'Title', '<div></div>', 4, true])).toEqual(['/project', 'intro', 'Title', '<div></div>', 4, true])
+  expect(mobileArgs('clip:move', ['/project', 'intro', 'el-1', 10, -5])).toEqual(['/project', 'intro', 'el-1', 10, -5])
+  expect(mobileArgs('media:thumbnails', ['/project', 'media/a.mp4', 8, 0, 10])).toEqual(['/project', 'media/a.mp4', 8, 0, 10])
+  expect(mobileArgs('export:run', ['/project', { preset: 'landscape', fit: 'crop', captions: 'burn', captionColor: '#ffffff' }])).toHaveLength(2)
+  expect(() => mobileArgs('media:thumbnails', ['/project', '../secret.mp4', 8])).toThrow()
+})
+
+describe('cloud & home worker extensions', () => {
+  it('persists TLS cert, workerSecret and paired devices across restarts when stateFile is set', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'manul-worker-persist-')); folders.push(root)
+    const stateFile = join(root, 'bridge.json')
+    const opts = {
+      stateFile,
+      invoke: async (method: string) => ({ method }),
+      projects: () => [{ dir: root }],
+      importFile: async () => ({}),
+      galleryFile: () => new Response('ok'),
+    }
+    const b1 = new MobileBridge(opts, () => ['127.0.0.1']); bridges.push(b1)
+    const st1 = await b1.start()
+    const creds1 = b1.workerCredentials()
+    const client = new WorkerClient({ projectsRoot: () => root, onEvent: () => {} })
+    const paired = await client.pair({ url: st1.addresses[0], code: st1.code!, name: 'MacBook' })
+    expect(paired.connected).toBe(true)
+    await b1.stop()
+
+    // Restart a new bridge instance with the same stateFile: fingerprint, secret and paired token survive
+    const b2 = new MobileBridge(opts, () => ['127.0.0.1']); bridges.push(b2)
+    const st2 = await b2.start()
+    expect(st2.fingerprint).toBe(st1.fingerprint)
+    expect(b2.workerCredentials().secret).toBe(creds1.secret)
+    await client.connect({ ...paired.active!, urls: st2.addresses, activeUrl: st2.addresses[0] })
+    expect(await client.rpc('app:info', [])).toEqual({ method: 'app:info' })
+    client.disconnect()
+  })
+
+  it('authenticates stateless HMAC worker lease tokens, resumable uploads, and Mac <-> Worker delta project sync', async () => {
+    const workerRoot = await mkdtemp(join(tmpdir(), 'manul-worker-projects-')); folders.push(workerRoot)
+    const macRoot = await mkdtemp(join(tmpdir(), 'manul-mac-projects-')); folders.push(macRoot)
+    const knownProjects = new Set<string>()
+    const syncedDirs: string[] = []
+
+    const bridge = new MobileBridge(
+      {
+        projectsRoot: () => workerRoot,
+        onProjectSynced: dir => { knownProjects.add(dir); syncedDirs.push(dir) },
+        invoke: async (method, args) => {
+          if (method === 'project:recent') return [...knownProjects].map(dir => ({ dir }))
+          return { method, args }
+        },
+        projects: () => [...knownProjects].map(dir => ({ dir })),
+        importFile: async (file, dir) => {
+          const target = dir || join(workerRoot, 'imported')
+          await mkdir(target, { recursive: true })
+          const content = await readFile(file, 'utf8')
+          await writeFile(join(target, basename(file)), content)
+          knownProjects.add(target)
+          return { dir: target, size: content.length }
+        },
+        galleryFile: () => new Response('ok'),
+      },
+      () => ['127.0.0.1'],
+    )
+    bridges.push(bridge)
+    await bridge.start()
+    const creds = bridge.workerCredentials()
+    const leaseToken = signWorkerToken(creds.secret, 'user_42', true, Date.now() + 60_000)
+
+    const pulledDirs: string[] = []
+    const client = new WorkerClient({
+      projectsRoot: () => macRoot,
+      onEvent: () => {},
+      onProjectPulled: dir => { pulledDirs.push(dir) },
+    })
+    await client.connect({
+      id: 'pool-worker-1',
+      name: 'Home Pool Worker',
+      urls: creds.urls,
+      fingerprint: creds.fingerprint!,
+      token: leaseToken,
+      pool: true,
+    })
+
+    // 1. Resumable chunked upload from client to worker
+    const sampleVideo = join(macRoot, 'source.mp4')
+    const payload = '0123456789abcdefghijklmnopqrstuvwxyz'
+    await writeFile(sampleVideo, payload)
+    const imported = (await client.uploadFile(sampleVideo, undefined, 10)) as { dir: string; size: number }
+    expect(imported.size).toBe(payload.length)
+
+    // 2. Byte-range media streaming from worker to Desktop client
+    const rangeRes = await client.fetchMedia(imported.dir, 'source.mp4', 'bytes=10-15')
+    expect(rangeRes.status).toBe(206)
+    expect(await rangeRes.text()).toBe('abcdef')
+
+    // 3. Push a self-contained Mac project (with .agent.sqlite, .git, media, and project.json) to Worker
+    const localProj = join(macRoot, 'my-edit')
+    await mkdir(join(localProj, 'media'), { recursive: true })
+    await mkdir(join(localProj, '.git'), { recursive: true })
+    await writeFile(join(localProj, 'media', 'clip.mp4'), 'video-bytes-12345')
+    await writeFile(join(localProj, '.agent.sqlite'), 'sqlite-conversation-state')
+    await writeFile(join(localProj, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+    await writeFile(join(localProj, 'project.json'), JSON.stringify({ id: 'p1', title: 'My Edit', dir: localProj }))
+
+    const push1 = await client.pushProject(localProj)
+    expect(push1.uploaded).toBe(4)
+    expect(push1.skipped).toBe(0)
+    expect(syncedDirs).toContain(push1.remoteDir)
+
+    // Second push skips unchanged media/clip.mp4
+    const push2 = await client.pushProject(localProj)
+    expect(push2.skipped).toBe(1)
+
+    // 4. Pull the project from Worker to a fresh local folder on another machine
+    const freshMacDir = join(macRoot, 'pulled-edit')
+    const pull1 = await client.pullProject(push1.remoteDir, freshMacDir)
+    expect(pull1.downloaded).toBe(4)
+    expect(pull1.skipped).toBe(0)
+    expect(pulledDirs).toContain(freshMacDir)
+    expect(await readFile(join(freshMacDir, '.agent.sqlite'), 'utf8')).toBe('sqlite-conversation-state')
+    const pulledJson = JSON.parse(await readFile(join(freshMacDir, 'project.json'), 'utf8')) as { dir: string }
+    expect(pulledJson.dir).toBe(freshMacDir)
+
+    // Second pull skips unchanged media/clip.mp4
+    const pull2 = await client.pullProject(push1.remoteDir, freshMacDir)
+    expect(pull2.skipped).toBe(1)
+
+    client.disconnect()
+  })
+
+  it('rejects expired, tampered, or wrong-secret HMAC lease tokens and enforces upload & sync security boundaries', async () => {
+    const f = await fixture()
+    const creds = f.bridge.workerCredentials()
+
+    // Expired token rejected
+    const expired = signWorkerToken(creds.secret, 'user_1', false, Date.now() - 1_000)
+    expect((await f.call('/hello', { token: expired })).status).toBe(401)
+
+    // Wrong workerSecret rejected
+    const wrongSecret = signWorkerToken('x'.repeat(48), 'user_1', false, Date.now() + 60_000)
+    expect((await f.call('/hello', { token: wrongSecret })).status).toBe(401)
+
+    // Tampered payload rejected
+    const valid = signWorkerToken(creds.secret, 'user_1', false, Date.now() + 60_000)
+    const parts = valid.split('.')
+    const tampered = `${parts[0]}.${Number(parts[1]) + 1000}.${parts[2]}.${parts[3]}`
+    expect((await f.call('/hello', { token: tampered })).status).toBe(401)
+
+    // Resumable upload validation: bad filenames, bad sizes, wrong offsets, and unknown upload IDs
+    expect((await f.call('/upload/init?name=../evil.mp4&size=10', { token: valid, body: {} })).status).toBe(400)
+    expect((await f.call('/upload/init?name=.hidden.mp4&size=10', { token: valid, body: {} })).status).toBe(400)
+    expect((await f.call('/upload/init?name=ok.mp4&size=0', { token: valid, body: {} })).status).toBe(413)
+    expect((await f.call('/upload?id=nonexistent', { token: valid })).status).toBe(404)
+    expect((await f.call('/upload?id=nonexistent&offset=0', { token: valid, method: 'PATCH', raw: 'abc' })).status).toBe(404)
+
+    const initRes = await f.call(`/upload/init?${new URLSearchParams({ project: f.dir, name: 'chunked.mp4', size: '6' })}`, { token: valid, body: {} })
+    expect(initRes.status).toBe(200)
+    const { id: upId } = JSON.parse(initRes.body) as { id: string }
+    // Wrong offset returns 409
+    expect((await f.call(`/upload?id=${upId}&offset=3`, { token: valid, method: 'PATCH', raw: 'abc' })).status).toBe(409)
+    // Valid first chunk (3 bytes)
+    const p1 = await f.call(`/upload?id=${upId}&offset=0`, { token: valid, method: 'PATCH', raw: 'abc' })
+    expect(p1.status).toBe(200)
+    expect(JSON.parse(p1.body)).toMatchObject({ done: false, offset: 3 })
+    // Valid second chunk completes and imports
+    const p2 = await f.call(`/upload?id=${upId}&offset=3`, { token: valid, method: 'PATCH', raw: 'def' })
+    expect(p2.status).toBe(200)
+    expect(JSON.parse(p2.body)).toMatchObject({ done: true, offset: 6, result: { name: 'chunked.mp4', content: 'abcdef' } })
+
+    // Project sync traversal & symlink escape checks
+    for (const badFile of ['../secret', 'a/../../etc/passwd', 'file.tmp', 'back\\slash']) {
+      expect((await f.call(`/project/file?${new URLSearchParams({ project: f.dir, file: badFile })}`, { token: valid })).status).toBe(400)
+      expect((await f.call(`/project/file?${new URLSearchParams({ project: f.dir, file: badFile })}`, { token: valid, raw: 'x' })).status).toBe(400)
+    }
+    await symlink('/etc/passwd', join(f.dir, 'sym.txt'))
+    expect((await f.call(`/project/file?${new URLSearchParams({ project: f.dir, file: 'sym.txt' })}`, { token: valid })).status).toBe(404)
+  })
+
+  it('falls back across multiple worker URLs, rejects TLS fingerprint spoofing, and streams live SSE events to WorkerClient', async () => {
+    const f = await fixture()
+    f.bridge.publish('agui', f.dir, { type: 'RUN_STARTED' })
+    const creds = f.bridge.workerCredentials()
+    const token = signWorkerToken(creds.secret, 'user_9', false, Date.now() + 60_000)
+    const { promise: jobEvent, resolve: onJobEvent } = Promise.withResolvers<unknown[]>()
+    const client = new WorkerClient({
+      projectsRoot: () => f.dir,
+      onEvent: (channel, ...args) => {
+        if (channel === 'agent:state') {
+          f.bridge.publish('jobs', [{ id: 'j1', title: 'Rendering on cloud worker' }])
+        } else if (channel === 'jobs') {
+          onJobEvent(args)
+        }
+      },
+    })
+
+    // Rejects wrong TLS certificate fingerprint
+    await expect(
+      client.connect({ id: 'w-spoof', name: 'Spoofed', urls: creds.urls, fingerprint: 'f'.repeat(64), token }),
+    ).rejects.toThrow(/Could not reach worker/)
+
+    // Falls back past dead primary address (127.0.0.1:1) to the working address
+    const st = await client.connect({
+      id: 'w-multi',
+      name: 'Multi-Address Worker',
+      urls: ['https://127.0.0.1:1', ...creds.urls],
+      fingerprint: creds.fingerprint!,
+      token,
+    })
+    expect(st.connected).toBe(true)
+    expect(st.active?.activeUrl).toBe(creds.urls[0])
+
+    expect(await jobEvent).toEqual([[{ id: 'j1', title: 'Rendering on cloud worker' }]])
+    client.disconnect()
+  })
 })

@@ -7,6 +7,8 @@ root=$(cd "$here/../.." && pwd)
 
 gcloud compute addresses describe manul-gateway --global >/dev/null 2>&1 || gcloud compute addresses create manul-gateway --global
 kubectl create namespace manul --dry-run=client -o yaml | kubectl apply -f -
+# Remove legacy relay resources if present
+kubectl -n manul delete deployment/relay service/relay configmap/relay-code backendconfig.cloud.google.com/relay managedcertificate.networking.gke.io/manul-relay --ignore-not-found >/dev/null 2>&1 || true
 kubectl -n manul create configmap bifrost-config --from-file=config.json="$here/config.json" --dry-run=client -o yaml | kubectl apply -f -
 npm --prefix "$root" run account:build
 # server-side: the bundle is too big for the last-applied annotation
@@ -21,5 +23,7 @@ kubectl apply -f "$here/manul.yaml"
 # pick up changed config or code
 kubectl -n manul rollout restart deployment/bifrost deployment/account
 kubectl -n manul rollout status deployment/bifrost --timeout=180s
+kubectl -n manul rollout status deployment/headscale --timeout=120s
 kubectl -n manul rollout status deployment/account --timeout=120s
+"$here/setup-headscale.sh"
 echo "Gateway IP: $(gcloud compute addresses describe manul-gateway --global --format='value(address)')"

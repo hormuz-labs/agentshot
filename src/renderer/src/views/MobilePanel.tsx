@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Check, Copy, RefreshCw, Smartphone } from 'lucide-react'
+import { Check, Cloud, Copy, RefreshCw, Server, Smartphone } from 'lucide-react'
 import { PanelHeader } from '@/components/ui/panel-header'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { MobileStatus } from '../../../main/mobile-bridge'
-
+import type { WorkerClientStatus } from '../../../main/worker-client'
+import type { DiscoveredWorker } from '../../../main/account'
 export function MobilePanel() {
   const [state, setState] = useState<MobileStatus>()
   const [error, setError] = useState('')
@@ -12,8 +13,15 @@ export function MobilePanel() {
   const [copied, setCopied] = useState(false)
   const [now, setNow] = useState(Date.now())
 
+  const [worker, setWorker] = useState<WorkerClientStatus>()
+  const [discovered, setDiscovered] = useState<{ workers: DiscoveredWorker[]; poolAvailable: number }>()
+  const [pairUrl, setPairUrl] = useState('')
+  const [pairCode, setPairCode] = useState('')
   useEffect(() => {
-    const refresh = () => window.manul.mobile.status().then(s => { setState(s); setNow(Date.now()) }).catch(e => setError(String(e)))
+    const refresh = () => {
+      window.manul.mobile.status().then(s => { setState(s); setNow(Date.now()) }).catch(e => setError(String(e)))
+      window.manul.worker?.status().then(w => setWorker(w)).catch(() => {})
+    }
     void refresh()
     const timer = setInterval(refresh, 1000)
     return () => clearInterval(timer)
@@ -142,6 +150,117 @@ export function MobilePanel() {
           </div>
         )}
 
+        <div className="mt-6 border-t border-line pt-4" data-testid="worker-section">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <div className="font-medium">Cloud &amp; Home Workers</div>
+              <p className="mt-0.5 text-xs text-dim">
+                Offload rendering and agent edits to a cloud worker or a home machine (`manul --worker`) over your mesh.
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true); setError('')
+                  window.manul.worker.discover().then(d => setDiscovered(d)).catch(e => setError(String(e))).finally(() => setBusy(false))
+                }}
+              >
+                <RefreshCw />Find workers
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true); setError('')
+                  window.manul.worker.lease().then(w => setWorker(w)).catch(e => setError(String(e))).finally(() => setBusy(false))
+                }}
+              >
+                <Cloud />Use cloud worker
+              </Button>
+            </div>
+          </div>
+
+          {worker?.active && (
+            <div className="mb-3 flex items-center gap-3 rounded-lg border border-amber/40 bg-amber/10 px-3 py-2.5" data-testid="active-worker">
+              <Server className="size-4 text-amber" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">Connected to {worker.active.name}</div>
+                <div className="truncate font-mono text-xs text-dim">{worker.active.activeUrl}</div>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true)
+                  const act = worker.active
+                  const action = act?.pool ? () => window.manul.worker.release(act.id) : () => window.manul.worker.disconnect()
+                  action().then(w => setWorker(w)).catch(e => setError(String(e))).finally(() => setBusy(false))
+                }}
+              >
+                Disconnect
+              </Button>
+            </div>
+          )}
+
+          {discovered && discovered.workers.length > 0 && (
+            <div className="mb-3 space-y-1.5">
+              {discovered.workers.map(w => (
+                <div key={w.id} className="flex items-center gap-3 rounded-lg border border-line bg-raised/60 px-3 py-2">
+                  <Server className="size-4 text-dim" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{w.name} {w.pool ? '(Pool)' : '(Personal)'}</div>
+                    <div className="truncate font-mono text-xs text-dim">{w.urls[0]}</div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={busy || worker?.active?.id === w.id}
+                    onClick={() => {
+                      setBusy(true); setError('')
+                      window.manul.worker.connect(w).then(st => setWorker(st)).catch(e => setError(String(e))).finally(() => setBusy(false))
+                    }}
+                  >
+                    {worker?.active?.id === w.id ? 'Connected' : 'Connect'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 rounded-lg border border-line bg-raised/60 p-2.5">
+            <input
+              type="text"
+              placeholder="Worker IP or URL (e.g. 100.64.0.2:47821)"
+              value={pairUrl}
+              onChange={e => setPairUrl(e.target.value)}
+              className="min-w-0 flex-1 rounded border border-line bg-surface px-2.5 py-1 text-xs text-fg outline-none focus:border-amber"
+            />
+            <input
+              type="text"
+              placeholder="6-digit code"
+              maxLength={6}
+              value={pairCode}
+              onChange={e => setPairCode(e.target.value)}
+              className="w-24 rounded border border-line bg-surface px-2.5 py-1 font-mono text-xs text-fg outline-none focus:border-amber"
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || !pairUrl.trim() || pairCode.trim().length < 6}
+              onClick={() => {
+                setBusy(true); setError('')
+                window.manul.worker.pair({ url: pairUrl, code: pairCode }).then(st => { setWorker(st); setPairCode('') }).catch(e => setError(String(e))).finally(() => setBusy(false))
+              }}
+            >
+              Pair worker
+            </Button>
+          </div>
+        </div>
         {error && <p role="alert" className="text-xs text-bad">{error}</p>}
       </div>
     </div>

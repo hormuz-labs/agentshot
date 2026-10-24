@@ -17,6 +17,20 @@ import type { Plan } from './plans.ts'
 export type Subscription = { plan: string; status: string; credits_per_cycle: number; period_end: string; cancelled: boolean }
 export type Charged = { userId: string; credits: number }
 export type Account = { userId: string; email: string; available: number; subscription?: Subscription }
+export type WorkerCapabilities = { platform?: string; arch?: string; gpu?: string; diskFree?: number; priority?: number; projects?: string[] }
+export type WorkerRecord = {
+  id: string
+  ownerId?: string
+  pool: boolean
+  name: string
+  urls: string[]
+  fingerprint: string
+  secret: string
+  capabilities: WorkerCapabilities
+  leasedTo?: string
+  leasedUntil?: number
+  updatedAt: number
+}
 
 export interface Wallet {
   /** The person with this email (the oldest profile, Pitch's if they have one), made if there is none. */
@@ -32,6 +46,10 @@ export interface Wallet {
   /** One at a time per person, across replicas. */
   lock<T>(userId: string, run: () => Promise<T>): Promise<T>
   close?(): Promise<void>
+  upsertWorker(w: Omit<WorkerRecord, 'updatedAt' | 'leasedTo' | 'leasedUntil'>): Promise<WorkerRecord>
+  workersFor(userId: string, now?: number): Promise<{ owned: WorkerRecord[]; leased: WorkerRecord[]; poolAvailable: number }>
+  leaseWorker(userId: string, opts?: { projectId?: string; workerId?: string; ttlMs?: number; now?: number }): Promise<WorkerRecord | undefined>
+  releaseWorker(userId: string, workerId: string): Promise<boolean>
 }
 
 /** The Pitch database. */
@@ -48,7 +66,34 @@ export async function postgresWallet(connectionString: string, manulDatabase?: s
     credits bigint NOT NULL,
     updated_at timestamptz NOT NULL DEFAULT now()
   )`)
-  return {
+  await own.query(`CREATE TABLE IF NOT EXISTS manul_workers (
+    id text PRIMARY KEY,
+    owner_id text,
+    pool boolean NOT NULL DEFAULT false,
+    name text NOT NULL,
+    urls jsonb NOT NULL DEFAULT '[]'::jsonb,
+    fingerprint text NOT NULL,
+    secret text NOT NULL,
+    capabilities jsonb NOT NULL DEFAULT '{}'::jsonb,
+    leased_to text,
+    leased_until timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`)
+  type WorkerRow = { id: string; owner_id: string | null; pool: boolean; name: string; urls: unknown; fingerprint: string; secret: string; capabilities: unknown; leased_to: string | null; leased_until: string | Date | null; updated_at: string | Date }
+  const rowToWorker = (r: WorkerRow): WorkerRecord => ({
+    id: r.id,
+    ownerId: r.owner_id ?? undefined,
+    pool: !!r.pool,
+    name: r.name,
+    urls: Array.isArray(r.urls) ? r.urls : [],
+    fingerprint: r.fingerprint,
+    secret: r.secret,
+    capabilities: r.capabilities && typeof r.capabilities === 'object' ? (r.capabilities as WorkerCapabilities) : {},
+    leasedTo: r.leased_to ?? undefined,
+    leasedUntil: r.leased_until ? new Date(r.leased_until).getTime() : undefined,
+    updatedAt: new Date(r.updated_at).getTime(),
+  })
+  const wallet: Wallet = {
     async link(email, manulUser) {
       const found = await pool.query(`SELECT id FROM "UserProfile" WHERE lower(email) = lower($1) ORDER BY "createdAt" LIMIT 1`, [email])
       if (found.rows[0]) return found.rows[0].id
@@ -99,8 +144,57 @@ export async function postgresWallet(connectionString: string, manulDatabase?: s
         }
       } finally { client.release(broken) }
     },
+    async upsertWorker(w) {
+      const r = await own.query(
+        `INSERT INTO manul_workers (id, owner_id, pool, name, urls, fingerprint, secret, capabilities, updated_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8::jsonb, now())
+         ON CONFLICT (id) DO UPDATE SET
+           owner_id = excluded.owner_id,
+           pool = excluded.pool,
+           name = excluded.name,
+           urls = excluded.urls,
+           fingerprint = excluded.fingerprint,
+           secret = excluded.secret,
+           capabilities = excluded.capabilities,
+           updated_at = now()
+         RETURNING *`,
+        [w.id, w.ownerId ?? null, w.pool, w.name, JSON.stringify(w.urls), w.fingerprint, w.secret, JSON.stringify(w.capabilities || {})],
+      )
+      return rowToWorker(r.rows[0])
+    },
+    async workersFor(userId, now = Date.now()) {
+      const cutoff = new Date(now - 2 * 60_000).toISOString()
+      const nowIso = new Date(now).toISOString()
+      const r = await own.query(`SELECT * FROM manul_workers WHERE updated_at > $1 ORDER BY updated_at DESC`, [cutoff])
+      const active = r.rows.map(rowToWorker)
+      const owned = active.filter(w => !w.pool && w.ownerId === userId)
+      const leased = active.filter(w => w.pool && w.leasedTo === userId && (w.leasedUntil ?? 0) > now)
+      const poolAvailable = active.filter(w => w.pool && (!w.leasedTo || (w.leasedUntil ?? 0) <= now || w.leasedTo === userId)).length
+      void nowIso
+      return { owned, leased, poolAvailable }
+    },
+    async leaseWorker(userId, opts = {}) {
+      return wallet.lock('worker-pool', async () => {
+        const now = opts.now ?? Date.now()
+        const ttl = opts.ttlMs ?? 60 * 60_000
+        const cutoff = new Date(now - 2 * 60_000).toISOString()
+        const until = new Date(now + ttl).toISOString()
+        const r = await own.query(`SELECT * FROM manul_workers WHERE pool = true AND updated_at > $1`, [cutoff])
+        const candidates = r.rows.map(rowToWorker).filter(w => !w.leasedTo || (w.leasedUntil ?? 0) <= now || w.leasedTo === userId)
+        if (!candidates.length) return undefined
+        candidates.sort((a, b) => scoreWorker(b, userId, opts.projectId, opts.workerId) - scoreWorker(a, userId, opts.projectId, opts.workerId))
+        const picked = candidates[0]
+        const up = await own.query(`UPDATE manul_workers SET leased_to = $2, leased_until = $3 WHERE id = $1 RETURNING *`, [picked.id, userId, until])
+        return up.rows[0] ? rowToWorker(up.rows[0]) : undefined
+      })
+    },
+    async releaseWorker(userId, workerId) {
+      const r = await own.query(`UPDATE manul_workers SET leased_to = NULL, leased_until = NULL WHERE id = $1 AND leased_to = $2`, [workerId, userId])
+      return r.rowCount === 1
+    },
     async close() { await pool.end(); if (own !== pool) await own.end() },
   }
+  return wallet
 }
 
 /** The part of Pitch's schema (packages/db/prisma/schema.prisma) Manul reads and writes, for local runs and tests. */
@@ -121,8 +215,9 @@ export function memoryWallet() {
   const subscriptions = new Map<string, Subscription>()
   const charges = new Map<string, Charged>()
   const locks = new Map<string, Promise<unknown>>()
-  const wallet: Wallet & { ledger: typeof ledger; subscriptions: typeof subscriptions; profiles: typeof profiles } = {
-    ledger, subscriptions, profiles,
+  const workers = new Map<string, WorkerRecord>()
+  const wallet: Wallet & { ledger: typeof ledger; subscriptions: typeof subscriptions; profiles: typeof profiles; workers: typeof workers } = {
+    ledger, subscriptions, profiles, workers,
     async link(email, manulUser) {
       for (const [id, p] of profiles) if (p.email.toLowerCase() === email.toLowerCase()) return id
       const id = 'manul_' + manulUser
@@ -147,6 +242,39 @@ export function memoryWallet() {
       locks.set(userId, next)
       try { return await next } finally { if (locks.get(userId) === next) locks.delete(userId) }
     },
+    async upsertWorker(w) {
+      const prev = workers.get(w.id)
+      const rec: WorkerRecord = { ...w, leasedTo: prev?.leasedTo, leasedUntil: prev?.leasedUntil, updatedAt: Date.now() }
+      workers.set(w.id, rec)
+      return rec
+    },
+    async workersFor(userId, now = Date.now()) {
+      const active = [...workers.values()].filter(w => w.updatedAt > now - 2 * 60_000)
+      const owned = active.filter(w => !w.pool && w.ownerId === userId)
+      const leased = active.filter(w => w.pool && w.leasedTo === userId && (w.leasedUntil ?? 0) > now)
+      const poolAvailable = active.filter(w => w.pool && (!w.leasedTo || (w.leasedUntil ?? 0) <= now || w.leasedTo === userId)).length
+      return { owned, leased, poolAvailable }
+    },
+    async leaseWorker(userId, opts = {}) {
+      return this.lock('worker-pool', async () => {
+        const now = opts.now ?? Date.now()
+        const ttl = opts.ttlMs ?? 60 * 60_000
+        const candidates = [...workers.values()].filter(w => w.pool && w.updatedAt > now - 2 * 60_000 && (!w.leasedTo || (w.leasedUntil ?? 0) <= now || w.leasedTo === userId))
+        if (!candidates.length) return undefined
+        candidates.sort((a, b) => scoreWorker(b, userId, opts.projectId, opts.workerId) - scoreWorker(a, userId, opts.projectId, opts.workerId))
+        const picked = candidates[0]
+        picked.leasedTo = userId
+        picked.leasedUntil = now + ttl
+        return { ...picked }
+      })
+    },
+    async releaseWorker(userId, workerId) {
+      const w = workers.get(workerId)
+      if (!w || w.leasedTo !== userId) return false
+      w.leasedTo = undefined
+      w.leasedUntil = undefined
+      return true
+    },
   }
   return wallet
 }
@@ -155,4 +283,13 @@ export function memoryWallet() {
 export const planOf = (a: Account | undefined, plans: Record<string, Plan>) => {
   const key = a?.subscription?.plan
   return key ? plans[key.replace(/_annual$/, '')] : undefined
+}
+
+function scoreWorker(w: WorkerRecord, userId: string, projectId?: string, workerId?: string): number {
+  let s = (w.capabilities.priority ?? 0) * 10
+  if (workerId && w.id === workerId) s += 1000
+  if (w.leasedTo === userId) s += 500
+  if (projectId && w.capabilities.projects?.includes(projectId)) s += 200
+  if (w.capabilities.gpu) s += 20
+  return s
 }

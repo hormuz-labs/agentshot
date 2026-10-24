@@ -953,21 +953,36 @@ export async function startAgent(opts: {
   const convDir = new Map<string, string>() // conversation id → project dir
   const demoBriefs = new DemoBriefs()
   const inspections = new InspectionGuard()
-  const registry = createRegistry()
   const dirOf = (id: string) => convDir.get(String(id)) || ''
-  for (const ext of [codingExtension(), editorExtension(opts.bridge, dirOf, opts.fence, demoBriefs, inspections), memoryExtension(opts.memory), skillsExtension(opts.skills),
-    ...(opts.browserPrompt ? [browserExtension(opts.bridge, dirOf, opts.browserPrompt)] : [])]) registry.install(ext)
+  const makeRegistry = (resolveDir: (id: string) => string) => {
+    const r = createRegistry()
+    for (const ext of [codingExtension(), editorExtension(opts.bridge, resolveDir, opts.fence, demoBriefs, inspections), memoryExtension(opts.memory), skillsExtension(opts.skills),
+      ...(opts.browserPrompt ? [browserExtension(opts.bridge, resolveDir, opts.browserPrompt)] : [])]) r.install(ext)
+    return r
+  }
   const shellEnv = opts.shellEnv ? liveEnv(opts.shellEnv) : undefined
+  const envFor = ({ cwd }: Any) => {
+    const dir = cwd ?? process.cwd()
+    const fence: Fence = opts.fence ? fenceFor({ project: dir, ...opts.fence }) : { rw: ['/'], ro: [] }
+    return new FencedEnv({ cwd: dir, shellEnv }, fence, { home: homedir(), fenceBin: opts.fence ? join(BIN, 'manul-fence') : undefined }, !!opts.fence)
+  }
 
-  const harness = await Harness.open(await openNodeSqliteStorage(opts.dbPath), {
-    models, registry,
-    env: ({ cwd }: Any) => {
-      const dir = cwd ?? process.cwd()
-      const fence: Fence = opts.fence ? fenceFor({ project: dir, ...opts.fence }) : { rw: ['/'], ro: [] }
-      return new FencedEnv({ cwd: dir, shellEnv }, fence, { home: homedir(), fenceBin: opts.fence ? join(BIN, 'manul-fence') : undefined }, !!opts.fence)
-    },
-  } as any, ctx)
-  harness.resume() // finish any run a crash or quit left unfinished
+  const openHarness = async (dbPath: string, resolveDir: (id: string) => string) => {
+    const h = await Harness.open(await openNodeSqliteStorage(dbPath), { models, registry: makeRegistry(resolveDir), env: envFor } as never, ctx)
+    h.resume() // finish any run a crash or quit left unfinished
+    return h
+  }
+  const harness = await openHarness(opts.dbPath, dirOf)
+  const projectHarnesses = new Map<string, Promise<typeof harness>>()
+  const harnessFor = (dir: string) => {
+    if (!existsSync(join(dir, 'project.json')) && !existsSync(join(dir, '.agent.sqlite'))) return Promise.resolve(harness)
+    let p = projectHarnesses.get(dir)
+    if (!p) {
+      p = openHarness(join(dir, '.agent.sqlite'), () => dir)
+      projectHarnesses.set(dir, p)
+    }
+    return p
+  }
 
   const available = async () => (await models.getAvailable().catch(() => [])) as unknown as { provider: string; id: string }[]
   /** The project's picked model when its key is set, else the best available. */
@@ -994,8 +1009,10 @@ export async function startAgent(opts: {
     if (l && !fresh && (convId == null || String(l.conv.id) === String(convId))) { l.adapter.replay(l.view.value); return String(l.conv.id) }
     if (l) detach(dir)
     const model = await pickModel(dir)
-    let conv: Any | undefined = convId && !fresh ? await harness.conversation(Number(convId) as any, ctx).catch(() => undefined) : undefined
-    if (!conv) conv = await harness.createConversation({ ownership: { kind: 'ownerless' }, agent: { ...(model ? { model } : {}), cwd: dir } } as any, ctx)
+    const h = await harnessFor(dir)
+    let conv: Any | undefined = convId && !fresh ? await h.conversation(Number(convId) as never, ctx).catch(() => undefined) : undefined
+    if (!conv && convId && !fresh && h !== harness) conv = await harness.conversation(Number(convId) as never, ctx).catch(() => undefined)
+    if (!conv) conv = await h.createConversation({ ownership: { kind: 'ownerless' }, agent: { ...(model ? { model } : {}), cwd: dir } } as never, ctx)
     else if (model) await conv.configure({ model, cwd: dir }, ctx)
     convDir.set(String(conv.id), dir)
     const view = await conv.viewState(ctx)
@@ -1053,6 +1070,11 @@ export async function startAgent(opts: {
     },
     async stop(dir: string) { await live.get(dir)?.conv.abort(ctx) },
     close: detach,
-    async shutdown() { for (const d of [...live.keys()]) this.close(d); await harness.close(ctx) },
+    async shutdown() {
+      for (const d of [...live.keys()]) this.close(d)
+      await Promise.all([...projectHarnesses.values()].map(p => p.then(h => h.close(ctx)).catch(() => {})))
+      projectHarnesses.clear()
+      await harness.close(ctx)
+    },
   }
 }

@@ -8,10 +8,13 @@ import { memoryWallet } from '../account/src/wallet'
 const env: Env = {
   CLERK_ISSUER: 'https://clerk.test', CLERK_SECRET_KEY: 'sk_clerk', BIFROST_URL: 'https://gw.test', BIFROST_AUTH: 'Basic YWRtaW46cHc=',
   DODO_API: 'https://dodo.test', DODO_API_KEY: 'dodo_key', DODO_PRODUCT_PRO_TEST: 'pdt_pro', DODO_PRODUCT_MAX_TEST: 'pdt_max', DODO_PRODUCT_FLEX_TEST: 'pdt_flex',
+  HEADSCALE_URL: 'https://hs.test', HEADSCALE_PUBLIC_URL: 'https://mesh.manul.si', HEADSCALE_API_KEY: 'hs_secret', WORKER_POOL_SECRET: 'pool_secret_123',
 }
 let metadata: any
 let keys: Record<string, any>
 let calls: { method: string; url: string; auth?: string; body?: any }[]
+let hsUsers: { id: string; name: string }[]
+let hsRejectIdPreauth = false
 let wallet: ReturnType<typeof memoryWallet>
 
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -19,6 +22,8 @@ beforeEach(() => {
   metadata = {}
   keys = {}
   calls = []
+  hsUsers = [{ id: '1', name: 'manul' }]
+  hsRejectIdPreauth = false
   wallet = memoryWallet()
   vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
     const url = String(input)
@@ -26,9 +31,15 @@ beforeEach(() => {
     const auth = new Headers(init.headers).get('authorization') || undefined
     const body = init.body ? JSON.parse(String(init.body)) : undefined
     calls.push({ method, url, auth, body })
-    if (url === 'https://clerk.test/oauth/userinfo') return auth === 'Bearer good' ? reply({ sub: 'user_1', email: 'ada@example.com' }) : reply({}, 401)
-    if (url === 'https://api.clerk.com/v1/users/user_1' && method === 'GET') return reply({ id: 'user_1', private_metadata: metadata })
+    if (url === 'https://clerk.test/oauth/userinfo') {
+      if (auth === 'Bearer good') return reply({ sub: 'user_1', email: 'ada@example.com' })
+      if (auth === 'Bearer good_2') return reply({ sub: 'user_2', email: 'grace@example.com' })
+      return reply({}, 401)
+    }
+    if (url === 'https://api.clerk.com/v1/users/user_1' && method === 'GET') return reply({ id: 'user_1', private_metadata: metadata.user_1 || metadata })
+    if (url === 'https://api.clerk.com/v1/users/user_2' && method === 'GET') return reply({ id: 'user_2', private_metadata: metadata.user_2 || {} })
     if (url === 'https://api.clerk.com/v1/users/user_1/metadata' && method === 'PATCH') { metadata = { ...metadata, ...body.private_metadata }; return reply({}) }
+    if (url === 'https://api.clerk.com/v1/users/user_2/metadata' && method === 'PATCH') { metadata.user_2 = { ...(metadata.user_2 || {}), ...body.private_metadata }; return reply({}) }
     if (url === 'https://gw.test/api/governance/customers' && method === 'POST') return reply({ customer: { id: 'cus_1', name: body.name } })
     if (url === 'https://gw.test/api/governance/virtual-keys' && method === 'POST') {
       const id = `vk_${Object.keys(keys).length + 1}`
@@ -46,6 +57,18 @@ beforeEach(() => {
     if (url === 'https://dodo.test/checkouts' && method === 'POST') return auth === 'Bearer dodo_key' ? reply({ session_id: 'cks_1', checkout_url: 'https://checkout.dodo.test/cks_1' }) : reply({}, 401)
     if (url === 'https://dodo.test/customers?email=ada%40example.com') return reply({ items: [{ customer_id: 'cus_dodo' }] })
     if (url === 'https://dodo.test/customers/cus_dodo/customer-portal/session' && method === 'POST') return reply({ link: 'https://portal.dodo.test/x' })
+    if (url === 'https://hs.test/api/v1/user' && method === 'GET') return auth === 'Bearer hs_secret' ? reply({ users: hsUsers }) : reply({}, 401)
+    if (url === 'https://hs.test/api/v1/user' && method === 'POST') {
+      if (auth !== 'Bearer hs_secret') return reply({}, 401)
+      const created = { id: '99', name: body.name }
+      hsUsers.push(created)
+      return reply({ user: created })
+    }
+    if (url === 'https://hs.test/api/v1/preauthkey' && method === 'POST') {
+      if (auth !== 'Bearer hs_secret') return reply({}, 401)
+      if (hsRejectIdPreauth && body.user !== 'manul') return reply({ message: 'user not found by id' }, 400)
+      return reply({ preAuthKey: { key: `tskey-${body.aclTags?.[0]}-${body.ephemeral ? 'eph' : 'perm'}` } })
+    }
     return reply({ error: `unexpected ${method} ${url}` }, 500)
   })
 })
@@ -215,5 +238,140 @@ describe('the account service: credits and plans', () => {
     const events = calls.filter(c => c.url === 'https://ph.test/i/v0/e/').map(c => c.body)
     expect(events.map(e => [e.event, e.distinct_id, e.api_key])).toEqual([['manul signed in', 'manul_user_1', 'phc_1'], ['manul checkout started', 'manul_user_1', 'phc_1']])
     expect(JSON.stringify(events)).not.toContain('ada@example.com')
+  })
+})
+
+describe('the account service: headscale mesh and worker pool', () => {
+  const fp = 'a'.repeat(64)
+  const secret = 's'.repeat(48)
+
+  it('mints Headscale pre-auth keys for clients and workers', async () => {
+    await ask('good')
+    const clientJoin = await (await call('/v1/mesh/join', { method: 'POST', headers: asKey(), body: JSON.stringify({ role: 'client' }) })).json()
+    expect(clientJoin).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-tag:client-eph', tag: 'tag:client' })
+
+    const poolJoin = await (await call('/v1/mesh/join', { method: 'POST', headers: { 'x-manul-pool-secret': 'pool_secret_123' }, body: '{}' })).json()
+    expect(poolJoin).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-tag:worker-perm', tag: 'tag:worker' })
+  })
+
+  it('registers personal and pooled workers, prefers sticky/priority workers on lease, and signs stateless tokens', async () => {
+    await ask('good')
+    // Personal worker owned by this user
+    const hbOwn = await call('/v1/workers/heartbeat', {
+      method: 'POST',
+      headers: asKey(),
+      body: JSON.stringify({ id: 'home-mac', name: 'Home Mac Studio', urls: ['https://100.64.0.2:47821'], fingerprint: fp, secret, capabilities: { gpu: 'videotoolbox' } }),
+    })
+    expect(hbOwn.status).toBe(200)
+
+    // Two shared pool workers (one cloud, one home pool with cached project)
+    await call('/v1/workers/heartbeat', {
+      method: 'POST',
+      headers: { 'x-manul-pool-secret': 'pool_secret_123' },
+      body: JSON.stringify({ id: 'cloud-1', name: 'Cloud Worker 1', urls: ['https://100.64.0.10:47821'], fingerprint: fp, secret, capabilities: { priority: 1 } }),
+    })
+    await call('/v1/workers/heartbeat', {
+      method: 'POST',
+      headers: { 'x-manul-pool-secret': 'pool_secret_123' },
+      body: JSON.stringify({ id: 'home-pool-1', name: 'Home Pool GPU', urls: ['https://100.64.0.11:47821'], fingerprint: fp, secret, capabilities: { priority: 5, projects: ['proj_abc'] } }),
+    })
+
+    const listed = await (await call('/v1/workers', { headers: asKey() })).json()
+    expect(listed.poolAvailable).toBe(2)
+    expect(listed.workers).toHaveLength(1)
+    expect(listed.workers[0]).toMatchObject({ id: 'home-mac', name: 'Home Mac Studio', pool: false, urls: ['https://100.64.0.2:47821'] })
+    expect(listed.workers[0].token).toMatch(/^lease\.\d+\./)
+
+    // Leasing picks the higher-priority / sticky-cache home-pool-1 worker first
+    const leased = await (await call('/v1/workers/lease', { method: 'POST', headers: asKey(), body: JSON.stringify({ projectId: 'proj_abc' }) })).json()
+    expect(leased.worker).toMatchObject({ id: 'home-pool-1', pool: true, urls: ['https://100.64.0.11:47821'] })
+    expect(leased.worker.token).toMatch(/^lease\.\d+\./)
+
+    // Releasing frees it back to the pool
+    const rel = await (await call('/v1/workers/release', { method: 'POST', headers: asKey(), body: JSON.stringify({ workerId: 'home-pool-1' }) })).json()
+    expect(rel).toEqual({ released: true })
+  })
+
+  it('auto-creates the Headscale manul user when absent, falls back to username preauthkey, and enforces auth & config', async () => {
+    await ask('good')
+    // Unauthenticated & bad pool secret rejected
+    expect((await call('/v1/mesh/join', { method: 'POST', body: '{}' })).status).toBe(401)
+    expect((await call('/v1/mesh/join', { method: 'POST', headers: { 'x-manul-pool-secret': 'wrong_secret' }, body: '{}' })).status).toBe(401)
+
+    // Missing Headscale config returns 503
+    const noHs = await handle(new Request('https://account.test/v1/mesh/join', { method: 'POST', headers: asKey(), body: '{}' }), { ...env, HEADSCALE_URL: undefined }, wallet)
+    expect(noHs.status).toBe(503)
+
+    // Auto-creates 'manul' user and falls back when Headscale v0.23 expects username instead of numeric ID
+    hsUsers = []
+    hsRejectIdPreauth = true
+    const joined = await (await call('/v1/mesh/join', { method: 'POST', headers: asKey(), body: JSON.stringify({ role: 'worker' }) })).json()
+    expect(joined).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-tag:worker-perm', tag: 'tag:worker' })
+    expect(hsUsers).toEqual([{ id: '99', name: 'manul' }])
+  })
+
+  it('validates worker registration fields and rejects malformed URLs, fingerprints, or secrets', async () => {
+    await ask('good')
+    const badCases = [
+      { id: '../bad', name: 'W', urls: ['https://100.64.0.1:47821'], fingerprint: fp, secret },
+      { id: 'valid-id', name: 'W', urls: ['http://100.64.0.1:47821'], fingerprint: fp, secret },
+      { id: 'valid-id', name: 'W', urls: [], fingerprint: fp, secret },
+      { id: 'valid-id', name: 'W', urls: ['https://100.64.0.1:47821'], fingerprint: 'not-hex', secret },
+      { id: 'valid-id', name: 'W', urls: ['https://100.64.0.1:47821'], fingerprint: fp, secret: 'too-short' },
+    ]
+    for (const payload of badCases) {
+      const res = await call('/v1/workers/heartbeat', { method: 'POST', headers: asKey(), body: JSON.stringify(payload) })
+      expect(res.status).toBe(400)
+    }
+    expect((await call('/v1/workers/release', { method: 'POST', headers: asKey(), body: '{}' })).status).toBe(400)
+  })
+
+  it('isolates personal workers and active pool leases between users, expires stale workers, and reclaims expired leases', async () => {
+    await ask('good')   // user_1 → vk_1
+    await ask('good_2') // user_2 → vk_2
+    const asUser1 = asKey('sk-bf-vk_1', 'vk_1')
+    const asUser2 = asKey('sk-bf-vk_2', 'vk_2')
+
+    // User 1 registers a personal home worker
+    await call('/v1/workers/heartbeat', {
+      method: 'POST',
+      headers: asUser1,
+      body: JSON.stringify({ id: 'u1-personal', name: 'Ada Mac', urls: ['https://100.64.0.2:47821'], fingerprint: fp, secret }),
+    })
+    // One shared pool worker
+    await call('/v1/workers/heartbeat', {
+      method: 'POST',
+      headers: { 'x-manul-pool-secret': 'pool_secret_123' },
+      body: JSON.stringify({ id: 'pool-only', name: 'Shared GPU', urls: ['https://100.64.0.50:47821'], fingerprint: fp, secret }),
+    })
+
+    // User 2 cannot see User 1's personal worker
+    const u2List = await (await call('/v1/workers', { headers: asUser2 })).json()
+    expect(u2List.workers).toEqual([])
+    expect(u2List.poolAvailable).toBe(1)
+
+    // User 1 leases the only pool worker
+    const u1Lease = await call('/v1/workers/lease', { method: 'POST', headers: asUser1, body: '{}' })
+    expect(u1Lease.status).toBe(200)
+
+    // User 2 cannot lease it while User 1 holds the lease, nor can User 2 release User 1's lease
+    expect((await call('/v1/workers/lease', { method: 'POST', headers: asUser2, body: '{}' })).status).toBe(404)
+    const u2Rel = await (await call('/v1/workers/release', { method: 'POST', headers: asUser2, body: JSON.stringify({ workerId: 'pool-only' }) })).json()
+    expect(u2Rel).toEqual({ released: false })
+
+    // User 1 re-leasing gets the same sticky worker
+    const u1Again = await (await call('/v1/workers/lease', { method: 'POST', headers: asUser1, body: '{}' })).json()
+    expect(u1Again.worker.id).toBe('pool-only')
+
+    // Simulate lease expiry: User 2 can now lease it
+    wallet.workers.get('pool-only')!.leasedUntil = Date.now() - 1_000
+    const u2Lease = await (await call('/v1/workers/lease', { method: 'POST', headers: asUser2, body: '{}' })).json()
+    expect(u2Lease.worker.id).toBe('pool-only')
+
+    // Simulate stale worker heartbeat (> 2 minutes old): excluded from listings and leases
+    wallet.workers.get('pool-only')!.updatedAt = Date.now() - 3 * 60_000
+    const u2AfterStale = await (await call('/v1/workers', { headers: asUser2 })).json()
+    expect(u2AfterStale.workers).toEqual([])
+    expect(u2AfterStale.poolAvailable).toBe(0)
   })
 })

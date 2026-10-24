@@ -118,3 +118,55 @@ export function signOut(): AccountStatus {
   setConfig({ account: undefined })
   return accountStatus()
 }
+
+export type DiscoveredWorker = {
+  id: string
+  name: string
+  pool: boolean
+  urls: string[]
+  fingerprint: string
+  token: string
+  capabilities: Record<string, unknown>
+  expiresAt: number
+}
+
+export async function meshJoin(role: 'client' | 'worker', poolSecret?: string): Promise<{ controlUrl: string; authKey: string; tag: string }> {
+  if (poolSecret) {
+    const r = await fetch(`${AUTH.account()}/v1/mesh/join`, {
+      method: 'POST',
+      headers: { 'x-manul-pool-secret': poolSecret, 'content-type': 'application/json' },
+      body: JSON.stringify({ role }),
+    })
+    const body = (await r.json().catch(() => ({}))) as { controlUrl?: string; authKey?: string; tag?: string; error?: string }
+    if (!r.ok || !body.controlUrl || !body.authKey) throw new Error(body.error || 'Could not join mesh.')
+    return { controlUrl: body.controlUrl, authKey: body.authKey, tag: body.tag || 'tag:worker' }
+  }
+  return (await asKey('/v1/mesh/join', { method: 'POST', body: JSON.stringify({ role }) })) as { controlUrl: string; authKey: string; tag: string }
+}
+
+export async function workerHeartbeat(body: Record<string, unknown>, poolSecret?: string): Promise<void> {
+  if (poolSecret) {
+    const r = await fetch(`${AUTH.account()}/v1/workers/heartbeat`, {
+      method: 'POST',
+      headers: { 'x-manul-pool-secret': poolSecret, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!r.ok) throw new Error('Worker heartbeat failed.')
+    return
+  }
+  await asKey('/v1/workers/heartbeat', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export async function accountWorkers(): Promise<{ workers: DiscoveredWorker[]; poolAvailable: number }> {
+  return (await asKey('/v1/workers')) as { workers: DiscoveredWorker[]; poolAvailable: number }
+}
+
+export async function leaseAccountWorker(opts: { projectId?: string; workerId?: string } = {}): Promise<DiscoveredWorker> {
+  const out = (await asKey('/v1/workers/lease', { method: 'POST', body: JSON.stringify(opts) })) as { worker: DiscoveredWorker }
+  return out.worker
+}
+
+export async function releaseAccountWorker(workerId: string): Promise<boolean> {
+  const out = (await asKey('/v1/workers/release', { method: 'POST', body: JSON.stringify({ workerId }) })) as { released: boolean }
+  return !!out.released
+}
