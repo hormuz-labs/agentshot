@@ -1,7 +1,13 @@
 AgentShot (Manul)
-Copyright 2026 Hormuz Labs
+Copyright (C) 2026 agenthormuz@proton.me
 
-This product includes software developed by Hormuz Labs (https://github.com/hormuz-labs/agentshot).
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
+version. It is distributed WITHOUT ANY WARRANTY; see LICENSE for the full text.
 
-Releases up to 0.1.1, and the code published before 2026-10-08, were licensed GPL-3.0 and remain available under it.
+Source: https://github.com/hormuz-labs/agentshot
+
+Releases up to 0.1.1 and the code published before 2026-10-08 were licensed GPL-3.0; the code published from
+2026-10-08 until the change to GPL-3.0-or-later was licensed Apache-2.0 (LICENSES/Apache-2.0.txt) and those
+published versions remain available under it.
 Some files carry their own licence, marked at the top of the file; see CONTRIBUTING.md and THIRD_PARTY_NOTICES.md.

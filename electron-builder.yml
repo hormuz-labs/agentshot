@@ -1,7 +1,7 @@
 # Native packaging: macOS (.dmg + .zip), Linux (.deb + AppImage), Windows x64 (per-user NSIS).
 appId: com.hormuzlabs.manul
 productName: AgentShot
-copyright: Copyright © 2026 Hormuz Labs
+copyright: Copyright © 2026 agenthormuz@proton.me
 directories:
   buildResources: build
   output: dist

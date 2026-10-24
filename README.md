@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://github.com/hormuz-labs/agentshot/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/hormuz-labs/agentshot?style=flat&color=262626&label=release"></a>
-  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-262626?style=flat"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-GPLv3-262626?style=flat"></a>
   <img alt="macOS · Windows · Linux · iOS · Android" src="https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux%20·%20iOS%20·%20Android-262626?style=flat">
   <a href="https://github.com/hormuz-labs/agentshot/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/hormuz-labs/agentshot?style=flat&color=f2a541&label=stars"></a>
 </p>
@@ -29,7 +29,7 @@
 
 AgentShot is **a video editor you direct by talking**. Drop in your footage, say what you want, and point at the frame when something's off. It makes the cut on your own computer and shows you a before / after of every change, to keep or send back. You never have to touch a timeline.
 
-It's **free and open source** under Apache-2.0, and stays free. If you like where it's going, a star (top right of this page) helps other people find it.
+It's **free and open source** under GPLv3, and stays free. If you like where it's going, a star (top right of this page) helps other people find it.
 
 <p align="center">
   <img src="docs/point.webp" alt="A box drawn around the cat's face with the note “zoom in on this grumpy face”, then AgentShot's before / after of the zoom, ready to keep or send back" width="100%">
@@ -278,7 +278,7 @@ Requires **Windows 10 version 1903 (build 18362) or newer, or Windows 11, x64**.
 
 It is signed with Hormuz Labs' own certificate rather than a public one, so SmartScreen may ask once: **More info → Run anyway**.
 
-It's free and open source under the [Apache License 2.0](LICENSE): use it, change it, ship it, edit paid work with it.
+It's free and open source under the [GNU GPL v3](LICENSE): use it, change it, ship it, edit paid work with it. If you distribute a changed version, share its source under the same licence.
 Keep the [NOTICE](NOTICE) attribution when you redistribute it. No AI key of your own? Sign in under **Settings → Keys → AgentShot key**: new accounts start with 1,000 credits, and Pro and Max plans (shared with Pitch: same email, same plan) add more every month. Or bring a Claude, Gemini or OpenAI key (it's kept in your system's keychain); your own keys are used first.
 
 On first run AgentShot asks whether to send crash reports and usage statistics. Both boxes start unticked, and you can change them anytime in Settings → About. It never sends your footage, file or project names, prompts, transcripts or keys. [Exactly what is sent](telemetry/README.md).
@@ -323,5 +323,5 @@ Want to hack on it? Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)
 <p align="center">
   <img src="build/icons/64x64.png" width="28" alt=""><br>
   <sub>Named after the <b>manul</b>, the Pallas cat: small, patient, and unbothered by anything.</sub><br>
-  <sub><a href="LICENSE">Apache-2.0</a> &nbsp;·&nbsp; <a href="THIRD_PARTY_NOTICES.md">Third-party notices</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">Contribute</a> &nbsp;·&nbsp; Made by <a href="https://github.com/hormuz-labs">Hormuz Labs</a></sub>
+  <sub><a href="LICENSE">GPL-3.0</a> &nbsp;·&nbsp; <a href="THIRD_PARTY_NOTICES.md">Third-party notices</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">Contribute</a> &nbsp;·&nbsp; Made by <a href="https://github.com/hormuz-labs">Hormuz Labs</a></sub>
 </p>
