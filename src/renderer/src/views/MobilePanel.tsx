@@ -23,6 +23,7 @@ export function MobilePanel() {
   const [discovered, setDiscovered] = useState<{ workers: DiscoveredWorker[]; poolAvailable: number }>()
   const [pairUrl, setPairUrl] = useState('')
   const [pairCode, setPairCode] = useState('')
+  const [qr, setQr] = useState<{ link: string; svg: string; mesh: boolean } | null>(null)
   useEffect(() => {
     const refresh = () => {
       window.manul.mobile.status().then(s => { setState(s); setNow(Date.now()) }).catch(e => setError(message(e)))
@@ -42,9 +43,16 @@ export function MobilePanel() {
     try { await action() } catch (e) { setWorkerError(message(e)) } finally { setWorkerBusy(false) }
   }
 
+  const left = state?.code && state.expiresAt ? Math.max(0, Math.ceil((state.expiresAt - now) / 1000)) : 0
+  const code = state?.code && left > 0 ? state.code : ''
+  useEffect(() => {
+    if (!code) { setQr(null); return }
+    let live = true
+    window.manul.mobile.qr().then(q => { if (live) setQr(q) }).catch(() => {})
+    return () => { live = false }
+  }, [code, state?.mesh])
+
   if (!state) return null
-  const left = state.code && state.expiresAt ? Math.max(0, Math.ceil((state.expiresAt - now) / 1000)) : 0
-  const code = state.code && left > 0 ? state.code : ''
 
   return (
     <div>
@@ -70,7 +78,7 @@ export function MobilePanel() {
               {state.running
                 ? state.devices.length
                   ? `${state.devices.length === 1 ? '1 device' : `${state.devices.length} devices`} paired. Connections are encrypted and pinned to this computer’s certificate.`
-                  : 'On. Enter the 6-digit code below in the AgentShot mobile app to pair.'
+                  : 'On. Scan the code below with your phone to pair.'
                 : state.devices.length
                   ? 'Off. Nothing on the network can reach AgentShot; paired devices reconnect when you turn this back on.'
                   : 'Off. Nothing on the network can reach AgentShot.'}
@@ -83,39 +91,57 @@ export function MobilePanel() {
             {!state.addresses.length ? (
               <p className="text-xs text-dim">Connect this computer to Wi-Fi or Tailscale first.</p>
             ) : code ? (
-              <div className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-4">
+                <div
+                  className="size-36 shrink-0 rounded-lg bg-white p-2.5 [&>svg]:size-full"
+                  data-testid="mobile-qr"
+                  role="img"
+                  aria-label="Pairing QR code"
+                  // trusted: an SVG the qrcode package rendered in the main process from our own link
+                  dangerouslySetInnerHTML={qr ? { __html: qr.svg } : undefined}
+                />
+                <div className="min-w-0 flex-1 space-y-3">
                   <div>
-                    <div className="font-medium">Verification code</div>
-                    <p className="mt-0.5 text-xs text-dim">
-                      Enter this 6-digit code in the mobile app. Expires in {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}.
+                    <div className="font-medium">Scan with your phone</div>
+                    <p className="mt-0.5 text-xs leading-relaxed text-dim">
+                      Use the phone’s camera or the AgentShot app.{' '}
+                      {qr?.mesh
+                        ? 'Works from anywhere: your phone joins your private AgentShot mesh.'
+                        : state.mesh
+                          ? 'Works on this Wi-Fi and Tailscale. Sign in to AgentShot to pair from anywhere.'
+                          : 'Works on this Wi-Fi and Tailscale.'}{' '}
+                      Expires in {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}.
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div>
+                    <div className="mb-1 text-xs text-faint">Or enter this code on the same Wi-Fi</div>
+                    <div className="flex items-center gap-1" data-testid="mobile-otp">
+                      {code.split('').map((digit, idx) => (
+                        <div
+                          key={idx}
+                          className={cn(
+                            'flex h-8 w-7 items-center justify-center rounded-md border border-line bg-surface font-mono text-base font-semibold text-fg',
+                            idx === 3 && 'ml-1.5',
+                          )}
+                        >
+                          {digit}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <Button
                       size="sm"
-                      variant="primary"
-                      onClick={() => navigator.clipboard.writeText(code).then(() => setCopied(true)).catch(e => setError(message(e)))}
+                      variant="ghost"
+                      disabled={!qr}
+                      onClick={() => qr && navigator.clipboard.writeText(qr.link).then(() => setCopied(true)).catch(e => setError(message(e)))}
                     >
-                      {copied ? <><Check />Copied</> : <><Copy />Copy code</>}
+                      {copied ? <><Check />Copied</> : <><Copy />Copy pairing link</>}
                     </Button>
                     <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(window.manul.mobile.start)}>
                       <RefreshCw />New code
                     </Button>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 pt-1" data-testid="mobile-otp">
-                  {code.split('').map((digit, idx) => (
-                    <div
-                      key={idx}
-                      className={cn(
-                        'flex h-12 w-10 items-center justify-center rounded-lg border border-line bg-surface font-mono text-xl font-semibold tracking-wider text-fg shadow-xs',
-                        idx === 3 && 'ml-2',
-                      )}
-                    >
-                      {digit}
-                    </div>
-                  ))}
                 </div>
               </div>
             ) : (
@@ -125,27 +151,6 @@ export function MobilePanel() {
                   <Smartphone />New code
                 </Button>
               </div>
-            )}
-          </div>
-        )}
-
-        {state.running && (
-          <div className="rounded-lg border border-line bg-raised/60 px-3 py-2.5" data-testid="mobile-tailscale">
-            <div className="flex items-center gap-2 font-medium">
-              <span className={cn('size-1.5 rounded-full', state.tailscale || state.mesh ? 'bg-ok' : 'bg-line-strong')} />
-              Away from home
-            </div>
-            <p className="mt-0.5 text-xs leading-relaxed text-dim">
-              {state.tailscale ? (
-                <>This computer is on Tailscale (<span className="font-mono">{state.tailscale}</span>). A paired phone with Tailscale on reaches it from anywhere, encrypted end to end.</>
-              ) : (
-                <>Put this computer and your phone on the same <a href="https://tailscale.com/download" target="_blank" rel="noreferrer" className="text-amber hover:underline">Tailscale</a> network and a paired phone reaches it from anywhere—nothing else to set up.</>
-              )}
-            </p>
-            {state.mesh && (
-              <p className="mt-1.5 text-xs leading-relaxed text-dim" data-testid="mobile-mesh">
-                Also on your AgentShot mesh as <span className="font-mono text-fg">{state.mesh}</span>. A phone on the same Headscale network can pair by entering this address in the app.
-              </p>
             )}
           </div>
         )}

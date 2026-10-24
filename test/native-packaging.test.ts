@@ -23,7 +23,7 @@ describe('native packaging gate', () => {
       const elf = Buffer.alloc(32); elf.write('\x7fELF'); elf[4] = 2; elf.writeUInt16LE(183, 18)
       for (const tool of [...NATIVE_TOOLS, 'manul-fence']) { writeFileSync(join(bin, tool), elf); chmodSync(join(bin, tool), 0o755) }
       for (const model of NATIVE_MODELS) writeFileSync(join(models, model), 'model')
-      expect(checkNative(root, { platform: 'linux', arch: 'arm64', runChecks: false })).toMatchObject({ tools: 8, models: 4 })
+      expect(checkNative(root, { platform: 'linux', arch: 'arm64', runChecks: false })).toMatchObject({ tools: 9, models: 4 })
       elf.writeUInt16LE(62, 18); writeFileSync(join(bin, 'manul-speakers'), elf)
       expect(() => checkNative(root, { platform: 'linux', arch: 'arm64', runChecks: false })).toThrow(/wrong architecture/)
     } finally { rmSync(root, { recursive: true, force: true }) }

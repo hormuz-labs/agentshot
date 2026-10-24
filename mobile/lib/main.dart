@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'bridge/client.dart';
+import 'bridge/mesh.dart';
 import 'bridge/store.dart';
 import 'ui/home.dart';
 import 'ui/pair.dart';
@@ -89,6 +90,8 @@ class _ManulAppState extends State<ManulApp> {
   final client = BridgeClient();
   late final store = BridgeStore(client);
   bool ready = false, paired = false;
+  // an agentshot://pair link from the phone's camera, handed to the pair screen
+  String? link;
   ThemeMode theme = ThemeMode.system;
   @override
   void initState() {
@@ -105,6 +108,10 @@ class _ManulAppState extends State<ManulApp> {
           ThemeMode.system;
       paired = await client.restore();
       if (paired) client.listen();
+      Mesh.onLink((value) {
+        if (!paired && mounted) setState(() => link = value);
+      });
+      if (!paired) link = await Mesh.initialLink();
     } catch (_) {
       paired = false;
     } finally {
@@ -149,8 +156,11 @@ class _ManulAppState extends State<ManulApp> {
             onDisconnect: disconnect,
           )
         : PairScreen(
+            key: ValueKey(link),
             client: client,
+            link: link,
             onPaired: () {
+              link = null;
               setState(() => paired = true);
               client.listen();
             },

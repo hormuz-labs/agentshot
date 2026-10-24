@@ -18,7 +18,7 @@ extraResources:
     to: icon.png
   - from: resources/bin/${platform}-${arch}
     to: bin
-    filter: ["ffmpeg", "ffprobe", "whisper-cli", "manul-beats", "manul-speakers", "manul-vision", "manul-fence", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
+    filter: ["ffmpeg", "ffprobe", "whisper-cli", "manul-beats", "manul-speakers", "manul-vision", "manul-fence", "manul-mesh", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
   - from: resources/lib
     to: lib
   - from: resources/models

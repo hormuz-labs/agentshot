@@ -46,3 +46,6 @@ app.*.map.json
 /android/key.properties
 *.jks
 *.keystore
+
+# built by scripts/build-mesh.sh android
+/android/app/libs/

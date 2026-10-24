@@ -15,6 +15,7 @@ dependencies:
   path_provider: ^2.1.6
   share_plus: ^13.3.1
   shared_preferences: ^2.5.6
+  mobile_scanner: ^7.0.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
