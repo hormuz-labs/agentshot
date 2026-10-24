@@ -1,11 +1,11 @@
 // Optional TLS bridge. Pairing is explicit on the desktop; tokens expire on stop/quit.
 import { createServer, type Server } from 'node:https'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { randomBytes, randomInt, timingSafeEqual, X509Certificate } from 'node:crypto'
+import { createHmac, randomBytes, randomInt, timingSafeEqual, X509Certificate } from 'node:crypto'
 import { createSocket, type Socket as UdpSocket } from 'node:dgram'
-import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdtemp, rm, stat } from 'node:fs/promises'
-import { join, extname } from 'node:path'
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, extname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path'
 import { tmpdir, networkInterfaces } from 'node:os'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -18,7 +18,17 @@ type Options = {
   projects(): { dir: string }[]
   importFile(file: string, dir?: string): Promise<unknown>
   galleryFile(url: string, range?: string): Response
+  stateFile?: string
+  projectsRoot?: () => string
+  onProjectSynced?: (dir: string) => Promise<void> | void
 }
+type PersistedBridgeState = {
+  key: string
+  cert: string
+  workerSecret: string
+  devices: [string, { id: string; name: string; expiresAt: number }][]
+}
+type UploadSession = { id: string; folder: string; file: string; dir?: string; name: string; size: number; offset: number; busy: boolean }
 export const DEFAULT_MOBILE_PORT = 47821
 const secret = () => randomBytes(32).toString('base64url')
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message) } }
@@ -36,6 +46,9 @@ export class MobileBridge {
   private udp?: UdpSocket
   private fingerprint?: string
   private code?: string
+  private workerSecret = secret()
+  private pem?: { private: string; cert: string }
+  private uploads = new Map<string, UploadSession>()
   private codeTries = 0
   private expiresAt = 0
   private port = 0
@@ -51,6 +64,50 @@ export class MobileBridge {
     const addresses = this.server ? list.map(ip => `https://${ip}:${this.port}`) : []
     return { running: !!this.server, addresses, tailscale: list.find(isTailscale), fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: [...this.devices.values()].map(({ id, name }) => ({ id, name })) }
   }
+  workerCredentials() {
+    return { fingerprint: this.fingerprint, secret: this.workerSecret, urls: this.status().addresses }
+  }
+  private loadState() {
+    if (!this.options.stateFile || !existsSync(this.options.stateFile)) return
+    try {
+      const raw = JSON.parse(readFileSync(this.options.stateFile, 'utf8')) as Partial<PersistedBridgeState>
+      if (typeof raw.key === 'string' && typeof raw.cert === 'string') this.pem = { private: raw.key, cert: raw.cert }
+      if (typeof raw.workerSecret === 'string' && raw.workerSecret.length >= 32) this.workerSecret = raw.workerSecret
+      if (Array.isArray(raw.devices)) {
+        const now = Date.now()
+        for (const [t, d] of raw.devices) if (d && d.expiresAt > now) this.devices.set(t, d)
+      }
+    } catch {}
+  }
+  private saveState() {
+    if (!this.options.stateFile || !this.pem) return
+    try {
+      mkdirSync(dirname(this.options.stateFile), { recursive: true })
+      const data: PersistedBridgeState = {
+        key: this.pem.private,
+        cert: this.pem.cert,
+        workerSecret: this.workerSecret,
+        devices: [...this.devices.entries()],
+      }
+      writeFileSync(this.options.stateFile, JSON.stringify(data, null, 2), { mode: 0o600 })
+    } catch {}
+  }
+  private verifyAuth(token: string): { id: string; name: string; expiresAt: number } | undefined {
+    if (!token) return undefined
+    const dev = this.devices.get(token)
+    if (dev) {
+      if (dev.expiresAt < Date.now()) { this.devices.delete(token); this.saveState(); return undefined }
+      return dev
+    }
+    const m = /^lease\.(\d+)\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(token)
+    if (!m) return undefined
+    const expiresAt = Number(m[1])
+    if (!Number.isSafeInteger(expiresAt) || expiresAt < Date.now()) return undefined
+    const payload = `${m[1]}.${m[2]}`
+    const expected = createHmac('sha256', this.workerSecret).update(payload).digest('base64url')
+    if (Buffer.byteLength(m[3]) !== Buffer.byteLength(expected) || !timingSafeEqual(Buffer.from(m[3]), Buffer.from(expected))) return undefined
+    return { id: `lease:${m[2]}`, name: 'Cloud Client', expiresAt }
+  }
   start(): Promise<MobileStatus> {
     if (this.starting) return this.starting
     this.starting = this.listen().finally(() => { this.starting = undefined })
@@ -58,7 +115,13 @@ export class MobileBridge {
   }
   private async listen() {
     if (this.server) { this.code = String(randomInt(100_000, 1_000_000)); this.codeTries = 0; this.expiresAt = Date.now() + 5 * 60_000; return this.status() }
-    const pem = await generate([{ name: 'commonName', value: 'Manul Mobile Bridge' }], { keySize: 2048, algorithm: 'sha256', notAfterDate: new Date(Date.now() + 30 * 86400_000) })
+    this.loadState()
+    if (!this.pem) {
+      const generated = await generate([{ name: 'commonName', value: 'Manul Mobile Bridge' }], { keySize: 2048, algorithm: 'sha256', notAfterDate: new Date(Date.now() + 365 * 86400_000) })
+      this.pem = { private: generated.private, cert: generated.cert }
+    }
+    const pem = this.pem
+    this.saveState()
     const server = createServer({ key: pem.private, cert: pem.cert, minVersion: 'TLSv1.2' }, (req, res) => {
       void this.handle(req, res).catch(error => {
         if (res.headersSent) { res.destroy(); return }
@@ -100,7 +163,10 @@ export class MobileBridge {
     if (this.starting) await this.starting
     try { this.udp?.close() } catch {}
     this.udp = undefined
-    this.code = undefined; this.codeTries = 0; this.devices.clear()
+    this.code = undefined; this.codeTries = 0
+    if (!this.options.stateFile) this.devices.clear()
+    for (const u of this.uploads.values()) await rm(u.folder, { recursive: true, force: true }).catch(() => {})
+    this.uploads.clear()
     for (const res of this.clients.keys()) res.end()
     this.clients.clear()
     const server = this.server; this.server = undefined
@@ -110,13 +176,14 @@ export class MobileBridge {
   }
   revoke(id: string) {
     for (const [token, d] of this.devices) if (d.id === id) { this.devices.delete(token); for (const [res, t] of this.clients) if (t === token) res.end() }
+    this.saveState()
     return this.status()
   }
   publish(channel: string, ...args: unknown[]) {
     if (channel === 'agui') { const [dir, event] = args as [string, Parameters<typeof reduce>[1]]; this.states.set(dir, reduce(this.states.get(dir) || emptyAgentState(), event)) }
     if (!['agui', 'project', 'jobs', 'consent', 'preview:state', 'browser:state', 'notice', 'seek', 'agent:ready'].includes(channel)) return
     for (const [res, token] of this.clients) {
-      if (!this.devices.has(token)) { res.end(); continue }
+      if (!this.verifyAuth(token)) { res.end(); continue }
       if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); continue }
       res.write(`data: ${JSON.stringify({ channel, args })}\n\n`)
     }
@@ -153,10 +220,11 @@ export class MobileBridge {
       if (this.devices.size >= 10) throw new HttpError(409, 'Remove a paired device first')
       const token = secret(); this.code = undefined; this.codeTries = 0
       this.devices.set(token, { id: secret(), name: String(body.name || 'Phone').slice(0, 80), expiresAt: Date.now() + 30 * 24 * 60 * 60_000 })
+      this.saveState()
       return reply({ token, protocol: 1, fingerprint: this.fingerprint, urls: this.status().addresses, methods: Object.keys(mobileSchemas) })
     }
-    const token = req.headers.authorization?.replace(/^Bearer /, '') || ''; const device = this.devices.get(token)
-    if (!device || device.expiresAt < Date.now()) { this.devices.delete(token); throw new HttpError(401, 'Reconnect to your desktop') }
+    const token = req.headers.authorization?.replace(/^Bearer /, '') || ''; const device = this.verifyAuth(token)
+    if (!device) throw new HttpError(401, 'Reconnect to your desktop')
     if (url.pathname === '/hello' && req.method === 'GET') {
       return reply({ urls: this.status().addresses })
     }
@@ -171,8 +239,50 @@ export class MobileBridge {
       if (this.clients.size >= 20) throw new HttpError(429, 'Too many live connections')
       res.writeHead(200, { 'content-type': 'text/event-stream', connection: 'keep-alive' }); this.clients.set(res, token)
       for (const [dir, state] of this.states) res.write(`data: ${JSON.stringify({ channel: 'agent:state', args: [dir, state] })}\n\n`)
-      const heartbeat = setInterval(() => { if (!this.devices.has(token) || device.expiresAt < Date.now()) res.end(); else res.write(': heartbeat\n\n') }, 15_000)
+      const heartbeat = setInterval(() => { if (!this.verifyAuth(token)) res.end(); else res.write(': heartbeat\n\n') }, 15_000)
       res.on('close', () => { clearInterval(heartbeat); this.clients.delete(res) }); return
+    }
+    if (url.pathname === '/upload/init' && req.method === 'POST') {
+      if (this.uploads.size >= 8) throw new HttpError(429, 'Too many active uploads')
+      const dir = url.searchParams.has('project') ? this.authorizeProject(url.searchParams.get('project')) : undefined
+      const name = url.searchParams.get('name') || 'upload.mp4'
+      if (!/^[^/\\\x00-\x1f]{1,180}$/.test(name) || name.startsWith('.') || name.includes(':')) throw new HttpError(400, 'Invalid file name')
+      const size = Number(url.searchParams.get('size') ?? req.headers['x-upload-length'])
+      if (!Number.isSafeInteger(size) || size <= 0 || size > 4 * 1024 ** 3) throw new HttpError(413, 'Upload a file between 1 byte and 4 GB')
+      const folder = await mkdtemp(join(tmpdir(), 'manul-upload-'))
+      const file = join(folder, name)
+      await writeFile(file, new Uint8Array(0), { mode: 0o600 })
+      const id = secret()
+      this.uploads.set(id, { id, folder, file, dir, name, size, offset: 0, busy: false })
+      return reply({ id, offset: 0, size })
+    }
+    if (url.pathname === '/upload' && req.method === 'GET' && url.searchParams.has('id')) {
+      const u = this.uploads.get(url.searchParams.get('id') || '')
+      if (!u) throw new HttpError(404, 'Upload session not found')
+      return reply({ id: u.id, offset: u.offset, size: u.size })
+    }
+    if (url.pathname === '/upload' && req.method === 'PATCH') {
+      const u = this.uploads.get(url.searchParams.get('id') || '')
+      if (!u) throw new HttpError(404, 'Upload session not found')
+      if (u.busy) throw new HttpError(409, 'Upload chunk already in progress')
+      const offset = Number(url.searchParams.get('offset') ?? req.headers['upload-offset'] ?? 0)
+      if (!Number.isSafeInteger(offset) || offset !== u.offset) throw new HttpError(409, `Expected offset ${u.offset}`)
+      const rem = u.size - u.offset
+      u.busy = true
+      try {
+        let received = 0
+        const limit = new Transform({ transform(chunk, _enc, cb) { received += chunk.length; cb(received > rem ? new Error('Upload too large') : null, chunk) } })
+        await pipeline(req, limit, createWriteStream(u.file, { flags: 'a', mode: 0o600 }))
+        u.offset += received
+        if (u.offset < u.size) return reply({ id: u.id, done: false, offset: u.offset, size: u.size })
+        this.uploads.delete(u.id)
+        try {
+          const result = await this.options.importFile(u.file, u.dir)
+          return reply({ id: u.id, done: true, offset: u.offset, size: u.size, result })
+        } finally {
+          await rm(u.folder, { recursive: true, force: true }).catch(() => {})
+        }
+      } finally { u.busy = false }
     }
     if (url.pathname === '/upload' && req.method === 'POST') {
       if (this.activeUploads >= 2) throw new HttpError(429, 'Wait for the current upload')
@@ -208,6 +318,44 @@ export class MobileBridge {
       if (req.method === 'HEAD' || !size) { res.end(); return }
       await pipeline(createReadStream(file, { start, end }), res); return
     }
+    if (url.pathname === '/project/manifest' && req.method === 'GET') {
+      const dir = this.authorizeProject(url.searchParams.get('project'))
+      return reply({ dir, files: await walkProjectFiles(dir) })
+    }
+    if (url.pathname === '/project/file' && req.method === 'GET') {
+      const dir = this.authorizeProject(url.searchParams.get('project'))
+      const file = await syncFilePath(dir, url.searchParams.get('file') || '', true)
+      const s = await stat(file)
+      res.setHeader('content-type', 'application/octet-stream')
+      res.setHeader('content-length', String(s.size))
+      await pipeline(createReadStream(file), res)
+      return
+    }
+    if (url.pathname === '/project/file' && req.method === 'POST') {
+      let dir = url.searchParams.get('project') || ''
+      if (dir) {
+        dir = this.authorizeProject(dir)
+      } else {
+        const slug = url.searchParams.get('slug') || ''
+        const root = this.options.projectsRoot?.()
+        if (!root || !/^[a-zA-Z0-9._-]{1,120}$/.test(slug) || slug.startsWith('.')) throw new HttpError(400, 'Invalid project slug')
+        dir = join(root, slug)
+        await mkdir(dir, { recursive: true })
+      }
+      const rel = url.searchParams.get('file') || ''
+      const target = await syncFilePath(dir, rel, false)
+      await mkdir(dirname(target), { recursive: true })
+      const tmp = `${target}.${process.pid}.${Date.now()}.tmp`
+      await pipeline(req, createWriteStream(tmp, { mode: 0o600 }))
+      if (rel === 'project.json') {
+        const parsed = JSON.parse(await readFile(tmp, 'utf8')) as Record<string, unknown>
+        parsed.dir = dir
+        await writeFile(tmp, JSON.stringify(parsed, null, 1))
+      }
+      await rename(tmp, target)
+      if (rel === 'project.json') await this.options.onProjectSynced?.(dir)
+      return reply({ dir, file: rel })
+    }
     if (url.pathname === '/gallery' && req.method === 'GET') {
       const src = url.searchParams.get('url') || ''
       if (!src.startsWith('manul://gallery/')) throw new HttpError(400, 'Invalid gallery media')
@@ -219,4 +367,44 @@ export class MobileBridge {
     }
     throw new HttpError(404, 'Unknown bridge route')
   }
+}
+
+
+async function syncFilePath(dir: string, rel: string, mustExist: boolean): Promise<string> {
+  const parts = rel.split('/')
+  if (!rel || rel.startsWith('/') || rel.includes('\\') || rel.includes('\0') || parts.some(p => !p || p === '.' || p === '..' || p.endsWith('.tmp'))) {
+    throw new HttpError(400, 'Invalid project file path')
+  }
+  const root = await realpath(dir)
+  const target = resolve(root, ...parts)
+  const back = relative(root, target)
+  if (!back || back.startsWith('..') || isAbsolute(back)) throw new HttpError(400, 'Invalid project file path')
+  if (mustExist) {
+    const real = await realpath(target).catch(() => '')
+    if (!real || relative(root, real).startsWith('..')) throw new HttpError(404, 'File not found')
+    return real
+  }
+  return target
+}
+
+export async function walkProjectFiles(dir: string): Promise<{ path: string; size: number; mtimeMs: number }[]> {
+  const root = await realpath(dir)
+  const out: { path: string; size: number; mtimeMs: number }[] = []
+  async function walk(cur: string, prefix: string) {
+    const entries = await readdir(cur, { withFileTypes: true }).catch(() => [])
+    for (const e of entries) {
+      if (e.name.endsWith('.tmp') || e.name === '.DS_Store') continue
+      const abs = join(cur, e.name)
+      const rel = prefix ? posix.join(prefix, e.name) : e.name
+      if (e.isSymbolicLink()) continue
+      if (e.isDirectory()) {
+        await walk(abs, rel)
+      } else if (e.isFile()) {
+        const s = await stat(abs).catch(() => null)
+        if (s) out.push({ path: rel, size: s.size, mtimeMs: Math.floor(s.mtimeMs) })
+      }
+    }
+  }
+  await walk(root, '')
+  return out.sort((a, b) => a.path.localeCompare(b.path))
 }

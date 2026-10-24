@@ -1,7 +1,10 @@
 // Manul's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
 import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
 import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
-import { MobileBridge } from './mobile-bridge'
+import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
+import { projectArgument } from './mobile-contract'
+import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
+import { startMeshNode, type MeshNode } from './mesh'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { copyFile, readFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
@@ -15,7 +18,7 @@ import { renderClip, setClipProtocol } from './clips'
 import { buildMenu } from './menu'
 import { startUpdates } from './updates'
 import { keyStatus, loadKeys, setKey } from './keys'
-import { accountStatus, balance, cancelSignIn, checkout, manageBilling, signIn, signOut } from './account'
+import { accountStatus, accountWorkers, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, workerHeartbeat } from './account'
 import { importOmp, ompAvailable, providerInfo, removeProvider, saveProvider } from './providers'
 import { asJob, listJobs, onJobs } from './jobs'
 import { toolPath, toolStatus } from './media'
@@ -37,7 +40,7 @@ import { composeWalkthrough, takeDir, Takes, type ComposeRequest } from './walkt
 import { generate } from './generate'
 import { randomUUID } from 'node:crypto'
 import { agentEnv, browserPrompt, BskDaemon, BSK_BIN, bskScript, chromeBsk, extensionStorage, HALTED, findUserBsk, privateHome, userBskEnv, userBskHome } from './bsk'
-import { homedir } from 'node:os'
+import { homedir, hostname } from 'node:os'
 import * as Projects from './projects'
 import * as Gallery from './gallery'
 import * as Files from './files'
@@ -56,9 +59,9 @@ import { FFMPEG, FFPROBE, probe } from './media'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
-import type { Anchor, BrowserMode, ClipInfo, ConsentRequest, Project, Transcript } from '../shared/types'
+import type { Anchor, BrowserMode, ClipInfo, ConsentRequest, Project, RecentProject, Transcript } from '../shared/types'
 import type { Timeline } from '../shared/timeline'
-import { filesystemSlug, pathBasename } from '../shared/paths'
+import { decodeMediaPath, filesystemSlug, pathBasename } from '../shared/paths'
 import { relativeProjectPath } from './paths'
 import { serveMedia as mediaResponse } from './media-protocol'
 
@@ -71,6 +74,10 @@ process.env.PATH = toolPath() // the agent's shell and tools find bundled execut
 protocol.registerSchemesAsPrivileged([{ scheme: 'manul', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, bypassCSP: true, corsEnabled: true } }])
 
 let win: BrowserWindow | null = null
+const WORKER_MODE = process.argv.includes('--worker') || process.env.MANUL_WORKER === '1'
+let stopHeartbeat: (() => void) | null = null
+let meshNode: MeshNode | null = null
+let meshIp: string | undefined
 let agent: AgentHandle | null = null
 let memory: Memory
 let skills: Skills
@@ -86,22 +93,94 @@ let quitRequested = false
 let allowQuit = false
 // Register once: desktop IPC and validated mobile calls share application operations.
 const handlers = new Map<string, Parameters<typeof electronIpcMain.handle>[1]>()
+const workerClient = new WorkerClient({
+  stateFile: join(app.getPath('userData'), 'workers.json'),
+  projectsRoot: () => Projects.projectsRoot(),
+  onEvent: (ch, ...args) => win?.webContents.send(ch, ...args),
+  onProjectPulled: async dir => {
+    const p = await Projects.load(dir)
+    open.set(dir, p)
+    send('project', p)
+  },
+})
 const ipcMain = {
-  handle(channel: string, listener: Parameters<typeof electronIpcMain.handle>[1]) { handlers.set(channel, listener); electronIpcMain.handle(channel, listener) },
+  handle(channel: string, listener: Parameters<typeof electronIpcMain.handle>[1]) {
+    const wrapped: Parameters<typeof electronIpcMain.handle>[1] = async (ev, ...args) => {
+      if (projectArgument(channel) && typeof args[0] === 'string' && workerClient.ownsProject(args[0])) {
+        const remoteDir = args[0]
+        if (channel === 'project:import' && typeof args[1] === 'string') return workerClient.uploadFile(args[1], remoteDir)
+        if (channel === 'export:run') {
+          const exported = (await workerClient.rpc('mobile:export', [remoteDir, args[1]])) as { file: string; srt?: string } | null
+          if (!exported) return null
+          const r = await dialog.showSaveDialog(win!, { title: 'Export', defaultPath: join(app.getPath('videos'), basename(exported.file)), filters: [{ name: 'MP4 video', extensions: ['mp4'] }] })
+          if (r.canceled || !r.filePath) return null
+          const mediaRes = await workerClient.fetchMedia(remoteDir, exported.file)
+          if (mediaRes.ok) await writeFile(r.filePath, Buffer.from(await mediaRes.arrayBuffer()))
+          return { file: r.filePath }
+        }
+        return workerClient.rpc(channel, args)
+      }
+      return listener(ev, ...args)
+    }
+    handlers.set(channel, listener)
+    electronIpcMain.handle(channel, wrapped)
+  },
   on: electronIpcMain.on.bind(electronIpcMain),
 }
-const mobile = new MobileBridge({
-  invoke: async (method, args) => {
-    const handler = handlers.get(method)
-    if (!handler) throw new Error('Operation unavailable')
-    return handler(undefined as unknown as Electron.IpcMainInvokeEvent, ...args)
+const mobile = new MobileBridge(
+  {
+    stateFile: join(app.getPath('userData'), 'mobile-bridge.json'),
+    projectsRoot: () => Projects.projectsRoot(),
+    onProjectSynced: async dir => {
+      const p = await Projects.load(dir)
+      open.set(dir, p)
+      send('project', p)
+    },
+    invoke: async (method, args) => {
+      const handler = handlers.get(method)
+      if (!handler) throw new Error('Operation unavailable')
+      return handler(undefined as unknown as Electron.IpcMainInvokeEvent, ...args)
+    },
+    projects: () => Projects.recent(),
+    importFile: async (file, dir) => dir
+      ? handlers.get('project:import')!(undefined as unknown as Electron.IpcMainInvokeEvent, dir, file)
+      : handlers.get('project:create')!(undefined as unknown as Electron.IpcMainInvokeEvent, [file]),
+    galleryFile: (url, range) => mediaResponse(new Request(url, { headers: range ? { range } : {} }), LIB, [Projects.projectsRoot(), ...open.keys()], Gallery.GALLERY),
   },
-  projects: () => Projects.recent(),
-  importFile: async (file, dir) => dir
-    ? handlers.get('project:import')!(undefined as unknown as Electron.IpcMainInvokeEvent, dir, file)
-    : handlers.get('project:create')!(undefined as unknown as Electron.IpcMainInvokeEvent, [file]),
-  galleryFile: (url, range) => serveMedia(new Request(url, { headers: range ? { range } : {} })),
-})
+  () => {
+    const ips = reachableIps()
+    return meshIp && !ips.includes(meshIp) ? [...ips, meshIp] : ips
+  },
+)
+
+async function startBridgeAndMesh() {
+  const st = await mobile.start()
+  const poolSecret = process.env.MANUL_POOL_SECRET
+  if (!meshNode && (poolSecret || getConfig().account?.keyId)) {
+    const joined = await meshJoin('worker', poolSecret).catch(() => null)
+    if (joined) {
+      meshNode = await startMeshNode({
+        stateDir: join(app.getPath('userData'), 'mesh-worker'),
+        hostname: `manul-${(hostname() || 'worker').replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`,
+        controlUrl: joined.controlUrl,
+        authKey: joined.authKey,
+        forwardPort: DEFAULT_MOBILE_PORT,
+      })
+      if (meshNode?.ip) meshIp = meshNode.ip
+    }
+  }
+  stopHeartbeat?.()
+  stopHeartbeat = startWorkerHeartbeat({
+    bridge: mobile,
+    workerId: process.env.MANUL_WORKER_ID || `worker-${(hostname() || 'host').replace(/[^a-zA-Z0-9._-]/g, '-')}`,
+    workerName: process.env.MANUL_WORKER_NAME || hostname() || 'Manul Worker',
+    poolSecret,
+    priority: process.env.MANUL_WORKER_PRIORITY ? Number(process.env.MANUL_WORKER_PRIORITY) : undefined,
+    projects: () => Projects.recent().map(r => r.id),
+    sendHeartbeat: workerHeartbeat,
+  })
+  return mobile.status()
+}
 const browserMode = (): BrowserMode => getConfig().browser?.mode ?? 'manul'
 
 function shutdown() {
@@ -115,6 +194,11 @@ function shutdown() {
       done()
     }, 10_000)
     void (async () => {
+      stopHeartbeat?.()
+      stopHeartbeat = null
+      meshNode?.stop()
+      meshNode = null
+      workerClient.disconnect()
       await mobile.stop()
       await startup.catch(e => console.warn('startup', e))
       await browserStartup
@@ -154,7 +238,21 @@ const askTool = (project?: string) => (title: string, body: string, sizeMB: numb
 
 // Libraries motion clips may load: manul://lib/<file> (GSAP, the clip runtime)
 const LIB = app.isPackaged ? join(process.resourcesPath, 'lib') : join(import.meta.dirname, '../../resources/lib')
-const serveMedia = (req: Request) => mediaResponse(req, LIB, [Projects.projectsRoot(), ...open.keys()], Gallery.GALLERY)
+const serveMedia = (req: Request): Response | Promise<Response> => {
+  try {
+    const url = new URL(req.url)
+    if (url.protocol === 'manul:' && url.host !== 'lib' && url.host !== 'gallery') {
+      const decoded = decodeMediaPath(url)
+      for (const remoteDir of workerClient.status().remoteProjects) {
+        if (decoded.startsWith(`${remoteDir}/`)) {
+          const rel = decoded.slice(remoteDir.length + 1)
+          return workerClient.fetchMedia(remoteDir, rel, req.headers.get('range') || undefined)
+        }
+      }
+    }
+  } catch {}
+  return mediaResponse(req, LIB, [Projects.projectsRoot(), ...open.keys()], Gallery.GALLERY)
+}
 
 // ---------------------------------------------------------------- projects
 async function openProject(dir: string) {
@@ -633,8 +731,24 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
 // ---------------------------------------------------------------- IPC
 function wire() {
   ipcMain.handle('mobile:status', () => mobile.status())
-  ipcMain.handle('mobile:start', () => mobile.start())
-  ipcMain.handle('mobile:stop', () => mobile.stop())
+  ipcMain.handle('mobile:start', () => startBridgeAndMesh())
+  ipcMain.handle('mobile:stop', () => { stopHeartbeat?.(); stopHeartbeat = null; meshNode?.stop(); meshNode = null; return mobile.stop() })
+  ipcMain.handle('worker:status', () => workerClient.status())
+  ipcMain.handle('worker:discover', () => accountWorkers())
+  ipcMain.handle('worker:lease', async (_e, opts?: { projectId?: string; workerId?: string }) => {
+    const w = await leaseAccountWorker(opts)
+    return workerClient.connect(w)
+  })
+  ipcMain.handle('worker:release', async (_e, id: string) => {
+    await releaseAccountWorker(id)
+    return workerClient.remove(id)
+  })
+  ipcMain.handle('worker:pair', (_e, input: { url: string; code: string; name?: string }) => workerClient.pair(input))
+  ipcMain.handle('worker:connect', (_e, w: SavedWorker) => workerClient.connect(w))
+  ipcMain.handle('worker:disconnect', () => workerClient.disconnect())
+  ipcMain.handle('worker:remove', (_e, id: string) => workerClient.remove(id))
+  ipcMain.handle('worker:pull', (_e, remoteDir: string) => workerClient.pullProject(remoteDir))
+  ipcMain.handle('worker:push', (_e, localDir: string) => workerClient.pushProject(localDir))
   ipcMain.handle('mobile:revoke', (_e, id: string) => mobile.revoke(id))
   ipcMain.handle('mobile:export', async (_e, dir: string, req: ExportRequest) => {
     const p = projectOf(dir)
@@ -716,7 +830,13 @@ function wire() {
   ipcMain.handle('providers:import-omp', () => { const added = importOmp(); agent?.keysChanged(); return { ...providersState(), added } })
   ipcMain.handle('agent:ready', async () => !!agent && (await agent.hasModel()))
 
-  ipcMain.handle('project:recent', () => Projects.recent())
+  ipcMain.handle('project:recent', async () => {
+    const local = Projects.recent()
+    if (!workerClient.active()) return local
+    const remote = (await workerClient.refreshProjects().catch(() => [])) as RecentProject[]
+    const seen = new Set(remote.map(r => r.dir))
+    return [...remote, ...local.filter(l => !seen.has(l.dir))]
+  })
   ipcMain.handle('tabs:get', () => getConfig().tabs || { open: [], active: null })
   ipcMain.handle('tabs:set', (_e, tabs: { open: string[]; active: string | null }) => { setConfig({ tabs }) })
   ipcMain.handle('theme:set', (_e, theme: 'light' | 'dark' | 'system') => {
@@ -733,6 +853,14 @@ function wire() {
   })
   ipcMain.handle('project:create', async (_e, files: string | string[], model?: Project['model']) => {
     const sources = typeof files === 'string' ? [files] : files
+    if (workerClient.active()) {
+      let created: Project | undefined
+      for (const src of sources) {
+        created = (await workerClient.uploadFile(src, created?.dir)) as Project
+      }
+      if (!created) throw new Error('Failed to create project on worker.')
+      return created
+    }
     const created = await asJob(`Importing ${sources.length === 1 ? 'project files' : `${sources.length} items`}`, 'import', j => {
       return Projects.createFromFiles(sources, (done, total, file) => j.progress(done / total, `${done} of ${total} · ${file}`), model)
     }, { doneTitle: 'Project files imported' })
@@ -743,6 +871,9 @@ function wire() {
     return p
   })
   ipcMain.handle('project:createMotion', async (_e, o: Parameters<typeof Projects.createMotion>[0]) => {
+    if (workerClient.active()) {
+      return (await workerClient.rpc('project:createMotion', [o])) as Project
+    }
     const created = await asJob('Setting up the canvas', 'import', () => Projects.createMotion(o), { doneTitle: 'Canvas ready' })
     const p = await openProject(created.dir)
     if (!o.walkthrough) telemetry.track('motion project created', { example: o.example || 'none', aspect: o.aspect, reference: !!o.reference })
@@ -948,7 +1079,8 @@ function createWindow() {
 
 const startup = app.whenReady().then(async () => {
   if (quitting) return
-  if (process.platform === 'darwin' && !app.isPackaged && existsSync(ICON)) app.dock?.setIcon(ICON)
+  if (process.platform === 'darwin' && WORKER_MODE) app.dock?.hide()
+  else if (process.platform === 'darwin' && !app.isPackaged && existsSync(ICON)) app.dock?.setIcon(ICON)
   protocol.handle('manul', serveMedia)
   setClipProtocol(serveMedia)
   loadKeys()
@@ -968,10 +1100,17 @@ const startup = app.whenReady().then(async () => {
   // skills come only from the bundle now: drop what the old over-the-air feed downloaded (a cache, never the user's)
   rmSync(join(app.getPath('userData'), 'skill-updates'), { recursive: true, force: true })
   wire()
-  buildMenu(() => win)
-  updates = startUpdates(st => send('update', st), shutdown)
+  if (!WORKER_MODE) {
+    buildMenu(() => win)
+    updates = startUpdates(st => send('update', st), shutdown)
+  }
   onJobs(jobs => send('jobs', jobs))
-  createWindow()
+  if (!WORKER_MODE) createWindow()
+  else {
+    void startBridgeAndMesh().then(st => {
+      console.log(JSON.stringify({ worker: 'ready', addresses: st.addresses, tailscale: st.tailscale, code: st.code, fingerprint: st.fingerprint }))
+    })
+  }
   browserStartup = startBrowser(resources)
   // the agent's bsk (its browser setting's) and chrome-bsk (the user's own Chrome, where product walkthroughs are filmed)
   const agentBin = join(app.getPath('userData'), 'bin')
@@ -1094,6 +1233,6 @@ app.on('before-quit', e => {
   // Internal browser/clip windows must not keep a closed desktop app alive.
   void shutdown().finally(() => { allowQuit = true; app.quit() })
 })
-app.on('window-all-closed', () => app.quit())
+app.on('window-all-closed', () => { if (!WORKER_MODE) app.quit() })
 app.on('will-quit', () => { telemetry?.stop(); bskd?.killNow() })
-app.on('activate', () => { if (!win && !quitting) createWindow() })
+app.on('activate', () => { if (!WORKER_MODE && !win && !quitting) createWindow() })

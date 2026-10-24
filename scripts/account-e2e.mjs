@@ -65,6 +65,24 @@ try {
   check(dup.status === 409, 'a second plan is refused')
   const flex = await (await fetch(`${ACCOUNT}/v1/checkout`, { method: 'POST', headers: as, body: '{"topup":"flex"}' })).json()
   check(/^https:\/\/.*dodopayments/.test(flex.url || ''), 'Flex top-up gets a live Dodo checkout', flex.url ? new URL(flex.url).host : JSON.stringify(flex))
+
+  // Headscale mesh pre-auth key & worker pool lifecycle
+  const meshClient = await (await fetch(`${ACCOUNT}/v1/mesh/join`, { method: 'POST', headers: as, body: JSON.stringify({ role: 'client' }) })).json()
+  check(meshClient.controlUrl === 'https://mesh.manul.si' && meshClient.tag === 'tag:client' && typeof meshClient.authKey === 'string' && meshClient.authKey.length > 20, 'mesh: client pre-auth key minted', meshClient.tag)
+
+  const workerId = `e2e-worker-${Date.now()}`
+  const fp = 'e'.repeat(64)
+  const secret = 'w'.repeat(48)
+  const hb = await fetch(`${ACCOUNT}/v1/workers/heartbeat`, {
+    method: 'POST',
+    headers: { 'x-manul-pool-secret': env.WORKER_POOL_SECRET, 'content-type': 'application/json' },
+    body: JSON.stringify({ id: workerId, name: 'E2E Pool Worker', urls: ['https://100.64.0.99:47821'], fingerprint: fp, secret, capabilities: { priority: 99, projects: ['e2e_proj'] } }),
+  })
+  check(hb.ok, 'worker pool: heartbeat registered')
+  const leased = await (await fetch(`${ACCOUNT}/v1/workers/lease`, { method: 'POST', headers: as, body: JSON.stringify({ projectId: 'e2e_proj', workerId }) })).json()
+  check(leased.worker?.id === workerId && /^lease\.\d+\./.test(leased.worker?.token || ''), 'worker pool: leased with signed HMAC token', leased.worker?.id)
+  const rel = await (await fetch(`${ACCOUNT}/v1/workers/release`, { method: 'POST', headers: as, body: JSON.stringify({ workerId }) })).json()
+  check(rel.released === true, 'worker pool: lease released')
 } catch (e) {
   check(false, 'smoke test ran', e.stack)
 } finally {
@@ -78,6 +96,7 @@ try {
   }
   const own = new pg.Pool({ connectionString: manulDb, max: 1 })
   if (keyId) await own.query('DELETE FROM manul_gateway_charges WHERE key_id = $1', [keyId])
+  await own.query(`DELETE FROM manul_workers WHERE id LIKE 'e2e-worker-%'`)
   await own.end(); await pitch.end(); await wallet.close()
   console.log(failed ? `${failed} failed` : 'all passed')
   process.exit(failed ? 1 : 0)

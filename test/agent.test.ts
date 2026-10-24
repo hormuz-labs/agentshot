@@ -1,5 +1,5 @@
 // The real pi-durable harness (no model needed): conversations per project, switching, and surviving a restart.
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -111,6 +111,23 @@ describe('conversations', () => {
     agent = await startAgent({ ...deps(), onEvent: () => {} })
     expect(await agent.open(dir, b)).toBe(b) // the same durable conversation after a restart
     await agent.shutdown()
+  })
+
+  it('stores conversations inside <projectDir>/.agent.sqlite when project.json exists so synced folders carry their history', async () => {
+    const projDir = join(root, 'portable-project')
+    mkdirSync(projDir, { recursive: true })
+    writeFileSync(join(projDir, 'project.json'), JSON.stringify({ id: 'p1', title: 'Portable', dir: projDir }))
+    const machine1 = await startAgent({ ...deps(), dbPath: join(root, 'machine1-global.sqlite'), onEvent: () => {} })
+    const conv1 = await machine1.open(projDir)
+    const conv2 = await machine1.newConversation(projDir)
+    await machine1.shutdown()
+    expect(existsSync(join(projDir, '.agent.sqlite'))).toBe(true)
+
+    // Machine 2 has its own empty global dbPath, yet opening the synced project folder recovers conv1 and conv2
+    const machine2 = await startAgent({ ...deps(), dbPath: join(root, 'machine2-global.sqlite'), onEvent: () => {} })
+    expect(await machine2.open(projDir, conv1)).toBe(conv1)
+    expect(await machine2.open(projDir, conv2)).toBe(conv2)
+    await machine2.shutdown()
   })
 })
 

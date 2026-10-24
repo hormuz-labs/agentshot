@@ -241,6 +241,10 @@ class BridgeClient {
         );
       }
       target = Connection.fromJson(input);
+      if (target.token.isNotEmpty && input['code'] == null) {
+        await connectDirect(target);
+        return;
+      }
       if (input['code'] is! String) {
         throw BridgeException('Connection code is missing.');
       }
@@ -305,6 +309,30 @@ class BridgeClient {
     connection = null;
     throw lastError ??
         BridgeException('Could not reach your desktop on the network.');
+  }
+
+  /// Connect directly to a pre-authenticated worker (personal or leased pool worker from the account service).
+  Future<void> connectDirect(Connection target) async {
+    Object? lastError;
+    for (final candidate in target.urls) {
+      _configure(Connection(candidate, target.fingerprint, target.token, target.urls));
+      try {
+        final req = await _http!.openUrl('GET', candidate.replace(path: '/hello'));
+        req.followRedirects = false;
+        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.token}');
+        final res = await req.close().timeout(const Duration(seconds: 6));
+        if (res.statusCode != 200) {
+          throw BridgeException('Worker refused connection (${res.statusCode}).', res.statusCode);
+        }
+        await storage.write(key: _storageKey, value: jsonEncode(connection!.toJson()));
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    _http?.close(force: true);
+    connection = null;
+    throw lastError ?? BridgeException('Could not reach the worker on any address.');
   }
 
   Future<void> _refreshAddresses() async {

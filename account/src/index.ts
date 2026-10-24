@@ -24,10 +24,10 @@
 // make a new one.
 
 import { readFile } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import { brandPage } from '../../src/shared/brand-page.ts'
 import { costForCredits, creditsForCost, creditsForPrice, DISCOUNT, isPaid, PLANS, productEnv, providerConfigs, STARTER_CREDITS, TIERS, tiersFor, TOPUPS, type PlanKey, type TopupKey } from './plans.ts'
-import { planOf, type Wallet } from './wallet.ts'
+import { planOf, type Wallet, type WorkerCapabilities, type WorkerRecord } from './wallet.ts'
 import { checkMusic, checkVoice, compose, KEY_ENV, MediaError, speak, VENDOR_NAME, VOICES, type Choice, type MusicRequest, type Voice, type VoiceRequest } from './media.ts'
 
 export interface Env {
@@ -68,6 +68,12 @@ export interface Env {
   GEMINI_API_KEY?: string
   ELEVENLABS_API_KEY?: string
   OPENAI_API_KEY?: string
+  /** Headscale control server inside the cluster (e.g. http://headscale:8080) and its public URL (https://mesh.manul.si) */
+  HEADSCALE_URL?: string
+  HEADSCALE_PUBLIC_URL?: string
+  HEADSCALE_API_KEY?: string
+  /** Shared secret for registering pooled workers (cloud or home pool) */
+  WORKER_POOL_SECRET?: string
 }
 
 /** What a person pays (USD) per model: per 1,000 characters said, per minute of music, and/or per request. */
@@ -252,6 +258,11 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
   if (url.pathname === '/v1/voice' && req.method === 'POST') return generate('voice')
   if (url.pathname === '/v1/music' && req.method === 'POST') return generate('music')
   if (url.pathname === '/paid') return page('Payment received. Your plan and credits show up in a moment: go back to Manul.')
+  if (url.pathname === '/v1/mesh/join' && req.method === 'POST') return joinMesh()
+  if (url.pathname === '/v1/workers/heartbeat' && req.method === 'POST') return heartbeatWorker()
+  if (url.pathname === '/v1/workers' && req.method === 'GET') return listWorkers()
+  if (url.pathname === '/v1/workers/lease' && req.method === 'POST') return leaseWorker()
+  if (url.pathname === '/v1/workers/release' && req.method === 'POST') return releaseWorker()
   return fail(404, 'Not found.')
 
   async function signIn() {
@@ -432,6 +443,153 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     console.log(JSON.stringify({ media: kind, user: userId, provider: choice.provider, model: choice.model, credits: cost }))
     return new Response(audio.data as Uint8Array<ArrayBuffer>, { headers: { 'content-type': audio.type, 'x-manul-cost': String(cost) } })
   }
+
+  async function joinMesh() {
+    const poolSecret = req.headers.get('x-manul-pool-secret') || ''
+    const isPoolWorker = !!(env.WORKER_POOL_SECRET && poolSecret && same(poolSecret, env.WORKER_POOL_SECRET))
+    if (!isPoolWorker) {
+      const vk = await caller()
+      if (vk instanceof Response) return vk
+    }
+    if (!env.HEADSCALE_URL || !env.HEADSCALE_API_KEY) return fail(503, 'Mesh is not configured yet.')
+    const body = (await req.json().catch(() => ({}))) as { role?: 'client' | 'worker' }
+    const role = isPoolWorker || body.role === 'worker' ? 'worker' : 'client'
+    const hs = (path: string, init: RequestInit = {}) =>
+      fetch(`${env.HEADSCALE_URL!.replace(/\/+$/, '')}${path}`, {
+        signal: AbortSignal.timeout(10_000),
+        ...init,
+        headers: { authorization: `Bearer ${env.HEADSCALE_API_KEY}`, 'content-type': 'application/json', ...init.headers },
+      })
+    const usersRes = await hs('/api/v1/user')
+    if (!usersRes.ok) return fail(502, 'Could not reach the mesh control server.')
+    const usersData = (await usersRes.json().catch(() => ({}))) as { users?: { id: string; name: string }[] }
+    let meshUser = usersData.users?.find(u => u.name === 'manul')
+    if (!meshUser) {
+      const created = await hs('/api/v1/user', { method: 'POST', body: JSON.stringify({ name: 'manul' }) })
+      if (created.ok) {
+        const out = (await created.json().catch(() => ({}))) as { user?: { id: string; name: string } }
+        meshUser = out.user
+      }
+    }
+    const tag = role === 'worker' ? 'tag:worker' : 'tag:client'
+    const expiration = new Date(Date.now() + 60 * 60_000).toISOString()
+    // Headscale v0.23 takes user by name; v0.24+ takes user by id. Try id first if present, fall back to 'manul'.
+    let keyRes = await hs('/api/v1/preauthkey', {
+      method: 'POST',
+      body: JSON.stringify({ user: meshUser?.id || 'manul', reusable: false, ephemeral: role === 'client', expiration, aclTags: [tag] }),
+    })
+    if (!keyRes.ok && meshUser?.id) {
+      keyRes = await hs('/api/v1/preauthkey', {
+        method: 'POST',
+        body: JSON.stringify({ user: 'manul', reusable: false, ephemeral: role === 'client', expiration, aclTags: [tag] }),
+      })
+    }
+    const keyOut = (await keyRes.json().catch(() => ({}))) as { preAuthKey?: { key?: string } }
+    if (!keyRes.ok || !keyOut.preAuthKey?.key) return fail(502, 'Could not create a mesh key.')
+    return json({
+      controlUrl: (env.HEADSCALE_PUBLIC_URL || env.HEADSCALE_URL).replace(/\/+$/, ''),
+      authKey: keyOut.preAuthKey.key,
+      tag,
+    })
+  }
+
+  async function heartbeatWorker() {
+    if (!wallet) return fail(503, 'Accounts are unavailable. Try again later.')
+    const poolSecret = req.headers.get('x-manul-pool-secret') || ''
+    const isPool = !!(env.WORKER_POOL_SECRET && poolSecret && same(poolSecret, env.WORKER_POOL_SECRET))
+    let ownerId: string | undefined
+    if (!isPool) {
+      const vk = await caller()
+      if (vk instanceof Response) return vk
+      ownerId = await owner(vk)
+      if (!ownerId) return fail(503, 'Accounts are unavailable. Try again later.')
+    }
+    const body = (await req.json().catch(() => ({}))) as {
+      id?: string
+      name?: string
+      urls?: unknown
+      fingerprint?: string
+      secret?: string
+      capabilities?: WorkerCapabilities
+      pool?: boolean
+    }
+    const id = typeof body.id === 'string' && /^[a-zA-Z0-9._-]{3,80}$/.test(body.id) ? body.id : ''
+    const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : 'Worker'
+    const urls = Array.isArray(body.urls) ? body.urls.filter((u): u is string => typeof u === 'string' && /^https:\/\/[^\s/]+$/.test(u)).slice(0, 12) : []
+    const fingerprint = typeof body.fingerprint === 'string' && /^[0-9a-f]{64}$/i.test(body.fingerprint) ? body.fingerprint.toLowerCase() : ''
+    const secret = typeof body.secret === 'string' && body.secret.length >= 32 && body.secret.length <= 256 ? body.secret : ''
+    if (!id || !urls.length || !fingerprint || !secret) return fail(400, 'Invalid worker registration.')
+    const rec = await wallet.upsertWorker({
+      id,
+      ownerId,
+      pool: isPool || !!body.pool,
+      name,
+      urls,
+      fingerprint,
+      secret,
+      capabilities: body.capabilities && typeof body.capabilities === 'object' ? body.capabilities : {},
+    })
+    return json({ id: rec.id, pool: rec.pool, leasedTo: rec.leasedTo, leasedUntil: rec.leasedUntil })
+  }
+
+  async function listWorkers() {
+    const vk = await caller()
+    if (vk instanceof Response) return vk
+    const userId = await owner(vk)
+    if (!wallet || !userId) return fail(503, 'Accounts are unavailable. Try again later.')
+    const { owned, leased, poolAvailable } = await wallet.workersFor(userId)
+    const toClient = (w: WorkerRecord) => {
+      const expiresAt = w.pool && w.leasedUntil ? w.leasedUntil : Date.now() + 24 * 60 * 60_000
+      return {
+        id: w.id,
+        name: w.name,
+        pool: w.pool,
+        urls: w.urls,
+        fingerprint: w.fingerprint,
+        token: signWorkerToken(w.secret, userId, w.pool, expiresAt),
+        capabilities: w.capabilities,
+        expiresAt,
+      }
+    }
+    return json({ workers: [...owned.map(toClient), ...leased.map(toClient)], poolAvailable })
+  }
+
+  async function leaseWorker() {
+    const vk = await caller()
+    if (vk instanceof Response) return vk
+    const userId = await owner(vk)
+    if (!wallet || !userId) return fail(503, 'Accounts are unavailable. Try again later.')
+    const body = (await req.json().catch(() => ({}))) as { projectId?: string; workerId?: string }
+    const leased = await wallet.leaseWorker(userId, {
+      projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
+      workerId: typeof body.workerId === 'string' ? body.workerId : undefined,
+    })
+    if (!leased) return fail(404, 'No cloud workers are free right now. Try again in a moment.')
+    const expiresAt = leased.leasedUntil ?? Date.now() + 60 * 60_000
+    return json({
+      worker: {
+        id: leased.id,
+        name: leased.name,
+        pool: true,
+        urls: leased.urls,
+        fingerprint: leased.fingerprint,
+        token: signWorkerToken(leased.secret, userId, true, expiresAt),
+        capabilities: leased.capabilities,
+        expiresAt,
+      },
+    })
+  }
+
+  async function releaseWorker() {
+    const vk = await caller()
+    if (vk instanceof Response) return vk
+    const userId = await owner(vk)
+    if (!wallet || !userId) return fail(503, 'Accounts are unavailable. Try again later.')
+    const body = (await req.json().catch(() => ({}))) as { workerId?: string }
+    if (typeof body.workerId !== 'string' || !body.workerId) return fail(400, 'Specify workerId.')
+    const ok = await wallet.releaseWorker(userId, body.workerId)
+    return json({ released: ok })
+  }
 }
 
 /** Equal strings, compared in constant time. */
@@ -440,4 +598,12 @@ function same(a: string, b: string) {
   let d = 0
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return d === 0
+}
+
+/** Stateless HMAC token verified locally by MobileBridge on the worker without an account round-trip. */
+export function signWorkerToken(workerSecret: string, userId: string, pool: boolean, expiresAt: number): string {
+  const scope = pool ? `pool:${userId}` : `owner:${userId}`
+  const payload = `${expiresAt}.${Buffer.from(scope, 'utf8').toString('base64url')}`
+  const sig = createHmac('sha256', workerSecret).update(payload).digest('base64url')
+  return `lease.${payload}.${sig}`
 }

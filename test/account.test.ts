@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { accountStatus, balance, checkout, manageBilling, signIn, signOut } from '../src/main/account'
+import { accountStatus, accountWorkers, balance, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, workerHeartbeat } from '../src/main/account'
 import { getConfig } from '../src/main/config'
 import { friendly } from '../src/main/agui'
 
@@ -24,6 +24,25 @@ const server = createServer((req, res) => {
       seen[req.url] = { auth: req.headers.authorization, keyId: req.headers['x-manul-key-id'], body }
       const out = req.url === '/v1/balance' ? { credits: 1000, plan: null } : { url: `https://dodo.test${req.url}` }
       return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(out))
+    }
+    if (req.url === '/v1/mesh/join') {
+      seen['/v1/mesh/join'] = { auth: req.headers.authorization, pool: req.headers['x-manul-pool-secret'], body }
+      return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-123', tag: 'tag:client' }))
+    }
+    if (req.url === '/v1/workers/heartbeat') {
+      seen['/v1/workers/heartbeat'] = { auth: req.headers.authorization, pool: req.headers['x-manul-pool-secret'], body: JSON.parse(body) }
+      return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ id: 'w1', pool: !!req.headers['x-manul-pool-secret'] }))
+    }
+    if (req.url === '/v1/workers') {
+      return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ workers: [{ id: 'w1', name: 'Home Mac', pool: false, urls: ['https://100.64.0.2:47821'], fingerprint: 'a'.repeat(64), token: 'lease.1.x.y', capabilities: {}, expiresAt: 999 }], poolAvailable: 2 }))
+    }
+    if (req.url === '/v1/workers/lease') {
+      seen['/v1/workers/lease'] = JSON.parse(body)
+      return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ worker: { id: 'pool-1', name: 'Cloud Pool', pool: true, urls: ['https://100.64.0.9:47821'], fingerprint: 'b'.repeat(64), token: 'lease.2.x.y', capabilities: {}, expiresAt: 999 } }))
+    }
+    if (req.url === '/v1/workers/release') {
+      seen['/v1/workers/release'] = JSON.parse(body)
+      return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ released: true }))
     }
     res.writeHead(404).end()
   })
@@ -67,6 +86,30 @@ describe('signing in to Manul', () => {
     expect(JSON.parse(seen['/v1/checkout'].body)).toEqual({ plan: 'pro' })
     await manageBilling(url => { opened = url })
     expect(opened).toBe('https://dodo.test/v1/portal')
+  })
+
+  it('joins the Headscale mesh, sends worker heartbeats, and discovers/leases/releases workers', async () => {
+    expect(await meshJoin('client')).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-123', tag: 'tag:client' })
+    expect(seen['/v1/mesh/join']).toMatchObject({ auth: 'Bearer sk-bf-ada' })
+
+    expect(await meshJoin('worker', 'pool-sec')).toEqual({ controlUrl: 'https://mesh.manul.si', authKey: 'tskey-123', tag: 'tag:client' })
+    expect(seen['/v1/mesh/join']).toMatchObject({ pool: 'pool-sec' })
+
+    await workerHeartbeat({ id: 'w1', name: 'Home Mac' })
+    expect(seen['/v1/workers/heartbeat'].auth).toBe('Bearer sk-bf-ada')
+    await workerHeartbeat({ id: 'w-pool', name: 'Pool' }, 'pool-sec')
+    expect(seen['/v1/workers/heartbeat'].pool).toBe('pool-sec')
+
+    const discovered = await accountWorkers()
+    expect(discovered.poolAvailable).toBe(2)
+    expect(discovered.workers[0].id).toBe('w1')
+
+    const leased = await leaseAccountWorker({ projectId: 'proj_1' })
+    expect(leased.id).toBe('pool-1')
+    expect(seen['/v1/workers/lease']).toEqual({ projectId: 'proj_1' })
+
+    expect(await releaseAccountWorker('pool-1')).toBe(true)
+    expect(seen['/v1/workers/release']).toEqual({ workerId: 'pool-1' })
   })
 
   it('says what to do when the gateway refuses', () => {

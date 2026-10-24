@@ -22,6 +22,7 @@ const edit = z.discriminatedUnion('op', [
 export const mobileSchemas = {
   'app:info': z.tuple([]), 'project:recent': z.tuple([]), 'gallery:list': z.tuple([]),
   'project:open': z.tuple([dir]), 'project:delete': z.tuple([dir]),
+  'project:close': z.tuple([dir]),
   'project:createMotion': z.tuple([z.object({ title: text.optional(), aspect: z.enum(['16:9', '9:16', '1:1']), length: time.optional(), example: id.optional(), walkthrough: z.boolean().optional(), model: model.optional() }).strict()]),
   'project:decide': z.tuple([dir, z.boolean()]), 'project:current': z.tuple([dir, id]), 'project:removeFiles': z.tuple([dir, z.array(rel).max(1000)]),
   'agent:ready': z.tuple([]), 'agent:attach': z.tuple([dir]), 'agent:stop': z.tuple([dir]),
@@ -32,6 +33,16 @@ export const mobileSchemas = {
   'history:log': z.tuple([dir]), 'history:restore': z.tuple([dir, id]),
   'transcript:get': z.tuple([dir, rel, z.boolean()]), 'preview:prepare': z.tuple([dir, rel]),
   'mobile:export': z.tuple([dir, z.object({ preset: z.enum(['original', 'landscape', 'vertical', 'square']), fit: z.enum(['pad', 'crop']), captions: z.enum(['none', 'burn', 'srt']) }).strict()]),
+  'clip:overlay': z.tuple([dir, id, time, text]),
+  'clip:save': z.tuple([dir, id, text, text, time, z.boolean().optional()]),
+  'clip:insert': z.tuple([dir, id, time, text]),
+  'clip:move': z.tuple([dir, id, id, num, num]),
+  'clip:render': z.tuple([dir, id]),
+  'media:thumbnails': z.tuple([dir, rel, z.number().int().min(1).max(120), time.optional(), time.optional()]),
+  'demo:cancel': z.tuple([dir]),
+  'demo:create': z.tuple([dir, z.record(z.string(), z.unknown())]),
+  'mix:speech': z.tuple([dir, id.optional()]),
+  'export:run': z.tuple([dir, z.object({ preset: z.enum(['original', 'landscape', 'vertical', 'square']), fit: z.enum(['pad', 'crop']).optional(), captions: z.enum(['none', 'burn', 'srt']), captionColor: text.optional() }).strict()]),
   'jobs:list': z.tuple([]), 'consent:list': z.tuple([]), 'consent:answer': z.tuple([id, z.boolean()]),
   'skills:state': z.tuple([]), 'skills:enable': z.tuple([id, z.boolean()]), 'skills:profile': z.tuple([id]), 'skills:newProfile': z.tuple([id]),
   'memory:list': z.tuple([]), 'memory:save': z.tuple([id.regex(/^[a-zA-Z0-9_-]+$/), text, text]), 'memory:forget': z.tuple([id.regex(/^[a-zA-Z0-9_-]+$/)]),
@@ -48,5 +59,5 @@ export function mobileArgs(method: string, args: unknown): unknown[] {
   return (mobileSchemas[method as keyof typeof mobileSchemas] as z.ZodType<unknown[]>).parse(args)
 }
 export function projectArgument(method: string): boolean {
-  return /^(project:(open|delete|decide|current|removeFiles)|agent:(attach|stop|send|models|setModel|newConversation|switch|rename)|timeline:|history:|transcript:|preview:|mobile:export)/.test(method)
+  return /^(project:(open|close|delete|decide|current|removeFiles)|agent:(attach|stop|send|models|setModel|newConversation|switch|rename)|timeline:|history:|transcript:|preview:|mobile:export|clip:|media:thumbnails|demo:|mix:|export:run)/.test(method)
 }

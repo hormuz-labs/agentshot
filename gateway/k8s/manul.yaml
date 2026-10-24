@@ -113,6 +113,10 @@ spec:
             - { name: GEMINI_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: GEMINI_API_KEY, optional: true } } }
             - { name: ELEVENLABS_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: ELEVENLABS_API_KEY, optional: true } } }
             - { name: OPENAI_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: OPENAI_API_KEY, optional: true } } }
+            - { name: HEADSCALE_URL, value: "http://headscale:8080" }
+            - { name: HEADSCALE_PUBLIC_URL, value: "https://mesh.manul.si" }
+            - { name: HEADSCALE_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: HEADSCALE_API_KEY, optional: true } } }
+            - { name: WORKER_POOL_SECRET, valueFrom: { secretKeyRef: { name: manul-secrets, key: WORKER_POOL_SECRET, optional: true } } }
           volumeMounts:
             - { name: code, mountPath: /app, readOnly: true }
             - { name: media, mountPath: /config, readOnly: true }
@@ -146,6 +150,129 @@ spec:
   timeoutSec: 600                 # making music takes a minute or two
   healthCheck: { type: HTTP, requestPath: /healthz, port: 8080 }
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: headscale-config
+  namespace: manul
+data:
+  config.yaml: |
+    server_url: https://mesh.manul.si
+    listen_addr: 0.0.0.0:8080
+    metrics_listen_addr: 127.0.0.1:9090
+    grpc_listen_addr: 127.0.0.1:50443
+    grpc_allow_insecure: true
+    unix_socket: /var/lib/headscale/headscale.sock
+    unix_socket_permission: "0770"
+    noise:
+      private_key_path: /var/lib/headscale/noise_private.key
+    prefixes:
+      v4: 100.64.0.0/10
+      v6: fd7a:115c:a1e0::/48
+    derp:
+      server:
+        enabled: false
+      urls:
+        - https://controlplane.tailscale.com/derpmap/default
+      paths: []
+      auto_update_enabled: true
+      update_frequency: 24h
+    disable_check_updates: true
+    ephemeral_node_inactivity_timeout: 30m
+    database:
+      type: sqlite
+      sqlite:
+        path: /var/lib/headscale/db.sqlite
+        write_ahead_log: true
+    policy:
+      mode: file
+      path: /etc/headscale/acl.json
+    dns:
+      magic_dns: false
+      base_domain: mesh.manul.internal
+  acl.json: |
+    {
+      "tagOwners": {
+        "tag:client": ["manul"],
+        "tag:worker": ["manul"]
+      },
+      "acls": [
+        {
+          "action": "accept",
+          "src": ["tag:client", "tag:worker"],
+          "dst": ["tag:worker:47821"]
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: headscale-data
+  namespace: manul
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headscale
+  namespace: manul
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: headscale }
+  template:
+    metadata:
+      labels: { app: headscale }
+    spec:
+      nodeSelector: { pool: system }
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      containers:
+        - name: headscale
+          image: headscale/headscale:v0.23.0
+          args: ["serve"]
+          ports: [{ name: http, containerPort: 8080 }]
+          volumeMounts:
+            - { name: config, mountPath: /etc/headscale, readOnly: true }
+            - { name: data, mountPath: /var/lib/headscale }
+          readinessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /health, port: http }, initialDelaySeconds: 15, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: config
+          configMap: { name: headscale-config }
+        - name: data
+          persistentVolumeClaim: { claimName: headscale-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: headscale
+  namespace: manul
+  annotations:
+    cloud.google.com/backend-config: '{"default": "headscale"}'
+spec:
+  selector: { app: headscale }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: headscale
+  namespace: manul
+spec:
+  timeoutSec: 3600
+  connectionDraining: { drainingTimeoutSec: 30 }
+  healthCheck: { type: HTTP, requestPath: /health, port: 8080 }
+---
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
 metadata:
@@ -161,6 +288,14 @@ metadata:
   namespace: manul
 spec:
   domains: [admin.manul.si]
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: manul-mesh
+  namespace: manul
+spec:
+  domains: [mesh.manul.si]
 ---
 apiVersion: networking.gke.io/v1beta1
 kind: FrontendConfig
@@ -178,7 +313,7 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: gce
     kubernetes.io/ingress.global-static-ip-name: manul-gateway
-    networking.gke.io/managed-certificates: manul,manul-admin
+    networking.gke.io/managed-certificates: manul,manul-admin,manul-mesh
     networking.gke.io/v1beta1.FrontendConfig: manul
 spec:
   defaultBackend:                 # anything else gets the account service's 404
@@ -197,3 +332,14 @@ spec:
       http:
         paths:
           - { path: /, pathType: Prefix, backend: { service: { name: account, port: { number: 8080 } } } }
+    - host: mesh.manul.si
+      http:
+        paths:
+          - { path: /key, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /ts2021, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /machine, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /register, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /noise, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /a/, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /d/, pathType: Prefix, backend: { service: { name: headscale, port: { number: 8080 } } } }
+          - { path: /health, pathType: Exact, backend: { service: { name: headscale, port: { number: 8080 } } } }

@@ -10,6 +10,9 @@ import type { DemoOptions } from '../main/demo'
 import type { GalleryExample, SubtitleLink } from '../shared/types'
 import type { TelemetryState } from '../shared/telemetry'
 import type { SettingsOpened } from '../shared/onboarding'
+import type { MobileStatus } from '../main/mobile-bridge'
+import type { SavedWorker, WorkerClientStatus } from '../main/worker-client'
+import type { DiscoveredWorker } from '../main/account'
 
 export type SubtitlesState = { link?: SubtitleLink; cues: Cue[]; candidates: string[] }
 /** How many edits can be undone (back) and redone (forward). */
@@ -30,10 +33,22 @@ const on = <T extends unknown[]>(ch: string) => (fn: (...args: T) => void) => {
 
 const api = {
   mobile: {
-    status: () => ipcRenderer.invoke('mobile:status') as Promise<import('../main/mobile-bridge').MobileStatus>,
-    start: () => ipcRenderer.invoke('mobile:start') as Promise<import('../main/mobile-bridge').MobileStatus>,
-    stop: () => ipcRenderer.invoke('mobile:stop') as Promise<import('../main/mobile-bridge').MobileStatus>,
-    revoke: (id: string) => ipcRenderer.invoke('mobile:revoke', id) as Promise<import('../main/mobile-bridge').MobileStatus>,
+    status: () => ipcRenderer.invoke('mobile:status') as Promise<MobileStatus>,
+    start: () => ipcRenderer.invoke('mobile:start') as Promise<MobileStatus>,
+    stop: () => ipcRenderer.invoke('mobile:stop') as Promise<MobileStatus>,
+    revoke: (id: string) => ipcRenderer.invoke('mobile:revoke', id) as Promise<MobileStatus>,
+  },
+  worker: {
+    status: () => ipcRenderer.invoke('worker:status') as Promise<WorkerClientStatus>,
+    discover: () => ipcRenderer.invoke('worker:discover') as Promise<{ workers: DiscoveredWorker[]; poolAvailable: number }>,
+    lease: (opts?: { projectId?: string; workerId?: string }) => ipcRenderer.invoke('worker:lease', opts) as Promise<WorkerClientStatus>,
+    release: (id: string) => ipcRenderer.invoke('worker:release', id) as Promise<WorkerClientStatus>,
+    pair: (input: { url: string; code: string; name?: string }) => ipcRenderer.invoke('worker:pair', input) as Promise<WorkerClientStatus>,
+    connect: (w: Omit<SavedWorker, 'activeUrl'> & { activeUrl?: string }) => ipcRenderer.invoke('worker:connect', w) as Promise<WorkerClientStatus>,
+    disconnect: () => ipcRenderer.invoke('worker:disconnect') as Promise<WorkerClientStatus>,
+    remove: (id: string) => ipcRenderer.invoke('worker:remove', id) as Promise<WorkerClientStatus>,
+    pull: (remoteDir: string) => ipcRenderer.invoke('worker:pull', remoteDir) as Promise<{ dir: string; downloaded: number; skipped: number }>,
+    push: (localDir: string) => ipcRenderer.invoke('worker:push', localDir) as Promise<{ remoteDir: string; uploaded: number; skipped: number }>,
   },
   onboarding: {
     settingsOpened: () => ipcRenderer.invoke('onboarding:settings-opened') as Promise<SettingsOpened>,
