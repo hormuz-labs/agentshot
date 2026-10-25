@@ -82,7 +82,7 @@ test: ## Unit and widget tests (flutter test)
 e2e: $(MESH_AAR) ## All end-to-end tests on the emulator against the real desktop app (ONLY=editing,create runs some)
 	cd .. && MOBILE_E2E_ONLY=$(ONLY) npm run test:e2e:mobile
 
-e2e-smoke: $(MESH_AAR) ## The quick end-to-end set CI runs on every pull request (pairing, projects, conversation, editing)
+e2e-smoke: $(MESH_AAR) ## The quick end-to-end set (pairing, projects, conversation, editing)
 	cd .. && MOBILE_E2E_ONLY=pairing,projects,conversation,editing npm run test:e2e:mobile
 
 screenshots: $(MESH_AAR) ## Capture Play Store screenshots from the real app into build/store-screenshots

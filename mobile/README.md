@@ -141,8 +141,9 @@ npm run test:e2e:mobile
 ```
 
 That runs all of them (`cd mobile && make e2e`, or `make e2e ONLY=editing,create` for some), about half an hour.
-CI runs the quick set on every pull request, pairing, projects, conversation and editing (`make e2e-smoke`, about
-10 minutes); the whole suite runs nightly on `main` and from Mobile checks → Run workflow.
+`make e2e-smoke` runs the quick set (pairing, projects, conversation, editing), about 10 minutes. Pull requests
+don't run them; the whole suite runs nightly on `main`, and Mobile checks → Run workflow runs it (or the smoke set)
+on any branch.
 
 `test/e2e/mobile.e2e.mjs` starts desktop AgentShot with a throwaway profile, a
 project made from a test video and a scripted model (no API keys), turns on

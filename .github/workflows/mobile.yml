@@ -63,13 +63,14 @@ jobs:
         working-directory: mobile
   # The app on an Android emulator against the real desktop app (test/e2e/mobile.e2e.mjs): pairing, projects, talking
   # to the agent, editing, a video from an idea, every screen at phone and tablet sizes with large text, disconnecting.
+  # Not on pull requests or pushes: an Android emulator on CI is slow and different enough to fail for its own
+  # reasons. It runs nightly on main and from "Run workflow" (full, or the smoke set); locally: cd mobile && make e2e.
   e2e:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      # pull requests and pushes: the core path (pairing, projects, talking to the agent, an edit kept), about
-      # 10 minutes; the nightly run and "Run workflow" (full): all of it. Locally: cd mobile && make e2e.
-      MOBILE_E2E_ONLY: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite != 'smoke')) && 'all' || 'pairing,projects,conversation,editing' }}
+      MOBILE_E2E_ONLY: ${{ inputs.suite == 'smoke' && 'pairing,projects,conversation,editing' || 'all' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
