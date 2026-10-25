@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'account.dart';
 import 'client.dart';
 
 class AgentState {
@@ -64,7 +65,13 @@ class BridgeStore extends ChangeNotifier {
   List<Json> projects = [], jobs = [], consents = [];
   final Map<String, AgentState> agents = {};
   Json? project;
+
+  /// The AgentShot account this phone signed in with, if it did.
+  Account? account;
   bool connected = false;
+
+  /// The computer turned this phone away for good (not just out of reach): time to connect again.
+  bool revoked = false;
   String? connectionError;
   bool _disposed = false;
   BridgeStore(this.client) {
@@ -114,6 +121,7 @@ class BridgeStore extends ChangeNotifier {
     switch (event['channel']) {
       case 'connection':
         connected = args.first == true;
+        revoked = !connected && args.length > 2 && args[2] == 'revoked';
         connectionError = connected
             ? null
             : (args.length > 1 ? '${args[1]}' : 'Disconnected');

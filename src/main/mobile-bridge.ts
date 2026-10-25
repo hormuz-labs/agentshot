@@ -23,15 +23,25 @@ type Options = {
   onProjectSynced?: (dir: string) => Promise<void> | void
   /** This computer's Headscale mesh IP, when the userspace mesh node is up. */
   meshIp?: () => string | undefined
+  /** A cloud worker (pool): leased to one person at a time, each seeing only the projects they made here. */
+  pool?: boolean
+  /** Asks the account now who leases this cloud worker (a heartbeat), for a lease that began since the last one. */
+  refreshLease?: () => Promise<void>
 }
 type PersistedBridgeState = {
   key: string
   cert: string
   workerSecret: string
   devices: [string, { id: string; name: string; expiresAt: number }][]
+  /** On a cloud worker: which lessee made each project (dir → account user). */
+  owners?: [string, string][]
 }
 type UploadSession = { id: string; folder: string; file: string; dir?: string; name: string; size: number; offset: number; busy: boolean }
 export const DEFAULT_MOBILE_PORT = 47821
+/** On a cloud worker, the worker's own settings: a lessee neither reads nor changes them. */
+const WORKER_PRIVATE = /^(keys:set|memory:|skills:(enable|profile|newProfile)|tools:(install|remove)|browser:)/
+/** Calls that make a project, which then belongs to the lessee who made it. */
+const CREATES_PROJECT = new Set(['project:create', 'project:createMotion'])
 const secret = () => randomBytes(32).toString('base64url')
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message) } }
 export function isTailscale(ip: string) {
@@ -42,7 +52,11 @@ export function reachableIps(ifaces = networkInterfaces()) {
   const ips = Object.values(ifaces).flat().filter(n => n?.family === 'IPv4' && !n.internal && !n.address.startsWith('169.254.')).map(n => n!.address)
   return [...new Set([...ips.filter(ip => !isTailscale(ip)), ...ips.filter(isTailscale)])]
 }
-export type MobileStatus = { running: boolean; addresses: string[]; tailscale?: string; mesh?: string; fingerprint?: string; code?: string; expiresAt?: number; devices: { id: string; name: string }[] }
+export type MobileStatus = { running: boolean; addresses: string[]; tailscale?: string; mesh?: string; fingerprint?: string; code?: string; expiresAt?: number; devices: { id: string; name: string }[]
+  /** phones and computers signed in to the same AgentShot account, connected in the last two minutes */
+  signedIn: { name: string; lastSeen: number }[] }
+/** What Settings → Mobile shows: the bridge, and whether signed-in phones can find this computer through the account. */
+export type MobileState = MobileStatus & { account: { signedIn: boolean; email?: string; phones: boolean } }
 export class MobileBridge {
   private server?: Server
   private udp?: UdpSocket
@@ -55,6 +69,10 @@ export class MobileBridge {
   private expiresAt = 0
   private port = 0
   private devices = new Map<string, { id: string; name: string; expiresAt: number }>()
+  private signedIn = new Map<string, { name: string; lastSeen: number }>()
+  /** On a cloud worker: who holds the lease now (from the account's answer to the heartbeat), and what each made. */
+  private lease?: { userId: string; until: number }
+  private owners = new Map<string, string>()
   private clients = new Map<ServerResponse, string>()
   private states = new Map<string, AgentState>()
   private failures = new Map<string, { count: number; until: number }>()
@@ -66,7 +84,12 @@ export class MobileBridge {
     const mesh = this.server ? this.options.meshIp?.() : undefined
     // the mesh node always listens on 47821 (the Headscale ACL allows only that port) and forwards to wherever we bound
     const addresses = this.server ? list.map(ip => `https://${ip}:${ip === mesh ? DEFAULT_MOBILE_PORT : this.port}`) : []
-    return { running: !!this.server, addresses, tailscale: list.find(ip => isTailscale(ip) && ip !== mesh), mesh, fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: [...this.devices.values()].map(({ id, name }) => ({ id, name })) }
+    return { running: !!this.server, addresses, tailscale: list.find(ip => isTailscale(ip) && ip !== mesh), mesh, fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: [...this.devices.values()].map(({ id, name }) => ({ id, name })), signedIn: this.recentSignedIn() }
+  }
+  private recentSignedIn() {
+    // seen lately, or still holding its live event stream open
+    const since = Date.now() - 2 * 60_000, live = new Set(this.clients.values())
+    return [...this.signedIn].filter(([token, d]) => d.lastSeen > since || live.has(token)).map(([, { name, lastSeen }]) => ({ name, lastSeen }))
   }
   /** The port the bridge actually bound (47821 unless that was taken). */
   listenPort() {
@@ -81,6 +104,7 @@ export class MobileBridge {
       const raw = JSON.parse(readFileSync(this.options.stateFile, 'utf8')) as Partial<PersistedBridgeState>
       if (typeof raw.key === 'string' && typeof raw.cert === 'string') this.pem = { private: raw.key, cert: raw.cert }
       if (typeof raw.workerSecret === 'string' && raw.workerSecret.length >= 32) this.workerSecret = raw.workerSecret
+      if (Array.isArray(raw.owners)) this.owners = new Map(raw.owners)
       if (Array.isArray(raw.devices)) {
         const now = Date.now()
         for (const [t, d] of raw.devices) if (d && d.expiresAt > now) this.devices.set(t, d)
@@ -96,11 +120,21 @@ export class MobileBridge {
         cert: this.pem.cert,
         workerSecret: this.workerSecret,
         devices: [...this.devices.entries()],
+        owners: [...this.owners.entries()],
       }
       writeFileSync(this.options.stateFile, JSON.stringify(data, null, 2), { mode: 0o600 })
     } catch {}
   }
-  private verifyAuth(token: string): { id: string; name: string; expiresAt: number } | undefined {
+  /** On a cloud worker, the lease the account reports (heartbeat): cloud tokens of anyone else stop working. */
+  setLease(lease?: { userId: string; until: number }) {
+    const before = this.lease?.userId
+    this.lease = lease && lease.until > Date.now() ? lease : undefined
+    if (this.lease?.userId !== before) {
+      for (const [res, token] of this.clients) if (!this.verifyAuth(token)) res.end()
+    }
+    return this.lease?.userId !== before
+  }
+  private verifyAuth(token: string): { id: string; name: string; expiresAt: number; lessee?: string } | undefined {
     if (!token) return undefined
     const dev = this.devices.get(token)
     if (dev) {
@@ -114,7 +148,35 @@ export class MobileBridge {
     const payload = `${m[1]}.${m[2]}`
     const expected = createHmac('sha256', this.workerSecret).update(payload).digest('base64url')
     if (Buffer.byteLength(m[3]) !== Buffer.byteLength(expected) || !timingSafeEqual(Buffer.from(m[3]), Buffer.from(expected))) return undefined
+    // a cloud lease (pool:<user>) is good on a cloud worker, and only while the account says that person holds it
+    const scope = Buffer.from(m[2], 'base64url').toString('utf8')
+    if (scope.startsWith('pool:')) {
+      const lessee = scope.slice(5)
+      if (!this.options.pool || this.lease?.userId !== lessee || this.lease.until < Date.now()) return undefined
+      return { id: `lease:${m[2]}`, name: 'Cloud lessee', expiresAt: Math.min(expiresAt, this.lease.until), lessee }
+    }
     return { id: `lease:${m[2]}`, name: 'Leased client', expiresAt }
+  }
+  /** A cloud token from someone the worker doesn't know holds it yet: the lease may have just begun (the heartbeat,
+   *  every 30 s, hasn't told it). Ask the account now, at most every few seconds, and look again. */
+  private leaseCheck?: Promise<void>
+  private leaseCheckedAt = 0
+  private async leaseBegun(token: string) {
+    if (!this.options.pool || !this.options.refreshLease || !token.startsWith('lease.')) return undefined
+    if (!this.leaseCheck && Date.now() - this.leaseCheckedAt > 3_000) {
+      this.leaseCheckedAt = Date.now()
+      this.leaseCheck = this.options.refreshLease().catch(() => {}).finally(() => { this.leaseCheck = undefined })
+    }
+    await this.leaseCheck
+    return this.verifyAuth(token)
+  }
+  /** A cloud lessee's: made by them here. Anyone else's token sees everything (it's their own computer). */
+  private mine(dir: unknown, lessee?: string) {
+    return !lessee || (typeof dir === 'string' && this.owners.get(dir) === lessee)
+  }
+  private claim(result: unknown, lessee?: string) {
+    const dir = result && typeof result === 'object' ? (result as { dir?: unknown }).dir : undefined
+    if (lessee && typeof dir === 'string' && !this.owners.has(dir)) { this.owners.set(dir, lessee); this.saveState() }
   }
   start(): Promise<MobileStatus> {
     if (this.starting) return this.starting
@@ -134,6 +196,12 @@ export class MobileBridge {
       void this.handle(req, res).catch(error => {
         if (res.headersSent) { res.destroy(); return }
         const expected = error instanceof HttpError
+        // no AI set up on this computer: the phone offers AgentShot credits or the person's own key
+        if ((error as { code?: string })?.code === 'needs-key') {
+          res.writeHead(409, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: 'AgentShot on your computer has no AI to edit with yet.', code: 'needs-key' }))
+          return
+        }
         if (!expected) console.warn('Mobile bridge request failed', error instanceof Error ? error.message : 'unknown')
         res.writeHead(expected ? error.status : 400, { 'content-type': 'application/json', 'cache-control': 'no-store' })
         res.end(JSON.stringify({ error: expected ? error.message : 'Request failed. Check the desktop and try again.' }))
@@ -187,13 +255,25 @@ export class MobileBridge {
     this.saveState()
     return this.status()
   }
+  /** What a cloud lessee hears (undefined: nothing): their own projects' news and the questions about them; not the
+   *  worker's browser, notices or anyone's jobs. */
+  private forLessee(channel: string, args: unknown[], lessee: string): unknown[] | undefined {
+    const first = args[0]
+    if (channel === 'consent' && Array.isArray(first)) return [first.filter(c => this.mine((c as { project?: unknown })?.project, lessee)), ...args.slice(1)]
+    if (channel === 'jobs' || channel === 'browser:state' || channel === 'notice') return undefined
+    const dir = typeof first === 'string' ? first : (first as { dir?: unknown } | undefined)?.dir
+    return this.mine(dir, lessee) ? args : undefined
+  }
   publish(channel: string, ...args: unknown[]) {
     if (channel === 'agui') { const [dir, event] = args as [string, Parameters<typeof reduce>[1]]; this.states.set(dir, reduce(this.states.get(dir) || emptyAgentState(), event)) }
     if (!['agui', 'project', 'jobs', 'consent', 'preview:state', 'browser:state', 'notice', 'seek', 'agent:ready'].includes(channel)) return
     for (const [res, token] of this.clients) {
-      if (!this.verifyAuth(token)) { res.end(); continue }
+      const device = this.verifyAuth(token)
+      if (!device) { res.end(); continue }
+      const sent = device.lessee ? this.forLessee(channel, args, device.lessee) : args
+      if (!sent) continue
       if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); continue }
-      res.write(`data: ${JSON.stringify({ channel, args })}\n\n`)
+      res.write(`data: ${JSON.stringify({ channel, args: sent })}\n\n`)
     }
   }
   private async json(req: IncomingMessage) {
@@ -201,8 +281,8 @@ export class MobileBridge {
     for await (const part of req) { size += part.length; if (size > 1024 * 1024) throw new HttpError(413, 'Request is too large'); parts.push(part) }
     return JSON.parse(Buffer.concat(parts).toString('utf8'))
   }
-  private authorizeProject(dir: unknown) {
-    if (typeof dir !== 'string' || !this.options.projects().some(p => p.dir === dir)) throw new HttpError(403, 'Open a known AgentShot project')
+  private authorizeProject(dir: unknown, lessee?: string) {
+    if (typeof dir !== 'string' || !this.options.projects().some(p => p.dir === dir) || !this.mine(dir, lessee)) throw new HttpError(403, 'Open a known AgentShot project')
     return dir
   }
   private async handle(req: IncomingMessage, res: ServerResponse) {
@@ -231,8 +311,13 @@ export class MobileBridge {
       this.saveState()
       return reply({ token, protocol: 1, fingerprint: this.fingerprint, urls: this.status().addresses, methods: Object.keys(mobileSchemas) })
     }
-    const token = req.headers.authorization?.replace(/^Bearer /, '') || ''; const device = this.verifyAuth(token)
+    const token = req.headers.authorization?.replace(/^Bearer /, '') || ''; const device = this.verifyAuth(token) ?? await this.leaseBegun(token)
     if (!device) throw new HttpError(401, 'Reconnect to your desktop')
+    // signed in to the same account (an account lease, not a pairing): remember it for Settings → Mobile
+    if (device.id.startsWith('lease:')) {
+      const name = String(req.headers['x-agentshot-device'] || 'Signed-in device').slice(0, 80)
+      this.signedIn.set(token, { name, lastSeen: Date.now() })
+    }
     if (url.pathname === '/hello' && req.method === 'GET') {
       return reply({ urls: this.status().addresses })
     }
@@ -244,21 +329,28 @@ export class MobileBridge {
     }
     if (url.pathname === '/rpc' && req.method === 'POST') {
       const body = await this.json(req); const args = mobileArgs(body.method, body.args)
-      if (projectArgument(body.method) && args.length) this.authorizeProject(args[0])
+      const lessee = device.lessee
+      // the worker's own settings aren't a lessee's to read or change
+      if (lessee && WORKER_PRIVATE.test(body.method)) throw new HttpError(403, 'Not available on a cloud worker')
+      if (projectArgument(body.method) && args.length) this.authorizeProject(args[0], lessee)
       const result = await this.options.invoke(body.method, args)
+      if (lessee) {
+        if (CREATES_PROJECT.has(body.method)) this.claim(result, lessee)
+        if (body.method === 'project:recent' && Array.isArray(result)) return reply(result.filter(r => this.mine((r as { dir?: unknown })?.dir, lessee)))
+      }
       if (body.method === 'agent:attach') return reply(this.states.get(args[0] as string) || emptyAgentState())
       return reply(result)
     }
     if (url.pathname === '/events' && req.method === 'GET') {
       if (this.clients.size >= 20) throw new HttpError(429, 'Too many live connections')
       res.writeHead(200, { 'content-type': 'text/event-stream', connection: 'keep-alive' }); this.clients.set(res, token)
-      for (const [dir, state] of this.states) res.write(`data: ${JSON.stringify({ channel: 'agent:state', args: [dir, state] })}\n\n`)
+      for (const [dir, state] of this.states) if (this.mine(dir, device.lessee)) res.write(`data: ${JSON.stringify({ channel: 'agent:state', args: [dir, state] })}\n\n`)
       const heartbeat = setInterval(() => { if (!this.verifyAuth(token)) res.end(); else res.write(': heartbeat\n\n') }, 15_000)
       res.on('close', () => { clearInterval(heartbeat); this.clients.delete(res) }); return
     }
     if (url.pathname === '/upload/init' && req.method === 'POST') {
       if (this.uploads.size >= 8) throw new HttpError(429, 'Too many active uploads')
-      const dir = url.searchParams.has('project') ? this.authorizeProject(url.searchParams.get('project')) : undefined
+      const dir = url.searchParams.has('project') ? this.authorizeProject(url.searchParams.get('project'), device.lessee) : undefined
       const name = url.searchParams.get('name') || 'upload.mp4'
       if (!/^[^/\\\x00-\x1f]{1,180}$/.test(name) || name.startsWith('.') || name.includes(':')) throw new HttpError(400, 'Invalid file name')
       const size = Number(url.searchParams.get('size') ?? req.headers['x-upload-length'])
@@ -292,6 +384,7 @@ export class MobileBridge {
         this.uploads.delete(u.id)
         try {
           const result = await this.options.importFile(u.file, u.dir)
+          this.claim(result, device.lessee)
           return reply({ id: u.id, done: true, offset: u.offset, size: u.size, result })
         } finally {
           await rm(u.folder, { recursive: true, force: true }).catch(() => {})
@@ -300,7 +393,7 @@ export class MobileBridge {
     }
     if (url.pathname === '/upload' && req.method === 'POST') {
       if (this.activeUploads >= 2) throw new HttpError(429, 'Wait for the current upload')
-      const dir = url.searchParams.has('project') ? this.authorizeProject(url.searchParams.get('project')) : undefined
+      const dir = url.searchParams.has('project') ? this.authorizeProject(url.searchParams.get('project'), device.lessee) : undefined
       const name = url.searchParams.get('name') || 'upload.mp4'
       if (!/^[^/\\\x00-\x1f]{1,180}$/.test(name) || name.startsWith('.') || name.includes(':')) throw new HttpError(400, 'Invalid file name')
       const size = Number(req.headers['content-length'])
@@ -313,12 +406,13 @@ export class MobileBridge {
         await pipeline(req, limit, createWriteStream(file, { flags: 'wx', mode: 0o600 }))
         if (received !== size) throw new HttpError(400, 'Incomplete upload')
         const result = await this.options.importFile(file, dir)
+        this.claim(result, device.lessee)
         await rm(folder, { recursive: true, force: true }); folder = undefined
         return reply(result)
       } finally { this.activeUploads--; if (folder) await rm(folder, { recursive: true, force: true }) }
     }
     if (url.pathname === '/media' && (req.method === 'GET' || req.method === 'HEAD')) {
-      const dir = this.authorizeProject(url.searchParams.get('project')); const file = await artifactPath(dir, url.searchParams.get('file') || ''); const size = (await stat(file)).size
+      const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee); const file = await artifactPath(dir, url.searchParams.get('file') || ''); const size = (await stat(file)).size
       const mime: Record<string, string> = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' }
       res.setHeader('content-type', mime[extname(file).toLowerCase()] || 'application/octet-stream'); res.setHeader('accept-ranges', 'bytes')
       let start = 0, end = size - 1
@@ -333,11 +427,11 @@ export class MobileBridge {
       await pipeline(createReadStream(file, { start, end }), res); return
     }
     if (url.pathname === '/project/manifest' && req.method === 'GET') {
-      const dir = this.authorizeProject(url.searchParams.get('project'))
+      const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee)
       return reply({ dir, files: await walkProjectFiles(dir) })
     }
     if (url.pathname === '/project/file' && req.method === 'GET') {
-      const dir = this.authorizeProject(url.searchParams.get('project'))
+      const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee)
       const file = await syncFilePath(dir, url.searchParams.get('file') || '', true)
       const s = await stat(file)
       res.setHeader('content-type', 'application/octet-stream')
@@ -348,13 +442,16 @@ export class MobileBridge {
     if (url.pathname === '/project/file' && req.method === 'POST') {
       let dir = url.searchParams.get('project') || ''
       if (dir) {
-        dir = this.authorizeProject(dir)
+        dir = this.authorizeProject(dir, device.lessee)
       } else {
         const slug = url.searchParams.get('slug') || ''
         const root = this.options.projectsRoot?.()
         if (!root || !/^[a-zA-Z0-9._-]{1,120}$/.test(slug) || slug.startsWith('.')) throw new HttpError(400, 'Invalid project slug')
         dir = join(root, slug)
+        // someone else's project here isn't a lessee's to write into
+        if (device.lessee && this.owners.has(dir) && !this.mine(dir, device.lessee)) throw new HttpError(403, 'Open a known AgentShot project')
         await mkdir(dir, { recursive: true })
+        this.claim({ dir }, device.lessee)
       }
       const rel = url.searchParams.get('file') || ''
       const target = await syncFilePath(dir, rel, false)

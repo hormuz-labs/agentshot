@@ -18,6 +18,10 @@ export type Config = {
   gateway?: string
   /** who is signed in to AgentShot (account.ts); their key is in the keychain */
   account?: { email?: string; keyId?: string }
+  /** while signed in, keep this computer reachable for the person's phones signed in to the same account (unset: yes) */
+  accountPhones?: boolean
+  /** share this computer as a cloud worker: a separate headless AgentShot worker runs alongside (its key is in the keychain) */
+  cloudWorker?: { share: boolean }
 }
 
 const file = () => join(app.getPath('userData'), 'config.json')

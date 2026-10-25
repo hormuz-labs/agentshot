@@ -1,25 +1,33 @@
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import '../bridge/account.dart';
 import '../bridge/client.dart';
+import '../bridge/pick.dart';
 import '../bridge/store.dart';
 import 'common.dart';
 import 'project.dart';
 import 'settings.dart';
 import 'player.dart';
+import 'import.dart';
+import 'mascot.dart';
+import 'setup_ai.dart';
 
 class HomeScreen extends StatefulWidget {
   final BridgeStore store;
   final ThemeMode theme;
   final ValueChanged<ThemeMode> onTheme;
   final Future<void> Function() onDisconnect;
+
+  /// Signed in to AgentShot (else paired with a code): Settings offers switching computer and signing out.
+  final Account? account;
+  final Future<void> Function() onSignOut;
   const HomeScreen({
     super.key,
     required this.store,
     required this.theme,
     required this.onTheme,
     required this.onDisconnect,
+    this.account,
+    required this.onSignOut,
   });
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -30,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String search = '';
   bool working = false;
   double? progress;
+  String? status;
   BridgeStore get store => widget.store;
   Future<void> open(Json project) async {
     await store.open(project['dir'] as String);
@@ -42,28 +51,63 @@ class _HomeScreenState extends State<HomeScreen> {
     await store.refresh();
   }
 
+  /// Brings footage in: a recording, or several videos, photos or both. Videos go first, so the project starts from
+  /// one; photos alone start a project made from scratch, with the photos as its material.
   Future<void> import({bool camera = false}) async {
     if (working) return;
+    final List<Picked> files;
+    if (camera) {
+      final recorded = await Picker.record();
+      files = [?recorded];
+    } else {
+      final kind = await choosePick(context);
+      if (kind == null) return;
+      files = await Picker.pick(kind);
+    }
+    if (files.isEmpty || !mounted) return;
+    final ordered = [
+      ...files.where((f) => f.isVideo),
+      ...files.where((f) => !f.isVideo),
+    ];
+    String? aspect;
+    if (!ordered.first.isVideo) {
+      if (!ordered.any((f) => f.isPhoto)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Start with a video or some photos; other files can come with them.',
+            ),
+          ),
+        );
+        return;
+      }
+      aspect = await chooseFormat(context);
+      if (aspect == null || !mounted) return;
+    }
     setState(() => working = true);
     await guard(context, () async {
-      final files = <(File, String)>[];
-      if (camera) {
-        final picked = await ImagePicker().pickVideo(
-          source: ImageSource.camera,
-        );
-        if (picked != null) files.add((File(picked.path), picked.name));
-      } else {
-        final picked = await FilePicker.pickFiles();
-        for (final file in picked) {
-          if (file.path != null) files.add((File(file.path!), file.name));
-        }
-      }
-      if (files.isEmpty) return;
       Json? project;
-      for (final file in files) {
+      if (aspect != null) {
+        final photos = ordered.where((f) => f.isPhoto).length;
+        project = object(
+          await store.client.call('project:createMotion', [
+            {
+              'title': photos == 1 ? 'From a photo' : 'From $photos photos',
+              'aspect': aspect,
+            },
+          ]),
+        );
+        await store.open(project['dir'] as String);
+      }
+      for (final (index, file) in ordered.indexed) {
+        if (mounted) {
+          setState(
+            () => status = 'Uploading ${index + 1} of ${ordered.length}…',
+          );
+        }
         final result = await store.client.upload(
-          file.$1,
-          file.$2,
+          file.file,
+          file.name,
           project: project?['dir'] as String?,
           progress: (value) {
             if (mounted) setState(() => progress = value);
@@ -80,6 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         working = false;
         progress = null;
+        status = null;
       });
     }
   }
@@ -95,22 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (title == null || title.isEmpty || !mounted) return;
     var aspect = '16:9';
     if (!walkthrough) {
-      final choice = await showDialog<String>(
-        context: context,
-        builder: (context) => SimpleDialog(
-          title: const Text('Choose a format'),
-          children: [
-            for (final item in ['16:9', '9:16', '1:1'])
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, item),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(item),
-                ),
-              ),
-          ],
-        ),
-      );
+      final choice = await chooseFormat(context);
       if (choice == null) return;
       aspect = choice;
     }
@@ -129,10 +159,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
         );
         await store.open(p['dir'] as String);
-        await store.client.call('agent:send', [
-          p['dir'],
-          {'text': title},
-        ]);
+        if (!mounted) return;
+        await sendToAgent(context, store, p['dir'] as String, {'text': title});
         await open(p);
       } finally {
         if (mounted) setState(() => working = false);
@@ -153,26 +181,35 @@ class _HomeScreenState extends State<HomeScreen> {
           theme: widget.theme,
           onTheme: widget.onTheme,
           onDisconnect: widget.onDisconnect,
+          account: widget.account,
+          onSignOut: widget.onSignOut,
         ),
       ];
+      // outlined, filled when it's the tab showing
       final destinations = [
-        const NavigationDestination(
-          icon: Icon(Icons.movie_outlined),
-          label: 'Projects',
+        const Destination(
+          Icons.video_library_outlined,
+          Icons.video_library_rounded,
+          'Projects',
         ),
-        const NavigationDestination(
-          icon: Icon(Icons.auto_awesome_outlined),
-          label: 'Examples',
+        const Destination(
+          Icons.explore_outlined,
+          Icons.explore_rounded,
+          'Examples',
         ),
-        const NavigationDestination(
-          icon: Icon(Icons.bolt_outlined),
-          label: 'Activity',
+        Destination(
+          Icons.notifications_none_rounded,
+          Icons.notifications_rounded,
+          'Activity',
+          badge: store.consents.length,
         ),
-        const NavigationDestination(
-          icon: Icon(Icons.settings_outlined),
-          label: 'Settings',
+        const Destination(
+          Icons.settings_outlined,
+          Icons.settings_rounded,
+          'Settings',
         ),
       ];
+      final narrow = MediaQuery.sizeOf(context).width < 760;
       return Scaffold(
         appBar: AppBar(
           title: Row(
@@ -215,10 +252,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           Expanded(
                             child: Text(
                               store.connectionError ??
-                                  'Connecting to your desktop…',
+                                  'Connecting to your computer…',
                               maxLines: 3,
                               overflow: TextOverflow.ellipsis,
                             ),
+                          ),
+                          // never stuck waiting: another computer, or the same one again
+                          TextButton(
+                            onPressed: () =>
+                                guard(context, widget.onDisconnect),
+                            child: const Text('Change computer'),
                           ),
                         ],
                       ),
@@ -226,6 +269,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               if (working) LinearProgressIndicator(value: progress),
+              if (working && status != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  child: Text(status!, key: const ValueKey('upload-status')),
+                ),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, size) {
@@ -239,14 +287,27 @@ class _HomeScreenState extends State<HomeScreen> {
                               onDestinationSelected: (i) =>
                                   setState(() => section = i),
                               labelType: NavigationRailLabelType.all,
-                              destinations: destinations
-                                  .map(
-                                    (d) => NavigationRailDestination(
-                                      icon: d.icon,
-                                      label: Text(d.label),
-                                    ),
-                                  )
-                                  .toList(),
+                              leading: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                child: FloatingActionButton(
+                                  heroTag: null,
+                                  tooltip: 'Start something new',
+                                  elevation: 1,
+                                  shape: const CircleBorder(),
+                                  onPressed: startSheet,
+                                  child: const Icon(Icons.add),
+                                ),
+                              ),
+                              destinations: [
+                                for (final d in destinations)
+                                  NavigationRailDestination(
+                                    icon: d.iconWith(),
+                                    selectedIcon: d.iconWith(selected: true),
+                                    label: Text(d.label),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
@@ -260,15 +321,117 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        bottomNavigationBar: MediaQuery.sizeOf(context).width >= 760
-            ? null
-            : NavigationBar(
-                selectedIndex: section,
-                onDestinationSelected: (i) => setState(() => section = i),
-                destinations: destinations,
-              ),
+        // the + sits in a notch in the middle of the bar, two tabs either side
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: narrow
+            ? FloatingActionButton(
+                heroTag: null,
+                tooltip: 'Start something new',
+                shape: const CircleBorder(),
+                elevation: 2,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                onPressed: startSheet,
+                child: const Icon(Icons.add, size: 30),
+              )
+            : null,
+        bottomNavigationBar: narrow
+            ? BottomAppBar(
+                // its own surface: a shade apart from the page, lifted a little
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                elevation: 6,
+                shadowColor: Colors.black,
+                shape: const CircularNotchedRectangle(),
+                notchMargin: 8,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                height: 72,
+                child: Row(
+                  children: [
+                    for (final (i, d) in destinations.indexed) ...[
+                      if (i == 2) const SizedBox(width: 72),
+                      Expanded(
+                        child: NavItem(
+                          d,
+                          selected: section == i,
+                          onTap: () => setState(() => section = i),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              )
+            : null,
       );
     },
+  );
+
+  /// The ways to start something, behind the + in the bar (or atop the side rail).
+  List<StartOption> get starts {
+    final ready = !working && store.connected;
+    return [
+      StartOption(
+        Icons.add_photo_alternate_outlined,
+        'Import footage',
+        'Videos and photos from this phone',
+        ready ? () => import() : null,
+      ),
+      StartOption(
+        Icons.videocam_outlined,
+        'Record',
+        'Film something now',
+        ready ? () => import(camera: true) : null,
+      ),
+      StartOption(
+        Icons.auto_awesome,
+        'Start from an idea',
+        'Describe it; AgentShot makes it',
+        ready ? createMotion : null,
+      ),
+      StartOption(
+        Icons.web,
+        'Film a walkthrough',
+        'A site or product, filmed for you',
+        ready ? () => createMotion(walkthrough: true) : null,
+      ),
+    ];
+  }
+
+  /// The + in the bar: what to start, from any tab.
+  void startSheet() => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    useSafeArea: true,
+    // the options turn on as soon as the computer is connected, sheet open or not
+    builder: (sheet) => ListenableBuilder(
+      listenable: store,
+      builder: (sheet, _) => SingleChildScrollView(
+        key: const ValueKey('start-sheet'),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Start something new',
+              style: Theme.of(sheet).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            for (final option in starts)
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                enabled: option.onTap != null,
+                leading: Icon(option.icon),
+                title: Text(option.title),
+                subtitle: Text(option.hint),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  option.onTap?.call();
+                },
+              ),
+          ],
+        ),
+      ),
+    ),
   );
 
   Widget projects() {
@@ -277,93 +440,73 @@ class _HomeScreenState extends State<HomeScreen> {
           (p) => '${p['title']}'.toLowerCase().contains(search.toLowerCase()),
         )
         .toList();
+    final theme = Theme.of(context);
     return RefreshIndicator(
       onRefresh: store.refresh,
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        // room at the end to scroll clear of the + and the bar
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
         children: [
-          Text(
-            'What are we making?',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
+          Text('What are we making?', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),
-          const Text('Bring your footage. Tell AgentShot what should change.'),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              FilledButton.icon(
-                onPressed: working || !store.connected ? null : () => import(),
-                icon: const Icon(Icons.add),
-                label: const Text('Import footage'),
-              ),
-              OutlinedButton.icon(
-                onPressed: working || !store.connected
-                    ? null
-                    : () => import(camera: true),
-                icon: const Icon(Icons.videocam_outlined),
-                label: const Text('Record'),
-              ),
-              OutlinedButton.icon(
-                onPressed: working || !store.connected ? null : createMotion,
-                icon: const Icon(Icons.auto_awesome),
-                label: const Text('Start from an idea'),
-              ),
-              OutlinedButton.icon(
-                onPressed: working || !store.connected
-                    ? null
-                    : () => createMotion(walkthrough: true),
-                icon: const Icon(Icons.web),
-                label: const Text('Film a walkthrough'),
-              ),
-            ],
+          Text(
+            'Bring your footage. Tell AgentShot what should change.',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           TextField(
             onChanged: (value) => setState(() => search = value),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Search projects',
-              prefixIcon: Icon(Icons.search),
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(28),
+                borderSide: BorderSide.none,
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           if (results.isEmpty)
-            const EmptyMessage(
+            EmptyMessage(
               Icons.video_library_outlined,
               'A home for your films',
-              'Import a video or start with an idea. Your desktop projects appear here too.',
+              search.isEmpty
+                  ? 'Tap + to bring in footage or start from an idea. Your desktop projects show up here too.'
+                  : 'Nothing matches that. Try another word.',
+              art: search.isEmpty ? const Mascot(size: 88) : null,
             ),
           for (final p in results)
-            Card(
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                leading: const Icon(Icons.movie_outlined),
-                title: Text('${p['title']}'),
-                subtitle: const Text('On your computer'),
-                onTap: () => guard(context, () => open(p)),
-                trailing: PopupMenuButton<String>(
-                  tooltip: 'Project actions',
-                  onSelected: (_) => guard(context, () async {
-                    if (await confirm(
-                      context,
-                      'Delete project?',
-                      'Move this project and all of its files to the Trash on your computer?',
-                    )) {
-                      await store.client.call('project:delete', [p['dir']]);
-                      await store.refresh();
-                    }
-                  }),
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Move to Trash'),
-                    ),
-                  ],
-                ),
+            ListTile(
+              contentPadding: const EdgeInsets.only(left: 4),
+              leading: const Icon(Icons.movie_outlined),
+              title: Text(
+                '${p['title']}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: const Text('On your computer'),
+              onTap: () => guard(context, () => open(p)),
+              trailing: PopupMenuButton<String>(
+                tooltip: 'Project actions',
+                onSelected: (_) => guard(context, () async {
+                  if (await confirm(
+                    context,
+                    'Delete project?',
+                    'Move this project and all of its files to the Trash on your computer?',
+                  )) {
+                    await store.client.call('project:delete', [p['dir']]);
+                    await store.refresh();
+                  }
+                }),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Move to Trash'),
+                  ),
+                ],
               ),
             ),
         ],
@@ -372,7 +515,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget gallery() => ListView(
-    padding: const EdgeInsets.all(20),
+    padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
     children: [
       Text(
         'Start with a little inspiration',
@@ -394,7 +537,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ],
   );
   Widget activity() => ListView(
-    padding: const EdgeInsets.all(20),
+    padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
     children: [
       Text('Activity', style: Theme.of(context).textTheme.headlineMedium),
       const SizedBox(height: 16),
@@ -580,6 +723,80 @@ class _GalleryListState extends State<GalleryList> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// A way to start something, in the + sheet.
+class StartOption {
+  final IconData icon;
+  final String title, hint;
+  final VoidCallback? onTap;
+  const StartOption(this.icon, this.title, this.hint, this.onTap);
+}
+
+/// A tab of the home screen.
+class Destination {
+  final IconData icon, selectedIcon;
+  final String label;
+
+  /// Things waiting on the person there (questions in Activity).
+  final int badge;
+  const Destination(this.icon, this.selectedIcon, this.label, {this.badge = 0});
+
+  Widget iconWith({bool selected = false}) => Badge(
+    isLabelVisible: badge > 0,
+    label: Text('$badge'),
+    child: Icon(selected ? selectedIcon : icon),
+  );
+}
+
+/// A tab in the bottom bar: its icon and name, filled and coloured when it's the one showing.
+class NavItem extends StatelessWidget {
+  final Destination destination;
+  final bool selected;
+  final VoidCallback onTap;
+  const NavItem(
+    this.destination, {
+    super.key,
+    required this.selected,
+    required this.onTap,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context), scheme = theme.colorScheme;
+    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: destination.label,
+      excludeSemantics: true,
+      child: InkResponse(
+        key: ValueKey('nav-${destination.label}'),
+        onTap: onTap,
+        radius: 36,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconTheme(
+                data: IconThemeData(color: color, size: 24),
+                child: destination.iconWith(selected: selected),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                destination.label,
+                maxLines: 1,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: color,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -246,9 +246,25 @@ spec:
           resources:
             requests: { cpu: 20m, memory: 64Mi }
             limits: { memory: 256Mi }
+        # TLS for mesh.agentshot.si on its own TCP load balancer (headscale-public): Tailscale clients open the control
+        # connection with an HTTP upgrade (ts2021) that Google's HTTPS load balancer refuses, so it can't sit behind the
+        # ingress. Caddy gets the certificate (Let's Encrypt, kept on headscale's disk) and passes the upgrade through.
+        - name: tls
+          image: caddy:2.8.4
+          args: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+          ports: [{ name: web, containerPort: 8081 }, { name: tls, containerPort: 8443 }]
+          env: [{ name: XDG_DATA_HOME, value: /data }, { name: XDG_CONFIG_HOME, value: /data/config }]
+          volumeMounts:
+            - { name: caddy, mountPath: /etc/caddy, readOnly: true }
+            - { name: data, mountPath: /data, subPath: caddy }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
       volumes:
         - name: config
           configMap: { name: headscale-config }
+        - name: caddy
+          configMap: { name: headscale-tls }
         - name: data
           persistentVolumeClaim: { claimName: headscale-data }
 ---
@@ -262,6 +278,36 @@ metadata:
 spec:
   selector: { app: headscale }
   ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: headscale-tls
+  namespace: manul
+data:
+  Caddyfile: |
+    {
+      # unprivileged ports (the pod runs as a normal user); the load balancer maps 80 and 443 to them
+      http_port 8081
+      https_port 8443
+      admin off
+    }
+    mesh.agentshot.si {
+      reverse_proxy 127.0.0.1:8080
+    }
+---
+# mesh.agentshot.si points here (DNS only, not proxied): plain TCP, so the Tailscale upgrade reaches headscale
+apiVersion: v1
+kind: Service
+metadata:
+  name: headscale-public
+  namespace: manul
+spec:
+  type: LoadBalancer
+  selector: { app: headscale }
+  ports:
+    - { name: http, port: 80, targetPort: web }
+    - { name: https, port: 443, targetPort: tls }
 ---
 apiVersion: cloud.google.com/v1
 kind: BackendConfig

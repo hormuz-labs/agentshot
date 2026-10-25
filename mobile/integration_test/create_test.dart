@@ -13,7 +13,7 @@ void main() {
   ) async {
     await launchPaired(tester);
 
-    await tester.tap(find.text('Start from an idea'));
+    await start(tester, 'Start from an idea');
     await waitFor(tester, find.text('Describe your video…'));
     await tester.enterText(
       find.byType(TextField).last,
@@ -29,10 +29,12 @@ void main() {
       find.text(reply),
       timeout: const Duration(minutes: 5),
     );
-    expect(find.text('create_clip'), findsOneWidget);
-    expect(find.text('insert_clip'), findsOneWidget);
+    expect(
+      find.text('create_clip'),
+      findsNothing,
+    ); // the runner checks the agent's tools on the desktop
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Film'));
+    await tester.tap(find.byKey(const ValueKey('tab-Film')));
     await waitFor(tester, find.text('A new cut is ready'));
     await tester.tap(find.widgetWithText(ChoiceChip, 'After'));
     await waitFor(
@@ -47,5 +49,31 @@ void main() {
     await waitFor(tester, find.text('What are we making?'));
     await reveal(tester, find.text('On your computer'));
     await reveal(tester, find.text('Mobile e2e motion title card'));
+  });
+
+  testWidgets('films a walkthrough, after a change of mind', (tester) async {
+    await launchPaired(tester);
+    const idea = 'Mobile e2e walkthrough of the examples page';
+
+    // Cancel: nothing is made
+    await start(tester, 'Film a walkthrough');
+    await waitFor(tester, find.text('What should AgentShot film?'));
+    await answer(tester, null);
+    expect(find.text('What are we making?'), findsOneWidget);
+
+    await start(tester, 'Film a walkthrough');
+    await answer(tester, idea);
+    await waitFor(
+      tester,
+      find.widgetWithText(AppBar, idea),
+      // after the motion clip above, the desktop may still be rendering
+      timeout: const Duration(minutes: 5),
+    );
+    await waitFor(tester, find.text(idea));
+    await waitFor(
+      tester,
+      find.text(reply),
+      timeout: const Duration(minutes: 2),
+    );
   });
 }

@@ -11,13 +11,13 @@ void main() {
   testWidgets('shows desktop settings and disconnects', (tester) async {
     await launchPaired(tester);
 
-    await tester.tap(find.widgetWithText(NavigationDestination, 'Activity'));
+    await tester.tap(find.byKey(const ValueKey('nav-Activity')));
     await waitFor(tester, find.text('Activity'));
-    await tester.tap(find.widgetWithText(NavigationDestination, 'Examples'));
+    await tester.tap(find.byKey(const ValueKey('nav-Examples')));
     await waitFor(tester, find.text('Start with a little inspiration'));
 
-    await tester.tap(find.widgetWithText(NavigationDestination, 'Settings'));
-    await waitFor(tester, find.text('Connected desktop'));
+    await tester.tap(find.byKey(const ValueKey('nav-Settings')));
+    await waitFor(tester, find.text('Connected'));
     await tester.tap(find.text('Model providers'));
     await waitFor(tester, find.text('Scripted'));
     await tester.tap(find.byTooltip('Close'));
@@ -30,6 +30,6 @@ void main() {
     if (find.text('Confirm').evaluate().isNotEmpty) {
       await tester.tap(find.text('Confirm'));
     }
-    await waitFor(tester, find.text('Scan QR code'));
+    await waitFor(tester, find.text('Continue with Google'));
   });
 }

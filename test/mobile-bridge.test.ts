@@ -70,6 +70,25 @@ describe('mobile TLS bridge', () => {
     expect((await f.call('/rpc', { token: f.token, body: { method: 'project:recent', args: [] } })).status).toBe(401)
     expect((await f.call('/rpc', { token: other, body: { method: 'project:recent', args: [] } })).status).toBe(200)
   })
+  it('tells the phone when the computer has no AI set up yet, instead of a generic failure', async () => {
+    const f = await fixture()
+    f.invoke.mockRejectedValueOnce(Object.assign(new Error('Add an API key first (Settings → Keys).'), { code: 'needs-key' }))
+    const r = await f.call('/rpc', { token: f.token, body: { method: 'agent:send', args: [f.dir, { text: 'hi' }] } })
+    expect(r.status).toBe(409)
+    expect(JSON.parse(r.body)).toEqual({ error: 'AgentShot on your computer has no AI to edit with yet.', code: 'needs-key' })
+    f.invoke.mockRejectedValueOnce(new Error('something internal'))
+    expect(JSON.parse((await f.call('/rpc', { token: f.token, body: { method: 'project:recent', args: [] } })).body)).toEqual({ error: 'Request failed. Check the desktop and try again.' })
+  })
+  it('lists phones signed in to the same account (account tokens), by the name they give', async () => {
+    const f = await fixture()
+    expect(f.bridge.status().signedIn).toEqual([])
+    const lease = signWorkerToken(f.bridge.workerCredentials().secret, 'user_1', false, Date.now() + 60_000)
+    expect((await f.call('/hello', { token: lease, headers: { 'x-agentshot-device': 'Android phone' } })).status).toBe(200)
+    expect(f.bridge.status().signedIn.map(d => d.name)).toEqual(['Android phone'])
+    // a paired phone (a pairing, not an account token) is not one of them
+    await f.call('/hello', { token: f.token, headers: { 'x-agentshot-device': 'Paired phone' } })
+    expect(f.bridge.status().signedIn.map(d => d.name)).toEqual(['Android phone'])
+  })
   it('denies unknown projects, arbitrary IPC, traversal and symlink escapes', async () => {
     const f = await fixture()
     expect((await f.call('/rpc', { token: f.token, body: { method: 'project:open', args: ['/etc'] } })).status).toBe(403)
@@ -190,12 +209,15 @@ describe('cloud & home worker extensions', () => {
           return { dir: target, size: content.length }
         },
         galleryFile: () => new Response('ok'),
+        pool: true,
       },
       () => ['127.0.0.1'],
     )
     bridges.push(bridge)
     await bridge.start()
     const creds = bridge.workerCredentials()
+    // a cloud worker, leased to this person (what the account tells it with each heartbeat)
+    bridge.setLease({ userId: 'user_42', until: Date.now() + 60_000 })
     const leaseToken = signWorkerToken(creds.secret, 'user_42', true, Date.now() + 60_000)
 
     const pulledDirs: string[] = []
@@ -343,5 +365,75 @@ describe('cloud & home worker extensions', () => {
 
     expect(await jobEvent).toEqual([[{ id: 'j1', title: 'Rendering on cloud worker' }]])
     client.disconnect()
+  })
+
+  it('on a cloud worker: a cloud token works only while its holder leases it, and each lessee sees only what they made', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'agentshot-pool-')); folders.push(root)
+    const projects: { dir: string }[] = [{ dir: join(root, 'operators-own') }]
+    let made = 0
+    const invoke = vi.fn(async (method: string) => {
+      if (method === 'project:recent') return projects
+      if (method === 'project:createMotion') { const p = { dir: join(root, `made-${++made}`) }; projects.push(p); return p }
+      return { method }
+    })
+    const bridge = new MobileBridge({ invoke, projects: () => projects, importFile: async () => null, galleryFile: () => new Response(''), stateFile: join(root, 'bridge.json'), pool: true }); bridges.push(bridge)
+    const status = await bridge.start()
+    const port = new URL(status.addresses[0]).port
+    const secretOf = () => (bridge.workerCredentials() as { secret: string }).secret
+    const rpc = (token: string, method: string, args: unknown[] = []) => new Promise<{ status: number; body: unknown }>((ok, fail) => {
+      const data = JSON.stringify({ method, args })
+      const req = request(`https://127.0.0.1:${port}/rpc`, { rejectUnauthorized: false, method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-length': String(Buffer.byteLength(data)) } }, res => {
+        const chunks: Buffer[] = []; res.on('data', c => chunks.push(c)); res.on('end', () => ok({ status: res.statusCode!, body: JSON.parse(Buffer.concat(chunks).toString() || 'null') })); res.on('error', fail)
+      }); req.on('error', fail); req.end(data)
+    })
+    const until = Date.now() + 60 * 60_000
+    const maya = signWorkerToken(secretOf(), 'user_maya', true, until)
+    const sam = signWorkerToken(secretOf(), 'user_sam', true, until)
+
+    // not leased to anyone yet: a cloud token is refused
+    expect((await rpc(maya, 'project:recent')).status).toBe(401)
+
+    // leased to Maya: she works, makes a project, and sees only that one (not the operator's)
+    bridge.setLease({ userId: 'user_maya', until })
+    expect((await rpc(sam, 'project:recent')).status).toBe(401)
+    const mine = (await rpc(maya, 'project:createMotion', [{ title: 'Maya', aspect: '16:9' }])).body as { dir: string }
+    expect((await rpc(maya, 'project:recent')).body).toEqual([mine])
+    expect((await rpc(maya, 'project:open', [projects[0].dir])).status).toBe(403)
+    // the worker's own settings stay the worker's
+    expect((await rpc(maya, 'memory:list')).status).toBe(403)
+    expect((await rpc(maya, 'keys:set', ['OPENAI_API_KEY', 'x'])).status).toBe(403)
+
+    // the lease moves to Sam: Maya's token stops at once; Sam doesn't see Maya's project
+    bridge.setLease({ userId: 'user_sam', until })
+    expect((await rpc(maya, 'project:recent')).status).toBe(401)
+    expect((await rpc(sam, 'project:recent')).body).toEqual([])
+    expect((await rpc(sam, 'project:open', [mine.dir])).status).toBe(403)
+
+    // released: nobody's cloud token works; who made what survives a restart
+    bridge.setLease(undefined)
+    expect((await rpc(sam, 'project:recent')).status).toBe(401)
+    expect(JSON.parse(await readFile(join(root, 'bridge.json'), 'utf8')).owners).toEqual([[mine.dir, 'user_maya']])
+  })
+
+  it('refuses cloud tokens on a computer that is not a cloud worker', async () => {
+    const f = await fixture()
+    const token = signWorkerToken((f.bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, Date.now() + 60_000)
+    f.bridge.setLease({ userId: 'user_maya', until: Date.now() + 60_000 })
+    expect((await f.call('/rpc', { token, body: { method: 'project:recent', args: [] } })).status).toBe(401)
+  })
+
+  it('on a cloud worker, accepts a lease that began since the last heartbeat by asking the account then', async () => {
+    let leasedTo: string | undefined
+    const bridge: MobileBridge = new MobileBridge({
+      invoke: async () => [], projects: () => [], importFile: async () => null, galleryFile: () => new Response(''), pool: true,
+      refreshLease: async () => { bridge.setLease(leasedTo ? { userId: leasedTo, until: Date.now() + 60_000 } : undefined) },
+    }); bridges.push(bridge)
+    const port = new URL((await bridge.start()).addresses[0]).port
+    const token = signWorkerToken((bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, Date.now() + 60_000)
+    const hello = () => new Promise<number>((ok, fail) => {
+      const req = request(`https://127.0.0.1:${port}/hello`, { rejectUnauthorized: false, headers: { authorization: `Bearer ${token}` } }, res => { res.resume(); ok(res.statusCode!) }); req.on('error', fail); req.end()
+    })
+    leasedTo = 'user_maya' // leased just now: the worker's last heartbeat didn't know
+    expect(await hello()).toBe(200)
   })
 })

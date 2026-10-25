@@ -553,8 +553,10 @@ export function startWorkerHeartbeat(opts: {
   poolSecret?: string
   priority?: number
   projects: () => string[]
-  sendHeartbeat: (body: Record<string, unknown>, poolSecret?: string) => Promise<void>
-}): () => void {
+  sendHeartbeat: (body: Record<string, unknown>, poolSecret?: string) => Promise<{ leasedTo?: string | null; leasedUntil?: number | null } | void>
+  /** A cloud worker hears who leases it with every heartbeat. */
+  onLease?: (lease?: { userId: string; until: number }) => void
+}): (() => void) & { beat: () => Promise<void> } {
   let stopped = false
   const tick = async () => {
     if (stopped) return
@@ -579,13 +581,21 @@ export function startWorkerHeartbeat(opts: {
           },
           opts.poolSecret,
         )
+        .then(reply => {
+          if (!opts.poolSecret || !reply) return
+          opts.onLease?.(reply.leasedTo && reply.leasedUntil ? { userId: reply.leasedTo, until: reply.leasedUntil } : undefined)
+        })
         .catch(() => {})
     }
   }
   void tick()
   const timer = setInterval(() => void tick(), 30_000)
-  return () => {
-    stopped = true
-    clearInterval(timer)
-  }
+  // beat(): report now, e.g. to hear about a lease that just started
+  return Object.assign(
+    () => {
+      stopped = true
+      clearInterval(timer)
+    },
+    { beat: tick },
+  )
 }

@@ -513,7 +513,6 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       fingerprint?: string
       secret?: string
       capabilities?: WorkerCapabilities
-      pool?: boolean
     }
     const id = typeof body.id === 'string' && /^[a-zA-Z0-9._-]{3,80}$/.test(body.id) ? body.id : ''
     const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : 'Worker'
@@ -524,7 +523,8 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     const rec = await wallet.upsertWorker({
       id,
       ownerId,
-      pool: isPool || !!body.pool,
+      // only the pool secret makes a cloud worker: a signed-in machine saying so stays the owner's own
+      pool: isPool,
       name,
       urls,
       fingerprint,

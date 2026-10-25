@@ -28,15 +28,11 @@ void main() {
 
     await openProject(tester);
     await tester.enterText(
-      find.widgetWithText(TextField, 'Your notes'),
+      find.byKey(const ValueKey('composer')),
       'Cut the ums and tighten the opening',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
-    await waitFor(
-      tester,
-      find.text('rerender_timeline'),
-      timeout: const Duration(minutes: 3),
-    );
+    await tester.pump(); // Send turns on once there is text
+    await tester.tap(find.byTooltip('Send'));
     await waitFor(
       tester,
       find.text(reply),
@@ -48,7 +44,7 @@ void main() {
     await tester.drag(find.byType(ListView).first, const Offset(0, 260));
     await shot(tester, '3-conversation');
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Film'));
+    await tester.tap(find.byKey(const ValueKey('tab-Film')));
     await waitFor(tester, find.text('A new cut is ready'));
     await tester.tap(find.widgetWithText(ChoiceChip, 'After'));
     await waitFor(
@@ -67,7 +63,7 @@ void main() {
     await tester.pageBack();
     await waitFor(tester, find.byTooltip('Refresh'));
 
-    await tester.tap(find.text('Start from an idea'));
+    await start(tester, 'Start from an idea');
     await waitFor(tester, find.text('Describe your video…'));
     await tester.enterText(
       find.byType(TextField).last,

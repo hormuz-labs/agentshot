@@ -49,6 +49,8 @@ export const mobileSchemas = {
   'keys:list': z.tuple([]), 'keys:set': z.tuple([id, text]), 'providers:list': z.tuple([]),
   'tools:status': z.tuple([]), 'tools:list': z.tuple([]), 'tools:install': z.tuple([id]), 'tools:remove': z.tuple([id]), 'whisper:status': z.tuple([]),
   'account:status': z.tuple([]), 'account:balance': z.tuple([]),
+  // the phone hands over the AgentShot account it signed in with (checked with the account service before it is kept)
+  'account:adopt': z.tuple([z.object({ key: z.string().min(8).max(512), keyId: id.optional(), email: z.string().max(320).optional() }).strict()]),
   'browser:state': z.tuple([]), 'browser:mode': z.tuple([]), 'browser:set-mode': z.tuple([z.enum(['manul', 'chrome'])]),
   'browser:navigate': z.tuple([z.url().refine(s => /^https?:\/\//.test(s))]),
   'browser:back': z.tuple([]), 'browser:forward': z.tuple([]), 'browser:reload': z.tuple([]), 'browser:new': z.tuple([]),

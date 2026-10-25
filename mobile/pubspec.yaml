@@ -16,6 +16,7 @@ dependencies:
   share_plus: ^13.3.1
   shared_preferences: ^2.5.6
   flutter_zxing: ^3.1.0
+  flutter_web_auth_2: ^5.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -48,7 +48,7 @@ void main() {
 
   // The section chips scroll sideways when they don't fit (large text on a phone), as a person would swipe them.
   Future<void> chip(WidgetTester tester, String label) async {
-    final target = find.widgetWithText(ChoiceChip, label);
+    final target = find.byKey(ValueKey('tab-$label'));
     await tester.ensureVisible(target);
     await settle(tester, const Duration(milliseconds: 300));
     await tester.tap(target);
@@ -107,7 +107,7 @@ void main() {
         await openProject(tester);
         await visit(tester, '$where, project conversation');
         // Wide screens show the conversation and the film side by side; narrow ones switch between them.
-        if (find.widgetWithText(ChoiceChip, 'Film').evaluate().isNotEmpty) {
+        if (find.byKey(const ValueKey('tab-Film')).evaluate().isNotEmpty) {
           await chip(tester, 'Film');
           await visit(tester, '$where, project film');
           await chip(tester, 'Files');
@@ -121,11 +121,12 @@ void main() {
           'Timeline & mix',
           'Choose model',
           'History',
+          'Transcript',
         ]) {
           await sheet(tester, menu, where);
         }
         await tester.enterText(
-          find.widgetWithText(TextField, 'Your notes'),
+          find.byKey(const ValueKey('composer')),
           'A long note that wraps over several lines on a small phone with very large text',
         );
         await visit(tester, '$where, typing a note');

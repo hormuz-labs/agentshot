@@ -74,6 +74,15 @@ export async function signIn(open: (url: string) => Promise<void> | void, timeou
   return accountStatus()
 }
 
+/** Signs this computer in with an AgentShot key from the person's phone, once the account service accepts it. */
+export async function adoptKey(account: { key: string; keyId?: string; email?: string }): Promise<AccountStatus> {
+  const r = await fetch(`${AUTH.account()}/v1/balance`, { headers: { authorization: `Bearer ${account.key}`, ...(account.keyId ? { 'x-manul-key-id': account.keyId } : {}) } }).catch(() => null)
+  if (!r?.ok) throw new Error('That AgentShot sign-in didn’t work. Sign in again on your phone.')
+  setKey(MANUL_KEY, account.key)
+  setConfig({ account: { email: account.email, keyId: account.keyId } })
+  return accountStatus()
+}
+
 /** The account service, as the signed-in key. */
 async function asKeyRaw(path: string, init: RequestInit = {}) {
   const keyId = getConfig().account?.keyId
@@ -144,7 +153,10 @@ export async function meshJoin(role: 'client' | 'worker', poolSecret?: string, o
   return (await asKey('/v1/mesh/join', { method: 'POST', body: JSON.stringify({ role, ...opts }) })) as { controlUrl: string; authKey: string; tag: string }
 }
 
-export async function workerHeartbeat(body: Record<string, unknown>, poolSecret?: string): Promise<void> {
+/** What the account says back to a worker's heartbeat: whether it's a cloud worker and who leases it, until when. */
+export type HeartbeatReply = { pool?: boolean; leasedTo?: string | null; leasedUntil?: number | null }
+
+export async function workerHeartbeat(body: Record<string, unknown>, poolSecret?: string): Promise<HeartbeatReply> {
   if (poolSecret) {
     const r = await fetch(`${AUTH.account()}/v1/workers/heartbeat`, {
       method: 'POST',
@@ -152,9 +164,9 @@ export async function workerHeartbeat(body: Record<string, unknown>, poolSecret?
       body: JSON.stringify(body),
     })
     if (!r.ok) throw new Error('Worker heartbeat failed.')
-    return
+    return (await r.json().catch(() => ({}))) as HeartbeatReply
   }
-  await asKey('/v1/workers/heartbeat', { method: 'POST', body: JSON.stringify(body) })
+  return (await asKey('/v1/workers/heartbeat', { method: 'POST', body: JSON.stringify(body) })) as HeartbeatReply
 }
 
 export async function accountWorkers(): Promise<{ workers: DiscoveredWorker[]; poolAvailable: number }> {

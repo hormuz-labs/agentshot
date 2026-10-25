@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
+import '../bridge/account.dart';
 import '../bridge/client.dart';
 import '../bridge/store.dart';
 import 'common.dart';
 import 'project.dart' show dropdown;
+import 'setup_ai.dart';
 
 class SettingsScreen extends StatelessWidget {
   final BridgeStore store;
   final ThemeMode theme;
   final ValueChanged<ThemeMode> onTheme;
   final Future<void> Function() onDisconnect;
+  final Account? account;
+  final Future<void> Function() onSignOut;
   const SettingsScreen({
     super.key,
     required this.store,
     required this.theme,
     required this.onTheme,
     required this.onDisconnect,
+    this.account,
+    required this.onSignOut,
   });
   Future<void> panel(
     BuildContext context,
@@ -31,7 +37,8 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(20),
+    // room at the end to scroll clear of the + and the bar
+    padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
     children: [
       Text('Settings', style: Theme.of(context).textTheme.headlineMedium),
       const SizedBox(height: 24),
@@ -43,10 +50,8 @@ class SettingsScreen extends StatelessWidget {
       const SizedBox(height: 20),
       ListTile(
         leading: const Icon(Icons.computer),
-        title: const Text('Connected desktop'),
-        subtitle: Text(
-          store.client.connection?.url.toString() ?? 'Disconnected',
-        ),
+        title: Text(store.client.connection?.name ?? 'Your computer'),
+        subtitle: Text(store.connected ? 'Connected' : 'Connecting…'),
       ),
       ListTile(
         leading: const Icon(Icons.key_outlined),
@@ -79,9 +84,10 @@ class SettingsScreen extends StatelessWidget {
       ListTile(
         leading: const Icon(Icons.account_circle_outlined),
         title: const Text('AgentShot account'),
+        subtitle: Credits(store: store),
         onTap: () => panel(
           context,
-          'Desktop account',
+          'AgentShot account',
           'account:status',
           (data, reload) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,7 +156,8 @@ class SettingsScreen extends StatelessWidget {
             height: 48,
           ),
           applicationVersion: '0.1.0',
-          applicationLegalese: '© 2026 agenthormuz@proton.me · GPL-3.0-or-later',
+          applicationLegalese:
+              '© 2026 agenthormuz@proton.me · GPL-3.0-or-later',
           children: [
             const Text(
               'A video editor you direct by talking. Mobile companion for Android and iOS.\nagentshot.si',
@@ -159,47 +166,38 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 20),
-      OutlinedButton.icon(
-        onPressed: () => guard(context, onDisconnect),
-        icon: const Icon(Icons.link_off),
-        label: const Text('Disconnect this device'),
-      ),
-      const SizedBox(height: 16),
-      const Text(
-        'To revoke this device’s access, use Settings → Mobile on the desktop. Stopping the bridge revokes all paired devices.',
-      ),
+      if (account != null) ...[
+        if (account!.email != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text('Signed in as ${account!.email}'),
+          ),
+        OutlinedButton.icon(
+          onPressed: () => guard(context, onDisconnect),
+          icon: const Icon(Icons.swap_horiz),
+          label: const Text('Switch computer'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => guard(context, onSignOut),
+          icon: const Icon(Icons.logout),
+          label: const Text('Sign out'),
+        ),
+      ] else ...[
+        OutlinedButton.icon(
+          onPressed: () => guard(context, onDisconnect),
+          icon: const Icon(Icons.link_off),
+          label: const Text('Disconnect this device'),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'You can also remove this phone on your computer, in AgentShot → Settings → Mobile.',
+        ),
+      ],
     ],
   );
 
-  void keys(BuildContext context) => panel(
-    context,
-    'Bring your own keys',
-    'keys:list',
-    (data, reload) => Column(
-      children: [
-        for (final key in objects(data))
-          ListTile(
-            title: Text('${key['label']}'),
-            subtitle: Text(
-              '${(key['unlocks'] as List? ?? []).join(', ')}\n${key['set'] == true ? 'Key is set' : 'No key configured'}',
-            ),
-            isThreeLine: true,
-            trailing: const Icon(Icons.edit_outlined),
-            onTap: () => guard(context, () async {
-              final value = await askText(
-                context,
-                '${key['label']} key',
-                hint: 'Paste key; leave empty to remove',
-                secret: true,
-              );
-              if (value == null) return;
-              await store.client.call('keys:set', [key['env'], value]);
-              reload();
-            }),
-          ),
-      ],
-    ),
-  );
+  void keys(BuildContext context) => showKeys(context, store);
 
   void skills(BuildContext context) => panel(
     context,
@@ -468,6 +466,34 @@ class SettingsScreen extends StatelessWidget {
           child: const Text('Refresh browser state'),
         ),
       ],
+    ),
+  );
+}
+
+/// Credits left and the plan, from the account this phone signed in with, or else the computer's.
+class Credits extends StatelessWidget {
+  final BridgeStore store;
+  const Credits({super.key, required this.store});
+
+  static String describe(Json value) {
+    final credits = (value['credits'] as num? ?? 0)
+        .round()
+        .toString()
+        .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+    return '$credits credits · ${value['plan']?['name'] ?? 'Free'} plan';
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Json>(
+    future: store.account?.signedIn == true
+        ? store.account!.balance()
+        : store.client.call('account:balance').then((v) => object(v)),
+    builder: (context, snapshot) => Text(
+      snapshot.hasData
+          ? describe(snapshot.data!)
+          : snapshot.hasError
+          ? 'Not signed in'
+          : 'Checking credits…',
     ),
   );
 }

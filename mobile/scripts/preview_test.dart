@@ -37,12 +37,17 @@ void main() {
     addTearDown(client.dispose);
     for (final brightness in Brightness.values) {
       final screens = <String, Widget>{
-        'pair': PairScreen(client: client, onPaired: () {}),
+        'pair': PairScreen(
+          client: client,
+          onPaired: () {},
+          onSignIn: () async {},
+        ),
         'home': HomeScreen(
           store: store,
           theme: ThemeMode.system,
           onTheme: (_) {},
           onDisconnect: () async {},
+          onSignOut: () async {},
         ),
         'project': ProjectScreen(store: store),
       };

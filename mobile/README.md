@@ -7,23 +7,37 @@ desktop editing engine. This is an initial implementation, not a published store
 
 1. From the repository root: `npm install`, then `npm run dev`.
 2. On the desktop, open **Settings → Mobile** and turn on **Let my phone connect**.
-3. Build the Android mesh library once (needs Go, the Android NDK and Java 17), then run the app:
+3. In `mobile/`, start the emulator and the app (`make setup` once first: packages, the Android mesh library, a
+   toolchain check):
 
    ```sh
-   ./scripts/build-mesh.sh android
-   cd mobile
-   flutter pub get
-   flutter run
+   make start   # the Android emulator, in a window
+   make run     # the app, with hot reload
    ```
-4. Scan the QR code on the desktop with the phone's camera or **Scan QR code** in the app. On the same Wi-Fi
-   the 6-digit code works too. A code expires after five minutes and pairs one device.
+4. Scan the QR code on the desktop with the phone's camera or **Scan QR code** in the app. On the same Wi-Fi (and
+   from the emulator) the 6-digit code works too. A code expires after five minutes and pairs one device.
 
 Pairings last 30 days, across restarts of AgentShot, until removed in **Settings → Mobile**.
 
-Flutter is installed at `/home/adnan/flutter-sdk/bin/flutter` in the development
-environment used to start this project. Android requires Java 17 or newer; use
-`JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64` here rather than the system Java 11.
-iOS builds require a Mac with Xcode. The iOS deployment target is 14.0.
+`make help` lists the rest: `desktop` (step 1), `install`, `test`, `analyze`, `e2e`, `screenshots`, `bundle`,
+`logs`, `stop`. The Makefile finds Flutter and the Android SDK in `PATH`, Android Studio's usual folders or
+`~/development`; set `ANDROID_HOME`, `FLUTTER` or `AVD` to use others. Android builds need Go (for the mesh library),
+the NDK and Java 17. iOS builds require a Mac with Xcode. The iOS deployment target is 14.0.
+
+## Signing in
+
+The welcome screen leads with **Continue with Google**: the phone signs in to the same AgentShot account as the
+computer and lists every computer signed in to it, at home or away; one tap opens one. The 6-digit code and QR stay
+under **Other ways to connect** for computers that aren't signed in.
+
+- Sign-in is Clerk in the browser (OAuth with PKCE, the desktop's public client), returning to
+  `agentshot://auth/callback`. **That redirect URI must be added to the Clerk OAuth application** (Clerk dashboard →
+  OAuth applications → the AgentShot app → Redirect URIs) before it works in production.
+- The account service lists the person's computers with a day-long token each (`/v1/workers`, fed by the desktop's
+  worker heartbeat, which now runs whenever the desktop is signed in and Settings → Mobile → **Let my phones connect**
+  is on). The phone renews a token when it runs out.
+- `AUTH_ISSUER`, `AUTH_CLIENT_ID` and `ACCOUNT_URL` (`--dart-define`) point the app at a development Clerk instance
+  or account service.
 
 ## Implemented workflows
 
@@ -128,16 +142,33 @@ npm run test:e2e:mobile
 
 `test/e2e/mobile.e2e.mjs` starts desktop AgentShot with a throwaway profile, a
 project made from a test video and a scripted model (no API keys), turns on
-Settings → Mobile, and runs each test with a fresh pairing code:
+Settings → Mobile, and runs each test with a fresh pairing code. The desktop's
+downloads from the internet fail at once (so Install and Download can be pressed
+without fetching hundreds of megabytes), and the examples' videos come from the
+runner. A test asks the runner for what only it can do with a `DESKTOP …` line
+(offline and back, the share sheet's Back, the camera permission, the computer
+signing out and in); the system pickers and the camera hand over the runner's
+test media through `Picker.override` and `Picker.recordOverride`:
 
 | Test | Covers |
 |---|---|
-| `pairing` | wrong code refused, right code connects, still paired after a restart |
-| `projects` | search, open a project, play its film, see its files |
-| `conversation` | send a note, the agent's reply streams back, new and switched conversations |
-| `editing` | the agent cuts the film and proposes it; Before/After; Keep makes it current |
-| `create` | Start from an idea → 9:16 → the agent builds and renders a motion clip; play and keep it |
+| `pairing` | the other ways to connect fold open and shut; Scan QR code opens the camera; a wrong code typed is refused; Paste code connects; still paired after a restart |
+| `projects` | search, open a project, play its film, see its files; Refresh and pull to refresh; Move to Trash asks (Cancel, then Confirm) |
+| `conversation` | send a note, the reply streams back, new and switched conversations; rename a conversation; pick a model and Automatic; @ and + mention a file or version, and take it off; Stop a slow turn |
+| `film` | play, pause, mute, seek; Note here, Draw a box (and Cancel box), Note a range (a wrong range caught, Cancel); a box note reaches the agent and shows under the film; Timeline & mix |
+| `editing` | the agent proposes a cut and the conversation shows a card (and the Film tab a dot); Send back with feedback from the card; Watch, Before/After, Keep; Versions |
+| `create` | Start from an idea → 9:16 → the agent builds and renders a motion clip; play and keep it; Film a walkthrough (Cancel, then for real) |
+| `examples` | search, filter by category, open an example and its preview, Use this example → 1:1 → a project the agent picks up |
+| `uploads` | several videos, photos only (a project made from scratch), a mix with a photo first, several photos attached to a note; Record; a text file alone is turned away; one photo → 16:9 |
+| `timeline` | a project from two clips: Import files, attach a file, Insert at playhead (and a file that can't go in), Download / share, Remove (Cancel, Confirm, a protected file); Split, Undo, Redo, Move earlier/later, Mute, Trim (a wrong one caught), Remove piece; the mix with music, Save mix, Render preview; restore a checkpoint; choose a version; Transcribe asks to download speech recognition: Decline, and Download from Activity |
+| `export` | the export sheet closed without exporting; format, fit and captions; Render and download → share sheet |
 | `responsive` | every screen, sheet and settings panel at 320×568, 393×852, phone landscape and tablet sizes, text ×1 and ×2: no overflow, nothing unreachable |
+| `connection` | Try again on a panel and Retry preview on the film once the computer is back; out of reach and back by itself; disconnected by the computer → the connect screen, saying why |
+| `change_computer` | out of reach, Change computer leads back to the connect screen |
+| `setup_ai` | a computer with no AI: closing the question says why the note didn't go; an own key added from it sends the note; the key removed in Settings; AgentShot credits sign in and hand the account over |
+| `signin` | Continue with Google, the signed-in computer shows up by itself; Refresh, pull to refresh; Pair with a code instead and back; the computer signs out (Check again) and back in; open it, switch computer, sign out from Settings and from the list |
+| `cloud` | none of the person's computers on: Use a cloud worker leases one (a real `--worker` the runner starts), an idea becomes a project there and the agent answers, Switch computer gives it back; the runner checks the project is on the worker, not the computer |
+| `settings_panels` | Appearance; an AI key added and removed; a new skill profile and back, a skill off and on; Memory remember, edit, forget (Cancel first); Desktop tools Install (Cancel, then yes) and Speech recognition; the agent browser: mode, a new tab, Navigate, reload/back/forward, close a tab, refresh; AgentShot account; About and its licenses |
 | `settings` | desktop settings and providers, other tabs, disconnect |
 
 It then checks the desktop side: the notes reached the agent, the kept cut is
