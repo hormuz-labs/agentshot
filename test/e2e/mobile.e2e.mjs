@@ -297,7 +297,10 @@ try {
     status = await win.evaluate(() => window.agentshot.mobile.start()) // a fresh code: each one pairs once
     console.log(`mobile e2e: ${test}`)
     // Not spawnSync: the scripted model above answers the desktop from this same process while the phone test runs.
-    const run = spawn(flutter, ['test', `integration_test/${test}_test.dart`, '-d', device, '--no-pub',
+    // --reporter expanded: the test's lines (PAIR_LINK, DESKTOP …, SIGNING_IN) are its requests to this runner and
+    // must arrive as they're printed; on GitHub Actions flutter otherwise picks its github reporter, which holds a
+    // test's output back until the test has ended
+    const run = spawn(flutter, ['test', `integration_test/${test}_test.dart`, '-d', device, '--no-pub', '--reporter', 'expanded',
       `--dart-define=E2E_PAIR=${pairLink(status)}`, `--dart-define=E2E_TYPE=${process.env.MOBILE_E2E_TYPE === '1'}`,
       `--dart-define=E2E_PROJECT=${project}`, `--dart-define=E2E_REPLY=${reply}`, `--dart-define=E2E_COMPUTER=${computer}`,
       `--dart-define=E2E_FIXTURES=${at(fixtures, '10.0.2.2')}/fixtures`, `--dart-define=E2E_DESKTOP_PAGE=${at(fixtures, '127.0.0.1')}/fixtures/page.html`, `--dart-define=AUTH_ISSUER=${at(clerk, '10.0.2.2')}`, '--dart-define=AUTH_CLIENT_ID=e2e-client', `--dart-define=ACCOUNT_URL=${at(accounts, '10.0.2.2')}`], { cwd: mobile, stdio: ['ignore', 'pipe', 'inherit'], timeout: 15 * 60_000 })
