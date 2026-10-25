@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="196 315 632 632">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e2722"/>
+      <stop offset="1" stop-color="#15110e"/>
+    </linearGradient>
+    <radialGradient id="fur" cx="0.5" cy="0.38" r="0.62">
+      <stop offset="0" stop-color="#cdbba3"/>
+      <stop offset="0.7" stop-color="#a8937a"/>
+      <stop offset="1" stop-color="#7f6c58"/>
+    </radialGradient>
+    <radialGradient id="eye" cx="0.42" cy="0.38" r="0.65">
+      <stop offset="0" stop-color="#ffd27a"/>
+      <stop offset="0.6" stop-color="#f2a541"/>
+      <stop offset="1" stop-color="#b8661f"/>
+    </radialGradient>
+    <clipPath id="squircle"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  </defs>
+
+  <!-- tile -->
+
+  <g>
+    <!-- low, wide-set ears -->
+    <path d="M214 520 Q190 410 270 384 Q322 398 344 460 Z" fill="#8a7662"/>
+    <path d="M810 520 Q834 410 754 384 Q702 398 680 460 Z" fill="#8a7662"/>
+    <path d="M240 500 Q230 432 276 418 Q306 430 318 470 Z" fill="#3a302a"/>
+    <path d="M784 500 Q794 432 748 418 Q718 430 706 470 Z" fill="#3a302a"/>
+
+    <!-- shaggy cheek ruff -->
+    <path d="M196 600 L150 640 L200 664 L160 712 L226 724 L206 784 L282 772 L290 838 L360 800 L512 860 L664 800 L734 838 L742 772 L818 784 L798 724 L864 712 L824 664 L874 640 L828 600 Z" fill="#9c876f"/>
+
+    <!-- flat, wide head -->
+    <ellipse cx="512" cy="590" rx="318" ry="250" fill="url(#fur)"/>
+
+    <!-- forehead spots -->
+    <g fill="#4a3d33">
+      <circle cx="512" cy="404" r="11"/><circle cx="470" cy="414" r="9"/><circle cx="554" cy="414" r="9"/>
+      <circle cx="432" cy="432" r="8"/><circle cx="592" cy="432" r="8"/><circle cx="492" cy="446" r="8"/>
+      <circle cx="532" cy="446" r="8"/><circle cx="512" cy="472" r="7"/>
+    </g>
+
+    <!-- eye sockets (light fur around the eyes) -->
+    <ellipse cx="398" cy="560" rx="92" ry="78" fill="#e3d4bf"/>
+    <ellipse cx="626" cy="560" rx="92" ry="78" fill="#e3d4bf"/>
+
+    <!-- eyes: amber, round pupils -->
+    <circle cx="398" cy="566" r="58" fill="url(#eye)"/>
+    <circle cx="626" cy="566" r="58" fill="url(#eye)"/>
+    <circle cx="400" cy="570" r="27" fill="#16100c"/>
+    <circle cx="628" cy="570" r="27" fill="#16100c"/>
+    <circle cx="386" cy="552" r="9" fill="#fff6e6"/>
+    <circle cx="614" cy="552" r="9" fill="#fff6e6"/>
+
+    <!-- the famous unimpressed lids -->
+    <path d="M334 540 Q398 500 466 534 L466 516 Q398 470 330 514 Z" fill="#a8937a"/>
+    <path d="M690 540 Q626 500 558 534 L558 516 Q626 470 694 514 Z" fill="#a8937a"/>
+    <path d="M336 540 Q398 504 464 536" fill="none" stroke="#2c241f" stroke-width="10" stroke-linecap="round"/>
+    <path d="M688 540 Q626 504 560 536" fill="none" stroke="#2c241f" stroke-width="10" stroke-linecap="round"/>
+
+    <!-- cheek stripes -->
+    <path d="M338 612 Q300 650 252 668" fill="none" stroke="#3a302a" stroke-width="14" stroke-linecap="round"/>
+    <path d="M352 644 Q320 690 276 716" fill="none" stroke="#3a302a" stroke-width="12" stroke-linecap="round"/>
+    <path d="M686 612 Q724 650 772 668" fill="none" stroke="#3a302a" stroke-width="14" stroke-linecap="round"/>
+    <path d="M672 644 Q704 690 748 716" fill="none" stroke="#3a302a" stroke-width="12" stroke-linecap="round"/>
+
+    <!-- muzzle, nose, mouth -->
+    <ellipse cx="512" cy="704" rx="112" ry="76" fill="#efe4d3"/>
+    <path d="M486 646 Q512 638 538 646 Q530 668 512 676 Q494 668 486 646 Z" fill="#6e4a3e"/>
+    <path d="M512 676 L512 700 M512 700 Q490 724 462 714 M512 700 Q534 724 562 714" fill="none" stroke="#3a302a" stroke-width="7" stroke-linecap="round"/>
+  </g>
+</svg>

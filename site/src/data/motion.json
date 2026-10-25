@@ -1,0 +1,56 @@
+[
+ {
+  "id": "ultimaxbt-bbebf5",
+  "title": "Orange dot motion system",
+  "handle": "ultimaxbt",
+  "post": "https://x.com/ultimaxbt/status/2107486052550062398",
+  "source": "https://prompt-motion.com/ultimaxbt-bbebf5",
+  "duration": 15.1,
+  "prompt": "<inputs>\nAsk me for: a short label for the opening toggle, one hero word, a percentage for the graph, the text for the final card, one accent color, and a track with a clear beat.\n</inputs>\n\n<direction>\nA 2D motion design film in 16:9. Use a warm off-white canvas, near-black backgrounds, bold typography and one vivid orange accent. The orange dot connects every scene: it starts in the UI, becomes the dot over a letter, traces a spring graph, grows into a shape and returns on the end card. A cursor makes the opening click feel real. Keep the motion sharp and controlled, with small spring overshoots and no dead time.\nBanned: stock footage, gradients, glows, particle bursts, random transitions and motion that isn't connected to an element already on screen.\n</direction>\n\n<structure>\nAround 15 seconds, with a visual change on every major beat.\nOpen: a cursor clicks the orange toggle beside \"Reduce Motion\". The letters bend and move into place until only \"Motion\" remains, with the orange dot above the \"i\".\nSpring: the dot jumps away from the word and lands on a graph. Its path draws a spring response, overshoots the target and settles beside a \"+22%\" callout.\nShape: the dot shoots across a line, grows into an orange circle and fills the frame. A black rounded square rotates inside it, then stretches into a pill. The scene contracts to a single orange dot on black.\nType: words like \"SPRINGS\", \"EASING\", \"KINETIC TYPE\", \"3D\" and \"SOUND\" orbit the dot. The circle of type opens out into a field of tiny dots.\nReveal: the halftone field expands and flips to black, revealing the final card: \"Opus 5.5\", \"Motion designer.\" and \"0 keyframes\".\nReturn: the orange dot moves back through the halftone, graph and toggle. Match the final frame to the first so the video loops cleanly.\n</structure>\n\n<build>\n1. One HTML file, 1920x1080 at 60fps. Compute every visual from time inside seek(t): no CSS transitions, timers or state carried between frames.\n2. Use closed-form springs for the toggle, bouncing dot and graph. Draw the graph from the same spring function that moves the dot.\n3. Animate letters individually for the \"Reduce Motion\" to \"Motion\" transformation. Keep the orange dot attached to the \"i\" until it begins its jump.\n4. Make the orange circle, rotating square and pill different states of the same shape. Preserve its position and motion through each transformation.\n5. Place the orbiting words along a circular path, then move their letters outward to hand the frame over to the halftone grid.\n6. Draw the halftone as a grid of dots whose sizes respond to the orange dot. Let it grow past the frame edges before revealing the end card.\n7. Sync the click, dot landing, graph peak, shape changes and final title to measured beats. Render one frame per beat to check the pacing before the full export.\n</build>\n\n<gotchas>\nThe graph and dot must follow the same motion or the spring will feel fake. Keep the orange accent consistent across every scene. Give outgoing and incoming text separate timing so letters don't overlap. When a shape fills the screen, scale it past all four corners. Match the cursor, dot and typography in the first and last frames to avoid a loop stutter.\n</gotchas>\n\n<start>\nAsk me for the inputs, then show me the beat map and four stills (toggle, graph, kinetic type, end card) before building the full video.\n</start>"
+ },
+ {
+  "id": "stephanlivera-df17a2",
+  "title": "Claude motion designer showreel",
+  "handle": "stephanlivera",
+  "post": "https://x.com/stephanlivera/status/2103315922098470926",
+  "source": "https://prompt-motion.com/stephanlivera-df17a2",
+  "duration": 15.1,
+  "prompt": "make a dynamic 15-second motion graphics video that shows what an incredible motion designer you are, like it's your showreel for a résumé. go all out."
+ },
+ {
+  "id": "steventey-0d20e4",
+  "title": "Dub promo video",
+  "handle": "steventey",
+  "post": "https://x.com/steventey/status/2103625902211088880",
+  "source": "https://prompt-motion.com/steventey-0d20e4",
+  "duration": 15.1,
+  "prompt": "make a dynamic 15-second motion graphics video that shows what an incredible motion designer you are, like it's your showreel for a résumé. go all out.\n\nit should be a launch saas video for https://dub.co"
+ },
+ {
+  "id": "robj3d3-b18fad",
+  "title": "SuperX feature release teaser",
+  "handle": "robj3d3",
+  "post": "https://x.com/robj3d3/status/2107040421989994822",
+  "source": "https://prompt-motion.com/robj3d3-b18fad",
+  "duration": 15.1,
+  "prompt": "look at my product roadmap and make a dynamic 15-second motion graphics video that teases the next feature release. go all out and hold nothing back"
+ },
+ {
+  "id": "tdinh-me-815acb",
+  "title": "TypingMind logo reveal",
+  "handle": "tdinh_me",
+  "post": "https://x.com/tdinh_me/status/2103704250329301409",
+  "source": "https://prompt-motion.com/tdinh-me-815acb",
+  "duration": 21.1,
+  "prompt": "Create an impressive motion design video of a slow-reveal transition that assembles and eventually reveals the TypingMind logo."
+ },
+ {
+  "id": "gabrielbuzziv-4ff0c6",
+  "title": "Enxovaly baby app promo",
+  "handle": "gabrielbuzziv",
+  "post": "https://x.com/gabrielbuzziv/status/2103590703289057430",
+  "source": "https://prompt-motion.com/gabrielbuzziv-4ff0c6",
+  "duration": 15.1,
+  "prompt": "make a dynamic 15-second motion graphics video that shows what an incredible motion designer you are, like it's your showreel for a résumé. go all out."
+ }
+]

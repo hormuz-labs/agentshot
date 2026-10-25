@@ -1,0 +1,130 @@
+---
+// The plans: free with your own keys, or a Manul plan with credits shared with Pitch. Used on the home page (#pricing)
+// and on /pricing. Subscribing happens in the app, so every button leads to the download.
+import { PLANS, FLEX, ENTERPRISE, TIERS, PITCH, STARTER_CREDITS, LAUNCH_DISCOUNT, fmt } from '../data/plans'
+
+interface Props { heading?: 'h1' | 'h2' }
+const { heading = 'h2' } = Astro.props
+const H = heading
+const paint = (name: string, pos = 'center', tint = '#e9e6da') => `--img:url(/paint/${name}.webp);--pos:${pos};--tint:${tint}`
+---
+<section class="pricing" id="pricing" aria-labelledby="pricing-h">
+  <div class="wrap sh" data-r>
+    <H class="slate" id="pricing-h">Free with your keys.<br /> A plan when you’d rather not.</H>
+    <p>AgentShot is open source and runs on your computer, so bring your own model keys and it costs nothing, for good. Or take one AgentShot key that covers every model, voice and music, paid in credits—plus cloud workers when you want heavy renders off your laptop.</p>
+  </div>
+
+  <div class="panel paint" style={paint('grass', 'center 40%', '#d6dfcc')}>
+    {LAUNCH_DISCOUNT > 0 && (
+      <p class="launch sheet" data-r><span class="pitch-tag launch-tag">Launch offer</span><span>Every model at {LAUNCH_DISCOUNT}% off: your credits go twice as far on AgentShot’s key while we launch.</span></p>
+    )}
+    <a class="pitch sheet" href="/#get" data-r>
+      <span class="pitch-tag">From Pitch</span>
+      <span>{PITCH}</span>
+    </a>
+
+    <ol class="plans" role="list">
+      {PLANS.map((p, i) => (
+        <li class:list={['plan sheet', { pop: p.popular }]} data-r style={`--d:${i}`} aria-labelledby={`plan-${p.key}`}>
+          <div class="plan-top">
+            <h3 id={`plan-${p.key}`}>{p.name}</h3>
+            {p.popular && <span class="badge">Most picked</span>}
+          </div>
+          <p class="price"><span class="amt">{p.price}</span> <span class="per">{p.per}</span></p>
+          {p.annual
+            ? <p class="yr">or <b>${fmt(p.annual.price)} a year</b>, {fmt(p.annual.credits)} credits upfront <span class="save">save {p.annual.save}%</span></p>
+            : <p class="yr">Open source under Apache-2.0. <b>No card, no account needed.</b></p>}
+          <p class="blurb">{p.blurb}</p>
+          <ul class="feats">{p.features.map(f => <li>{f}</li>)}</ul>
+          <a href={p.cta.href} class:list={['btn', { light: !p.popular, dot: p.popular }]}>
+            {p.popular && <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></span>}
+            {p.cta.label}
+          </a>
+          <p class="how-sub">{p.note ?? 'macOS, Windows and Linux'}</p>
+        </li>
+      ))}
+    </ol>
+
+    <div class="extras">
+      <div class="extra sheet" data-r>
+        <h3>{FLEX.name}</h3>
+        <p class="price small"><span class="amt">${FLEX.price}</span> <span class="per">once</span></p>
+        <p>{fmt(FLEX.credits)} more credits, whenever a project runs long. Needs an active Pro or Max plan.</p>
+      </div>
+      <div class="extra sheet" data-r style="--d:1">
+        <h3>{ENTERPRISE.name}</h3>
+        <p class="price small"><span class="amt">Let’s talk</span></p>
+        <p>{ENTERPRISE.blurb} <a href={ENTERPRISE.href}>Email us</a>.</p>
+      </div>
+    </div>
+
+    <div class="tiers sheet" data-r>
+      <div class="tiers-copy">
+        <h3>Model tiers on the AgentShot key</h3>
+        <p>Pick a tier in the model picker, per project. Plans unlock the strongest models. Credits never expire once they’re yours, and they’re the same credits you use on Pitch.</p>
+      </div>
+      <ul class="tier-row" role="list" aria-label="Model tiers and who can use them">
+        {TIERS.map(t => <li class:list={{ paid: t.who !== 'Everyone' }}><b>{t.name}</b><span>{t.who}</span></li>)}
+      </ul>
+    </div>
+
+    <p class="fine">Prices in US dollars. {LAUNCH_DISCOUNT > 0 && `Launch pricing: model usage is billed at ${LAUNCH_DISCOUNT}% off its list rate, for a limited time. `}Annual plans grant the year’s credits on day one. New AgentShot accounts start with {fmt(STARTER_CREDITS)} credits. Subscribe, change or cancel in AgentShot under <b>Settings → Keys → AgentShot key</b>; billing is handled by Dodo Payments.</p>
+  </div>
+</section>
+
+<style>
+  .pricing { padding-top: clamp(80px, 10vw, 128px); }
+  .pitch { display: flex; align-items: center; gap: 12px; width: fit-content; max-width: 100%; margin: 0 auto 20px; padding: 10px 18px 10px 10px; border-radius: 999px; font: 600 15px/1.35 var(--sans); text-decoration: none; }
+  .pitch:hover { background: #fff; }
+  .launch { display: flex; align-items: center; gap: 12px; width: fit-content; max-width: 100%; margin: 0 auto 12px; padding: 10px 18px 10px 10px; border-radius: 999px; font: 600 15px/1.35 var(--sans); }
+  .launch-tag { background: var(--amber); color: var(--ink); }
+  .pitch-tag { flex: none; padding: 5px 11px; border-radius: 999px; background: var(--dark); color: #fff; font: 700 12.5px/1.2 var(--sans); }
+
+  .plans { list-style: none; margin: 0 auto; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+  .plan { display: flex; flex-direction: column; padding: 26px; border-radius: 20px; }
+  .plan.pop { box-shadow: 0 0 0 2px var(--ink), 0 40px 80px -44px rgba(30, 30, 20, .55); }
+  .plan-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  h3 { margin: 0; font-size: 21px; letter-spacing: -.015em; }
+  .badge { padding: 4px 10px; border-radius: 999px; background: var(--amber); color: var(--ink); font: 700 12px/1.2 var(--sans); }
+  .price { margin: 16px 0 0; }
+  .amt { font: 800 46px/1 var(--sans); letter-spacing: -.035em; }
+  .per { font-size: 15px; color: var(--ink-3); }
+  .price.small { margin-top: 8px; }
+  .price.small .amt { font-size: 30px; }
+  .yr { margin: 10px 0 0; min-height: 3em; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); }
+  .yr b { color: var(--ink); }
+  .save { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--amber-soft); color: var(--amber-ink); font: 700 12.5px/1.5 var(--sans); white-space: nowrap; }
+  .blurb { margin: 14px 0 0; padding-top: 14px; border-top: 1px solid var(--line-2); font: 600 16px/1.4 var(--sans); }
+  .feats { flex: 1; margin: 12px 0 22px; padding: 0; list-style: none; }
+  .feats li { position: relative; padding: 6px 0 6px 24px; font-size: 15px; color: var(--ink-2); }
+  .feats li::before { content: ''; position: absolute; left: 2px; top: 13px; width: 10px; height: 6px; border-left: 2px solid var(--amber-ink); border-bottom: 2px solid var(--amber-ink); transform: rotate(-45deg); }
+  .plan .btn { justify-content: center; width: 100%; }
+  .how-sub { margin: 10px 0 0; text-align: center; font-size: 13px; color: var(--ink-3); }
+
+  .extras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+  .extra { padding: 22px 26px; border-radius: 20px; }
+  .extra p:not(.price) { margin: 10px 0 0; font-size: 15px; color: var(--ink-2); }
+  .extra a { color: var(--ink); text-underline-offset: 3px; text-decoration-color: var(--amber); }
+
+  .tiers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 24px; align-items: center; margin-top: 16px; padding: 22px 26px; border-radius: 20px; }
+  .tiers-copy p { margin: 8px 0 0; font-size: 15px; color: var(--ink-2); }
+  .tier-row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .tier-row li { display: flex; flex-direction: column; gap: 4px; padding: 12px 10px; border-radius: 14px; background: var(--bg-2); text-align: center; }
+  .tier-row b { font: 750 16px/1.1 var(--sans); }
+  .tier-row span { font-size: 12.5px; color: var(--ink-3); }
+  .tier-row .paid { background: var(--dark); color: #fff; }
+  .tier-row .paid span { color: #d8d5cb; }
+
+  .fine { width: fit-content; max-width: 760px; margin: 20px auto 0; padding: 10px 18px; border-radius: 16px; background: rgba(32, 32, 32, .82); color: #f1efe8; font-size: 13.5px; text-align: center; }
+
+  @media (max-width: 980px) {
+    .plans { grid-template-columns: 1fr; max-width: 520px; }
+    .extras, .tiers { grid-template-columns: 1fr; max-width: 520px; }
+    .yr { min-height: 0; }
+  }
+  @media (max-width: 760px) {
+    .pitch { border-radius: 18px; align-items: flex-start; font-size: 14.5px; }
+    .plan, .extra, .tiers { padding: 20px; }
+    .tier-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+</style>
