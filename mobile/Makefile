@@ -19,7 +19,7 @@ MESH_AAR := android/app/libs/agentshotmesh.aar
 # the device flutter and adb use: the first emulator, or DEVICE=<serial>
 DEVICE ?= $(shell $(ADB) devices 2>/dev/null | awk 'NR>1 && $$2=="device" {print $$1; exit}')
 
-.PHONY: help setup mesh avd start start-headless stop devices run install launch desktop analyze test e2e screenshots apk bundle logs clean
+.PHONY: help setup mesh avd start start-headless stop devices run install launch desktop analyze test e2e e2e-smoke screenshots apk bundle logs clean
 
 help: ## Show this help message
 	@grep -E '^[-a-zA-Z0-9_]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
