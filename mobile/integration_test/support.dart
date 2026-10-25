@@ -123,9 +123,14 @@ double area(ScrollableState s) {
 Future<void> launch(WidgetTester tester) async {
   expect(pairLink, isNotEmpty, reason: 'Run through test/e2e/mobile.e2e.mjs');
   app.main();
+  // the pair screen's Scan button, or home's Refresh (its heading may be scrolled away)
   await waitFor(
     tester,
-    find.textContaining(RegExp(r'Your film\.|What are we making\?')),
+    find.byWidgetPredicate(
+      (w) =>
+          (w is Tooltip && w.message == 'Refresh') ||
+          (w is Text && w.data == 'Scan QR code'),
+    ),
   );
 }
 
@@ -155,26 +160,38 @@ String codeOf(String link) =>
             as Map<String, dynamic>)['code']
         as String;
 
-/// Pairs with a link from the desktop's QR, brought over with Paste code (the camera can't be scripted). Android only
-/// lets the app in focus read the clipboard, so where that fails (a CI emulator) the code is typed into the six boxes
-/// instead, the other way the pair screen offers. E2E_TYPE=true always types.
+/// Pairs with a link from the desktop's QR, the ways a person brings it over, most direct first:
+///  1. as if the phone's camera scanned it: the runner opens the agentshot://pair link on the device (it watches for
+///     the PAIR_LINK line), and Android hands it to the app
+///  2. Paste code (Android only lets the app in focus read the clipboard, which a CI emulator may not allow)
+///  3. typing the 6-digit code into the boxes (E2E_TYPE=true goes straight to this)
 Future<void> enterCode(WidgetTester tester, String link) async {
+  String? error() => find
+      .textContaining(RegExp('Invalid|Could not|Try pairing'))
+      .evaluate()
+      .map((e) => (e.widget as Text).data)
+      .firstOrNull;
+  final before = error();
   bool started() =>
       find.text('Connecting…').evaluate().isNotEmpty ||
       find.text('What are we making?').evaluate().isNotEmpty ||
-      find
-          .textContaining(RegExp('Invalid|Could not|Try pairing'))
-          .evaluate()
-          .isNotEmpty;
-  if (!const bool.fromEnvironment('E2E_TYPE')) {
-    await Clipboard.setData(ClipboardData(text: link));
-    await reveal(tester, find.text('Paste code'));
-    await tester.tap(find.text('Paste code'));
-    final end = DateTime.now().add(const Duration(seconds: 3));
+      (error() != null && error() != before);
+  Future<bool> waitStarted(Duration timeout) async {
+    final end = DateTime.now().add(timeout);
     while (!started() && DateTime.now().isBefore(end)) {
       await tester.pump(const Duration(milliseconds: 100));
     }
-    if (started()) return;
+    return started();
+  }
+
+  if (!const bool.fromEnvironment('E2E_TYPE')) {
+    // ignore: avoid_print
+    print('PAIR_LINK $link');
+    if (await waitStarted(const Duration(seconds: 10))) return;
+    await Clipboard.setData(ClipboardData(text: link));
+    await reveal(tester, find.text('Paste code'));
+    await tester.tap(find.text('Paste code'));
+    if (await waitStarted(const Duration(seconds: 3))) return;
   }
   final digits = codeOf(link);
   for (var i = 0; i < 6; i++) {

@@ -20,7 +20,11 @@ const flutter = process.env.FLUTTER || 'flutter'
 // pairing first (from a phone that never paired), settings last (it disconnects the phone); MOBILE_E2E_ONLY=a,b runs some
 const all = ['pairing', 'projects', 'conversation', 'editing', 'create', 'responsive', 'settings']
 const tests = process.env.MOBILE_E2E_ONLY ? process.env.MOBILE_E2E_ONLY.split(',') : all
-const project = 'Harbour walk', reply = 'Mobile e2e reply: the opening is tighter now.'
+// MOBILE_E2E_SHOTS=<folder> (with MOBILE_E2E_ONLY=store_screenshots): store screenshots, saved as the test asks
+const shots = process.env.MOBILE_E2E_SHOTS
+const project = 'Harbour walk', reply = shots
+  ? 'Done. I cut four fillers, 2.1 s in all, each in the quiet before the next word so nothing jumps, and the film now starts on her first line. Have a look at the before and after.'
+  : 'Mobile e2e reply: the opening is tighter now.'
 const until = async (what, f, ms = 30_000) => { const end = Date.now() + ms; for (;;) { const v = await f(); if (v) return v; if (Date.now() > end) throw new Error(`timed out: ${what}`); await new Promise(r => setTimeout(r, 500)) } }
 
 // An Android device: the one named, a running one, or an AVD booted headless (and shut down afterwards).
@@ -39,10 +43,16 @@ if (!device) {
 for (const args of [['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'], ['shell', 'wm', 'dismiss-keyguard'], ['shell', 'input', 'keyevent', '82']])
   spawnSync('adb', ['-s', device, ...args])
 
+if (shots) spawnSync('adb', ['-s', device, 'shell', 'settings', 'put', 'global', 'sysui_demo_allowed', '1'])
 const tmp = mkdtempSync(join(tmpdir(), 'agentshot-mobile-')), ud = join(tmp, 'ud'), projects = join(tmp, 'projects')
 const video = join(tmp, `${project}.mp4`)
-execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=640x360:d=3:r=30', '-f', 'lavfi', '-i', 'sine=f=440:d=3',
-  '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', video])
+// a test card, or for store screenshots slow colour gradients that read as footage
+const footage = (file, [c0, c1, c2] = ['0x1d3557', '0xe76f51', '0xf4a261']) => execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
+  shots ? `gradients=s=1280x720:c0=${c0}:c1=${c1}:c2=${c2}:n=3:speed=0.015:d=12:r=30` : 'testsrc2=s=640x360:d=3:r=30',
+  '-f', 'lavfi', '-i', `sine=f=440:d=${shots ? 12 : 3}`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', file])
+footage(video)
+const extras = shots ? [['Product launch teaser', ['0x0b132b', '0x3a506b', '0x5bc0be']], ['Interview with Maya', ['0x2b2d42', '0x8d99ae', '0xedf2f4']], ['Weekend in Lisbon', ['0x264653', '0x2a9d8f', '0xe9c46a']]] : []
+for (const [title, colours] of extras) footage(join(tmp, `${title}.mp4`), colours)
 
 // The agent's model, scripted by what the phone asked: an edit really cuts the film and proposes it, a video from an
 // idea really makes and renders a motion clip, and anything else gets a reply. Every turn ends with the same text,
@@ -109,6 +119,15 @@ try {
   const created = await win.evaluate(f => window.agentshot.project.create(f), video)
   assert.equal(created.title, project)
   await win.evaluate(d => window.agentshot.project.close(d), created.dir)
+  for (const [title] of extras) {
+    const p = await win.evaluate(f => window.agentshot.project.create(f), join(tmp, `${title}.mp4`))
+    await win.evaluate(d => window.agentshot.project.close(d), p.dir)
+  }
+  if (shots) { // a tidy status bar: 12:00, full battery and signal, no notifications
+    mkdirSync(shots, { recursive: true })
+    for (const c of [['enter'], ['clock', '-e', 'hhmm', '1200'], ['battery', '-e', 'level', '100', '-e', 'plugged', 'false'], ['network', '-e', 'wifi', 'show', '-e', 'level', '4', '-e', 'mobile', 'hide'], ['notifications', '-e', 'visible', 'false']])
+      spawnSync('adb', ['-s', device, 'shell', 'am', 'broadcast', '-a', 'com.android.systemui.demo', '-e', 'command', ...c])
+  }
 
   let status = await win.evaluate(() => window.agentshot.mobile.start())
   assert.ok(status.running, 'the mobile bridge is running')
@@ -128,7 +147,18 @@ try {
     // Not spawnSync: the scripted model above answers the desktop from this same process while the phone test runs.
     const run = spawn(flutter, ['test', `integration_test/${test}_test.dart`, '-d', device, '--no-pub',
       `--dart-define=E2E_PAIR=${pairLink(status)}`, `--dart-define=E2E_TYPE=${process.env.MOBILE_E2E_TYPE === '1'}`,
-      `--dart-define=E2E_PROJECT=${project}`, `--dart-define=E2E_REPLY=${reply}`], { cwd: mobile, stdio: 'inherit', timeout: 15 * 60_000 })
+      `--dart-define=E2E_PROJECT=${project}`, `--dart-define=E2E_REPLY=${reply}`], { cwd: mobile, stdio: ['ignore', 'pipe', 'inherit'], timeout: 15 * 60_000 })
+    run.stdout.on('data', d => {
+      process.stdout.write(d)
+      // the test "scans" the QR: open the pairing link on the device, as the camera would
+      for (const [, link] of String(d).matchAll(/PAIR_LINK (agentshot:\/\/pair\?d=[\w-]+)/g))
+        spawnSync('adb', ['-s', device, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', `'${link}'`, 'si.agentshot.app'])
+      if (!shots) return
+      for (const [, name] of String(d).matchAll(/SHOT (\S+)/g)) {
+        writeFileSync(join(shots, `${name}.png`), execFileSync('adb', ['-s', device, 'exec-out', 'screencap', '-p'], { maxBuffer: 64 << 20 }))
+        console.log(`mobile e2e: saved ${name}.png`)
+      }
+    })
     run.status = await new Promise(r => run.on('close', r))
     const bridgeNow = run.status ? await win.evaluate(() => window.agentshot.mobile.status()).then(st => `bridge ${st.running ? 'up' : 'DOWN'} at ${st.addresses.join(' ')}`, e => `desktop gone: ${e.message}`) : ''
     assert.equal(run.status, 0, `mobile ${test} test failed (${bridgeNow}) (desktop log: ${desktopLog}; the model answered: ${turns.join(' | ') || 'nothing'})`)
