@@ -566,8 +566,16 @@ class BridgeClient {
     return _decode(await request.close());
   }
 
-  Future<dynamic> call(String method, [List<dynamic> args = const []]) =>
-      _post('/rpc', {'method': method, 'args': args});
+  Future<dynamic> call(String method, [List<dynamic> args = const []]) async {
+    try {
+      return await _post('/rpc', {'method': method, 'args': args});
+    } catch (_) {
+      // cut off because this client was put away (the app closing, another computer): whoever asked is gone too,
+      // so it never answers rather than raise an error nobody is left to handle
+      if (_disposed) return Completer<dynamic>().future;
+      rethrow;
+    }
+  }
 
   void listen() {
     final generation = ++_generation;
