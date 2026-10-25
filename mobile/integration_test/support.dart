@@ -337,10 +337,14 @@ Future<void> enterCode(WidgetTester tester, String link) async {
 
 /// Opens "Other ways to connect" on the welcome screen, where the QR and 6-digit code wait.
 Future<void> showCodes(WidgetTester tester) async {
-  if (find.text('Paste code').evaluate().isNotEmpty) return;
-  await reveal(tester, find.text('Other ways to connect'));
-  await tester.tap(find.text('Other ways to connect'));
-  await settle(tester, const Duration(milliseconds: 400));
+  // the screen may rebuild just after (a refused code), folding them away again: open until they stay open
+  for (var tries = 0; tries < 3; tries++) {
+    await settle(tester, const Duration(milliseconds: 600));
+    if (find.byKey(const ValueKey('scan')).evaluate().isNotEmpty) return;
+    await reveal(tester, find.text('Other ways to connect'));
+    await tester.tap(find.text('Other ways to connect'));
+  }
+  await waitFor(tester, find.byKey(const ValueKey('scan')));
 }
 
 /// Starts the app paired with the desktop: pairs with [pairLink] unless an earlier test file already did.

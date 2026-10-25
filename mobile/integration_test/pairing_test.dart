@@ -11,6 +11,33 @@ import 'support.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  // first, from a phone that never paired: pairing by link, as the camera app would open it
+  testWidgets('pairs with the desktop and lists its projects', (tester) async {
+    await const FlutterSecureStorage().deleteAll();
+    await launch(tester);
+    expect(find.text('Continue with Google'), findsOneWidget);
+
+    final wrong = codeOf(pairLink) == '000000' ? '111111' : '000000';
+    await enterCode(tester, withCode(pairLink, wrong));
+    await waitFor(tester, find.textContaining('Invalid or expired code'));
+    expect(find.text('What are we making?'), findsNothing);
+
+    await enterCode(tester, pairLink);
+    await waitFor(
+      tester,
+      find.text('What are we making?'),
+      timeout: const Duration(minutes: 1),
+    );
+    await reveal(tester, find.text('On your computer'));
+    await reveal(tester, find.text(project));
+
+    // The connection survives a restart: the app comes back paired, not on the pair screen.
+    await launch(tester);
+    await reveal(tester, find.text('On your computer'));
+    expect(find.text('Continue with Google'), findsNothing);
+  });
+
+  // then, unpaired again: the other ways to connect
   testWidgets('offers the other ways to connect', (tester) async {
     await const FlutterSecureStorage().deleteAll();
     await launch(tester);
@@ -21,17 +48,6 @@ void main() {
     await press(tester, find.text('Other ways to connect'));
     expect(find.text('Paste code'), findsNothing);
     await showCodes(tester);
-
-    // Scan QR code opens the camera (allowed by the runner), and back. A slow emulator may rebuild the screen
-    // behind the camera (the options folded again), so each step after opens them again.
-    await showCodes(tester);
-    cue('camera');
-    await settle(tester, const Duration(seconds: 2));
-    await press(tester, find.byKey(const ValueKey('scan')));
-    await waitFor(tester, find.text('Scan to pair'));
-    await settle(tester, const Duration(seconds: 2));
-    await tester.pageBack();
-    await waitFor(tester, find.text('Continue with Google'));
 
     await showCodes(tester);
     // a wrong code typed into the boxes is turned away: as a wrong code where the computer is found on the Wi-Fi;
@@ -57,30 +73,15 @@ void main() {
     await press(tester, find.text('Paste code'));
     await settle(tester, const Duration(seconds: 3));
     expect(find.text('What are we making?'), findsNothing);
-  });
-
-  // from a freshly started app: the ways above leave nothing behind for this one
-  testWidgets('pairs with the desktop and lists its projects', (tester) async {
-    await launch(tester);
-    expect(find.text('Continue with Google'), findsOneWidget);
-
-    final wrong = codeOf(pairLink) == '000000' ? '111111' : '000000';
-    await enterCode(tester, withCode(pairLink, wrong));
-    await waitFor(tester, find.textContaining('Invalid or expired code'));
-    expect(find.text('What are we making?'), findsNothing);
-
-    await enterCode(tester, pairLink);
-    await waitFor(
-      tester,
-      find.text('What are we making?'),
-      timeout: const Duration(minutes: 1),
-    );
-    await reveal(tester, find.text('On your computer'));
-    await reveal(tester, find.text(project));
-
-    // The connection survives a restart: the app comes back paired, not on the pair screen.
-    await launch(tester);
-    await reveal(tester, find.text('On your computer'));
-    expect(find.text('Continue with Google'), findsNothing);
+    // Scan QR code opens the camera (allowed by the runner), and back. Last in the file: a slow emulator may
+    // rebuild the app's screen behind the camera, after which it no longer hears pairing links.
+    await showCodes(tester);
+    cue('camera');
+    await settle(tester, const Duration(seconds: 2));
+    await press(tester, find.byKey(const ValueKey('scan')));
+    await waitFor(tester, find.text('Scan to pair'));
+    await settle(tester, const Duration(seconds: 2));
+    await tester.pageBack();
+    await waitFor(tester, find.text('Continue with Google'));
   });
 }
