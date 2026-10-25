@@ -1,4 +1,4 @@
-// What Manul may report, when the user has said yes. Every usage event and every property is listed here; nothing
+// What AgentShot may report, when the user has said yes. Every usage event and every property is listed here; nothing
 // else can be sent. Never add file names, paths, project titles, prompts, transcripts, keys or URLs.
 // telemetry/README.md publishes this list; keep the two in step.
 
@@ -11,7 +11,7 @@ export type UsageEvents = {
   'motion project created': { example: string; aspect: string; reference: boolean }
   /** seconds of focused, non-idle use since the last report */
   'active time': { seconds: number }
-  /** one agent turn: which model family, which of Manul's tools it called, how it ended */
+  /** one agent turn: which model family, which of AgentShot's tools it called, how it ended */
   'agent run': { provider: string; model: string; tools: string[]; toolCalls: number; ok: boolean; seconds: number }
   /** the user kept or rejected a proposed version */
   'version decided': { accepted: boolean }

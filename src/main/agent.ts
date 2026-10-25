@@ -1,8 +1,8 @@
-// Manul's agent: a pi-durable Harness on SQLite, so conversations, tool calls and their output survive a crash or quit.
+// AgentShot's agent: a pi-durable Harness on SQLite, so conversations, tool calls and their output survive a crash or quit.
 // One durable conversation per project. Every view change goes through the AG-UI adapter to the renderer.
 // Extensions:
 //   coding   read / write / edit / native shell in the project folder (bundled ffmpeg and ffprobe are on PATH)
-//   editor   Manul's own tools: project state, probe, ffmpeg, propose a version, seek, resolve a note, ask the user
+//   editor   AgentShot's own tools: project state, probe, ffmpeg, propose a version, seek, resolve a note, ask the user
 import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context'
 import { Type } from '@earendil-works/pi-ai'
 import { createModels } from '@earendil-works/pi-ai/models'
@@ -21,7 +21,7 @@ import { liveEnv } from './bsk'
 import { isWithinDir } from './paths'
 import { chooseModel, describeModels } from './models'
 import { buildProviders, listProviders } from './providers'
-import { manulProvider } from './gateway'
+import { agentshotProvider } from './gateway'
 import type { Memory } from './memory'
 import type { Skills } from './skills'
 import { BIN, FFMPEG, FONTS_DIR, MODELS_DIR, VISION, probe } from './media'
@@ -85,7 +85,7 @@ export type Bridge = {
   /** Copy a file, folder or .zip (e.g. a download) into media/ and add it to the project; a line per new file. */
   importFiles(dir: string, absPath: string): Promise<string[]>
   exportFilm(dir: string, req: { preset: 'original' | 'landscape' | 'vertical' | 'square'; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string }): Promise<{ file: string; srt?: string }>
-  /** Start filming the tab the agent's bsk session drives (Manul's browser or the user's Chrome, per the setting). */
+  /** Start filming the tab the agent's bsk session drives (AgentShot's browser or the user's Chrome, per the setting). */
   startTake(dir: string, o: { session: string }): Promise<Recorder>
   /** The take recording in this project, if any. */
   take(dir: string): Recorder | undefined
@@ -96,7 +96,7 @@ export type Bridge = {
   composeWalkthrough(dir: string, req: ComposeRequest, title: string, signal?: AbortSignal): Promise<{ version: string; duration: number; outline: string[]; cut: number; spedUp: number; held: number; voiced: number }>
 }
 
-const MOTION_POINTER = `Motion clips (title cards, lower thirds, kinetic text, charts…) are HTML + GSAP that Manul renders frame-exact: ` +
+const MOTION_POINTER = `Motion clips (title cards, lower thirds, kinetic text, charts…) are HTML + GSAP that AgentShot renders frame-exact: ` +
   `full-frame cards go between shots with insert_clip; lower thirds, captions, callouts and logos are made with overlay: true and laid over ` +
   `the footage with overlay_clip. Read the motion-design skill first when it is enabled.`
 
@@ -112,7 +112,7 @@ export function motionBrief(p?: Project, lookup: (id: string) => GalleryExample 
       `Make the user's video the way that one was made: its look, pacing, structure and taste, with the user's own content. ` +
       (ex?.prompt ? `This is the prompt that made it:\n<example_prompt>\n${ex.prompt}\n</example_prompt>\n` +
         `Follow its direction, structure, rules and gotchas. Where it asks the user for inputs, ask for the ones the user hasn't given (one ask_user). ` +
-        `Where it says how to build or render (one HTML file, seek(t), Playwright, ffmpeg, a framework), use Manul's motion clips instead: ` +
+        `Where it says how to build or render (one HTML file, seek(t), Playwright, ffmpeg, a framework), use AgentShot's motion clips instead: ` +
         `the same ideas, made with create_clip.\n`
         : ex?.skill ? `It was made with a skill (${ex.skill}); you don't have that skill, so work from the video.\n` : '')
       : '') +
@@ -192,7 +192,7 @@ async function imageResult(caption: string, path: string) {
   return { content: [{ type: 'text' as const, text: caption }, { type: 'image' as const, data: data.toString('base64'), mimeType: 'image/jpeg' }] }
 }
 
-/** Where the agent may go, per project (src/main/fence.ts): Manul's resources read-only, plus extra folders. */
+/** Where the agent may go, per project (src/main/fence.ts): AgentShot's resources read-only, plus extra folders. */
 export type FenceConfig = { resources: string; extraRw?: string[]; extraRo?: string[] }
 
 export function editorExtension(bridge: Bridge, dirOf: (convId: string) => string, fenceConfig?: FenceConfig, briefs = new DemoBriefs(), inspections = new InspectionGuard()) {
@@ -210,20 +210,20 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
   /** Run a bundled program inside the agent's fence (its paths come from the model). */
   const fencedExec = (p: Project, bin: string, args: string[]): [string, string[]] => {
     if (!fenceConfig) return [bin, args]
-    const argv = fencedArgv(fenceFor({ project: p.dir, ...fenceConfig }), [bin, ...args], { home: homedir(), fenceBin: join(BIN, 'manul-fence') })
+    const argv = fencedArgv(fenceFor({ project: p.dir, ...fenceConfig }), [bin, ...args], { home: homedir(), fenceBin: join(BIN, 'agentshot-fence') })
     return argv ? [argv[0], argv.slice(1)] : [bin, args]
   }
   return defineExtension({
     name: 'editor',
-    sections: [section('manul', (input: Any) =>
-      `You are Manul, an agentic video editor. The user drops in a video and tells you what they want; you do it.\n` +
+    sections: [section('agentshot', (input: Any) =>
+      `You are AgentShot, an agentic video editor. The user drops in a video and tells you what they want; you do it.\n` +
       `The project folder is ${input.env?.cwd || 'the working directory'}: project.json (versions, notes, media info), media/ (imported files), ` +
       `renders/ (your outputs), notes/ (frame stills).\n` +
-      `When delivering a generated file (image, document, spreadsheet, audio, video, or archive), save it under renders/ and include a Markdown link such as [Download thumbnail](renders/thumbnail.png) in your reply. Manul shows linked project files as downloadable cards in chat and lists generated outputs in Files.\n` +
+      `When delivering a generated file (image, document, spreadsheet, audio, video, or archive), save it under renders/ and include a Markdown link such as [Download thumbnail](renders/thumbnail.png) in your reply. AgentShot shows linked project files as downloadable cards in chat and lists generated outputs in Files.\n` +
       `How to work:\n` +
       `- Start with project_state to see the versions, the current one, open notes and media details.\n` +
       `Use project_state rather than bash/Python to inspect project.json, current, proposal or media. Do not run ls .., ` +
-      `search parent folders, or investigate Manul's installation to recover from an edit error. Bash works inside the project; ` +
+      `search parent folders, or investigate AgentShot's installation to recover from an edit error. Bash works inside the project; ` +
       `"Operation not permitted" outside it is a sandbox refusal, not a broken shell.\n` +
       `- Know the footage before deciding anything about it. Measure first: analyze_video gives the shots (cut times), camera shake and motion, ` +
       `exposure, contrast, colour cast, black/frozen frames, loudness and silence, plus one frame per shot to see what each shot shows; ` +
@@ -276,16 +276,16 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       `They are filmed in the user's own Chrome: drive it with chrome-bsk (bsk's commands, on their Chrome and logins). ` +
       `walkthrough_record films the tab your session drives in one continuous take; compose_walkthrough cuts the idle time, voices one line per step ` +
       `and adds the zoom and a cursor. Never record the screen any other way.\n` +
-      `- Voice and music: generate_voice and generate_music (they use the user's own key or their Manul key; never call voice or music APIs with curl).\n` +
+      `- Voice and music: generate_voice and generate_music (they use the user's own key or their AgentShot key; never call voice or music APIs with curl).\n` +
       `- Fonts for text you draw with ffmpeg: ${FONTS_DIR} (Inter-Regular.ttf, Inter-Bold.ttf; drawtext fontfile=…, subtitles fontsdir=…). ` +
       `Fonts the user added are in the project's fonts/ folder with Inter: then use fontsdir=fonts (never fontsdir=media).\n` +
       `- Prefer one well-built ffmpeg command over many small ones. Keep codecs sensible: libx264 -crf 18 -preset veryfast, aac 192k, -movflags +faststart.\n` +
       `- When you need a decision from the user, call ask_user with 2–5 options and stop.\n` +
-      `API keys the user saved in Manul are already in your shell's environment (e.g. $ELEVENLABS_API_KEY, $GEMINI_API_KEY): use them in commands as they are; ` +
+      `API keys the user saved in AgentShot are already in your shell's environment (e.g. $ELEVENLABS_API_KEY, $GEMINI_API_KEY): use them in commands as they are; ` +
       `never print, echo, measure or log a key or any part of it, and never look for keys elsewhere (other shells, files).\n` +
-      `Your files and shell are fenced to the project folder (plus temp folders and Manul's bundled tools, skills, models and fonts, ` +
+      `Your files and shell are fenced to the project folder (plus temp folders and AgentShot's bundled tools, skills, models and fonts, ` +
       `read-only); anything else is refused, so don't look elsewhere. Files the user adds are already copied into media/ (never look for the originals).\n` +
-      `Stay inside the project folder. Never inspect, run or search Manul's own program files, other folders or system processes; ` +
+      `Stay inside the project folder. Never inspect, run or search AgentShot's own program files, other folders or system processes; ` +
       `if a tool fails, read its error and fix your input instead of investigating the app.\n` +
       `Write replies in short plain Markdown. Say what you did, not how.\n\n` + MOTION_POINTER +
       motionBrief(input.env?.cwd ? bridge.project(input.env.cwd) : undefined) +
@@ -939,7 +939,7 @@ export async function startAgent(opts: {
   fence?: FenceConfig
 }) {
   const models = createModels({ authContext: { env: async (n: string) => process.env[n], fileExists: async (p: string) => existsSync(p) } })
-  for (const p of [anthropicProvider, googleProvider, openaiProvider, manulProvider]) models.setProvider(p())
+  for (const p of [anthropicProvider, googleProvider, openaiProvider, agentshotProvider]) models.setProvider(p())
   // custom providers (Azure AI Foundry, gateways, local servers): rebuilt when they or their keys change
   let custom: string[] = []
   const loadCustom = () => {
@@ -964,7 +964,7 @@ export async function startAgent(opts: {
   const envFor = ({ cwd }: Any) => {
     const dir = cwd ?? process.cwd()
     const fence: Fence = opts.fence ? fenceFor({ project: dir, ...opts.fence }) : { rw: ['/'], ro: [] }
-    return new FencedEnv({ cwd: dir, shellEnv }, fence, { home: homedir(), fenceBin: opts.fence ? join(BIN, 'manul-fence') : undefined }, !!opts.fence)
+    return new FencedEnv({ cwd: dir, shellEnv }, fence, { home: homedir(), fenceBin: opts.fence ? join(BIN, 'agentshot-fence') : undefined }, !!opts.fence)
   }
 
   const openHarness = async (dbPath: string, resolveDir: (id: string) => string) => {
@@ -1061,7 +1061,8 @@ export async function startAgent(opts: {
       const l = live.get(dir)
       if (!l) throw new Error('This project is not open.')
       const model = await pickModel(dir)
-      if (!model) throw new Error('Add an API key first (Settings → Keys).')
+      // code: the phone offers AgentShot credits or its own key for this (mobile-bridge.ts)
+      if (!model) throw Object.assign(new Error('Add an API key first (Settings → Keys).'), { code: 'needs-key' })
       const inputText = typeof content === 'string' ? content : content.filter(c => c.type === 'text').map(c => c.text || '').join('\n')
       demoBriefs.input(String(l.conv.id), inputText.split(ATTACHED)[0])
       inspections.reset(String(l.conv.id))

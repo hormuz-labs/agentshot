@@ -8,7 +8,7 @@ import { Memory } from '../src/main/memory'
 import { Skills } from '../src/main/skills'
 import { isWithinDir } from '../src/main/paths'
 
-const root = mkdtempSync(join(tmpdir(), 'manul-agent-'))
+const root = mkdtempSync(join(tmpdir(), 'agentshot-agent-'))
 const dir = join(root, 'project')
 const bridge = { project: () => undefined } as unknown as Bridge
 const deps = () => ({

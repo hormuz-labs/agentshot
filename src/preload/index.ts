@@ -10,10 +10,11 @@ import type { DemoOptions } from '../main/demo'
 import type { GalleryExample, SubtitleLink } from '../shared/types'
 import type { TelemetryState } from '../shared/telemetry'
 import type { SettingsOpened } from '../shared/onboarding'
-import type { MobileStatus } from '../main/mobile-bridge'
+import type { MobileState } from '../main/mobile-bridge'
 import type { SavedWorker, WorkerClientStatus } from '../main/worker-client'
 import type { DiscoveredWorker } from '../main/account'
 
+export type CloudWorkerStatus = { share: boolean; keySet: boolean; running: boolean; name: string; error?: string }
 export type SubtitlesState = { link?: SubtitleLink; cues: Cue[]; candidates: string[] }
 /** How many edits can be undone (back) and redone (forward). */
 export type UndoState = { back: number; forward: number }
@@ -33,10 +34,12 @@ const on = <T extends unknown[]>(ch: string) => (fn: (...args: T) => void) => {
 
 const api = {
   mobile: {
-    status: () => ipcRenderer.invoke('mobile:status') as Promise<MobileStatus>,
-    start: () => ipcRenderer.invoke('mobile:start') as Promise<MobileStatus>,
-    stop: () => ipcRenderer.invoke('mobile:stop') as Promise<MobileStatus>,
-    revoke: (id: string) => ipcRenderer.invoke('mobile:revoke', id) as Promise<MobileStatus>,
+    status: () => ipcRenderer.invoke('mobile:status') as Promise<MobileState>,
+    start: () => ipcRenderer.invoke('mobile:start') as Promise<MobileState>,
+    stop: () => ipcRenderer.invoke('mobile:stop') as Promise<MobileState>,
+    revoke: (id: string) => ipcRenderer.invoke('mobile:revoke', id) as Promise<MobileState>,
+    /** let phones signed in to the same AgentShot account reach this computer (on unless turned off) */
+    setAccountPhones: (on: boolean) => ipcRenderer.invoke('mobile:accountPhones', on) as Promise<MobileState>,
     qr: () => ipcRenderer.invoke('mobile:qr') as Promise<{ link: string; svg: string; mesh: boolean } | null>,
   },
   worker: {
@@ -50,6 +53,11 @@ const api = {
     remove: (id: string) => ipcRenderer.invoke('worker:remove', id) as Promise<WorkerClientStatus>,
     pull: (remoteDir: string) => ipcRenderer.invoke('worker:pull', remoteDir) as Promise<{ dir: string; downloaded: number; skipped: number }>,
     push: (localDir: string) => ipcRenderer.invoke('worker:push', localDir) as Promise<{ remoteDir: string; uploaded: number; skipped: number }>,
+  },
+  /** Sharing this computer as a cloud worker (a separate headless worker runs alongside). */
+  cloudWorker: {
+    status: () => ipcRenderer.invoke('cloudWorker:status') as Promise<CloudWorkerStatus>,
+    set: (opts: { share: boolean; secret?: string }) => ipcRenderer.invoke('cloudWorker:set', opts) as Promise<CloudWorkerStatus>,
   },
   onboarding: {
     settingsOpened: () => ipcRenderer.invoke('onboarding:settings-opened') as Promise<SettingsOpened>,
@@ -133,7 +141,7 @@ const api = {
     list: () => ipcRenderer.invoke('keys:list') as Promise<KeyInfo[]>,
     set: (name: string, value: string) => ipcRenderer.invoke('keys:set', name, value) as Promise<KeyInfo[]>,
   },
-  /** Signing in to Manul: brings the person's Manul key (stays in the main process); only who is signed in comes back. */
+  /** Signing in to AgentShot: brings the person's AgentShot key (stays in the main process); only who is signed in comes back. */
   account: {
     status: () => ipcRenderer.invoke('account:status') as Promise<AccountStatus>,
     signIn: () => ipcRenderer.invoke('account:signIn') as Promise<AccountStatus>,
@@ -153,7 +161,7 @@ const api = {
     remove: (id: string) => ipcRenderer.invoke('providers:remove', id) as Promise<ProvidersState>,
     importOmp: () => ipcRenderer.invoke('providers:import-omp') as Promise<ProvidersState & { added: { id: string; name: string; models: number; key: boolean }[] }>,
   },
-  /** Manul's own browser (the Browser panel) and which browser the agent drives. */
+  /** AgentShot's own browser (the Browser panel) and which browser the agent drives. */
   browser: {
     state: () => ipcRenderer.invoke('browser:state') as Promise<BrowserState>,
     onState: on<[BrowserState]>('browser:state'),
@@ -227,5 +235,5 @@ const api = {
   onNotice: on<[string]>('notice'),
 }
 
-export type ManulApi = typeof api
-contextBridge.exposeInMainWorld('manul', api)
+export type AgentShotApi = typeof api
+contextBridge.exposeInMainWorld('agentshot', api)

@@ -67,6 +67,7 @@ On macOS, `npm run dev` and `npm start` use a cached `AgentShot.app` development
 | `npm run test:mascot` | Checks gaze tracking, touch response, paw/growl interactions, and compact controls in Electron |
 | `npm test` | Unit and integration tests (Vitest) |
 | `npm run test:e2e` | The real app, end to end (Playwright) |
+| `npm run test:e2e:mobile` | The mobile app on an Android emulator or phone, against the real desktop app (needs Flutter) |
 | `npm run smoke` | Builds, launches, screenshots each screen (set `GEMINI_API_KEY` and pass a prompt to test the agent) |
 | `node scripts/screenshot.mjs` | Takes the README screenshots of a staged project (`docs/start.png`, `chat.png`, `inline.png`, `dark.png`) |
 | `node scripts/fetch-motion-gallery.mjs [--media]` | The motion gallery from prompt-motion.com: catalogue and posters (shipped), and with `--media` the videos from each creator's post (local only) |
@@ -91,7 +92,7 @@ flowchart LR
   Agent --> Models["Claude · Gemini · GPT"]
   Agent --> Tools["ffmpeg · whisper.cpp<br/>motion clips"]
   Agent --> Bsk["bsk<br/>(private daemon)"]
-  Bsk --> Browser["Manul's browser<br/>Browser panel"]
+  Bsk --> Browser["AgentShot's browser<br/>Browser panel"]
 ```
 
 | | |
@@ -100,8 +101,8 @@ flowchart LR
 | **Agent** | [pi-durable](https://www.npmjs.com/package/@earendil-works/pi-durable): every conversation and tool call is saved before it's shown, so a crash resumes mid-run |
 | **Agent ↔ UI** | [AG-UI](https://docs.ag-ui.com) events: tool cards, permission cards, live state |
 | **Media** | Our own pinned static ffmpeg 9.0.2 and whisper.cpp builds; heavy tools download on demand, checksummed |
-| **Motion clips** | HTML + GSAP on Manul's clock, stepped frame by frame in an offscreen Chromium and piped to ffmpeg |
-| **Agent browser** | [BrowserSkill](https://github.com/Tencent/BrowserSkill) (`bsk`), bundled and private: its own daemon home and port, the extension running inside Manul's browser on a rebuilt Chrome extension API. A bsk installed in the user's Chrome never sees it; Settings → Browser can switch to the user's Chrome on purpose |
+| **Motion clips** | HTML + GSAP on AgentShot's clock, stepped frame by frame in an offscreen Chromium and piped to ffmpeg |
+| **Agent browser** | [BrowserSkill](https://github.com/Tencent/BrowserSkill) (`bsk`), bundled and private: its own daemon home and port, the extension running inside AgentShot's browser on a rebuilt Chrome extension API. A bsk installed in the user's Chrome never sees it; Settings → Browser can switch to the user's Chrome on purpose |
 | **Skills & memory** | Plain `SKILL.md` folders grouped into profiles; memory is one fact per file |
 | **Updates** | The app via GitHub releases; skills over the air from an Ed25519-signed feed |
 
@@ -125,6 +126,7 @@ npm test           # unit + integration (Vitest); Electron is stubbed, ffmpeg is
 npm run test:e2e   # the real app: clips, export, menu, proxies, projects in the sidebar, resizing, instructions at the selection, files, browser, conversations
 npm run test:packaging   # no runtime suite; native Windows CI also downloads the pinned model and tests Unicode paths
 npm run package:dir && node test/e2e/packaged.e2e.mjs   # the packaged app: tools, clips, skills, export from the bundle
+npm run test:e2e:mobile   # the mobile app: pairing, projects, talking to the agent, editing, a video from an idea, every screen at phone/tablet sizes and large text, disconnecting
 MANUL_TEST_TOOLS=<tools folder with whisper installed> npm test   # also runs the downloaded-engine test
 ```
 

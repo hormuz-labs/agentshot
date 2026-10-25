@@ -287,9 +287,34 @@ describe('the account service: headscale mesh and worker pool', () => {
     expect(leased.worker).toMatchObject({ id: 'home-pool-1', pool: true, urls: ['https://100.64.0.11:47821'] })
     expect(leased.worker.token).toMatch(/^lease\.\d+\./)
 
-    // Releasing frees it back to the pool
+    // the worker learns who holds it from its next heartbeat (and enforces it)
+    const poolBeat = (id: string) => call('/v1/workers/heartbeat', {
+      method: 'POST',
+      headers: { 'x-manul-pool-secret': 'pool_secret_123' },
+      body: JSON.stringify({ id, name: 'Home Pool GPU', urls: ['https://100.64.0.11:47821'], fingerprint: fp, secret, capabilities: { priority: 5 } }),
+    }).then(r => r.json())
+    const held = await poolBeat('home-pool-1')
+    expect(held.pool).toBe(true)
+    expect(held.leasedTo).toBeTruthy()
+    expect(held.leasedUntil).toBeGreaterThan(Date.now())
+
+    // Releasing frees it back to the pool, and the worker hears so
     const rel = await (await call('/v1/workers/release', { method: 'POST', headers: asKey(), body: JSON.stringify({ workerId: 'home-pool-1' }) })).json()
     expect(rel).toEqual({ released: true })
+    const freed = await poolBeat('home-pool-1')
+    expect(!freed.leasedTo || freed.leasedUntil <= Date.now()).toBe(true)
+  })
+
+  it('makes a cloud worker only with the pool secret, never because a signed-in machine says so', async () => {
+    await ask('good')
+    const hb = await (await call('/v1/workers/heartbeat', {
+      method: 'POST',
+      headers: asKey(),
+      body: JSON.stringify({ id: 'sneaky-pc', name: 'Not a pool', urls: ['https://100.64.0.3:47821'], fingerprint: fp, secret, pool: true }),
+    })).json()
+    expect(hb.pool).toBe(false)
+    const listed = await (await call('/v1/workers', { headers: asKey() })).json()
+    expect(listed.workers.find((w: { id: string }) => w.id === 'sneaky-pc')).toMatchObject({ pool: false })
   })
 
   it('auto-creates the Headscale manul user when absent, falls back to username preauthkey, and enforces auth & config', async () => {

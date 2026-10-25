@@ -1,4 +1,4 @@
-/* Manul's house stylesheet for motion clips: a good typeface that works offline, sane defaults. */
+/* AgentShot's house stylesheet for motion clips: a good typeface that works offline, sane defaults. */
 @font-face { font-family: "Inter"; src: url("manul://lib/fonts/Inter.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
 *, *::before, *::after { box-sizing: border-box; }
 html, body { font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }

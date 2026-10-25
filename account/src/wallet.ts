@@ -1,13 +1,13 @@
 // The wallet: the credits a person has, shared with Pitch (trypitch.co). Pitch's billing (its Dodo Payments business,
 // its plans, its webhook that grants a plan's credits every cycle) is the one ledger for both products, so a Pitch
-// subscriber signs in to Manul with the same email and finds their plan and credits there, and what they spend in either
+// subscriber signs in to AgentShot with the same email and finds their plan and credits there, and what they spend in either
 // app comes off the same balance.
 //
 // The ledger is Pitch's Postgres: "UserProfile" (one per person), "Subscription" (written by Pitch's Dodo webhook) and
-// "CreditTransaction" (every grant and every spend, each with a unique idempotency key). Manul only adds rows: a new
+// "CreditTransaction" (every grant and every spend, each with a unique idempotency key). AgentShot only adds rows: a new
 // profile for someone Pitch hasn't seen, a starter grant, and its own spends (keys starting `manul:`).
 //
-// The gateway (Bifrost) meters what a Manul key spends in dollars of model cost. Every so often (sync below) the dollars
+// The gateway (Bifrost) meters what an AgentShot key spends in dollars of model cost. Every so often (sync below) the dollars
 // spent since the last look become credits taken off the ledger, and the key's budget is set to what it has used plus
 // what the ledger says is left, so the gateway stops it when the credits run out.
 import { randomUUID } from 'node:crypto'
@@ -34,11 +34,11 @@ export type WorkerRecord = {
 
 export interface Wallet {
   /** The person with this email (the oldest profile, Pitch's if they have one), made if there is none. */
-  link(email: string, manulUser: string): Promise<string>
+  link(email: string, agentshotUser: string): Promise<string>
   account(userId: string): Promise<Account | undefined>
   /** Adds a ledger row once per key (a negative delta is a spend). False when the key was already used. */
   post(userId: string, delta: number, type: 'promo' | 'usage', description: string, key: string): Promise<boolean>
-  /** Whose each Manul key is, and the credits charged so far for its gateway spend, so each dollar is charged once. */
+  /** Whose each AgentShot key is, and the credits charged so far for its gateway spend, so each dollar is charged once. */
   charged(keyId: string): Promise<Charged | undefined>
   setCharged(keyId: string, userId: string, credits: number): Promise<void>
   /** Every key with spend to look at. */
@@ -53,12 +53,12 @@ export interface Wallet {
 }
 
 /** The Pitch database. */
-export async function postgresWallet(connectionString: string, manulDatabase?: string, { createTables = false } = {}): Promise<Wallet> {
+export async function postgresWallet(connectionString: string, agentshotDatabase?: string, { createTables = false } = {}): Promise<Wallet> {
   const pool = new pg.Pool({ connectionString, max: 5, connectionTimeoutMillis: 10_000 })
   pool.on('error', e => console.error('wallet database:', e.message))
   if (createTables) await pool.query(PITCH_TABLES)
-  // What Manul has charged per key lives with Manul, not in Pitch's schema.
-  const own = manulDatabase ? new pg.Pool({ connectionString: manulDatabase, max: 3, connectionTimeoutMillis: 10_000 }) : pool
+  // What AgentShot has charged per key lives with AgentShot, not in Pitch's schema.
+  const own = agentshotDatabase ? new pg.Pool({ connectionString: agentshotDatabase, max: 3, connectionTimeoutMillis: 10_000 }) : pool
   if (own !== pool) own.on('error', e => console.error('account database:', e.message))
   await own.query(`CREATE TABLE IF NOT EXISTS manul_gateway_charges (
     key_id text PRIMARY KEY,
@@ -94,11 +94,11 @@ export async function postgresWallet(connectionString: string, manulDatabase?: s
     updatedAt: new Date(r.updated_at).getTime(),
   })
   const wallet: Wallet = {
-    async link(email, manulUser) {
+    async link(email, agentshotUser) {
       const found = await pool.query(`SELECT id FROM "UserProfile" WHERE lower(email) = lower($1) ORDER BY "createdAt" LIMIT 1`, [email])
       if (found.rows[0]) return found.rows[0].id
-      // Pitch's profile ids are its Clerk user ids; Manul's are prefixed so the two can't collide.
-      const id = 'manul_' + manulUser
+      // Pitch's profile ids are its Clerk user ids; AgentShot's are prefixed so the two can't collide.
+      const id = 'manul_' + agentshotUser
       await pool.query(`INSERT INTO "UserProfile" (id, email, "updatedAt") VALUES ($1, $2, now()) ON CONFLICT (id) DO NOTHING`, [id, email])
       return id
     },
@@ -197,7 +197,7 @@ export async function postgresWallet(connectionString: string, manulDatabase?: s
   return wallet
 }
 
-/** The part of Pitch's schema (packages/db/prisma/schema.prisma) Manul reads and writes, for local runs and tests. */
+/** The part of Pitch's schema (packages/db/prisma/schema.prisma) AgentShot reads and writes, for local runs and tests. */
 export const PITCH_TABLES = `
 CREATE TABLE IF NOT EXISTS "UserProfile" (id text PRIMARY KEY, email text NOT NULL, "createdAt" timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" timestamp(3) NOT NULL);
 CREATE TABLE IF NOT EXISTS "Subscription" (id text PRIMARY KEY, "userId" text NOT NULL REFERENCES "UserProfile"(id), "dodoSubscriptionId" text NOT NULL UNIQUE,
@@ -218,9 +218,9 @@ export function memoryWallet() {
   const workers = new Map<string, WorkerRecord>()
   const wallet: Wallet & { ledger: typeof ledger; subscriptions: typeof subscriptions; profiles: typeof profiles; workers: typeof workers } = {
     ledger, subscriptions, profiles, workers,
-    async link(email, manulUser) {
+    async link(email, agentshotUser) {
       for (const [id, p] of profiles) if (p.email.toLowerCase() === email.toLowerCase()) return id
-      const id = 'manul_' + manulUser
+      const id = 'manul_' + agentshotUser
       profiles.set(id, { email })
       return id
     },

@@ -1,12 +1,12 @@
 ---
 name: motion-design
-description: Making motion clips (title cards, lower thirds, kinetic text, charts, explainers, end cards) with HTML + GSAP that Manul renders frame-exact. Read before create_clip or editing a clip.
+description: Making motion clips (title cards, lower thirds, kinetic text, charts, explainers, end cards) with HTML + GSAP that AgentShot renders frame-exact. Read before create_clip or editing a clip.
 ---
 
-# Motion design for Manul clips
+# Motion design for AgentShot clips
 
-A clip is HTML + GSAP that Manul renders into video frame by frame. `create_clip` takes the body markup, a `<style>` and
-a `<script>`; Manul adds the document, GSAP, its runtime, the Inter font and a fixed stage at the timeline size.
+A clip is HTML + GSAP that AgentShot renders into video frame by frame. `create_clip` takes the body markup, a `<style>` and
+a `<script>`; AgentShot adds the document, GSAP, its runtime, the Inter font and a fixed stage at the timeline size.
 
 ## Two kinds of clip
 - **Full-frame cards** (title cards, chapter cards, end cards, explainers that replace the picture): `create_clip`
@@ -17,7 +17,7 @@ a `<script>`; Manul adds the document, GSAP, its runtime, the Inter font and a f
 
 ## How clips work
 - Write normal GSAP: `gsap.timeline()`, `gsap.to / from / fromTo`, eases, staggers. **Never pause it**, and never use
-  `setTimeout`, `setInterval` or `requestAnimationFrame` for motion: Manul drives time and renders any frame exactly.
+  `setTimeout`, `setInterval` or `requestAnimationFrame` for motion: AgentShot drives time and renders any frame exactly.
 - Plugins load by name when you use them: SplitText, DrawSVGPlugin, MorphSVGPlugin, MotionPathPlugin, TextPlugin,
   CustomEase. For canvas drawing use `manul.onFrame(t => …)` (t in seconds).
 - The stage is `manul.width × manul.height` px (the film's size). Position elements absolutely in px.

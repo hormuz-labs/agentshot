@@ -5,7 +5,7 @@ import { createTour, decorateTour } from '@/lib/tour-driver'
 
 type Session = { phase: TourPhase; project: string | null }
 
-/** Driver.js supplies the spotlight and positioning; every visible style belongs to Manul. */
+/** Driver.js supplies the spotlight and positioning; every visible style belongs to AgentShot. */
 export function ProductTour({ project, restored, blocked, ready, onPrepare, onKeys }: {
   project: string | null; restored: boolean; blocked: boolean; ready: boolean
   onPrepare(): void; onKeys(): void
@@ -18,7 +18,7 @@ export function ProductTour({ project, restored, blocked, ready, onPrepare, onKe
   const paused = blocked || modalOpen
 
   useEffect(() => {
-    const check = () => setModalOpen(Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]:not(.manul-tour)'))
+    const check = () => setModalOpen(Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]:not(.agentshot-tour)'))
       .some(el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden'))
     const observer = new MutationObserver(check)
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-state', 'style'] })
@@ -29,7 +29,7 @@ export function ProductTour({ project, restored, blocked, ready, onPrepare, onKe
   // A new installation has no projects. Existing users discover the replay entry without an interruption.
   useEffect(() => {
     let cancelled = false
-    window.manul.project.recent().then(recent => {
+    window.agentshot.project.recent().then(recent => {
       if (cancelled) return
       if (recent.length && !readTourProgress().home) {
         const saved = { home: 'skipped', editor: 'skipped' } as const
@@ -87,7 +87,7 @@ export function ProductTour({ project, restored, blocked, ready, onPrepare, onKe
         decorateTour(popover, session.phase === 'home' ? 'Getting started' : 'Directing your film', at, steps.length, skipTour)
         if ((session.phase === 'home' && at === 1) || (session.phase === 'editor' && at === 1 && !ready)) {
           const keys = document.createElement('button')
-          keys.type = 'button'; keys.className = 'manul-tour-action'; keys.textContent = 'Open Settings → Keys'
+          keys.type = 'button'; keys.className = 'agentshot-tour-action'; keys.textContent = 'Open Settings → Keys'
           keys.onclick = onKeys
           popover.description.append(keys)
         }

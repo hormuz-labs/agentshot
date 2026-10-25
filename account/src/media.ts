@@ -1,7 +1,7 @@
-// Voice (text to speech) and music from the vendors Manul works with, behind one request shape, so the agent asks for
+// Voice (text to speech) and music from the vendors AgentShot works with, behind one request shape, so the agent asks for
 // "a warm narrator saying this" or "62 s of lo-fi in three sections" and doesn't care who makes it. Used twice:
 //   - the app, with the person's own keys (src/main/generate.ts)
-//   - the account service, with Manul's keys, for people with a Manul key (index.ts: /v1/voice, /v1/music); which
+//   - the account service, with AgentShot's keys, for people with an AgentShot key (index.ts: /v1/voice, /v1/music); which
 //     vendor and model it uses, the voices and the prices are in media.json (gateway/k8s/media.json), never told to the app
 // Errors never name the vendor: the app adds it for the person's own keys, the account service never does.
 
@@ -30,13 +30,13 @@ export type Voice = { about: string } & Record<Vendor, string>
 export const KEY_ENV: Record<Vendor, string> = { elevenlabs: 'ELEVENLABS_API_KEY', gemini: 'GEMINI_API_KEY', openai: 'OPENAI_API_KEY' }
 export const VENDOR_NAME: Record<Vendor, string> = { elevenlabs: 'ElevenLabs', gemini: 'Google Gemini', openai: 'OpenAI' }
 
-/** Each vendor's model when nothing else says (the app with the person's own keys; media.json for Manul keys). */
+/** Each vendor's model when nothing else says (the app with the person's own keys; media.json for AgentShot keys). */
 export const MODELS: { voice: Record<Vendor, string>; music: Partial<Record<Vendor, string>> } = {
   voice: { elevenlabs: 'eleven_v3', gemini: 'gemini-3.8-flash-tts', openai: 'gpt-4o-mini-tts' },
   music: { elevenlabs: 'music_v2_5', gemini: 'lyria-3.5' },
 }
 
-/** Manul's voices: one name, the nearest voice at each vendor (ElevenLabs premade voice ids, Gemini and OpenAI voice names). */
+/** AgentShot's voices: one name, the nearest voice at each vendor (ElevenLabs premade voice ids, Gemini and OpenAI voice names). */
 export const VOICES: Record<string, Voice> = {
   narrator: { about: 'warm, clear female narrator (default)', elevenlabs: 'EXAVITQu4vr4xnSDxMaL', gemini: 'Sulafat', openai: 'coral' },
   guide: { about: 'calm, friendly male voice for explainers and tutorials', elevenlabs: 'JBFqnCBsd6RMkjVDRZzb', gemini: 'Achird', openai: 'ash' },

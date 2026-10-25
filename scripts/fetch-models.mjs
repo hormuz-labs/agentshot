@@ -1,4 +1,4 @@
-// Fetch the models Manul's model runners use (scripts/build-ml.sh) into resources/models/. The same files on every
+// Fetch the models AgentShot's model runners use (scripts/build-ml.sh) into resources/models/. The same files on every
 // platform; each SHA-256 checked against the hashes pinned here. Runs on `npm install`.
 //   speaker-segmentation.onnx  pyannote segmentation 3.0 (MIT, github.com/pyannote), as converted by sherpa-onnx
 //   speaker-embedding.onnx     3D-Speaker CAM++ zh/en (Apache-2.0, github.com/modelscope/3D-Speaker)
@@ -47,7 +47,7 @@ async function fetchOne(name, m) {
   if (got !== m.sha256) throw new Error(`${name}: checksum mismatch (got ${got}); refusing to use it`)
   mkdirSync(dir, { recursive: true })
   if (m.member) {
-    const tmp = mkdtempSync(join(tmpdir(), 'manul-model-'))
+    const tmp = mkdtempSync(join(tmpdir(), 'agentshot-model-'))
     const tar = process.platform === 'win32' ? join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
     writeFileSync(join(tmp, 'a.tar.bz2'), buf)
     execFileSync(tar, ['-xjf', 'a.tar.bz2', m.member], { cwd: tmp, timeout: 60_000, windowsHide: true })

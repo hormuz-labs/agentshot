@@ -1,10 +1,10 @@
-// The Manul key: one key and a few model tiers ("Manul", and Low to Ultra as in Pitch), through Manul's gateway (Bifrost).
+// The AgentShot key: one key and a few model tiers ("AgentShot", and Low to Ultra as in Pitch), through AgentShot's gateway (Bifrost).
 // The app never knows which model answers: the gateway's routing rule for each (`manul`, `manul-high`…) picks it
 // (Claude, Gemini, GPT…) and can change it any time. Max and Ultra come with a Pro or Max plan: the key's plan decides
 // which models the gateway lets it reach (account/src/plans.ts). Requests
 // go through Bifrost's OpenAI Responses route, the one whose translation keeps every vendor's tool-call state
 // (Gemini's thought signatures, Claude's thinking signatures, GPT's encrypted reasoning): see gateway/README.md.
-// The Manul key is a Bifrost virtual key, with its own budget and rate limits; the gateway holds the vendor keys.
+// The AgentShot key is a Bifrost virtual key, with its own budget and rate limits; the gateway holds the vendor keys.
 import { createProvider } from '@earendil-works/pi-ai/models'
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy'
 import { getConfig } from './config'
@@ -18,7 +18,7 @@ export const DEFAULT_GATEWAY = 'https://gateway.agentshot.si'
 /** MANUL_GATEWAY (a local Bifrost while developing), else the config's, else AgentShot's. */
 export const gatewayUrl = () => (process.env.MANUL_GATEWAY || getConfig().gateway || DEFAULT_GATEWAY).replace(/\/+$/, '')
 
-export function manulProvider(gateway = gatewayUrl()) {
+export function agentshotProvider(gateway = gatewayUrl()) {
   const baseUrl = `${gateway}/openai`                    // the SDK adds /responses
   return createProvider({
     id: 'manul',

@@ -18,7 +18,7 @@ Add credit → account service POST /v1/checkout → Dodo hosted checkout
            → app refreshes balance on window focus
 ```
 
-Voice and music with a Manul account go through the account service, not Bifrost's inference route. The service generates audio and reduces the key's budget by its configured price.
+Voice and music with an AgentShot account go through the account service, not Bifrost's inference route. The service generates audio and reduces the key's budget by its configured price.
 
 ## Checked on 2026-10-11
 
@@ -28,15 +28,15 @@ Voice and music with a Manul account go through the account service, not Bifrost
 | Account, payments, media, and app gateway tests | 46 passed after fixes |
 | Real Bifrost + Postgres payment recovery tests | 6 passed: provisioning, restart, ambiguous writes, two replicas, deactivation, concurrent audio/top-up |
 | Actual Bifrost v2.2.6 with fake Gemini, Claude, and GPT | 3 passed, including tool-call state and images |
-| Electron Manul-key settings screen | Passed; paste/remove and model selection |
+| Electron AgentShot-key settings screen | Passed; paste/remove and model selection |
 | Production Clerk OAuth client | Public client, PKCE required, matching client ID and callback |
-| Clerk secret in local `.env` | Can read the matching Manul OAuth application |
+| Clerk secret in local `.env` | Can read the matching AgentShot OAuth application |
 | Deployed account `/healthz` | HTTP 200 |
 | Unauthenticated account/key/balance and invalid gateway key | HTTP 401 |
 | Unsigned webhook | HTTP 401 |
 | Signed unrelated webhook with local signing secret | HTTP 200, skipped without credit changes |
 | Dodo test-mode API key and credit product | Valid; one-time USD, $5 minimum, $10 suggested, tax exclusive |
-| Dodo Manul webhook | Enabled, correct account URL, subscribed to `payment.succeeded`; signing secret matches |
+| Dodo AgentShot webhook | Enabled, correct account URL, subscribed to `payment.succeeded`; signing secret matches |
 | Dodo $10 checkout price preview | HTTP 200, $10 subtotal |
 | Real Gemini through local Bifrost | HTTP 200, reply `OK`, usage returned |
 | Local account → actual Dodo test checkout | $4 rejected locally (400), $10 created test checkout (200) |
@@ -55,7 +55,7 @@ Passing mocked tests or a webhook signature check does not establish that the wh
 
 These changes are in the checkout/local stack; remote services need deployment before their behavior changes.
 
-The full repository test run found six unrelated failures due to missing native `manul-beats`, `manul-vision`, and `manul-speakers` executables; account/gateway tests passed.
+The full repository test run found six unrelated failures due to missing native `agentshot-beats`, `agentshot-vision`, and `agentshot-speakers` executables; account/gateway tests passed.
 
 ## Fresh local test (recommended for these fixes)
 
@@ -158,7 +158,7 @@ Expected balance shape: `{ "credit": 2, "used": 0.01, "left": 1.99 }` (example u
 
 1. Record the test key's current `credit`, `used`, and `left`.
 2. Click **Add credit** in the app.
-3. Expect a Dodo **test checkout** for “Manul credit,” with a $5 minimum and $10 suggested amount.
+3. Expect a Dodo **test checkout** for “AgentShot credit,” with a $5 minimum and $10 suggested amount.
 4. Select $10, keep the payment currency USD, and complete the payment using Dodo's documented successful test payment details.
 5. In Dodo → Payments, verify status `succeeded`, the product, amount, tax, and metadata:
 
@@ -166,7 +166,7 @@ Expected balance shape: `{ "credit": 2, "used": 0.01, "left": 1.99 }` (example u
    { "user_id": "your-clerk-user-id", "virtual_key_id": "your-bifrost-key-id" }
    ```
 
-6. In Dodo → Developer → Webhooks → the Manul endpoint → Logs, find this payment's `payment.succeeded` delivery. It must return HTTP 200; the handler should report `credited: 10`.
+6. In Dodo → Developer → Webhooks → the AgentShot endpoint → Logs, find this payment's `payment.succeeded` delivery. It must return HTTP 200; the handler should report `credited: 10`.
 7. Inspect Bifrost: `max_limit` should rise by exactly $10 and `current_usage` should remain unchanged.
 8. Inspect Clerk private metadata: `payments` should contain that payment ID with value `10`.
 9. Return focus to the app. Its balance refreshes on focus, not continuously. If the webhook is still arriving, wait and focus/reopen Settings again.
@@ -214,7 +214,7 @@ If listing pods is forbidden, the cluster administrator must grant the appropria
 npm run typecheck
 npx vitest run test/account.test.ts test/account-service.test.ts test/account-media.test.ts test/media.test.ts test/gateway.test.ts
 npm run build
-node test/e2e/manul-key.e2e.mjs
+node test/e2e/agentshot-key.e2e.mjs
 ```
 
 Actual Bifrost translation tests require a disposable probe container. They use fake vendors and require no real vendor keys:

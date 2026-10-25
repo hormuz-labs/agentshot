@@ -7,7 +7,7 @@ import type { Job } from '../../../shared/types'
 
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([])
-  useEffect(() => { window.manul.jobs.list().then(setJobs); return window.manul.jobs.onChange(setJobs) }, [])
+  useEffect(() => { window.agentshot.jobs.list().then(setJobs); return window.agentshot.jobs.onChange(setJobs) }, [])
   return jobs
 }
 

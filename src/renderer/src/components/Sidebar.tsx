@@ -82,9 +82,9 @@ function ProjectRow({ dir, title, active, open, project, onSelect, onClose, onDe
       {/* the project on screen, opened up: its chats and its files */}
       {active && project && (
         <div className="mb-1 ml-[15px] mt-0.5 space-y-0.5 border-l border-line pl-1.5" data-project-tree>
-          <Branch label="Chats" add={() => window.manul.agent.newConversation(dir)} addLabel="New chat">
+          <Branch label="Chats" add={() => window.agentshot.agent.newConversation(dir)} addLabel="New chat">
             {convs.map(c => (
-              <button key={c.id} onClick={() => window.manul.agent.switchConversation(dir, c.id)} title={c.title} aria-current={c.id === project.conversation || undefined}
+              <button key={c.id} onClick={() => window.agentshot.agent.switchConversation(dir, c.id)} title={c.title} aria-current={c.id === project.conversation || undefined}
                 className={cn('block h-7 w-full truncate rounded-md px-2 text-left text-[12.5px]', c.id === project.conversation ? 'bg-hover/80 text-fg' : 'text-dim hover:bg-hover/60 hover:text-fg')}>
                 {c.title}
               </button>
@@ -107,8 +107,8 @@ export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onDele
   const [q, setQ] = useState('')
   // the projects as they change (titles, conversations): the ones open, kept fresh
   const [live, setLive] = useState<Record<string, Project>>({})
-  useEffect(() => window.manul.project.onChange(np => setLive(x => ({ ...x, [np.dir]: np }))), [])
-  useEffect(() => { window.manul.project.recent().then(setRecent).catch(() => {}) }, [open.join('\n'), active])
+  useEffect(() => window.agentshot.project.onChange(np => setLive(x => ({ ...x, [np.dir]: np }))), [])
+  useEffect(() => { window.agentshot.project.recent().then(setRecent).catch(() => {}) }, [open.join('\n'), active])
   const info = (d: string) => live[d] ?? loaded[d]
 
   // Open and recent projects share one stable creation order; switching the active project never promotes it.

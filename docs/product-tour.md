@@ -2,7 +2,7 @@
 
 ## Product analysis
 
-Manul is a local, conversation-led video editor. The start screen creates a project from a video and optionally sends
+AgentShot is a local, conversation-led video editor. The start screen creates a project from a video and optionally sends
 the first direction. `ProjectView` brings together the agent conversation, video preview, timeline and proposal controls.
 Users can direct edits through text, a playhead note, a timeline range or a box on the picture. The sidebar holds projects,
 chats and assets; `@` mentions attach assets and versions. An agent proposal is compared before/after and accepted or
@@ -11,7 +11,7 @@ caption choices. Keys, appearance, skills, memory, browser and local tools are m
 
 The walkthrough follows these implemented controls rather than roadmap features. In particular, it uses the UI’s
 **Accept / Reject** labels and explains that captions need a transcript. It supports both provider keys and the existing
-Manul-key sign-in/paste flow. macOS uses ⌘ shortcuts; Linux uses Ctrl.
+AgentShot-key sign-in/paste flow. macOS uses ⌘ shortcuts; Linux uses Ctrl.
 
 ## Walkthrough structure
 
@@ -37,7 +37,7 @@ separate database. The main process inserts the record once; reopening Settings 
 The Settings walkthrough has **only two topics**, across three steps:
 
 1. **Your own keys / BYOK:** what an API key means, provider accounts, Add → paste → Save, and provider billing.
-2. **Manul key:** one gateway connection, sign-in/pasting, Manul credit, automatic model selection, and BYOK priority.
+2. **AgentShot key:** one gateway connection, sign-in/pasting, AgentShot credit, automatic model selection, and BYOK priority.
 3. **Browser:** the built-in browser versus personal Chrome, the project’s globe button, and BrowserSkill requirements.
 
 It automatically switches Keys subtabs and the Browser settings section, using the same `tour-driver.ts` presentation as

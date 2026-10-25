@@ -1,9 +1,9 @@
-// Manul accounts (served by server.mjs, in the cluster next to the gateway): who is signing in (Clerk), that person's
-// Manul key (a Bifrost virtual key under their own Bifrost customer, so every request and every dollar in the gateway is
+// AgentShot accounts (served by server.mjs, in the cluster next to the gateway): who is signing in (Clerk), that person's
+// AgentShot key (a Bifrost virtual key under their own Bifrost customer, so every request and every dollar in the gateway is
 // theirs), and their credits and plan, which are Pitch's: one wallet for both apps (wallet.ts, plans.ts).
 //
 //   POST /v1/key            Bearer <Clerk OAuth access token>              → { key, key_id, email }
-//   GET  /v1/balance        Bearer <Manul key>, X-Manul-Key-Id: <key_id>   → { credits, plan, tiers, plans, … }
+//   GET  /v1/balance        Bearer <AgentShot key>, X-Manul-Key-Id: <key_id>   → { credits, plan, tiers, plans, … }
 //   POST /v1/checkout       same, body { plan } or { topup }               → { url }  (Dodo Payments checkout, Pitch's products)
 //   POST /v1/portal         same                                           → { url }  (Dodo's page to manage or cancel the plan)
 //   GET  /paid              where the checkout returns to
@@ -15,7 +15,7 @@
 // the checkout's metadata: the wallet's user id as clerk_user_id, the plan as pack, its credits. Checkouts made here
 // carry the same metadata, so the same webhook grants them.
 //
-// Voice and music are made with Manul's own vendor keys; which vendor and model, the voices and the prices are in
+// Voice and music are made with AgentShot's own vendor keys; which vendor and model, the voices and the prices are in
 // media.json (MEDIA_CONFIG, re-read every 30 s so a changed ConfigMap applies without a restart). The app is never
 // told who made it. The price, in credits, is taken off the wallet before the audio is made and given back if it fails.
 //
@@ -39,7 +39,7 @@ export interface Env {
   BIFROST_URL: string
   /** the gateway's admin credential, as the Authorization header: "Basic base64(user:password)" */
   BIFROST_AUTH: string
-  /** Manul's own tables (what each key was charged), in the gateway's Postgres */
+  /** AgentShot's own tables (what each key was charged), in the gateway's Postgres */
   ACCOUNT_DATABASE_URL?: string
   /** The wallet: Pitch's Postgres (profiles, subscriptions, the credit ledger) */
   WALLET_DATABASE_URL?: string
@@ -51,7 +51,7 @@ export interface Env {
   BIFROST_SETUP_TOKEN?: string
   /** JSON: what a new key gets (rate_limit, provider_configs); default NEW_KEY below */
   NEW_KEY?: string
-  /** Credits a new Manul account starts with; default STARTER_CREDITS */
+  /** Credits a new AgentShot account starts with; default STARTER_CREDITS */
   STARTER_CREDITS?: string
   /** Dodo Payments (Pitch's business): https://test.dodopayments.com or https://live.dodopayments.com */
   DODO_API?: string
@@ -155,7 +155,7 @@ export async function sync(env: Env, wallet: Wallet, keyId: string, userId?: str
     const before = await wallet.charged(keyId)
     // A key's spend from before it had a wallet (the old free dollars) isn't charged.
     const charged = before?.userId === owner ? before.credits : total
-    if (total > charged) await wallet.post(owner, -(total - charged), 'usage', 'Manul: model usage', `manul:gateway:${keyId}:${total}`)
+    if (total > charged) await wallet.post(owner, -(total - charged), 'usage', 'AgentShot: model usage', `manul:gateway:${keyId}:${total}`)
     if (!before || before.credits !== total || before.userId !== owner) await wallet.setCharged(keyId, owner, total)
 
     const account = await wallet.account(owner)
@@ -215,7 +215,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     fetch(`${(env.DODO_API || 'https://test.dodopayments.com').replace(/\/+$/, '')}${path}`, { signal: AbortSignal.timeout(15_000), ...init, headers: { authorization: `Bearer ${env.DODO_API_KEY}`, 'content-type': 'application/json', ...init.headers } })
   const live = /live\./.test(env.DODO_API || '')
 
-  /** The caller's key, proven by its value (the app sends the Manul key and the key id it was given with it). */
+  /** The caller's key, proven by its value (the app sends the AgentShot key and the key id it was given with it). */
   const caller = async (): Promise<VirtualKey | Response> => {
     const value = /^Bearer (.+)$/.exec(req.headers.get('authorization') || '')?.[1]
     const id = req.headers.get('x-manul-key-id')
@@ -224,7 +224,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     if (vk === undefined) return fail(502, 'Could not reach the gateway. Try again in a moment.')
     if (!vk || !same(vk.value, value)) return fail(401, 'Sign in again.')
     // Audio and checkout use the admin API, so Bifrost's inference middleware cannot enforce this for us.
-    if (!vk.is_active) return fail(403, 'Your Manul key is turned off. Contact support.')
+    if (!vk.is_active) return fail(403, 'Your AgentShot key is turned off. Contact support.')
     return vk
   }
   /** The caller's wallet user: the key's, else (keys from before wallets) linked now by the key's email. */
@@ -240,7 +240,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
   }
   async function linkWallet(sub: string, email: string, m?: Meta) {
     const userId = await wallet!.link(email, sub)
-    await wallet!.post(userId, Number(env.STARTER_CREDITS ?? STARTER_CREDITS), 'promo', 'Manul starter credits', `manul:starter:${userId}`)
+    await wallet!.post(userId, Number(env.STARTER_CREDITS ?? STARTER_CREDITS), 'promo', 'AgentShot starter credits', `manul:starter:${userId}`)
     if (m && m.wallet !== userId) await saveMeta(sub, { ...m, wallet: userId })
     return userId
   }
@@ -287,7 +287,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       const vk = await getKey(link.virtual_key_id)
       if (vk === undefined) return fail(502, 'Could not reach the gateway. Try again in a moment.')
       if (vk) {
-        if (!vk.is_active) return fail(403, 'Your Manul key is turned off. Contact support.')
+        if (!vk.is_active) return fail(403, 'Your AgentShot key is turned off. Contact support.')
         await sync(env, wallet, vk.id, userId)
         track(env, 'manul signed in', userId, { new_key: false, from_pitch: !userId.startsWith('manul_') })
         return json({ key: vk.value, key_id: vk.id, email })
@@ -299,7 +299,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     let customerId = link?.customer_id
     if (!customerId) {
       const c = await bifrost('/customers', { method: 'POST', body: JSON.stringify({ name: email }) })
-      if (!c.ok) return fail(502, 'Could not create your Manul key. Try again in a moment.')
+      if (!c.ok) return fail(502, 'Could not create your AgentShot key. Try again in a moment.')
       customerId = ((await c.json()) as { customer: { id: string } }).customer.id
     }
     const grants = env.NEW_KEY ? JSON.parse(env.NEW_KEY) : NEW_KEY
@@ -312,10 +312,10 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
         name: sub, description: email, customer_id: customerId, is_active: true,
       }),
     })
-    if (!v.ok) return fail(502, 'Could not create your Manul key. Try again in a moment.')
+    if (!v.ok) return fail(502, 'Could not create your AgentShot key. Try again in a moment.')
     const vk = ((await v.json()) as { virtual_key: VirtualKey }).virtual_key
     const saved = await saveMeta(sub, { ...m, bifrost: { customer_id: customerId, virtual_key_id: vk.id }, wallet: userId })
-    if (!saved.ok) return fail(502, 'Could not save your Manul key. Try again in a moment.')
+    if (!saved.ok) return fail(502, 'Could not save your AgentShot key. Try again in a moment.')
     await sync(env, wallet, vk.id, userId)
     track(env, 'manul signed in', userId, { new_key: true, from_pitch: !userId.startsWith('manul_') })
     return json({ key: vk.value, key_id: vk.id, email })
@@ -396,7 +396,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     return json({ url: out.link })
   }
 
-  /** Voice or music, made with Manul's keys and paid for with the caller's credits. */
+  /** Voice or music, made with AgentShot's keys and paid for with the caller's credits. */
   async function generate(kind: 'voice' | 'music') {
     const vk = await caller()
     if (vk instanceof Response) return vk
@@ -419,16 +419,16 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     const taken = await wallet.lock(userId, async () => {
       const left = (await wallet.account(userId))?.available ?? 0
       if (left < cost) return left
-      await wallet.post(userId, -cost, 'usage', `Manul: ${kind}`, operation)
+      await wallet.post(userId, -cost, 'usage', `AgentShot: ${kind}`, operation)
       return true
     })
     if (taken !== true) track(env, 'manul out of credits', userId, { kind })
-    if (taken !== true) return fail(402, `You're out of Manul credits: this needs ${cost} and ${Math.max(0, taken)} are left. Get more in Settings → Keys → Manul key.`)
+    if (taken !== true) return fail(402, `You're out of AgentShot credits: this needs ${cost} and ${Math.max(0, taken)} are left. Get more in Settings → Keys → AgentShot key.`)
     let audio
     try {
       audio = kind === 'voice' ? await speak(choice, key, body, { voices }) : await compose(choice, key, body)
     } catch (e) {
-      await wallet.post(userId, cost, 'usage', `Manul: ${kind} refund`, operation + ':refund')
+      await wallet.post(userId, cost, 'usage', `AgentShot: ${kind} refund`, operation + ':refund')
       if (!(e instanceof MediaError)) throw e
       console.error(`media: ${kind} → ${choice.provider}/${choice.model}: ${e.message}`)
       if (e.status !== 422) return fail(e.status === 429 ? 429 : 502, `${what} couldn't be made right now. Try again in a moment.`)
@@ -513,7 +513,6 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       fingerprint?: string
       secret?: string
       capabilities?: WorkerCapabilities
-      pool?: boolean
     }
     const id = typeof body.id === 'string' && /^[a-zA-Z0-9._-]{3,80}$/.test(body.id) ? body.id : ''
     const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : 'Worker'
@@ -524,7 +523,8 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     const rec = await wallet.upsertWorker({
       id,
       ownerId,
-      pool: isPool || !!body.pool,
+      // only the pool secret makes a cloud worker: a signed-in machine saying so stays the owner's own
+      pool: isPool,
       name,
       urls,
       fingerprint,

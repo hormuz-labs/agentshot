@@ -21,7 +21,7 @@ const root = join(import.meta.dirname, '..', '..')
 const require = createRequire(import.meta.url)
 const config = yaml.load(readFileSync(join(root, 'electron-builder.yml'), 'utf8'))
 const temp = t => {
-  const dir = mkdtempSync(join(tmpdir(), 'manul packaging '))
+  const dir = mkdtempSync(join(tmpdir(), 'agentshot packaging '))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   return dir
 }

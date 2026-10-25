@@ -60,7 +60,7 @@ export type ExportOptions = {
   source: { width: number; height: number }
   /** an .srt to burn into the picture (absolute, or relative to ffmpeg's cwd) */
   burnCaptions?: string
-  /** folder with fonts for burned captions (Inter ships with Manul) */
+  /** folder with fonts for burned captions (Inter ships with AgentShot) */
   fontsDir?: string
   captionColor?: string
 }

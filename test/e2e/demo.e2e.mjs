@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 
-const root = join(import.meta.dirname, '..', '..'), tmp = mkdtempSync(join(tmpdir(), 'manul-demo-e2e-'))
+const root = join(import.meta.dirname, '..', '..'), tmp = mkdtempSync(join(tmpdir(), 'agentshot-demo-e2e-'))
 const ffmpeg = bundledBinary('ffmpeg')
 const ff = (...args) => execFileSync(ffmpeg, ['-y', '-v', 'error', ...args])
 ff('-f', 'lavfi', '-i', 'color=c=blue:s=640x360:r=25:d=24', '-f', 'lavfi', '-i', "anoisesrc=seed=42:d=24:r=16000,volume='0.2+0.15*sin(1.3*t)+0.05*sin(3.7*t)':eval=frame", '-c:v', 'libx264', '-c:a', 'aac', '-shortest', join(tmp, 'screen.mp4'))
@@ -24,8 +24,8 @@ try {
   await app.evaluate(({ ipcMain }, file) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [file]) }, join(tmp, 'screen.mp4'))
   await win.click('[data-tour="import"]'); await win.locator('button[aria-label="Start"]').click()
   await win.waitForSelector('[data-project-title]')
-  const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
-  await win.evaluate(([dir, file]) => window.manul.project.import(dir, file), [dir, join(tmp, 'camera.mp4')])
+  const dir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
+  await win.evaluate(([dir, file]) => window.agentshot.project.import(dir, file), [dir, join(tmp, 'camera.mp4')])
   const noAutoDemo = async () => {
     assert.equal(await win.getByRole('button', { name: 'Auto Demo', exact: true }).count(), 0, 'multiple videos never add an Auto Demo button')
     assert.equal(await win.locator('[data-demo-toolbox]').count(), 0, 'no automatic demo setup in ordinary chat')
@@ -64,7 +64,7 @@ try {
   let p = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
   assert.equal(p.versions.length, 1, 'chat submits a brief instead of generating a video itself')
   // Separately verify the deterministic tool backend an agent invokes after receiving the brief.
-  await win.evaluate(dir => window.manul.demo.create(dir, { screen: 'media/screen.mp4', camera: 'media/camera.mp4', corner: 'top-right', layout: { shape: 'circle', width: 128, height: 128 }, cleanup: 'none', audio: 'screen' }), dir)
+  await win.evaluate(dir => window.agentshot.demo.create(dir, { screen: 'media/screen.mp4', camera: 'media/camera.mp4', corner: 'top-right', layout: { shape: 'circle', width: 128, height: 128 }, cleanup: 'none', audio: 'screen' }), dir)
   await win.getByRole('button', { name: 'Accept', exact: true }).waitFor({ timeout: 60000 })
   p = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
   const version = p.versions.find(v => v.id === p.proposal)
@@ -100,7 +100,7 @@ try {
   await win.getByLabel('Camera width').fill('100')
   await win.waitForFunction(() => document.querySelector('[data-camera-controls]').textContent.includes('100 × 100'))
   assert.equal(await win.locator('[data-demo-camera]').evaluate(v => v.parentElement.style.width).then(parseFloat) > 0, true)
-  await win.evaluate(dir => window.manul.timeline.undo(dir), dir)
+  await win.evaluate(dir => window.agentshot.timeline.undo(dir), dir)
   await win.waitForFunction(() => document.querySelector('[data-camera-controls]').textContent.includes('128 × 128'))
   const camBox = await win.locator('[data-demo-camera]').evaluate(v => { const r = v.parentElement.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height } })
   const oldX = await win.getByLabel('Camera x', { exact: true }).inputValue()
@@ -146,8 +146,8 @@ try {
   await app.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: file }) }, join(tmp, 'concurrent.mp4'))
   const beforeRace = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
   const [saved, savedAgain, concurrentExport] = await win.evaluate(dir => Promise.all([
-    window.manul.timeline.render(dir), window.manul.timeline.render(dir),
-    window.manul.export.run(dir, { preset: 'original', captions: 'none' }),
+    window.agentshot.timeline.render(dir), window.agentshot.timeline.render(dir),
+    window.agentshot.export.run(dir, { preset: 'original', captions: 'none' }),
   ]), dir)
   assert.equal(saved, savedAgain, 'simultaneous saves share the same render')
   assert.equal(concurrentExport.file, join(tmp, 'concurrent.mp4'))
@@ -172,11 +172,11 @@ try {
   await win.locator('[data-project-row]').filter({ hasText: 'screen' }).first().click()
   await win.locator('[data-project-view]:visible').waitFor()
   await app.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: file }) }, join(tmp, 'final.mp4'))
-  const exported = await win.evaluate(dir => window.manul.export.run(dir, { preset: 'original', captions: 'none' }), dir)
+  const exported = await win.evaluate(dir => window.agentshot.export.run(dir, { preset: 'original', captions: 'none' }), dir)
   assert.equal(exported.file, join(tmp, 'final.mp4'))
-  const reopened = await win.evaluate(dir => window.manul.project.open(dir), dir)
+  const reopened = await win.evaluate(dir => window.agentshot.project.open(dir), dir)
   assert.equal(reopened.timeline.demo.sync.reliable, true, 'linked sources survive reopening')
-  const blocked = await win.evaluate(dir => window.manul.project.removeFiles(dir, ['media/camera.mp4']), dir)
+  const blocked = await win.evaluate(dir => window.agentshot.project.removeFiles(dir, ['media/camera.mp4']), dir)
   assert.equal(blocked.blocked.length, 1, 'camera source stays protected while a linked version uses it')
   console.log('auto demo e2e: sync, compose, live layout, undo, source protection, render, export and reopen ok')
 } finally { await app.close(); rmSync(tmp, { recursive: true, force: true }) }

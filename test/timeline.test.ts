@@ -81,7 +81,7 @@ describe('compose', () => {
   })
 
   it('renders for real: 4 s + 2 s clip + 6 s = 12 s', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-tl-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-tl-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=10', '-f', 'lavfi', '-i', 'sine=duration=10',
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(dir, 'a.mp4')])
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=orange:s=1280x720:r=30:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'clip.mp4')])
@@ -126,7 +126,7 @@ describe('overlays (lower thirds, captions, callouts on top of the footage)', ()
   })
 
   it('renders an overlay with transparency for real', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-ov-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-ov-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=320x180:r=25:d=4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'a.mp4')])
     // a red box on a transparent frame, 1 s
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black@0.0:s=320x180:r=25:d=1,format=rgba,drawbox=x=0:y=0:w=100:h=100:color=red@1:t=fill:replace=1',

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Points Manul's accounts at Pitch's billing: copies, from Pitch's secret pitch-runtime (namespace pitch) into
+# Points AgentShot's accounts at Pitch's billing: copies, from Pitch's secret pitch-runtime (namespace pitch) into
 # manul-secrets, the wallet's database (Pitch's DATABASE_URL, without Prisma's options), the Dodo Payments key and the
 # plans' live products, and its PostHog host. Values are never printed. (Pitch's secret holds a personal PostHog API
 # key, not the project token; account events use the public project token in manul.yaml, as the app's proxy does.) Run again whenever Pitch's change; restarts the account service.

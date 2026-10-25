@@ -156,7 +156,7 @@ export async function analyze(projectDir: string, file: string, signal?: AbortSi
   try { return JSON.parse(await readFile(cached, 'utf8')) } catch { /* measure it */ }
 
   const info = await probe(file)
-  const tmp = await mkdtemp(join(tmpdir(), 'manul-analysis-'))
+  const tmp = await mkdtemp(join(tmpdir(), 'agentshot-analysis-'))
   try {
     const video = info.width > 0
     const graph = [
@@ -268,7 +268,7 @@ export async function contactSheet(file: string, frames: { t: number; label: str
   const n = frames.length
   const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4
   const cell = n <= 1 ? 1280 : n <= 4 ? 768 : n <= 9 ? 512 : 400
-  const tmp = await mkdtemp(join(tmpdir(), 'manul-sheet-'))
+  const tmp = await mkdtemp(join(tmpdir(), 'agentshot-sheet-'))
   const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:').replace(/%/g, '\\%')
   const b = opts.box
   const crop = b ? `crop=iw*${b.w}:ih*${b.h}:iw*${b.x}:ih*${b.y},` : ''

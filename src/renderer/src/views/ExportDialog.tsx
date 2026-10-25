@@ -15,12 +15,12 @@ export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: b
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState('')
   useEffect(() => {
-    if (open) window.manul.tools.list().then(tools => setLargeInstalled(tools.some(t => t.id === 'whisper-large-v3' && t.installed))).catch(() => {})
+    if (open) window.agentshot.tools.list().then(tools => setLargeInstalled(tools.some(t => t.id === 'whisper-large-v3' && t.installed))).catch(() => {})
   }, [open])
   const downloadLarge = async () => {
     setDownloading(true); setDownloadError('')
     try {
-      await window.manul.tools.install('whisper-large-v3')
+      await window.agentshot.tools.install('whisper-large-v3')
       setLargeInstalled(true)
     } catch (e) {
       setDownloadError(String((e as Error).message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '').slice(0, 300))
@@ -30,7 +30,7 @@ export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: b
   const go = async () => {
     setState('busy')
     try {
-      const r = await window.manul.export.run(dir, { preset, fit, captions })
+      const r = await window.agentshot.export.run(dir, { preset, fit, captions })
       setState(r ? { file: r.file } : 'idle')
     } catch (e) { setState({ error: String((e as Error).message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '').slice(0, 300) }) }
   }
@@ -82,7 +82,7 @@ export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: b
       {typeof state === 'object' && 'file' in state && (
         <div className="mb-3 flex items-center gap-2 rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-xs">
           <Check className="size-3.5 text-ok" /><span className="flex-1 truncate" data-selectable>{state.file}</span>
-          <Button size="sm" variant="ghost" onClick={() => window.manul.export.reveal(state.file)}><FolderOpen />Show</Button>
+          <Button size="sm" variant="ghost" onClick={() => window.agentshot.export.reveal(state.file)}><FolderOpen />Show</Button>
         </div>
       )}
       {typeof state === 'object' && 'error' in state && <p className="mb-3 text-xs text-bad" data-selectable>{state.error}</p>}

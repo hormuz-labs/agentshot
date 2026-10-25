@@ -15,7 +15,10 @@ List<Json> objects(dynamic value) =>
 class BridgeException implements Exception {
   final String message;
   final int? status;
-  BridgeException(this.message, [this.status]);
+
+  /// What went wrong, when the desktop says (e.g. needs-key: no AI set up on the computer yet).
+  final String? code;
+  BridgeException(this.message, [this.status, this.code]);
   @override
   String toString() => message;
 }
@@ -25,8 +28,21 @@ class Connection {
   final List<Uri> urls;
   final String fingerprint;
   final String token;
-  Connection(this.url, this.fingerprint, this.token, [List<Uri>? urls])
-    : urls = <Uri>[
+
+  /// The computer in the person's AgentShot account this connects to (signed in, not paired): its token runs out
+  /// after a day and comes again from the account.
+  final String? machine;
+
+  /// What the computer is called, when the account said so.
+  final String? name;
+  Connection(
+    this.url,
+    this.fingerprint,
+    this.token, [
+    List<Uri>? urls,
+    this.machine,
+    this.name,
+  ]) : urls = <Uri>[
         url,
         ...?urls?.where((u) => u.toString() != url.toString()),
       ];
@@ -64,20 +80,29 @@ class Connection {
         } catch (_) {}
       }
     }
-    return Connection(url, fingerprint, json['token'] as String? ?? '', extra);
+    return Connection(
+      url,
+      fingerprint,
+      json['token'] as String? ?? '',
+      extra,
+      json['machine'] as String?,
+      json['name'] as String?,
+    );
   }
   Json toJson() => {
     'url': url.toString(),
     'urls': urls.map((u) => u.toString()).toList(),
     'fingerprint': fingerprint,
     'token': token,
+    'machine': ?machine,
+    'name': ?name,
   };
 }
 
 /// All remote traffic, including native-player media, uses certificate-pinned TLS.
 /// The localhost relay lets AVPlayer/ExoPlayer stream without bypassing their TLS checks.
 class BridgeClient {
-  static const _storageKey = 'manul.desktop.connection.v1';
+  static const _storageKey = 'agentshot.desktop.connection.v1';
   static const _meshStorageKey = 'agentshot.mesh.v1';
   final FlutterSecureStorage storage;
   Connection? connection;
@@ -92,6 +117,12 @@ class BridgeClient {
   int _generation = 0;
   bool _disposed = false;
   BridgeClient({this.storage = const FlutterSecureStorage()});
+
+  /// A fresh connection for a computer in the person's account when its token was turned down (see Account).
+  Future<Connection?> Function(Connection expired)? renew;
+
+  /// How this phone shows up on the desktop, under Settings → Mobile.
+  static final deviceName = Platform.isIOS ? 'iPhone' : 'Android phone';
 
   Future<bool> restore() async {
     final saved = await storage.read(key: _storageKey);
@@ -109,6 +140,10 @@ class BridgeClient {
       return false;
     }
   }
+
+  /// Rejoins the private network with this control server on the next start (the node key stays on the device).
+  Future<void> rememberMesh(String control) =>
+      storage.write(key: _meshStorageKey, value: control);
 
   void _configure(Connection value) {
     _generation++;
@@ -262,7 +297,7 @@ class BridgeClient {
       }
     }
     throw BridgeException(
-      'Could not find your computer on the network. Enable Mobile in AgentShot → Settings on your computer, and make sure both devices are on the same Wi-Fi (or enter your computer’s Tailscale or mesh address).',
+      'Could not find your computer. Make sure AgentShot is open on it and both are on the same Wi-Fi, or scan its QR code. Signed in with Google, it connects from anywhere.',
     );
   }
 
@@ -370,14 +405,51 @@ class BridgeClient {
   }
 
   /// Connect directly to a pre-authenticated worker (personal or leased pool worker from the account service).
+  /// The first of [target]'s addresses to answer, all tried at once; null when none does within [timeout].
+  /// Addresses on the private network count only once it is up.
+  Future<Uri?> firstToAnswer(
+    Connection target, {
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    final tries = target.urls
+        .where((u) => Mesh.proxyPort != null || !Mesh.isMeshHost(u.host))
+        .toList();
+    if (tries.isEmpty) return null;
+    final found = Completer<Uri?>();
+    var pending = tries.length;
+    for (final candidate in tries) {
+      final http = HttpClient(context: SecurityContext(withTrustedRoots: false))
+        ..connectionTimeout = timeout
+        ..findProxy = _proxyFor
+        ..badCertificateCallback = (certificate, host, port) =>
+            sha256.convert(certificate.der).toString() == target.fingerprint;
+      unawaited(() async {
+        try {
+          final req = await http.getUrl(candidate.replace(path: '/hello'));
+          req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.token}');
+          req.headers.set('x-agentshot-device', deviceName);
+          final res = await req.close().timeout(timeout);
+          await res.drain<void>();
+          if (res.statusCode == 200 && !found.isCompleted) found.complete(candidate);
+        } catch (_) {
+        } finally {
+          http.close(force: true);
+          if (--pending == 0 && !found.isCompleted) found.complete(null);
+        }
+      }());
+    }
+    return found.future;
+  }
+
   Future<void> connectDirect(Connection target) async {
     Object? lastError;
     for (final candidate in target.urls) {
-      _configure(Connection(candidate, target.fingerprint, target.token, target.urls));
+      _configure(Connection(candidate, target.fingerprint, target.token, target.urls, target.machine, target.name));
       try {
         final req = await _http!.openUrl('GET', candidate.replace(path: '/hello'));
         req.followRedirects = false;
         req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.token}');
+        req.headers.set('x-agentshot-device', deviceName);
         final res = await req.close().timeout(const Duration(seconds: 6));
         if (res.statusCode != 200) {
           throw BridgeException('Worker refused connection (${res.statusCode}).', res.statusCode);
@@ -460,6 +532,7 @@ class BridgeClient {
         'Bearer ${target.token}',
       );
     }
+    request.headers.set('x-agentshot-device', deviceName);
     return request;
   }
 
@@ -480,6 +553,7 @@ class BridgeClient {
             ? '${result['error'] ?? 'Request failed'}'
             : 'Request failed',
         response.statusCode,
+        result is Map ? result['code'] as String? : null,
       );
     }
     return result;
@@ -492,15 +566,41 @@ class BridgeClient {
     return _decode(await request.close());
   }
 
-  Future<dynamic> call(String method, [List<dynamic> args = const []]) =>
-      _post('/rpc', {'method': method, 'args': args});
+  Future<dynamic> call(String method, [List<dynamic> args = const []]) async {
+    try {
+      return await _post('/rpc', {'method': method, 'args': args});
+    } catch (_) {
+      // cut off because this client was put away (the app closing, another computer): whoever asked is gone too,
+      // so it never answers rather than raise an error nobody is left to handle
+      if (_disposed) return Completer<dynamic>().future;
+      rethrow;
+    }
+  }
 
   void listen() {
     final generation = ++_generation;
     unawaited(_listen(generation));
   }
 
+  /// Moves to whichever of the computer's addresses answers first (home Wi-Fi, or the private network away) when
+  /// that isn't the one in use. True when it did, and listening restarted there.
+  Future<bool> _preferReachable(int generation) async {
+    final current = connection;
+    if (current == null || current.urls.length < 2) return false;
+    // stay where it is while that answers (several may; switching between them would never settle)
+    final here = Connection(current.url, current.fingerprint, current.token);
+    if (await firstToAnswer(here, timeout: const Duration(seconds: 3)) != null) return false;
+    final first = await firstToAnswer(current);
+    if (_disposed || generation != _generation) return true;
+    if (first == null || first == current.url) return false;
+    _configure(Connection(first, current.fingerprint, current.token, current.urls, current.machine, current.name));
+    await storage.write(key: _storageKey, value: jsonEncode(connection!.toJson()));
+    listen();
+    return true;
+  }
+
   Future<void> _listen(int generation) async {
+    if (await _preferReachable(generation)) return;
     var delay = 1;
     while (!_disposed && generation == _generation && connection != null) {
       try {
@@ -527,17 +627,43 @@ class BridgeClient {
         }
       } catch (error) {
         if (_disposed || generation != _generation) return;
+        if (error is BridgeException && error.status == 401) {
+          // signed in: the computer's day-long token ran out; the account has a new one
+          final expired = connection;
+          if (renew != null && expired?.machine != null) {
+            try {
+              final fresh = await renew!(expired!);
+              if (fresh != null && !_disposed) {
+                await connectDirect(fresh);
+                listen();
+                return;
+              }
+            } catch (_) {}
+          }
+          // the computer doesn't let this phone in any more (removed there, or the pairing ended): connect again
+          await storage.delete(key: _storageKey);
+          _events.add({
+            'channel': 'connection',
+            'args': [
+              false,
+              'Your computer disconnected this phone. Connect again to keep going.',
+              'revoked',
+            ],
+          });
+          return;
+        }
+        // another of its addresses may answer (home Wi-Fi again, or the private network away)
+        if (await _preferReachable(generation)) return;
+        // off, asleep or out of reach: keep trying
         _events.add({
           'channel': 'connection',
-          'args': [false, error.toString()],
+          'args': [
+            false,
+            'Can’t reach ${connection?.name ?? 'your computer'}. Make sure AgentShot is open on it and both are online.',
+          ],
         });
-        if (error is BridgeException && error.status == 401) return;
       }
       if (_disposed || generation != _generation) return;
-      _events.add({
-        'channel': 'connection',
-        'args': [false, 'Reconnecting to your desktop…'],
-      });
       await Future<void>.delayed(Duration(seconds: delay));
       delay = min(delay * 2, 15);
     }
@@ -643,7 +769,7 @@ class BridgeClient {
       throw BridgeException('Download failed');
     }
     final directory = await Directory(
-      '${(await getTemporaryDirectory()).path}/manul-exports',
+      '${(await getTemporaryDirectory()).path}/agentshot-exports',
     ).create(recursive: true);
     final name = relative
         .split('/')
@@ -675,6 +801,11 @@ class BridgeClient {
 
   Future<void> disconnect() async {
     _generation++;
+    // Ask the desktop to forget this phone too; offline, it stays listed there until removed on the desktop.
+    try {
+      final request = await _request('POST', '/unpair');
+      await (await request.close()).drain<void>().timeout(const Duration(seconds: 5));
+    } catch (_) {}
     _http?.close(force: true);
     _http = null;
     connection = null;

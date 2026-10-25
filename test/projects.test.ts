@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { app } from 'electron'
 import { FFMPEG } from '../src/main/media'
 
-const root = mkdtempSync(join(tmpdir(), 'manul-proj-'))
+const root = mkdtempSync(join(tmpdir(), 'agentshot-proj-'))
 const previousRoot = process.env.MANUL_PROJECTS
 process.env.MANUL_PROJECTS = join(root, 'projects')
 const Projects = await import('../src/main/projects')
@@ -132,7 +132,7 @@ describe('projects', () => {
     const p = await Projects.createFromFile(clip)
     const dir = p.dir
     const info = p.media['media/My Clip.mp4']
-    p.dir = 'C:\\Users\\Me\\Videos\\Manul\\my-clip'
+    p.dir = 'C:\\Users\\Me\\Videos\\AgentShot\\my-clip'
     p.media = { 'media\\My Clip.mp4': info }
     p.versions[0].path = 'media\\My Clip.mp4'
     p.versions[0].dry = 'renders\\dry.mp4'

@@ -1,5 +1,5 @@
 // Preload of the hidden page that runs BrowserSkill's background script: installs `chrome` before the script runs and
-// reports whether the extension's socket to Manul's private bsk daemon is open (the dot in the Browser panel).
+// reports whether the extension's socket to AgentShot's private bsk daemon is open (the dot in the Browser panel).
 import { ipcRenderer } from 'electron'
 import { makeChrome, type ExtInfo } from './chrome-shim'
 

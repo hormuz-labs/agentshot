@@ -21,18 +21,18 @@ describe('Windows BSK discovery', () => {
     files.add(bin)
     vi.stubEnv('PATH', undefined)
     vi.stubEnv('Path', 'C:\\Windows;"D:\\My Tools"')
-    expect(findUserBsk({ home: 'C:\\Users\\A', bundled: 'C:\\Manul\\bin\\bsk.exe' })).toBe(bin)
+    expect(findUserBsk({ home: 'C:\\Users\\A', bundled: 'C:\\AgentShot\\bin\\bsk.exe' })).toBe(bin)
   })
 
   it('never returns a case variant of the bundled directory', () => {
-    files.add('c:\\manul\\BIN\\bsk.exe')
-    expect(findUserBsk({ home: 'C:\\Users\\A', bundled: 'C:\\Manul\\bin\\bsk.exe', path: 'c:\\manul\\BIN' })).toBeNull()
+    files.add('c:\\agentshot\\BIN\\bsk.exe')
+    expect(findUserBsk({ home: 'C:\\Users\\A', bundled: 'C:\\AgentShot\\bin\\bsk.exe', path: 'c:\\agentshot\\BIN' })).toBeNull()
   })
 
   it('discovers a per-user .exe but not extensionless Unix binaries', () => {
     files.add('C:\\Users\\A\\.local\\bin\\bsk')
-    expect(findUserBsk({ home: 'C:\\Users\\A', bundled: 'C:\\Manul\\bin\\bsk.exe', path: '' })).toBeNull()
+    expect(findUserBsk({ home: 'C:\\Users\\A', bundled: 'C:\\AgentShot\\bin\\bsk.exe', path: '' })).toBeNull()
     files.add('C:\\Users\\A\\.local\\bin\\bsk.exe')
-    expect(findUserBsk({ home: 'C:\\Users\\A', bundled: 'C:\\Manul\\bin\\bsk.exe', path: '' })).toBe('C:\\Users\\A\\.local\\bin\\bsk.exe')
+    expect(findUserBsk({ home: 'C:\\Users\\A', bundled: 'C:\\AgentShot\\bin\\bsk.exe', path: '' })).toBe('C:\\Users\\A\\.local\\bin\\bsk.exe')
   })
 })

@@ -60,7 +60,7 @@ const round = (t: number) => Math.round(t * 1000) / 1000
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 export const ease = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2)
 
-/** Whether a request with no footage asks for a product walkthrough (Manul films the product in a browser) rather than
+/** Whether a request with no footage asks for a product walkthrough (AgentShot films the product in a browser) rather than
  *  a motion video: a walkthrough, demo or tour of a site or app, unless it asks for animation. */
 export function wantsWalkthrough(prompt: string) {
   const p = prompt.toLowerCase()

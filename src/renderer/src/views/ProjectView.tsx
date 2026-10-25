@@ -80,19 +80,19 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const [inline, setInline] = useState(false)
   useEffect(() => { if (!anchor) setInline(false) }, [anchor])
   // the agent opened or focused a browser window: show it (in the project on screen)
-  useEffect(() => window.manul.browser.onReveal(() => { if (active) setBrowsing(true) }), [active])
+  useEffect(() => window.agentshot.browser.onReveal(() => { if (active) setBrowsing(true) }), [active])
   useEffect(() => {
     const prepare = () => {
       if (!active) return
       stage.current?.video?.pause()
       setPreview(true); setChatShut(false); setBrowsing(false); setHistoryOpen(false)
     }
-    window.addEventListener('manul:tour-prepare', prepare)
-    return () => window.removeEventListener('manul:tour-prepare', prepare)
+    window.addEventListener('agentshot:tour-prepare', prepare)
+    return () => window.removeEventListener('agentshot:tour-prepare', prepare)
   }, [active])
 
-  useEffect(() => window.manul.project.onChange(np => { if (np.dir === p.dir) setP(np) }), [p.dir])
-  useEffect(() => window.manul.onSeek((dir, t) => { if (dir === p.dir && stage.current?.video) stage.current.video.currentTime = t }), [p.dir])
+  useEffect(() => window.agentshot.project.onChange(np => { if (np.dir === p.dir) setP(np) }), [p.dir])
+  useEffect(() => window.agentshot.onSeek((dir, t) => { if (dir === p.dir && stage.current?.video) stage.current.video.currentTime = t }), [p.dir])
   useEffect(() => { if (p.proposal) setCompare('after') }, [p.proposal])
 
   const send = useCallback(async (text: string, files = attached) => {
@@ -101,7 +101,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     setAnchor(undefined)
     setDrawing(false)
     clearAttached(p.dir)
-    await window.manul.agent.send(p.dir, { text, anchor: a, still, files }).catch(e => alert((e as Error).message))
+    await window.agentshot.agent.send(p.dir, { text, anchor: a, still, files }).catch(e => alert((e as Error).message))
   }, [anchor, attached, p.dir])
 
   // Startup files belong to the submitted request, or to the first draft when no request was typed.
@@ -159,22 +159,22 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   // the mix the version on screen was rendered with (or the edit's), heard live over its dry film
   const mix: Mix = (live ? tl.mix : onScreen.timeline?.mix) || { filmDb: 0 }
   const speechKey = live ? JSON.stringify(tl.items) : onScreen.id
-  useEffect(() => { window.manul.mix.speech(p.dir, live ? 'edit' : onScreen.id).then(setRegions).catch(() => setRegions([])) }, [p.dir, speechKey, p.transcripts]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { window.agentshot.mix.speech(p.dir, live ? 'edit' : onScreen.id).then(setRegions).catch(() => setRegions([])) }, [p.dir, speechKey, p.transcripts]) // eslint-disable-line react-hooks/exhaustive-deps
   useLiveMix(source, p.dir, mix, regions)
 
   /** Change the edit by hand (a piece moved, footage dropped in): it plays at once, ⌘Z undoes it. */
   const doEdit = async (edits: Edit[], then?: number) => {
-    try { setP(await window.manul.timeline.edit(p.dir, edits)); if (then != null) seek(then) } catch (e) { alert(clean(e)) }
+    try { setP(await window.agentshot.timeline.edit(p.dir, edits)); if (then != null) seek(then) } catch (e) { alert(clean(e)) }
   }
   const insertFootage = (rel: string, t: number) => {
     const m = p.media[rel]
     if (!m?.width || !(m.duration > 0)) return alert(`${rel.split('/').pop()} isn't footage that can go in the film.`)
     doEdit([{ op: 'insert', at: t, src: rel, in: 0, out: Math.round(m.duration * 1000) / 1000 }], t)
   }
-  const undoEdit = async (redo: boolean) => { try { setP(await window.manul.timeline.undo(p.dir, redo)) } catch (e) { alert(clean(e)) } }
+  const undoEdit = async (redo: boolean) => { try { setP(await window.agentshot.timeline.undo(p.dir, redo)) } catch (e) { alert(clean(e)) } }
   const saveVersion = async () => {
     setSaving(true)
-    try { await window.manul.timeline.render(p.dir) } catch (e) { alert(clean(e)) } finally { setSaving(false) }
+    try { await window.agentshot.timeline.render(p.dir) } catch (e) { alert(clean(e)) } finally { setSaving(false) }
   }
   // the menu and palette run these with what is on screen now
   const act = useRef({ undoEdit, saveVersion, edited })
@@ -182,15 +182,15 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   useCommands(!active ? [] : [
     { id: 'export', title: 'Export…', keywords: 'save render mp4 vertical shorts captions srt', shortcut: `${mod}E`, run: () => setExporting(true) },
     { id: 'media', title: 'Add files…', keywords: 'import media footage image audio music logo subtitles srt vtt font lut folder zip', shortcut: `${mod}I`, run: () => pickFiles(p.dir) },
-    { id: 'reveal', title: 'Show project in Finder', keywords: 'folder files', run: () => window.manul.project.reveal(p.dir) },
+    { id: 'reveal', title: 'Show project in Finder', keywords: 'folder files', run: () => window.agentshot.project.reveal(p.dir) },
     { id: 'history', title: 'History', keywords: 'undo restore versions', run: () => setHistoryOpen(true) },
     { id: 'note', title: 'Add a note at the playhead', shortcut: 'N', run: () => noteHere() },
     { id: 'box', title: 'Draw a box on the picture', shortcut: 'B', run: () => { stage.current?.video?.pause(); setDrawing(true) } },
     { id: 'play', title: 'Play or pause', shortcut: 'Space', run: playPause },
-    { id: 'agent.new', title: 'New conversation', run: () => window.manul.agent.newConversation(p.dir) },
+    { id: 'agent.new', title: 'New conversation', run: () => window.agentshot.agent.newConversation(p.dir) },
     { id: 'agent.focus', title: 'Ask AgentShot', shortcut: `${mod}L`, run: () => ask() },
     { id: 'agent.panel', title: 'Show or hide the conversation', keywords: 'chat collapse film', run: () => { setChatShut(x => !x); setPreview(true) } },
-    { id: 'agent.stop', title: 'Stop the agent', run: () => window.manul.agent.stop(p.dir) },
+    { id: 'agent.stop', title: 'Stop the agent', run: () => window.agentshot.agent.stop(p.dir) },
     { id: 'browser', title: 'Show or hide the browser', keywords: 'web internet bsk sign in google youtube', shortcut: `${mod}⇧B`, run: () => setBrowsing(x => !x) },
     { id: 'timeline.undo', title: 'Undo an edit', keywords: 'timeline back', shortcut: `${mod}Z`, run: () => act.current.undoEdit(false) },
     { id: 'timeline.redo', title: 'Redo an edit', keywords: 'timeline', shortcut: `⇧${mod}Z`, run: () => act.current.undoEdit(true) },
@@ -200,7 +200,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const liveItem = live ? sourceAt(tl, time)?.item : undefined
   const previewMedia = liveItem?.kind === 'media' ? liveItem.src : liveItem?.kind === 'clip' ? p.clips?.[liveItem.clip]?.video || '' : playable
   const previewCopy = usePreview(p.dir, previewMedia)
-  const decide = async (accept: boolean) => setP(await window.manul.project.decide(p.dir, accept))
+  const decide = async (accept: boolean) => setP(await window.agentshot.project.decide(p.dir, accept))
   const selectedVideo = sourceAt(tl, time)?.item
   useEffect(() => {
     if (openAdjustment.current && tl.demo && !proposal) {
@@ -221,7 +221,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     stage.current?.video?.pause()
     if (proposal?.timeline?.demo) openAdjustment.current = true
     let next = p
-    try { next = proposal?.timeline?.demo ? await window.manul.project.decide(p.dir, true) : p }
+    try { next = proposal?.timeline?.demo ? await window.agentshot.project.decide(p.dir, true) : p }
     catch (e) { openAdjustment.current = false; throw e }
     if (!next.timeline?.demo) throw new Error('Choose a demo version to adjust.')
     setP(next); setChatShut(false); setPreview(true); setBrowsing(false)
@@ -233,7 +233,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const demoAnchor = shownDemo && (demoOutputMessage(agent.messages, shownDemo) || [...p.versions].reverse().filter(v => v.timeline?.demo).map(v => demoOutputMessage(agent.messages, v)).find(Boolean))
   const demoTools = shownDemo ? <DemoFollowup key={demoAnchor || shownDemo.id} editing={demoAdjusting} busy={agent.busy} proposal={!!proposal} onAdjust={adjustDemo} onDone={() => { setDemoAdjusting(false); setCameraMode(null); setVideoEditing(false) }} onRender={async () => {
       if (!ready) throw new Error('Add an API key to render the adjusted video in chat.')
-      await window.manul.agent.send(p.dir, { text: 'Render the face-layout and framing adjustments I made in the chat toolbox. They are already on the current timeline. Use rerender_timeline, preserve the existing sync and cuts, and show the updated video beside this chat.', files: [] })
+      await window.agentshot.agent.send(p.dir, { text: 'Render the face-layout and framing adjustments I made in the chat toolbox. They are already on the current timeline. Use rerender_timeline, preserve the existing sync and cuts, and show the updated video beside this chat.', files: [] })
     }}>
       <CameraControls timeline={tl} onEdit={doEdit} mode={cameraMode} sourceUrl={tl.demo ? mediaUrl(`${p.dir}/${tl.demo.camera}`) : undefined} sourceInfo={tl.demo ? p.media[tl.demo.camera] : undefined} sourceTime={cameraAt(tl, time)?.at || 0} onMode={v => { setCameraMode(v); if (v) { setVideoEditing(false); revealCamera(tl) } }} />
       {selectedVideo?.kind === 'media' && <VideoControls item={selectedVideo} onEdit={doEdit} editing={videoEditing} onEditing={v => { stage.current?.video?.pause(); setVideoEditing(v); if (v) setCameraMode(null) }} />}
@@ -369,7 +369,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
       onDragLeave={e => { if (e.currentTarget === e.target) setOver(false) }}
       onDrop={async e => {
         e.preventDefault(); setOver(false)
-        await addFiles(p.dir, Array.from(e.dataTransfer.files).map(f => window.manul.pathForFile(f)).filter(Boolean))
+        await addFiles(p.dir, Array.from(e.dataTransfer.files).map(f => window.agentshot.pathForFile(f)).filter(Boolean))
       }}
     >
       <ExportDialog dir={p.dir} open={exporting} onOpenChange={setExporting} />
@@ -385,7 +385,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
           value={p.current}
           onChange={async e => {
             if (edited && !confirm('The edit isn\'t saved as a version. Switch anyway? (History keeps it.)')) return
-            setP(await window.manul.project.setCurrent(p.dir, e.target.value))
+            setP(await window.agentshot.project.setCurrent(p.dir, e.target.value))
           }}
           title="Versions"
         >
@@ -394,7 +394,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         <span className="flex-1" />
         <JobsTray />
         <HistoryButton project={p} open={historyOpen} onOpenChange={setHistoryOpen} onRestored={np => { setP(np); setEditing(null) }} />
-        <Tip label="Show in Finder" side="bottom"><Button className="no-drag" size="iconSm" variant="ghost" onClick={() => window.manul.project.reveal(p.dir)}><FolderOpen /></Button></Tip>
+        <Tip label="Show in Finder" side="bottom"><Button className="no-drag" size="iconSm" variant="ghost" onClick={() => window.agentshot.project.reveal(p.dir)}><FolderOpen /></Button></Tip>
         <Tip label="AgentShot's browser (the agent uses it for the web)" side="bottom">
           <Button className="no-drag" size="iconSm" variant={browsing ? 'secondary' : 'ghost'} onClick={() => setBrowsing(x => !x)} aria-label="Browser"><Globe /></Button>
         </Tip>
@@ -423,7 +423,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
               onDetach={rels => detachFiles(p.dir, rels)}
               onAdd={() => pickFiles(p.dir)}
               onSend={send}
-              onStop={() => window.manul.agent.stop(p.dir)}
+              onStop={() => window.agentshot.agent.stop(p.dir)}
               ready={ready}
               onKeys={onKeys}
               inputRef={input}

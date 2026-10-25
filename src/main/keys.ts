@@ -26,8 +26,11 @@ export function loadKeys() {
   }
 }
 
+/** Kept like a key but never offered as one: what lets this computer run a cloud worker (index.ts, cloud worker). */
+export const CLOUD_WORKER_SECRET = 'MANUL_CLOUD_WORKER_SECRET'
+
 export function setKey(name: string, value: string) {
-  if (!KEYS.some(k => k.env === name) && !isProviderKeyEnv(name)) throw new Error(`unknown key ${name}`)  // or a custom provider's (providers.ts)
+  if (!KEYS.some(k => k.env === name) && !isProviderKeyEnv(name) && name !== CLOUD_WORKER_SECRET) throw new Error(`unknown key ${name}`)  // or a custom provider's (providers.ts)
   if (value) {
     store[name] = safeStorage.encryptString(value).toString('base64')
     process.env[name] = value

@@ -1,8 +1,8 @@
-// Fetch Manul's pinned ffmpeg + ffprobe (static builds, same release for every platform) into resources/bin/<platform>-<arch>/.
+// Fetch AgentShot's pinned ffmpeg + ffprobe (static builds, same release for every platform) into resources/bin/<platform>-<arch>/.
 // Every file is SHA-256 checked against the hashes pinned here. Runs on `npm install`; packaging fetches every target with --all.
 //   node scripts/fetch-ffmpeg.mjs            this machine's platform
-//   node scripts/fetch-ffmpeg.mjs --all      every platform Manul ships for
-// Builds: Manul's own on Unix (scripts/ffmpeg/build.sh: FFmpeg 9.0.2 in Martin Riedl's GPLv3 configuration — libx264, libass,
+//   node scripts/fetch-ffmpeg.mjs --all      every platform AgentShot ships for
+// Builds: AgentShot's own on Unix (scripts/ffmpeg/build.sh: FFmpeg 9.0.2 in Martin Riedl's GPLv3 configuration — libx264, libass,
 // VideoToolbox on macOS… — plus vid.stab and Rubber Band), made by .github/workflows/ffmpeg.yml and published as the
 // GitHub prerelease RELEASE; Windows x64 uses Gyan's GPLv3 static essentials build (libx264 + libass).
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -12,7 +12,7 @@ import { download, extractZip, zipFiles } from './archive.mjs'
 
 export const VERSION = '9.0.2'
 export const RELEASE = 'ffmpeg-9.0.2-2'
-const BASE = `https://github.com/hormuz-labs/manul/releases/download/${RELEASE}`
+const BASE = `https://github.com/hormuz-labs/agentshot/releases/download/${RELEASE}`
 export const BUILDS = {
   'darwin-arm64': { ffmpeg: '867fed3f111609a1ffcb4e1fac18f1e763e8672fe5d7b16ffd6be67711af8a1e', ffprobe: 'a78c66a130ba4bebd054903c04690b2d69c1e85e8ef54b62d932634c2304d27c' },
   'darwin-x64': { ffmpeg: '8bec703783a93005c09ddb8efb875d571d5b20d073375c819fc36273cd5395a9', ffprobe: 'be0e837ffb9e2724faac5559fcd663a87762745bc1257212871693d30daa9151' },

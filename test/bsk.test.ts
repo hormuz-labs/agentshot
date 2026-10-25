@@ -8,7 +8,7 @@ import { agentEnv, browserPrompt, chromeBsk, BskDaemon, BSK_BIN, daemonArgs, liv
 import { CLI, EXTENSION } from '../scripts/fetch-bsk.mjs'
 
 describe('pinned BrowserSkill', () => {
-  it('pins the CLI for every platform Manul ships and the extension, by SHA-256', () => {
+  it('pins the CLI for every platform AgentShot ships and the extension, by SHA-256', () => {
     for (const t of ['darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64', 'win32-x64']) {
       expect(CLI.builds[t].url).toMatch(/^https:\/\/github\.com\/Tencent\/BrowserSkill\/releases\/download\/cli-v/)
       expect(CLI.builds[t].sha256).toMatch(/^[0-9a-f]{64}$/)
@@ -24,9 +24,9 @@ describe('pinned BrowserSkill', () => {
   })
 })
 
-describe("Manul's private bsk", () => {
+describe("AgentShot's private bsk", () => {
   it('lives in its own home, never the user\'s ~/.bsk', () => {
-    const home = join(tmpdir(), 'home'), userData = join(home, 'Manul')
+    const home = join(tmpdir(), 'home'), userData = join(home, 'AgentShot')
     expect(privateHome(userData, home)).toBe(join(userData, 'bsk'))
   })
 
@@ -57,8 +57,8 @@ describe("Manul's private bsk", () => {
     try { expect(await freePort([taken])).not.toBe(taken) } finally { srv.close() }
   })
 
-  it("points Manul's embedded extension at the private port, labelled Manul", () => {
-    expect(extensionStorage(53111)).toEqual({ bsk_daemon_port: 53111, bh_label: 'Manul', bh_connection_enabled: true })
+  it("points AgentShot's embedded extension at the private port, labelled AgentShot", () => {
+    expect(extensionStorage(53111)).toEqual({ bsk_daemon_port: 53111, bh_label: 'AgentShot', bh_connection_enabled: true })
   })
 })
 
@@ -66,7 +66,7 @@ describe('which browser the agent drives', () => {
   const base = { bundledDir: join(tmpdir(), 'app', 'bin'), privateHome: join(tmpdir(), 'ud', 'bsk'), userHome: join(tmpdir(), 'user'), path: join(tmpdir(), 'system', 'bin') }
   const userBsk = join(base.userHome, '.local', 'bin', process.platform === 'win32' ? 'bsk.exe' : 'bsk')
 
-  it("default: Manul's own browser — private home, no auto-start, bundled CLI first", () => {
+  it("default: AgentShot's own browser — private home, no auto-start, bundled CLI first", () => {
     expect(agentEnv('manul', { ...base, userBsk })).toEqual({ BSK_HOME: base.privateHome, BSK_AUTO_START: '0', PATH: `${base.bundledDir}${delimiter}${base.path}` })
   })
 
@@ -78,8 +78,8 @@ describe('which browser the agent drives', () => {
     expect(agentEnv('chrome', { ...base, userBsk: null })).toMatchObject({ BSK_HOME: join(base.userHome, '.bsk'), PATH: `${base.bundledDir}${delimiter}${base.path}` })
   })
 
-  it("finds the user's own bsk, never Manul's bundled copy", () => {
-    const home = mkdtempSync(join(tmpdir(), 'manul-home-'))
+  it("finds the user's own bsk, never AgentShot's bundled copy", () => {
+    const home = mkdtempSync(join(tmpdir(), 'agentshot-home-'))
     mkdirSync(join(home, '.local/bin'), { recursive: true })
     expect(findUserBsk({ home, bundled: BSK_BIN, path: '' })).toBeNull()
     const bin = join(home, '.local', 'bin', process.platform === 'win32' ? 'bsk.exe' : 'bsk')
@@ -120,9 +120,9 @@ describe('the private daemon (real bundled bsk)', () => {
 })
 
 describe('agent instructions and live environment', () => {
-  it("Manul mode: Manul's own browser, never --browser, never touch the daemon", () => {
+  it("AgentShot mode: AgentShot's own browser, never --browser, never touch the daemon", () => {
     const p = browserPrompt('manul')
-    expect(p).toMatch(/Manul's own browser/)
+    expect(p).toMatch(/AgentShot's own browser/)
     expect(p).toMatch(/never.*--browser/i)
     expect(p).toMatch(/BSK_HOME/)
     expect(p).toMatch(/import_media/)
@@ -168,7 +168,7 @@ describe("the agent's shell", () => {
 describe('browserExtension', () => {
   it('import_media brings a downloaded file into the project, and only from inside it', async () => {
     const { browserExtension } = await import('../src/main/agent')
-    const dir = mkdtempSync(join(tmpdir(), 'manul-proj-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-proj-'))
     mkdirSync(join(dir, 'downloads'))
     writeFileSync(join(dir, 'downloads', 'song.mp3'), 'x')
     const got: string[] = []
@@ -202,7 +202,7 @@ describe('Windows browser environment', () => {
 
   it('reads PATH case-insensitively and prefixes with the native delimiter', () => {
     expect(environmentPath({ Path: 'C:\\Windows' }, 'win32')).toBe('C:\\Windows')
-    expect(agentEnv('chrome', { bundledDir: 'C:\\Manul\\bin', privateHome: 'C:\\data\\bsk', userHome: 'C:\\Users\\A',
+    expect(agentEnv('chrome', { bundledDir: 'C:\\AgentShot\\bin', privateHome: 'C:\\data\\bsk', userHome: 'C:\\Users\\A',
       userBsk: 'D:\\My Tools\\bsk.exe', path: 'C:\\Windows;C:\\Other' }, 'win32')).toEqual({
       BSK_HOME: 'C:\\Users\\A\\.bsk', BSK_AUTO_START: '1', PATH: 'D:\\My Tools;C:\\Windows;C:\\Other',
     })
@@ -210,7 +210,7 @@ describe('Windows browser environment', () => {
 
   it('overrides every inherited PATH spelling when Node merges environments', () => {
     const inherited = { Path: 'old', PaTh: 'old' }
-    let path = 'C:\\Manul;C:\\Windows'
+    let path = 'C:\\AgentShot;C:\\Windows'
     const env = liveEnv(() => ({ PATH: path }), 'win32', inherited)
     expect({ ...inherited, ...env }).toMatchObject({ PATH: path, Path: path, PaTh: path })
     path = 'D:\\User;C:\\Windows'

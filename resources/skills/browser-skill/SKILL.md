@@ -4,7 +4,7 @@ description: |
   Drive a web browser with the bsk CLI: open and read pages, search, fill forms,
   sign-in flows, screenshots, downloads and uploads. Read before any task that
   needs a website (research, references, fetching footage or music, publishing).
-  Which browser bsk reaches is set by Manul (see the browser section of your instructions).
+  Which browser bsk reaches is set by AgentShot (see the browser section of your instructions).
 ---
 
 # browser-skill

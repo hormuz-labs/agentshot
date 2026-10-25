@@ -11,7 +11,7 @@ vi.mock('node:child_process', async importOriginal => {
   return { ...actual, spawn, execFile: Object.assign(vi.fn(), { [promisify.custom]: run }) }
 })
 
-process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'manul-tools-'))
+process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'agentshot-tools-'))
 const Tools = await import('../src/main/tools')
 const mark = (id: string) => { mkdirSync(join(process.env.MANUL_TOOLS!, id), { recursive: true }); writeFileSync(join(process.env.MANUL_TOOLS!, id, '.installed.json'), '{"version":"t"}') }
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); run.mockReset(); spawn.mockReset() })
@@ -102,7 +102,7 @@ describe('on-demand tools', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     vi.spyOn(process, 'arch', 'get').mockReturnValue('x64')
     const originalRoot = process.env.MANUL_TOOLS!
-    process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), "manul [profile] tools'quote-"))
+    process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), "agentshot [profile] tools'quote-"))
     const build = Tools.UV_BUILDS['win32-x64'], hash = build.sha256
     const payload = Buffer.from('test ZIP payload')
     const fetched = vi.fn(async () => new Response(payload))

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { encodeMediaPath } from '../src/shared/paths'
 import { serveMedia } from '../src/main/media-protocol'
 
-const tmp = mkdtempSync(join(tmpdir(), 'manul-protocol-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-protocol-'))
 const project = join(tmp, 'project [edit]')
 const lib = join(tmp, 'lib')
 mkdirSync(project); mkdirSync(lib)

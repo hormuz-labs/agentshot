@@ -11,7 +11,7 @@ for app in "$dist"/mac*/AgentShot.app; do
   echo "== $app"
   codesign --verify --deep --strict --verbose=2 "$app"
   codesign -dvv "$app" 2>&1 | grep -q '^Authority=Developer ID Application:' || { echo "not signed with a Developer ID Application certificate"; exit 1; }
-  # every bundled executable and library (ffmpeg, whisper, manul-mesh, python…) needs the hardened runtime for notarization
+  # every bundled executable and library (ffmpeg, whisper, agentshot-mesh, python…) needs the hardened runtime for notarization
   find "$app/Contents/Resources" -type f -perm -u+x -o -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.node' \) | while read -r f; do
     kind=$(file -b "$f")
     case $kind in *Mach-O*) ;; *) continue ;; esac

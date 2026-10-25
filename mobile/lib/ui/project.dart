@@ -1,12 +1,16 @@
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../bridge/client.dart';
+import '../bridge/pick.dart';
 import '../bridge/store.dart';
 import 'common.dart';
 import 'home.dart' show ConsentCards;
+import 'markdown.dart';
+import 'mascot.dart';
 import 'player.dart';
+import 'settings.dart' show Credits;
+import 'import.dart';
+import 'setup_ai.dart';
 
 class ProjectScreen extends StatefulWidget {
   final BridgeStore store;
@@ -17,8 +21,20 @@ class ProjectScreen extends StatefulWidget {
 
 class _ProjectScreenState extends State<ProjectScreen> {
   final message = TextEditingController();
+  final chatScroll = ScrollController();
   final attachments = <String>{};
+  String chatShown = '';
+  bool wasBusy = false;
+  late Future<Json?> credits = loadCredits();
+  late Future<String> model = loadModel();
+  bool follow = true;
   int section = 0;
+
+  /// Film and conversation side by side (a wide screen), so a new cut is already in sight.
+  bool wide = false;
+
+  /// The new cut the person has looked at in the Film tab (no dot on the tab for it any more).
+  String? seen;
   bool after = true, boxMode = false, sending = false, exporting = false;
   double position = 0;
   Json? anchor;
@@ -29,6 +45,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
   @override
   void dispose() {
     message.dispose();
+    chatScroll.dispose();
     super.dispose();
   }
 
@@ -36,15 +53,13 @@ class _ProjectScreenState extends State<ProjectScreen> {
     if (message.text.trim().isEmpty || sending) return;
     setState(() => sending = true);
     await guard(context, () async {
-      await store.client.call('agent:send', [
-        dir,
-        {
-          'text': message.text.trim(),
-          if (anchor != null) 'anchor': anchor,
-          if (attachments.isNotEmpty) 'files': attachments.toList(),
-        },
-      ]);
+      await sendToAgent(context, store, dir, {
+        'text': message.text.trim(),
+        if (anchor != null) 'anchor': anchor,
+        if (attachments.isNotEmpty) 'files': attachments.toList(),
+      });
       message.clear();
+      follow = true; // after sending, show what comes back
       if (mounted) {
         setState(() {
           anchor = null;
@@ -56,17 +71,20 @@ class _ProjectScreenState extends State<ProjectScreen> {
     if (mounted) setState(() => sending = false);
   }
 
+  /// Brings files into this project (one or several videos, photos, or other files) and attaches them to the note.
   Future<void> importFiles() async {
-    final picked = await FilePicker.pickFiles();
+    final kind = await choosePick(context);
+    if (kind == null) return;
+    final picked = await Picker.pick(kind);
     if (picked.isEmpty) return;
     for (final file in picked) {
-      if (file.path == null) continue;
       final rels = await store.client.upload(
-        File(file.path!),
+        file.file,
         file.name,
         project: dir,
       );
       attachments.addAll((rels as List).cast<String>());
+      if (mounted) setState(() {});
     }
     await store.open(dir);
     if (mounted) setState(() {});
@@ -213,26 +231,36 @@ class _ProjectScreenState extends State<ProjectScreen> {
         body: SafeArea(
           child: Column(
             children: [
+              // banners take their size, but never more than the screen shares out (a landscape phone with
+              // the keyboard up leaves a sliver), and scroll within it
               if (!store.connected)
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(store.connectionError ?? 'Reconnecting…'),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      store.connectionError ?? 'Reconnecting…',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
               if (exporting)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: [
-                      Text(exportStatus ?? ''),
-                      const SizedBox(height: 8),
-                      const LinearProgressIndicator(),
-                    ],
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        Text(exportStatus ?? ''),
+                        const SizedBox(height: 8),
+                        const LinearProgressIndicator(),
+                      ],
+                    ),
                   ),
                 ),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, size) {
-                    final wide =
+                    wide =
                         size.maxWidth >= 900 &&
                         MediaQuery.textScalerOf(context).scale(16) <= 26;
                     if (wide) {
@@ -254,30 +282,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
                         ],
                       );
                     }
+                    // A phone in landscape with the keyboard up leaves a sliver: give it all to the note being typed.
+                    // (Height alone: the Scaffold has already taken the keyboard out of this body's insets.)
+                    if (size.maxHeight < 200) return chat();
                     return Column(
                       children: [
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Row(
-                            children: [
-                              for (final entry in [
-                                'Conversation',
-                                'Film',
-                                'Files',
-                              ].asMap().entries)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: ChoiceChip(
-                                    label: Text(entry.value),
-                                    selected: section == entry.key,
-                                    onSelected: (_) =>
-                                        setState(() => section = entry.key),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
+                        tabs(),
                         Expanded(
                           child: section == 0
                               ? chat()
@@ -298,142 +308,367 @@ class _ProjectScreenState extends State<ProjectScreen> {
     },
   );
 
+  /// Keeps the newest message in view as the agent works, unless the person scrolled up to read.
+  void followChat(AgentState state) {
+    final proposal = project['proposal'];
+    final shown =
+        '$dir:${state.messages.length}:${state.streaming.length}:${state.tools.length}:${state.busy}:${state.error}:$proposal';
+    if (shown == chatShown) return;
+    // a new cut is worth seeing even when the person had scrolled up: down to its card
+    final fresh = proposal != null && !chatShown.endsWith(':$proposal');
+    chatShown = shown;
+    if (!follow && !fresh) return;
+    follow = true;
+    void toEnd([int again = 2]) {
+      if (!mounted || !chatScroll.hasClients) return;
+      chatScroll.jumpTo(chatScroll.position.maxScrollExtent);
+      // the list builds lazily, so its true end is only known once the new items are laid out
+      if (again > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => toEnd(again - 1));
+      }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => toEnd());
+  }
+
+  /// What the agent is doing, in words (its tools stay out of the conversation).
+  static String doing(String tool) => switch (tool) {
+    'project_state' || 'probe' || 'look' => 'Looking at the project',
+    'analyze_video' ||
+    'analyze_screen_activity' ||
+    'find_subjects' => 'Watching the footage',
+    'transcript' || 'speakers' || 'name_speakers' => 'Listening to the speech',
+    'analyze_music' => 'Listening to the music',
+    'edit_timeline' || 'set_mix' => 'Editing the cut',
+    'rerender_timeline' || 'propose_version' => 'Rendering the new cut',
+    'create_clip' || 'render_clip' => 'Designing a motion clip',
+    'insert_clip' || 'overlay_clip' => 'Putting the clip in the film',
+    'generate_voice' => 'Recording a voice-over',
+    'generate_music' => 'Composing music',
+    'export_video' => 'Exporting the film',
+    'browser' ||
+    'walkthrough_record' ||
+    'compose_walkthrough' => 'Filming in the browser',
+    'ffmpeg' => 'Processing the video',
+    'memory' || 'remember' || 'forget' => 'Remembering',
+    _ => 'Working',
+  };
+
+  /// Conversation, Film and Files on a narrow screen: one rounded track across the width, the part showing raised.
+  Widget tabs() {
+    final scheme = Theme.of(context).colorScheme;
+    final proposal = project['proposal'] as String?;
+    if (section == 1) seen = proposal;
+    final waiting = proposal != null && proposal != seen;
+    final label = Theme.of(context).textTheme.labelLarge;
+    const parts = [
+      ('Conversation', Icons.chat_bubble_outline, Icons.chat_bubble),
+      ('Film', Icons.movie_outlined, Icons.movie),
+      ('Files', Icons.folder_outlined, Icons.folder),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            for (final (i, (name, icon, chosen)) in parts.indexed)
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: section == i,
+                  child: GestureDetector(
+                    key: ValueKey('tab-$name'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => section = i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      constraints: const BoxConstraints(minHeight: 40),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: section == i ? scheme.surface : null,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: section == i
+                            ? [
+                                BoxShadow(
+                                  color: scheme.shadow.withValues(alpha: .08),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      // large text on a small phone shrinks the words to fit rather than cutting them off
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Badge(
+                              key: ValueKey('tab-$name-dot'),
+                              isLabelVisible: waiting && name == 'Film',
+                              smallSize: 8,
+                              child: Icon(
+                                section == i ? chosen : icon,
+                                size: 18,
+                                color: section == i
+                                    ? scheme.primary
+                                    : scheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              name,
+                              maxLines: 1,
+                              style: label?.copyWith(
+                                color: section == i
+                                    ? scheme.onSurface
+                                    : scheme.onSurfaceVariant,
+                                fontWeight: section == i
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<Json?> loadCredits() async {
+    try {
+      final account = store.account;
+      return account?.signedIn == true
+          ? await account!.balance()
+          : object(await store.client.call('account:balance'));
+    } catch (_) {
+      return null; // not signed in to AgentShot: no credits to show
+    }
+  }
+
+  Future<String> loadModel() async {
+    try {
+      final data = object(await store.client.call('agent:models', [dir]));
+      final current = data['current'];
+      final model = objects(
+        data['models'],
+      ).where((m) => m['modelId'] == current?['modelId']).firstOrNull;
+      return model == null ? 'Automatic' : '${model['name']}';
+    } catch (_) {
+      return 'Automatic';
+    }
+  }
+
+  void addMenu() => showModalBottomSheet<void>(
+    context: context,
+    useSafeArea: true,
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.attach_file),
+            title: const Text('Attach files'),
+            subtitle: const Text('Videos, photos or other files'),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              guard(context, importFiles);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.alternate_email),
+            title: const Text('Mention a file, version or clip'),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              mentions();
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+
   Widget chat() {
     final state = store.agent(dir);
     final messages = state.messages;
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    followChat(state);
+    // credits change with every run
+    if (wasBusy && !state.busy) credits = loadCredits();
+    wasBusy = state.busy;
+    final status = state.tools.isNotEmpty
+        ? doing(state.tools.values.last)
+        : state.busy && state.streaming.isEmpty
+        ? 'Thinking'
+        : null;
+    final canSend =
+        message.text.trim().isNotEmpty && store.connected && !sending;
     return LayoutBuilder(
       builder: (context, available) => Column(
         children: [
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                ConsentCards(store: store),
-                if (!state.loaded &&
-                    messages.isEmpty &&
-                    state.streaming.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('Loading conversation…'),
-                  ),
-                if (state.loaded && messages.isEmpty && state.streaming.isEmpty)
-                  const EmptyMessage(
-                    Icons.chat_bubble_outline,
-                    'Give notes. Get cuts.',
-                    'Ask for an edit, attach a file, or point at a moment in the Film tab.',
-                  ),
-                for (final m in messages)
-                  if (m['role'] == 'tool')
-                    ExpansionTile(
-                      title: const Text('Tool result'),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: SelectableText('${m['content'] ?? ''}'),
-                        ),
-                      ],
-                    )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Card(
-                        color: m['role'] == 'user'
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                m['role'] == 'user' ? 'You' : 'AgentShot',
-                                style: Theme.of(context).textTheme.labelMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              if ('${m['content'] ?? ''}'.isNotEmpty)
-                                SelectableText('${m['content']}'),
-                              for (final call in objects(m['toolCalls']))
-                                ExpansionTile(
-                                  tilePadding: EdgeInsets.zero,
-                                  title: Text(
-                                    '${call['function']?['name'] ?? 'Tool'}',
-                                  ),
-                                  children: [
-                                    SelectableText(
-                                      '${call['function']?['arguments'] ?? ''}',
-                                    ),
-                                  ],
-                                ),
-                            ],
-                          ),
+            child: NotificationListener<ScrollEndNotification>(
+              onNotification: (_) {
+                follow = chatScroll.position.extentAfter < 120;
+                return false;
+              },
+              child: SelectionArea(
+                child: ListView(
+                  controller: chatScroll,
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  children: [
+                    ConsentCards(store: store),
+                    if (!state.loaded &&
+                        messages.isEmpty &&
+                        state.streaming.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text('Loading conversation…'),
+                      ),
+                    if (state.loaded &&
+                        messages.isEmpty &&
+                        state.streaming.isEmpty &&
+                        !state.busy)
+                      EmptyMessage(
+                        Icons.chat_bubble_outline,
+                        'Give notes. Get cuts.',
+                        'Ask for an edit, attach a file, or point at a moment in the Film tab.',
+                        // smaller when there's little room (a phone on its side, very large text)
+                        art: Mascot(
+                          size: (available.maxHeight * .22).clamp(56.0, 120.0),
                         ),
                       ),
-                    ),
-                if (state.streaming.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: SelectableText(state.streaming),
-                  ),
-                for (final name in state.tools.values)
-                  ListTile(
-                    leading: const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    title: Text(name),
-                  ),
-                if (state.error != null)
-                  Text(
-                    state.error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                if (state.busy) const LinearProgressIndicator(),
-                if (state.cost > 0)
-                  Text(
-                    'Session usage: \$${state.cost.toStringAsFixed(4)}',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-              ],
+                    for (final m in messages)
+                      if (m['role'] == 'user')
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: available.maxWidth * .82,
+                            ),
+                            margin: const EdgeInsets.only(bottom: 18, left: 32),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 11,
+                            ),
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerHighest,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(20),
+                                topRight: Radius.circular(20),
+                                bottomLeft: Radius.circular(20),
+                                bottomRight: Radius.circular(6),
+                              ),
+                            ),
+                            child: Text(
+                              '${m['content'] ?? ''}',
+                              style: text.bodyLarge,
+                            ),
+                          ),
+                        )
+                      else if (m['role'] == 'assistant' &&
+                          '${m['content'] ?? ''}'.trim().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 18),
+                          child: Markdown('${m['content']}'),
+                        ),
+                    if (state.streaming.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: Markdown(state.streaming),
+                      ),
+                    if (status != null)
+                      Padding(
+                        key: const ValueKey('agent-status'),
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: Row(
+                          children: [
+                            const Mascot(size: 32, busy: true),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                '$status…',
+                                style: text.bodyMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (state.error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: Text(
+                          state.error!,
+                          style: TextStyle(color: scheme.error),
+                        ),
+                      ),
+                    if (project['proposal'] != null && !state.busy)
+                      proposalCard(),
+                  ],
+                ),
+              ),
             ),
           ),
           // Bound composer height under large text/landscape/keyboard constraints; content scrolls.
-          LayoutBuilder(
-            builder: (context, size) => ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: (available.maxHeight * .55).clamp(
-                  0.0,
-                  MediaQuery.sizeOf(context).height * .32,
-                ),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: (available.maxHeight * .55).clamp(
+                0.0,
+                MediaQuery.sizeOf(context).height * .4,
               ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 10, 8, 8),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: scheme.outlineVariant),
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (anchor != null)
-                      Wrap(
-                        children: [
-                          InputChip(
-                            label: Text(
-                              'Note at ${timestamp(anchor!['t0'] as num)}${anchor!['box'] != null ? ' · box' : ''}',
-                            ),
-                            onDeleted: () => setState(() {
-                              anchor = null;
-                              boxMode = false;
-                            }),
-                          ),
-                        ],
-                      ),
-                    if (attachments.isNotEmpty)
-                      Wrap(
-                        spacing: 6,
-                        children: attachments
-                            .map(
-                              (f) => InputChip(
+                    if (anchor != null || attachments.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            if (anchor != null)
+                              InputChip(
+                                visualDensity: VisualDensity.compact,
+                                label: Text(
+                                  'Note at ${timestamp(anchor!['t0'] as num)}${anchor!['box'] != null ? ' · box' : ''}',
+                                ),
+                                onDeleted: () => setState(() {
+                                  anchor = null;
+                                  boxMode = false;
+                                }),
+                              ),
+                            for (final f in attachments)
+                              InputChip(
+                                visualDensity: VisualDensity.compact,
                                 label: ConstrainedBox(
                                   constraints: const BoxConstraints(
                                     maxWidth: 160,
@@ -446,54 +681,228 @@ class _ProjectScreenState extends State<ProjectScreen> {
                                 onDeleted: () =>
                                     setState(() => attachments.remove(f)),
                               ),
-                            )
-                            .toList(),
+                          ],
+                        ),
                       ),
                     TextField(
+                      key: const ValueKey('composer'),
                       controller: message,
                       minLines: 1,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: 'Ask for an edit, or @ a file…',
-                        labelText: 'Your notes',
+                      maxLines: 6,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: text.bodyLarge,
+                      decoration: const InputDecoration.collapsed(
+                        hintText: 'Ask for a change…',
                       ),
                       onChanged: (v) {
                         if (v.endsWith('@')) mentions();
+                        setState(() {});
                       },
                     ),
-                    Wrap(
-                      spacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    const SizedBox(height: 8),
+                    Row(
                       children: [
                         IconButton(
-                          tooltip: 'Import and attach files',
-                          onPressed: () => guard(context, importFiles),
-                          icon: const Icon(Icons.attach_file),
+                          tooltip: 'Add',
+                          onPressed: addMenu,
+                          icon: const Icon(Icons.add),
                         ),
-                        IconButton(
-                          tooltip: 'Mention file, version or clip',
-                          onPressed: mentions,
-                          icon: const Icon(Icons.alternate_email),
+                        Expanded(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: FutureBuilder<Json?>(
+                                  future: credits,
+                                  builder: (context, snapshot) =>
+                                      snapshot.data == null
+                                      ? const SizedBox.shrink()
+                                      : Container(
+                                          key: const ValueKey('credits'),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                            border: Border.all(
+                                              color: scheme.outlineVariant,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            Credits.describe(
+                                              snapshot.data!,
+                                            ).split(' · ').first,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: text.labelMedium,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              // the model sits beside Send, its name cut short when it doesn't fit
+                              Flexible(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 200,
+                                  ),
+                                  child: FutureBuilder<String>(
+                                    future: model,
+                                    builder: (context, snapshot) => TextButton(
+                                      key: const ValueKey('model'),
+                                      onPressed: () => action('models'),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor:
+                                            scheme.onSurfaceVariant,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              snapshot.data ?? 'Automatic',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const Icon(
+                                            Icons.expand_more,
+                                            size: 18,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         if (state.busy)
-                          TextButton.icon(
+                          IconButton.filled(
+                            tooltip: 'Stop',
                             onPressed: () => guard(context, () async {
                               await store.client.call('agent:stop', [dir]);
                             }),
-                            icon: const Icon(Icons.stop),
-                            label: const Text('Stop'),
+                            style: IconButton.styleFrom(
+                              backgroundColor: scheme.onSurface,
+                              foregroundColor: scheme.surface,
+                            ),
+                            icon: const Icon(Icons.stop_rounded),
+                          )
+                        else
+                          IconButton.filled(
+                            tooltip: 'Send',
+                            onPressed: canSend ? send : null,
+                            icon: sending
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.arrow_upward),
                           ),
-                        FilledButton.icon(
-                          onPressed: sending || !store.connected ? null : send,
-                          icon: const Icon(Icons.arrow_upward),
-                          label: Text(sending ? 'Sending…' : 'Send'),
-                        ),
                       ],
                     ),
                   ],
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Makes the new cut the film.
+  void keep() =>
+      guard(context, () => store.update('project:decide', [dir, true]));
+
+  /// Turns the new cut down, with what should change for the agent's next try.
+  void sendBack() => guard(context, () async {
+    final reply = await askText(
+      context,
+      'What should change?',
+      hint: 'Optional feedback for AgentShot',
+    );
+    if (reply == null) return;
+    await store.update('project:decide', [dir, false]);
+    if (reply.isNotEmpty && mounted) {
+      await sendToAgent(context, store, dir, {'text': reply});
+    }
+  });
+
+  /// In the conversation, under the agent's reply: a new cut is waiting, to watch, keep or send back from here.
+  Widget proposalCard() {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final title = objects(
+      project['versions'],
+    ).where((v) => v['id'] == project['proposal']).firstOrNull?['title'];
+    return Container(
+      key: const ValueKey('proposal-card'),
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: .45),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.primary.withValues(alpha: .25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.movie_filter_outlined, color: scheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('A new cut is ready', style: text.titleSmall),
+                    if (title != null)
+                      Text(
+                        '$title',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              // beside the conversation on a wide screen the film is already in sight
+              if (!wide)
+                OutlinedButton.icon(
+                  onPressed: () => setState(() {
+                    after = true;
+                    section = 1;
+                  }),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Watch'),
+                ),
+              FilledButton.icon(
+                onPressed: keep,
+                icon: const Icon(Icons.check),
+                label: const Text('Keep'),
+              ),
+              TextButton(onPressed: sendBack, child: const Text('Send back')),
+            ],
           ),
         ],
       ),
@@ -538,29 +947,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
                         onSelected: (_) => setState(() => after = true),
                       ),
                       FilledButton.icon(
-                        onPressed: () => guard(
-                          context,
-                          () => store.update('project:decide', [dir, true]),
-                        ),
+                        onPressed: keep,
                         icon: const Icon(Icons.check),
                         label: const Text('Keep'),
                       ),
                       TextButton(
-                        onPressed: () => guard(context, () async {
-                          final reply = await askText(
-                            context,
-                            'What should change?',
-                            hint: 'Optional feedback for AgentShot',
-                          );
-                          if (reply == null) return;
-                          await store.update('project:decide', [dir, false]);
-                          if (reply.isNotEmpty) {
-                            await store.client.call('agent:send', [
-                              dir,
-                              {'text': reply},
-                            ]);
-                          }
-                        }),
+                        onPressed: sendBack,
                         child: const Text('Send back'),
                       ),
                     ],
@@ -735,6 +1127,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 section = 0;
               }),
               trailing: PopupMenuButton<String>(
+                tooltip: 'File actions',
                 onSelected: (value) => guard(context, () async {
                   if (value == 'download') {
                     final file = await store.client.download(dir, entry.key);
@@ -853,7 +1246,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 title: const Text('Automatic'),
                 onTap: () => guard(context, () async {
                   await store.client.call('agent:setModel', [dir, null]);
-                  reload();
+                  // picked: back to the chat
+                  if (mounted) Navigator.of(context).pop();
                 }),
               ),
               for (final model in objects(data['models']))
@@ -871,12 +1265,18 @@ class _ProjectScreenState extends State<ProjectScreen> {
                         'modelId': model['modelId'],
                       },
                     ]);
-                    reload();
+                    if (mounted) Navigator.of(context).pop();
                   }),
                 ),
             ],
           ),
         );
+        // the chosen model (a block: an arrow would hand setState the Future it assigns)
+        if (mounted) {
+          setState(() {
+            model = loadModel();
+          });
+        }
       case 'conversations':
         await sheet(
           context,

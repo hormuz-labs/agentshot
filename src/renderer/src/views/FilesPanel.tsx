@@ -1,4 +1,4 @@
-// The files the user added to the project (footage, music, subtitles, fonts, LUTs…), what Manul made of each, and
+// The files the user added to the project (footage, music, subtitles, fonts, LUTs…), what AgentShot made of each, and
 // deleting them: the Files in the sidebar's project tree. Clicking one attaches it to the next message, so the agent
 // knows to use it. Also the icons and chips for files the message box and the start screen use.
 import { Captions, ChevronRight, Download, File, Film, Folder, FolderOpen, Image as ImageIcon, Music, Palette, Paperclip, ScrollText, Sparkles, Trash2, Type } from 'lucide-react'
@@ -17,7 +17,7 @@ export function FileIcon({ kind, className }: { kind: FileKind | 'folder' | 'cli
   return <I className={cn('size-3.5 shrink-0', className)} />
 }
 
-/** A file's kind: what Manul found, else what its name says. */
+/** A file's kind: what AgentShot found, else what its name says. */
 export const kindOf = (p: Project, rel: string) => p.files?.[rel]?.kind ?? kindByName(rel) ?? 'other'
 
 /** Chips for attached files: a folder's files (media/<folder>/…) collapse into one chip when there are several. */
@@ -75,8 +75,8 @@ function Remove({ label, onConfirm }: { label: string; onConfirm(): void }) {
 }
 
 /** What a drag from the Files carries: the file, and its kind (readable while dragging, when the data isn't). */
-export const DRAG_FILE = 'manul/file'
-export const dragKind = (types: readonly string[]) => (types.find(t => t.startsWith('manul/kind-'))?.slice('manul/kind-'.length) as FileKind | undefined)
+export const DRAG_FILE = 'agentshot/file'
+export const dragKind = (types: readonly string[]) => (types.find(t => t.startsWith('agentshot/kind-'))?.slice('agentshot/kind-'.length) as FileKind | undefined)
 
 /** Fold folders to navigate; their paperclip attaches all descendants. File clicks still attach to the next message. */
 export function FilesTree({ project }: { project: Project }) {
@@ -100,7 +100,7 @@ export function FilesTree({ project }: { project: Project }) {
   const [kept, setKept] = useState<Record<string, string>>({})
   const remove = async (rels: string[]) => {
     try {
-      const r = await window.manul.project.removeFiles(project.dir, rels)
+      const r = await window.agentshot.project.removeFiles(project.dir, rels)
       detachFiles(project.dir, r.removed)
       setKept(Object.fromEntries(r.blocked.map(b => [b.file, b.why])))
     } catch (e) { alert((e as Error).message) }
@@ -133,7 +133,7 @@ export function FilesTree({ project }: { project: Project }) {
           <li key={row.rel} data-project-file={row.rel} className="group flex items-center" style={{ paddingLeft: row.depth * 12 + 18 }}>
             <button
               draggable={f.kind === 'video'}
-              onDragStart={e => { e.dataTransfer.setData(DRAG_FILE, row.rel); e.dataTransfer.setData(`manul/kind-${f.kind}`, '1'); e.dataTransfer.effectAllowed = 'copy' }}
+              onDragStart={e => { e.dataTransfer.setData(DRAG_FILE, row.rel); e.dataTransfer.setData(`agentshot/kind-${f.kind}`, '1'); e.dataTransfer.effectAllowed = 'copy' }}
               onClick={() => (on ? detachFiles : attachFiles)(project.dir, [row.rel])}
               aria-pressed={on}
               title={`${row.rel}\n${f.summary}${kept[row.rel] ? `\nCan't delete: ${kept[row.rel]}.` : ''}\n${on ? 'Attached to your next message (click to take it off)' : 'Click to attach to your next message'}${f.kind === 'video' ? ', or drag onto the timeline' : ''}`}
@@ -143,8 +143,8 @@ export function FilesTree({ project }: { project: Project }) {
               <span className="truncate">{row.rel.split('/').pop()}</span>
               {long && <span className="ml-auto shrink-0 text-[10.5px] tabular text-faint">{long}</span>}
             </button>
-            <button type="button" aria-label={`Download ${row.rel.split('/').pop()}`} title="Download file" className="shrink-0 rounded p-1 text-faint hover:bg-hover hover:text-fg" onClick={() => window.manul.project.downloadFile(project.dir, row.rel).catch(e => alert((e as Error).message))}><Download className="size-3" /></button>
-            <button type="button" aria-label={`Show ${row.rel.split('/').pop()} in folder`} title="Show in folder" className="shrink-0 rounded p-1 text-faint hover:bg-hover hover:text-fg" onClick={() => window.manul.project.revealFile(project.dir, row.rel).catch(e => alert((e as Error).message))}><FolderOpen className="size-3" /></button>
+            <button type="button" aria-label={`Download ${row.rel.split('/').pop()}`} title="Download file" className="shrink-0 rounded p-1 text-faint hover:bg-hover hover:text-fg" onClick={() => window.agentshot.project.downloadFile(project.dir, row.rel).catch(e => alert((e as Error).message))}><Download className="size-3" /></button>
+            <button type="button" aria-label={`Show ${row.rel.split('/').pop()} in folder`} title="Show in folder" className="shrink-0 rounded p-1 text-faint hover:bg-hover hover:text-fg" onClick={() => window.agentshot.project.revealFile(project.dir, row.rel).catch(e => alert((e as Error).message))}><FolderOpen className="size-3" /></button>
             {row.rel.startsWith('media/') && <Remove label={row.rel.split('/').pop()!} onConfirm={() => remove([row.rel])} />}
           </li>
         )

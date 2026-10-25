@@ -1,11 +1,11 @@
-// Manul's bundled whisper.cpp + the on-demand model.
+// AgentShot's bundled whisper.cpp + the on-demand model.
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'manul-tools-'))
+process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'agentshot-tools-'))
 const { setConfig } = await import('../src/main/config')
 const { FFMPEG, WHISPER_CLI } = await import('../src/main/media')
 const Tools = await import('../src/main/tools')
@@ -71,7 +71,7 @@ describe.skipIf(!built || !localModel)('transcription with the bundled whisper-c
     copyFileSync(localModel!, Tools.whisperModelPath())
     writeFileSync(join(process.env.MANUL_TOOLS!, 'whisper-model', '.installed.json'), '{}')
     setConfig({ whisper: { engine: 'bundled', mode: 'custom' } })
-    const dir = mkdtempSync(join(tmpdir(), 'manul-stt-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-stt-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', join(import.meta.dirname, 'fixtures', 'speech', 'narration-music.flac'), '-t', '14', join(dir, 's.wav')])
     const t = await transcribe(join(dir, 's.wav'), join(dir, 's.json'), 'Transcribing s.wav')
     expect(t.model).toMatch(/bundled/)

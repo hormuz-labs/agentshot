@@ -1,4 +1,4 @@
-// ⌘K: every command, fuzzy search, and "Ask Manul" for anything else (sent to the agent in the open project).
+// ⌘K: every command, fuzzy search, and "Ask AgentShot" for anything else (sent to the agent in the open project).
 import { useEffect, useMemo, useState } from 'react'
 import * as D from '@radix-ui/react-dialog'
 import { CornerDownLeft, Search, Sparkles } from 'lucide-react'

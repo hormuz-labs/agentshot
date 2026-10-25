@@ -46,7 +46,7 @@ describe('ducking envelope', () => {
 
 describe('the mix in a render', () => {
   it('ducks the music under speech by the chosen amount', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-mix-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-mix-'))
     // film with a silent track (the speech regions are given directly); music: a constant 1 kHz tone
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=160x120:r=25:d=10',
       '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo:d=10', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(dir, 'film.mp4')])

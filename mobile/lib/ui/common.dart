@@ -135,7 +135,12 @@ class _AsyncPanelState extends State<AsyncPanel> {
     _future = widget.load();
   }
 
-  void reload() => setState(() => _future = widget.load());
+  // a block: an arrow would hand setState the Future it assigns. A load that fails at once (offline) fails before
+  // the FutureBuilder listens: marked as handled, it shows here as an error instead of escaping as an uncaught one.
+  void reload() => setState(() {
+    _future = widget.load()..ignore();
+  });
+
   @override
   Widget build(BuildContext context) => FutureBuilder<dynamic>(
     future: _future,
@@ -169,14 +174,18 @@ String timestamp(num seconds) {
 class EmptyMessage extends StatelessWidget {
   final IconData icon;
   final String title, body;
-  const EmptyMessage(this.icon, this.title, this.body, {super.key});
+
+  /// Shown instead of the icon (Manul, in an empty conversation).
+  final Widget? art;
+  const EmptyMessage(this.icon, this.title, this.body, {super.key, this.art});
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 12),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
+        art ??
+            Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
         const SizedBox(height: 16),
         Text(
           title,
@@ -186,6 +195,27 @@ class EmptyMessage extends StatelessWidget {
         const SizedBox(height: 8),
         Text(body, textAlign: TextAlign.center),
       ],
+    ),
+  );
+}
+
+/// Why the person is looking at this screen (e.g. the computer ended the connection).
+class NoticeBanner extends StatelessWidget {
+  final String text;
+  const NoticeBanner(this.text, {super.key});
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+    borderRadius: BorderRadius.circular(12),
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          const Icon(Icons.link_off, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text)),
+        ],
+      ),
     ),
   );
 }

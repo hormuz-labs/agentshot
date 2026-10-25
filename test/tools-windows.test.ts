@@ -9,7 +9,7 @@ import { plan, UV_BUILDS, windowsPowerShell } from '../src/main/tools'
 
 describe.skipIf(process.platform !== 'win32')('native Windows ZIP extraction', () => {
   it('extracts a verified ZIP into a profile path containing brackets, spaces and an apostrophe', async () => {
-    const root = mkdtempSync(join(tmpdir(), "manul [profile] tools'quote-"))
+    const root = mkdtempSync(join(tmpdir(), "agentshot [profile] tools'quote-"))
     const source = join(root, 'source'), zip = join(root, 'payload.zip'), tools = join(root, 'tools')
     const build = UV_BUILDS[`win32-${process.arch}`], hash = build.sha256
     const quote = (s: string) => `'${s.replace(/'/g, "''")}'`

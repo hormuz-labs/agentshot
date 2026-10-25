@@ -1,7 +1,7 @@
 // The agent's fence: its file tools and its shell reach only the project folder (read and write), temp folders, and
-// Manul's own bundled tools, skills, models and fonts (read only) — never the user's home folder, other projects,
-// Manul's app data or anything like ~/.claude. File tools are checked here, in process (symlinks resolved); shell
-// commands run inside the operating system's sandbox: Seatbelt (sandbox-exec) on macOS, Landlock (manul-fence) on Linux.
+// AgentShot's own bundled tools, skills, models and fonts (read only) — never the user's home folder, other projects,
+// AgentShot's app data or anything like ~/.claude. File tools are checked here, in process (symlinks resolved); shell
+// commands run inside the operating system's sandbox: Seatbelt (sandbox-exec) on macOS, Landlock (agentshot-fence) on Linux.
 import { existsSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -29,7 +29,7 @@ export function realish(p: string): string {
 const within = (p: string, root: string) =>
   (process.platform === 'win32' ? p.toLowerCase() === root.toLowerCase() : p === root) || isWithinDir(root, p)
 
-/** The folders the agent may use: the project, temp, Manul's bundled resources, and the private browser's home. */
+/** The folders the agent may use: the project, temp, AgentShot's bundled resources, and the private browser's home. */
 export function fenceFor(o: { project: string; resources: string; extraRw?: string[]; extraRo?: string[] }): Fence {
   const tmp = [tmpdir(), ...(process.platform === 'win32' ? [] : [process.platform === 'darwin' ? '/private/tmp' : '/tmp'])]
   return {
@@ -70,7 +70,7 @@ export function fencedArgv(fence: Fence, argv: string[], o: { home: string; fenc
 
 type Ctx = Parameters<NodeExecutionEnv['readTextFile']>[1]
 const denied = (path: string) => Promise.resolve({ ok: false as const, error: new FileError('permission_denied',
-  `${path} is outside the project. You can only use the project folder, temp folders and Manul's bundled tools and skills.`, path) })
+  `${path} is outside the project. You can only use the project folder, temp folders and AgentShot's bundled tools and skills.`, path) })
 
 /** NodeExecutionEnv with the fence: file operations checked, shell commands sandboxed. */
 export class FencedEnv extends NodeExecutionEnv {

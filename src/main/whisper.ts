@@ -1,5 +1,5 @@
 // Speech-to-text. Uses whisper.cpp when it is already on this computer (found automatically, or paths the user set),
-// otherwise faster-whisper that Manul downloads. One transcription at a time, so a long file never freezes the machine.
+// otherwise faster-whisper that AgentShot downloads. One transcription at a time, so a long file never freezes the machine.
 import { execFile, spawn } from 'node:child_process'
 import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -86,7 +86,7 @@ const bundled = () => ({ engine: 'bundled' as const, binary: WHISPER_CLI, model:
 /** The tool to offer when no engine is ready: the model for the bundled whisper.cpp, else the Python engine. */
 export const toolToInstall = () => (bundledBinary() ? 'whisper-model' : 'whisper')
 const system = (binary: string, model: string) => ({ engine: 'system' as const, binary, model, label: `whisper.cpp · ${basename(model).replace(/^ggml-|\.bin$/g, '')}` })
-const managed = () => ({ engine: 'managed' as const, label: `faster-whisper · ${WHISPER_MODEL} (downloaded by Manul)` })
+const managed = () => ({ engine: 'managed' as const, label: `faster-whisper · ${WHISPER_MODEL} (downloaded by AgentShot)` })
 
 export async function whisperStatus(find: Finders = FIND): Promise<WhisperStatus> {
   const binaries = await find.binaries()

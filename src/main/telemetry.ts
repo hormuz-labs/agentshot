@@ -1,4 +1,4 @@
-// Usage statistics, only when the user said yes. Events from src/shared/telemetry.ts go to PostHog through Manul's
+// Usage statistics, only when the user said yes. Events from src/shared/telemetry.ts go to PostHog through AgentShot's
 // proxy, which keeps users' IP addresses from PostHog. The queue is kept on disk and capped; event UUIDs make retries
 // safe when an acknowledgement is lost.
 import { randomUUID } from 'node:crypto'

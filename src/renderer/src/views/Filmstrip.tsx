@@ -41,7 +41,7 @@ export const Filmstrip = memo(function Filmstrip({ dir, src, revision, from = 0,
     if (!window.count || duration <= 0) return
     let cancelled = false
     const { total, first, count } = window
-    globalThis.window.manul.thumbnails(dir, src, count, from + duration * first / total, from + duration * (first + count) / total).then(frames => {
+    globalThis.window.agentshot.thumbnails(dir, src, count, from + duration * first / total, from + duration * (first + count) / total).then(frames => {
       if (!cancelled) setResult({ key, total, first, frames, failed: frames.length === 0 })
     }).catch(() => { if (!cancelled) setResult({ key, total, first, frames: [], failed: true }) })
     return () => { cancelled = true }

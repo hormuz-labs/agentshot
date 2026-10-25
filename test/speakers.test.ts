@@ -29,7 +29,7 @@ describe.skipIf(process.platform === 'win32')('diarizing a real conversation', (
   let dir: string
   const fixture = join(import.meta.dirname, 'fixtures', 'speech', 'two-voices.flac')
   const ref = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures', 'speech', 'two-voices.reference.json'), 'utf8')).turns as { speaker: string; s: number; e: number }[]
-  beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), 'manul-speakers-')) })
+  beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), 'agentshot-speakers-')) })
   afterAll(async () => { await rm(dir, { recursive: true, force: true }) })
 
   it('the runner and its models are there', () => {

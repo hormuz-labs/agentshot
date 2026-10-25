@@ -2,7 +2,7 @@
 // encoded once at the end (so minutes of the agent thinking cost nothing), and what happened on the page (clicks,
 // typing, scrolls, loads) from a small page script. The agent drives the page with bsk as usual; the take also types
 // and scrolls the way a person does, so both show on film. Where the frames come from is a Capture:
-//   ScreencastCapture  CDP screencast, 30–60 fps (Manul's browser, or the user's Chrome when its remote debugging is on)
+//   ScreencastCapture  CDP screencast, 30–60 fps (AgentShot's browser, or the user's Chrome when its remote debugging is on)
 //   BskCapture         the user's own bsk: its screenshots, about 10 fps, and nothing to set up
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -27,7 +27,7 @@ const BUFFER = '__manulTakeBuffer'
 
 /** Keeps bsk's overlay off the film (except while the take is paused) and reports what happens on the page (top frame
  *  only), with the page's clock (epoch ms): through the CDP binding when there is one, else into sessionStorage, from
- *  where Manul collects it (DRAIN). */
+ *  where AgentShot collects it (DRAIN). */
 export const pageScript = (take: string) => `(() => {
   if (window !== window.top || !document.documentElement) return
   const root = document.documentElement, me = ${JSON.stringify(take)}
@@ -229,7 +229,7 @@ export class ScreencastCapture implements Capture {
 
 /** The agent's own bsk session as the camera: bsk screenshots back to back (about 10 a second; bsk keeps its overlay out
  *  of them) and the page script's events collected a few times a second. Nothing to set up in the browser. A bsk session
- *  runs one command at a time: Manul's go one by one, the screenshots pause while one of the agent's commands runs (it
+ *  runs one command at a time: AgentShot's go one by one, the screenshots pause while one of the agent's commands runs (it
  *  leaves a mark in yieldDir, see bskScript), and a command bsk turns away as busy (never sent) is sent again. */
 export class BskCapture implements Capture {
   readonly kind = 'screenshots'

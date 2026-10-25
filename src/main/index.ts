@@ -1,4 +1,4 @@
-// Manul's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
+// AgentShot's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
 import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
 import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
 import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
@@ -6,7 +6,7 @@ import { projectArgument } from './mobile-contract'
 import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
 import { startMeshNode, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } from 'node:fs'
 import { copyFile, readFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import { artifactPath } from './artifacts'
@@ -18,8 +18,9 @@ import { demoHint } from '../shared/demo'
 import { renderClip, setClipProtocol } from './clips'
 import { buildMenu } from './menu'
 import { startUpdates } from './updates'
-import { keyStatus, loadKeys, setKey } from './keys'
-import { accountStatus, accountWorkers, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, workerHeartbeat } from './account'
+import { CLOUD_WORKER_SECRET, KEYS, keyStatus, loadKeys, setKey } from './keys'
+import { isProviderKeyEnv } from '../shared/providers'
+import { accountStatus, accountWorkers, adoptKey, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, workerHeartbeat } from './account'
 import { importOmp, ompAvailable, providerInfo, removeProvider, saveProvider } from './providers'
 import { asJob, listJobs, onJobs } from './jobs'
 import { toolPath, toolStatus } from './media'
@@ -76,7 +77,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'manul', privileges: { standard:
 
 let win: BrowserWindow | null = null
 const WORKER_MODE = process.argv.includes('--worker') || process.env.MANUL_WORKER === '1'
-let stopHeartbeat: (() => void) | null = null
+let stopHeartbeat: ReturnType<typeof startWorkerHeartbeat> | null = null
 let meshNode: MeshNode | null = null
 let meshIp: string | undefined
 let agent: AgentHandle | null = null
@@ -132,6 +133,8 @@ const mobile = new MobileBridge(
   {
     stateFile: join(app.getPath('userData'), 'mobile-bridge.json'),
     projectsRoot: () => Projects.projectsRoot(),
+    pool: !!process.env.MANUL_POOL_SECRET,
+    refreshLease: async () => { await stopHeartbeat?.beat() },
     onProjectSynced: async dir => {
       const p = await Projects.load(dir)
       open.set(dir, p)
@@ -210,6 +213,17 @@ function mobileQr() {
   return pairingQr.qr
 }
 
+// Phones signed in to the same AgentShot account find this computer through the account (it reports itself with the
+// worker heartbeat) and connect with a token from it, no pairing. That needs the bridge up while signed in; "Let my
+// phone connect" turns it on by hand, and only that keeps it up after signing out.
+let bridgeByHand = false
+const accountPhones = () => !!getConfig().account?.keyId && getConfig().accountPhones !== false
+function syncAccountPhones() {
+  if (accountPhones()) void startBridgeAndMesh().catch(e => console.warn('Could not make this computer reachable for signed-in phones', e))
+  else { stopMesh(); if (!bridgeByHand) void mobile.stop() }
+}
+const mobileState = () => ({ ...mobile.status(), account: { signedIn: !!getConfig().account?.keyId, email: getConfig().account?.email, phones: getConfig().accountPhones !== false } })
+
 function stopMesh() {
   stopHeartbeat?.()
   stopHeartbeat = null
@@ -218,19 +232,88 @@ function stopMesh() {
   meshIp = undefined
 }
 
+const hostSlug = () => (hostname() || 'host').replace(/[^a-zA-Z0-9._-]/g, '-')
+const ownWorkerId = () => process.env.MANUL_WORKER_ID || `worker-${hostSlug()}`
+
+// ---------------------------------------------------------------- sharing this computer as a cloud worker
+// A separate headless AgentShot (--worker) with its own profile and projects folder, so nothing of this person's
+// projects, keys or sign-in is there: whoever leases it from AgentShot works only with what they make on it.
+let cloudWorker: ReturnType<typeof spawn> | null = null
+let cloudWorkerError: string | undefined
+let cloudWorkerRestart: ReturnType<typeof setTimeout> | undefined
+const cloudWorkerDir = () => join(app.getPath('userData'), 'cloud-worker')
+const cloudWorkerName = () => `${hostname() || 'AgentShot'} (cloud)`
+const wantCloudWorker = () => !WORKER_MODE && !quitting && !!getConfig().cloudWorker?.share && !!process.env[CLOUD_WORKER_SECRET]
+function cloudWorkerStatus() {
+  return {
+    share: !!getConfig().cloudWorker?.share,
+    keySet: !!process.env[CLOUD_WORKER_SECRET],
+    running: !!cloudWorker,
+    name: cloudWorkerName(),
+    error: cloudWorkerError,
+  }
+}
+function syncCloudWorker() {
+  clearTimeout(cloudWorkerRestart)
+  if (!wantCloudWorker()) {
+    cloudWorker?.kill()
+    cloudWorker = null
+    if (!getConfig().cloudWorker?.share) cloudWorkerError = undefined
+    return
+  }
+  if (cloudWorker) return
+  cloudWorkerError = undefined
+  mkdirSync(cloudWorkerDir(), { recursive: true })
+  // none of this person's keys or sign-in go along: a lessee must never spend them
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  for (const name of Object.keys(env)) if (KEYS.some(k => k.env === name) || isProviderKeyEnv(name) || name === CLOUD_WORKER_SECRET) delete env[name]
+  Object.assign(env, {
+    MANUL_WORKER: '1',
+    MANUL_POOL_SECRET: process.env[CLOUD_WORKER_SECRET],
+    MANUL_WORKER_ID: `pool-${hostSlug()}`,
+    MANUL_WORKER_NAME: cloudWorkerName(),
+    MANUL_PROJECTS: join(cloudWorkerDir(), 'projects'),
+  })
+  const args = [
+    ...(app.isPackaged ? [] : [app.getAppPath()]),
+    '--worker',
+    `--user-data-dir=${join(cloudWorkerDir(), 'profile')}`,
+    ...(process.platform === 'linux' ? ['--password-store=basic'] : []),
+  ]
+  const log = openSync(join(cloudWorkerDir(), 'worker.log'), 'a')
+  const child = spawn(process.execPath, args, { env, stdio: ['ignore', log, log], windowsHide: true })
+  closeSync(log)
+  cloudWorker = child
+  child.on('exit', code => {
+    if (cloudWorker !== child) return
+    cloudWorker = null
+    if (!wantCloudWorker()) return
+    // it stopped by itself: say so, and try again in a little while
+    cloudWorkerError = `The cloud worker stopped (exit ${code ?? 'signal'}). Trying again… See ${join(cloudWorkerDir(), 'worker.log')}.`
+    cloudWorkerRestart = setTimeout(syncCloudWorker, 15_000)
+  })
+}
+
 async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
   await mobile.start()
   const joining = joinMesh()
-  if (opts.waitForMesh) await joining
+  // a worker waits a while for the mesh (its address from anywhere), but never stays unlisted for it: after 45 s it
+  // reports itself with what it has, and the mesh address joins the next heartbeat once it's up
+  if (opts.waitForMesh) await Promise.race([joining, new Promise(done => setTimeout(done, 45_000))])
   // "New code" calls this again; keep the one heartbeat
   stopHeartbeat ??= startWorkerHeartbeat({
     bridge: mobile,
-    workerId: process.env.MANUL_WORKER_ID || `worker-${(hostname() || 'host').replace(/[^a-zA-Z0-9._-]/g, '-')}`,
+    workerId: ownWorkerId(),
     workerName: process.env.MANUL_WORKER_NAME || hostname() || 'AgentShot Worker',
     poolSecret: process.env.MANUL_POOL_SECRET,
     priority: process.env.MANUL_WORKER_PRIORITY ? Number(process.env.MANUL_WORKER_PRIORITY) : undefined,
     projects: () => Projects.recent().map(r => r.id),
     sendHeartbeat: workerHeartbeat,
+    // a cloud worker serves one person at a time: when the lease moves on, the last one's AgentShot sign-in (adopted
+    // so their notes use their credits) goes with them
+    onLease: lease => {
+      if (mobile.setLease(lease) && getConfig().account?.keyId) { signOut(); agent?.keysChanged() }
+    },
   })
   return mobile.status()
 }
@@ -248,6 +331,7 @@ function shutdown() {
     }, 10_000)
     void (async () => {
       stopMesh()
+      syncCloudWorker() // quitting: stops it
       workerClient.disconnect()
       await mobile.stop()
       await startup.catch(e => console.warn('startup', e))
@@ -553,7 +637,7 @@ const haltFile = () => join(takeState(), 'halted')
 const run = promisify(execFile)
 
 /** The bsks a walkthrough's session can be on: the user's own Chrome (their bsk; walkthroughs film there by default), then
- *  Manul's browser. Each with the CLI and environment that reach its daemon. */
+ *  AgentShot's browser. Each with the CLI and environment that reach its daemon. */
 function takeBsks() {
   const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
   return [
@@ -574,7 +658,7 @@ async function markTab(session: string, nonce: string) {
   throw new Error(`No browser has a bsk session ${session}${why ? ` (${why})` : ''}. Start one (chrome-bsk session start --json) and pass its id.`)
 }
 
-/** Film the session's tab the best way available, with nothing for the user to set up: CDP screencast in Manul's browser,
+/** Film the session's tab the best way available, with nothing for the user to set up: CDP screencast in AgentShot's browser,
  *  or in the user's Chrome when its remote debugging is on; otherwise through their bsk's screenshots. */
 async function startTake(p: Project, o: { session: string }) {
   if (takes.get(p.dir)) throw new Error('A take is already recording in this project. Stop it first (stopping keeps what it recorded).')
@@ -584,9 +668,9 @@ async function startTake(p: Project, o: { session: string }) {
   let capture: Capture
   const viaBsk = () => new BskCapture({ bin: b.bin, env: b.env, session: o.session, yieldDir: yieldDir(), haltFile: haltFile() })
   if (b.browser === 'manul') {
-    if (!browser) throw new Error('Manul\'s browser is not running.')
+    if (!browser) throw new Error('AgentShot\'s browser is not running.')
     capture = new ScreencastCapture((await browser.film(nonce)).cdp)
-  } else if (!process.env.MANUL_CHROME_BSK_HOME && devToolsPortFiles().some(f => existsSync(f))) { // (tests stand Manul's browser in for Chrome)
+  } else if (!process.env.MANUL_CHROME_BSK_HOME && devToolsPortFiles().some(f => existsSync(f))) { // (tests stand AgentShot's browser in for Chrome)
     capture = await chromeCdp(nonce, { timeoutMs: 30_000 }).then(cdp => new ScreencastCapture(cdp) as Capture)
       .catch(e => { console.info(`walkthrough: filming through bsk (${(e as Error).message.slice(0, 120)})`); return viaBsk() })
   } else capture = viaBsk()
@@ -729,10 +813,10 @@ async function exportFilm(p: Project, req: ExportRequest, outAbs: string, by: 'u
       srt = outAbs.replace(/\.[^.]+$/, '.srt')
       await writeFile(srt, toSrt(t ? captionCues(t) : []))
     }
-    const tmpSrt = req.captions === 'burn' && srt ? join(p.dir, '.manul-captions.srt') : undefined
+    const tmpSrt = req.captions === 'burn' && srt ? join(p.dir, '.agentshot-captions.srt') : undefined
     if (tmpSrt) await writeFile(tmpSrt, await readFile(srt!, 'utf8'))
     const args = exportArgs({ preset: req.preset, fit: req.fit, input: join(p.dir, v.path), out: outAbs, source: info,
-      burnCaptions: tmpSrt ? '.manul-captions.srt' : undefined, fontsDir: join(LIB, 'fonts'), captionColor: req.captionColor })
+      burnCaptions: tmpSrt ? '.agentshot-captions.srt' : undefined, fontsDir: join(LIB, 'fonts'), captionColor: req.captionColor })
     try {
       await new Promise<void>((ok, fail) => {
         const ff = spawn(FFMPEG, ['-y', '-loglevel', 'error', '-progress', 'pipe:1', '-nostats', ...args], { cwd: p.dir, windowsHide: true })
@@ -780,12 +864,24 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
 
 // ---------------------------------------------------------------- IPC
 function wire() {
-  ipcMain.handle('mobile:status', () => mobile.status())
+  ipcMain.handle('mobile:status', () => mobileState())
   ipcMain.handle('mobile:qr', () => mobileQr())
-  ipcMain.handle('mobile:start', () => startBridgeAndMesh())
-  ipcMain.handle('mobile:stop', () => { stopMesh(); return mobile.stop() })
+  ipcMain.handle('mobile:start', async () => { bridgeByHand = true; await startBridgeAndMesh(); return mobileState() })
+  ipcMain.handle('mobile:stop', async () => { bridgeByHand = false; stopMesh(); await mobile.stop(); if (accountPhones()) await startBridgeAndMesh(); return mobileState() })
+  ipcMain.handle('mobile:accountPhones', (_e, on: boolean) => { setConfig({ accountPhones: !!on }); syncAccountPhones(); return mobileState() })
   ipcMain.handle('worker:status', () => workerClient.status())
-  ipcMain.handle('worker:discover', () => accountWorkers())
+  // this computer reports itself too (for its phones): not a worker it can hand work to
+  ipcMain.handle('worker:discover', async () => {
+    const found = await accountWorkers()
+    return { ...found, workers: found.workers.filter(w => w.id !== ownWorkerId()) }
+  })
+  ipcMain.handle('cloudWorker:status', () => cloudWorkerStatus())
+  ipcMain.handle('cloudWorker:set', (_e, opts: { share: boolean; secret?: string }) => {
+    if (typeof opts.secret === 'string') setKey(CLOUD_WORKER_SECRET, opts.secret.trim())
+    setConfig({ cloudWorker: { share: !!opts.share } })
+    syncCloudWorker()
+    return cloudWorkerStatus()
+  })
   ipcMain.handle('worker:lease', async (_e, opts?: { projectId?: string; workerId?: string }) => {
     const w = await leaseAccountWorker(opts)
     return workerClient.connect(w)
@@ -800,7 +896,7 @@ function wire() {
   ipcMain.handle('worker:remove', (_e, id: string) => workerClient.remove(id))
   ipcMain.handle('worker:pull', (_e, remoteDir: string) => workerClient.pullProject(remoteDir))
   ipcMain.handle('worker:push', (_e, localDir: string) => workerClient.pushProject(localDir))
-  ipcMain.handle('mobile:revoke', (_e, id: string) => mobile.revoke(id))
+  ipcMain.handle('mobile:revoke', (_e, id: string) => { mobile.revoke(id); return mobileState() })
   ipcMain.handle('mobile:export', async (_e, dir: string, req: ExportRequest) => {
     const p = projectOf(dir)
     await mkdir(join(p.dir, 'exports'), { recursive: true })
@@ -860,16 +956,23 @@ function wire() {
   })
   ipcMain.handle('keys:list', () => keyStatus())
   ipcMain.handle('keys:set', (_e, name: string, value: string) => { setKey(name, value); agent?.keysChanged(); return keyStatus() })
-  // signing in to Manul: the browser, then back here with the person's Manul key (account.ts)
+  // signing in to AgentShot: the browser, then back here with the person's AgentShot key (account.ts)
   ipcMain.handle('account:status', () => accountStatus())
   ipcMain.handle('account:signIn', async () => {
     const s = await signIn(url => shell.openExternal(url))
     agent?.keysChanged()
+    syncAccountPhones()
     app.focus({ steal: true })
     return s
   })
+  ipcMain.handle('account:adopt', async (_e, account: { key: string; keyId?: string; email?: string }) => {
+    const s = await adoptKey(account)
+    agent?.keysChanged()
+    syncAccountPhones()
+    return s
+  })
   ipcMain.handle('account:cancel', () => cancelSignIn())
-  ipcMain.handle('account:signOut', () => { const s = signOut(); agent?.keysChanged(); return s })
+  ipcMain.handle('account:signOut', () => { const s = signOut(); agent?.keysChanged(); syncAccountPhones(); return s })
   ipcMain.handle('account:balance', () => balance())
   ipcMain.handle('account:checkout', (_e, what: { plan: string } | { topup: string }) => checkout(url => shell.openExternal(url), what))
   ipcMain.handle('account:billing', () => manageBilling(url => shell.openExternal(url)))
@@ -980,7 +1083,7 @@ function wire() {
     for (const rel of rels) { ensureProxy(p, rel); autoTranscribe(p, rel) }
     return rels
   })
-  // into the Trash, with what Manul made from them; files the film uses stay (with the reason)
+  // into the Trash, with what AgentShot made from them; files the film uses stay (with the reason)
   ipcMain.handle('project:removeFiles', async (_e, dir: string, rels: string[]) => {
     const p = projectOf(dir)
     const r = await Projects.removeFiles(p, rels, abs => shell.trashItem(abs))
@@ -1084,7 +1187,7 @@ function telemetryState(): TelemetryState {
   return { usage: !!c?.usage, crashes: !!c?.crashes, asked: !!c?.asked, available: { usage: telemetry.available, crashes: CRASHES_AVAILABLE } }
 }
 
-/** One 'agent run' per agent turn: the model, which of Manul's tools it called, how it ended. Never what was said. */
+/** One 'agent run' per agent turn: the model, which of AgentShot's tools it called, how it ended. Never what was said. */
 const runs = new Map<string, { started: number; tools: string[]; failed: boolean }>()
 function agentRuns(dir: string, e: BaseEvent) {
   if (e.type === 'RUN_FINISHED' || e.type === 'RUN_ERROR') {
@@ -1156,7 +1259,7 @@ const startup = app.whenReady().then(async () => {
     updates = startUpdates(st => send('update', st), shutdown)
   }
   onJobs(jobs => send('jobs', jobs))
-  if (!WORKER_MODE) createWindow()
+  if (!WORKER_MODE) { createWindow(); syncAccountPhones(); syncCloudWorker() }
   else {
     void startBridgeAndMesh({ waitForMesh: true }).then(st => {
       console.log(JSON.stringify({ worker: 'ready', addresses: st.addresses, tailscale: st.tailscale, code: st.code, fingerprint: st.fingerprint }))
@@ -1172,15 +1275,15 @@ const startup = app.whenReady().then(async () => {
   mkdirSync(yieldDir(), { recursive: true })
   try {
     agent = await startAgent({
-      // which browser the agent's bsk reaches: Manul's own (private daemon) unless the user chose their Chrome
+      // which browser the agent's bsk reaches: AgentShot's own (private daemon) unless the user chose their Chrome
       shellEnv: () => {
         const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
         const env = agentEnv(browserMode(), { bundledDir: dirname(BSK_BIN), privateHome: bskd!.home, userHome: homedir(), userBsk, path: process.env.PATH || '' })
-        // bsk and chrome-bsk are Manul's wrappers (bskScript); the bsk wrapper runs the setting's real one
+        // bsk and chrome-bsk are AgentShot's wrappers (bskScript); the bsk wrapper runs the setting's real one
         return { ...env, PATH: `${agentBin}${delimiter}${env.PATH}`, MANUL_BSK_BIN: browserMode() === 'chrome' ? userBsk || BSK_BIN : BSK_BIN }
       },
       browserPrompt: () => browserPrompt(browserMode()),
-      // the agent's files and shell stay in the project: Manul's resources read-only, and the browser CLI's own state
+      // the agent's files and shell stay in the project: AgentShot's resources read-only, and the browser CLI's own state
       fence: (() => {
         const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
         return { resources, extraRw: [privateHome(app.getPath('userData'), homedir()), userBskHome(homedir()), takeState()], extraRo: [agentBin, ...(userBsk ? [dirname(userBsk)] : [])] }
@@ -1259,7 +1362,7 @@ const startup = app.whenReady().then(async () => {
   }
 })
 
-/** Manul's browser: its private bsk daemon (own home, own port) and the bundled extension running against its tabs. */
+/** AgentShot's browser: its private bsk daemon (own home, own port) and the bundled extension running against its tabs. */
 async function startBrowser(resources: string) {
   bskd = new BskDaemon({ bin: BSK_BIN, home: privateHome(app.getPath('userData'), homedir()), log: s => { if (/ERROR/.test(s)) console.warn('[bsk]', s.trim().slice(0, 300)) } })
   try {

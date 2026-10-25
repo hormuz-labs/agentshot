@@ -34,7 +34,7 @@ describe('independent viewport and source framing', () => {
     expect(args).not.toContain('-crf')
   })
   it('renders source position inside a circle and regular video position with exact duration', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-framing-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-framing-'))
     const ff = (...args: string[]) => execFileSync(FFMPEG, ['-y', '-v', 'error', ...args])
     try {
       ff('-f', 'lavfi', '-i', 'color=c=blue:s=320x180:r=25:d=2', '-c:v', 'libx264', join(dir, 'screen.mp4'))

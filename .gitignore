@@ -13,3 +13,9 @@ resources/bsk-ext/
 # Motion gallery videos and posters (scripts/fetch-motion-gallery.mjs --media); the catalogue is tracked
 resources/motion-gallery/media/
 resources/motion-gallery/stream/
+
+# Android signing keys: never commit
+*.jks
+*.keystore
+key.properties
+key.properties.txt

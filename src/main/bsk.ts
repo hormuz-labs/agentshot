@@ -1,7 +1,7 @@
-// BrowserSkill (bsk) for the agent. By default Manul runs its own copy, fully private: the bundled CLI, a daemon in
-// Manul's own home (never ~/.bsk) on a port other than bsk's default 52800, and the extension running inside Manul's
+// BrowserSkill (bsk) for the agent. By default AgentShot runs its own copy, fully private: the bundled CLI, a daemon in
+// AgentShot's own home (never ~/.bsk) on a port other than bsk's default 52800, and the extension running inside AgentShot's
 // embedded browser, preset to that port. A bsk extension the user installed in Chrome only knows 52800 and its own
-// daemon, so it never sees Manul's daemon, and the agent's bsk calls never reach the user's Chrome.
+// daemon, so it never sees AgentShot's daemon, and the agent's bsk calls never reach the user's Chrome.
 // Settings → Browser can switch the agent to the user's own Chrome bsk instead (their logins), on purpose.
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
@@ -20,8 +20,8 @@ export const DEFAULT_PORT = 52800
 import type { BrowserMode, ChromeBsk } from '../shared/types'
 export type { BrowserMode }
 
-/** Manul's bsk home. macOS caps unix socket paths (~104 bytes), so a very long userData falls back to a short folder
- *  ~/.manul/bsk-<hash of userData> (one per Manul install, so two never share a daemon). */
+/** AgentShot's bsk home. macOS caps unix socket paths (~104 bytes), so a very long userData falls back to a short folder
+ *  ~/.manul/bsk-<hash of userData> (one per AgentShot install, so two never share a daemon). */
 export function privateHome(userData: string, home: string, platform = process.platform): string {
   const h = join(userData, 'bsk')
   return platform !== 'darwin' || Buffer.byteLength(join(h, 'run', 'daemon.sock')) <= 100 ? h : join(home, '.manul', `bsk-${createHash('sha256').update(userData).digest('hex').slice(0, 8)}`)
@@ -45,10 +45,10 @@ export function daemonArgs(port: number): string[] {
   return ['daemon', 'start', '--foreground', '--port', String(port), '--daemon-idle', '8760h', '--session-idle', '30m']
 }
 
-/** chrome.storage.local preset for the extension inside Manul's browser. */
-export const extensionStorage = (port: number) => ({ bsk_daemon_port: port, bh_label: 'Manul', bh_connection_enabled: true })
+/** chrome.storage.local preset for the extension inside AgentShot's browser. */
+export const extensionStorage = (port: number) => ({ bsk_daemon_port: port, bh_label: 'AgentShot', bh_connection_enabled: true })
 
-/** The user's own bsk CLI (the one their Chrome extension pairs with), never Manul's bundled copy. */
+/** The user's own bsk CLI (the one their Chrome extension pairs with), never AgentShot's bundled copy. */
 export function findUserBsk({ home, bundled, path, platform = process.platform }: { home: string; bundled: string; path?: string; platform?: NodeJS.Platform }): string | null {
   const p = platform === 'win32' ? win32 : { join, dirname, resolve, delimiter }
   const name = platform === 'win32' ? 'bsk.exe' : 'bsk'
@@ -61,7 +61,7 @@ export function findUserBsk({ home, bundled, path, platform = process.platform }
 
 export const environmentPath = envPath
 
-/** The user's own bsk home (the daemon their Chrome extension pairs with). MANUL_CHROME_BSK_HOME: tests point it at Manul's. */
+/** The user's own bsk home (the daemon their Chrome extension pairs with). MANUL_CHROME_BSK_HOME: tests point it at AgentShot's. */
 export const userBskHome = (userHome: string) => process.env.MANUL_CHROME_BSK_HOME || join(userHome, '.bsk')
 /** The environment that reaches the user's own bsk daemon, never starting it. */
 export const userBskEnv = (userHome: string) => ({ BSK_HOME: userBskHome(userHome), BSK_AUTO_START: '0', BSK_BROWSER_WAIT_MS: '0' })
@@ -82,7 +82,7 @@ export const HALTED = 'error: the user stopped you in their browser (the Interru
 export const bskScript = (o: { bin?: string; bskHome?: string; stateDir: string; name: string }) => {
   const q = JSON.stringify, state = q(o.stateDir)
   return `#!/bin/sh
-# Manul: ${o.name === 'chrome-bsk' ? 'bsk on your own Chrome (your bsk daemon and extension), for product walkthroughs' : 'the browser bsk of the agent\'s setting'}.
+# AgentShot: ${o.name === 'chrome-bsk' ? 'bsk on your own Chrome (your bsk daemon and extension), for product walkthroughs' : 'the browser bsk of the agent\'s setting'}.
 ${o.bskHome ? `export BSK_HOME=${q(o.bskHome)} BSK_AUTO_START=0\n` : ''}real=${o.bin ? q(o.bin) : '"$MANUL_BSK_BIN"'}
 case "$1 $2" in
   "session stop"|"session list"|"--help "|"help "*) ;;
@@ -114,7 +114,7 @@ export function agentEnv(mode: BrowserMode, o: { bundledDir: string; privateHome
     PATH: [first, o.path || environmentPath(process.env, platform)].filter(Boolean).join(p.delimiter) }
 }
 
-/** Manul's private daemon: started on a fresh port, restarted if it dies, stopped with the app. */
+/** AgentShot's private daemon: started on a fresh port, restarted if it dies, stopped with the app. */
 export class BskDaemon {
   port: number | null = null
   private child: ChildProcess | null = null
@@ -131,7 +131,7 @@ export class BskDaemon {
   get running() { return !!this.child && this.child.exitCode == null && !this.child.killed && this.readyPid === this.child.pid }
   get env() { return { ...process.env, BSK_HOME: this.o.home, BSK_AUTO_START: '0', BSK_BROWSER_WAIT_MS: '0' } }
 
-  /** Run Manul's bsk CLI against the private daemon; JSON output is parsed. */
+  /** Run AgentShot's bsk CLI against the private daemon; JSON output is parsed. */
   async cli(args: string[]) {
     const { stdout } = await run(this.o.bin, args, { env: this.env, timeout: 30_000, windowsHide: true })
     try { return JSON.parse(stdout) } catch { return stdout }
@@ -147,7 +147,7 @@ export class BskDaemon {
     return { port: this.port }
   }
 
-  /** A daemon a crashed Manul left running in its home (it is ours: same private home). */
+  /** A daemon a crashed AgentShot left running in its home (it is ours: same private home). */
   private async stopLeftover() {
     let pid: number | undefined
     try { pid = JSON.parse(readFileSync(join(this.o.home, 'daemon.json'), 'utf8')).pid } catch { return }
@@ -241,9 +241,9 @@ export function browserPrompt(mode: BrowserMode, platform = process.platform): s
       `\`--browser <id>\` to \`bsk session start\`; if it is unclear which one, ask_user. Never start, stop or restart their bsk daemon. ` +
       `For how to use bsk, read the browser-skill skill first. ${files} ${STOPPED}`
   }
-  return `Browser: your \`bsk\` commands drive Manul's own browser (the Browser panel the user sees inside Manul), never the user's personal ` +
+  return `Browser: your \`bsk\` commands drive AgentShot's own browser (the Browser panel the user sees inside AgentShot), never the user's personal ` +
     `Chrome (only product walkthroughs use their Chrome, with chrome-bsk: see the product-walkthrough skill). It is the only browser bsk sees here: never pass \`--browser\`, and never change BSK_HOME or BSK_AUTO_START or start, stop or ` +
-    `restart the bsk daemon (Manul runs it). Sign-ins the user made in Manul's browser are kept between sessions; when a page needs a sign-in, ` +
+    `restart the bsk daemon (AgentShot runs it). Sign-ins the user made in AgentShot's browser are kept between sessions; when a page needs a sign-in, ` +
     `CAPTCHA or confirmation, use \`bsk request-help\` so the user does it in the panel. For how to use bsk, read the browser-skill skill first. ${files} ${STOPPED}`
 }
 

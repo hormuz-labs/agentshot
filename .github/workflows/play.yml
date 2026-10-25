@@ -1,0 +1,77 @@
+# Build the signed Android App Bundle for a release and upload it to Google Play.
+# Called by release.yml after publishing (when PLAY_TRACK is set); "Run workflow" with a tag re-uploads an existing release.
+# The version name is the tag (v0.4.13 → 0.4.13) and the version code is derived from it (0.4.13 → 4013), so every
+# release is a strictly higher build than the one before, as Play requires. Setup: RELEASING.md, "Google Play".
+name: Play
+on:
+  workflow_call:
+    inputs:
+      tag: { type: string, required: true }
+  workflow_dispatch:
+    inputs:
+      tag: { type: string, required: true, description: "Release tag, e.g. v0.4.13" }
+
+permissions:
+  contents: read
+
+jobs:
+  play:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: scripts/mesh/go.mod
+          cache-dependency-path: scripts/mesh/go.sum
+      - name: Build the embedded mesh node (gomobile)
+        run: ./scripts/build-mesh.sh android
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: true
+      - name: Version from the tag
+        id: version
+        run: |
+          name="${TAG#v}"
+          IFS=. read -r major minor patch <<< "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$((major * 1000000 + minor * 1000 + patch))" >> "$GITHUB_OUTPUT"
+          echo "package=$(sed -n 's/.*applicationId = "\(.*\)".*/\1/p' mobile/android/app/build.gradle.kts)" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ inputs.tag }}
+      - name: Upload key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
+          cat > mobile/android/key.properties <<EOF
+          storeFile=$RUNNER_TEMP/upload-keystore.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+      - run: flutter pub get
+        working-directory: mobile
+      - run: flutter build appbundle --release --build-name "${{ steps.version.outputs.name }}" --build-number "${{ steps.version.outputs.code }}"
+        working-directory: mobile
+      - uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ steps.version.outputs.package }}
+          releaseFiles: mobile/build/app/outputs/bundle/release/app-release.aab
+          releaseName: ${{ steps.version.outputs.name }}
+          track: ${{ vars.PLAY_TRACK }}
+          # "draft" until the app's first release has been reviewed and rolled out by hand in Play Console
+          status: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}

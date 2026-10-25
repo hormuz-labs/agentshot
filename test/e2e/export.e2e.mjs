@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { bundledBinary, loadRecordedTranscript, recordedTranscriptEnv, speechFixture } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-export-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-export-'))
 execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=5', '-i', speechFixture,
   '-t', '5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', join(tmp, 'talk.mp4')])
 const words = JSON.parse(readFileSync(speechFixture.replace(/\.flac$/, '.reference.json'), 'utf8')).words.filter(w => w.e <= 5)

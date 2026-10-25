@@ -10,7 +10,7 @@ import { basename, join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-delivery-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-delivery-'))
 const tools = join(tmp, 'tools')
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/_API_KEY$|_TOKEN$/.test(k)))
 const launch = () => electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...env, ANTHROPIC_API_KEY: 'sk-ant-e2e-not-a-real-key', MANUL_PROJECTS: join(tmp, 'projects'), MANUL_TOOLS: tools } })
@@ -27,12 +27,12 @@ try {
   await win.click('[data-tour="import"]')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForSelector('video')
-  const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
+  const dir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
   const output = join(dir, 'renders', 'docs')
   mkdirSync(output, { recursive: true })
   writeFileSync(join(output, 'report.pdf'), '%PDF-1.4\nGenerated fixture\n%%EOF')
   writeFileSync(join(dir, 'renders', 'my cover.png'), readFileSync(join(tmp, 'cover.png')))
-  await win.evaluate(d => window.manul.project.open(d), dir)
+  await win.evaluate(d => window.agentshot.project.open(d), dir)
   const file = win.locator('[data-project-file="renders/docs/report.pdf"]')
   await file.waitFor()
   assert.equal(await file.getByRole('button', { name: 'Delete report.pdf', exact: true }).count(), 0, 'generated files have no imported-file deletion control')
@@ -102,7 +102,7 @@ try {
   const blocked = await win.evaluate(async d => {
     const errors = []
     for (const action of ['downloadFile', 'revealFile']) {
-      try { await window.manul.project[action](d, '../secret.pdf') }
+      try { await window.agentshot.project[action](d, '../secret.pdf') }
       catch (e) { errors.push(e.message) }
     }
     return errors
@@ -218,7 +218,7 @@ try {
   await exportCached('None', 'plain.mp4')
   assert.ok(!existsSync(join(tmp, 'plain.srt')))
   assert.equal(readFileSync(join(dir, largeCache), 'utf8'), '{broken cache must not be read for caption-free export')
-  await win.evaluate(() => window.manul.tools.remove('whisper-large-v3'))
+  await win.evaluate(() => window.agentshot.tools.remove('whisper-large-v3'))
   await exportCached('Separate .srt', 'base.mp4')
   assert.match(readFileSync(join(tmp, 'base.srt'), 'utf8'), /Base caption fixture/, 'without the upgrade, exports reuse the editing transcript')
   assert.equal(readFileSync(join(dir, baseCache), 'utf8'), baseText, 'export upgrade never overwrites editing transcripts')

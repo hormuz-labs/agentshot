@@ -1,4 +1,4 @@
-# Manul's gateway: Bifrost with the vendor keys, and one virtual key per Manul key. See README.md.
+# AgentShot's gateway: Bifrost with the vendor keys, and one virtual key per AgentShot key. See README.md.
 services:
   site:
     profiles: [site]

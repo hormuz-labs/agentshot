@@ -10,7 +10,7 @@ export function HistoryButton({ project, onRestored, open, onOpenChange }: { pro
   const setOpen = onOpenChange
   const [log, setLog] = useState<Entry[]>([])
   const [busy, setBusy] = useState<string | null>(null)
-  useEffect(() => { if (open) window.manul.history.log(project.dir).then(setLog) }, [open, project])
+  useEffect(() => { if (open) window.agentshot.history.log(project.dir).then(setLog) }, [open, project])
   const when = (t: number) => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -28,7 +28,7 @@ export function HistoryButton({ project, onRestored, open, onOpenChange }: { pro
                 </div>
                 {i > 0 && (
                   <button disabled={!!busy} title="Go back to this point" className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-dim opacity-0 hover:bg-raised hover:text-fg group-hover:opacity-100"
-                    onClick={async () => { setBusy(e.id); try { onRestored(await window.manul.history.restore(project.dir, e.id)); setOpen(false) } finally { setBusy(null) } }}>
+                    onClick={async () => { setBusy(e.id); try { onRestored(await window.agentshot.history.restore(project.dir, e.id)); setOpen(false) } finally { setBusy(null) } }}>
                     {busy === e.id ? <Loader2 className="size-3 animate-spin" /> : <RotateCcw className="size-3" />}Restore
                   </button>
                 )}

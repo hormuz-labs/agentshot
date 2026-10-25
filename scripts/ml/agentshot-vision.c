@@ -1,9 +1,9 @@
-// manul-vision: faces (YuNet) or objects (YOLOX, 80 COCO classes) in a stream of video frames, as JSON lines, for
-// Manul's find_subjects tool. onnxruntime statically linked by scripts/build-ml.sh.
-//   ffmpeg … -vf scale=W:H -pix_fmt bgr24 -f rawvideo - | manul-vision --model yunet|yolox --file m.onnx --width W --height H
+// agentshot-vision: faces (YuNet) or objects (YOLOX, 80 COCO classes) in a stream of video frames, as JSON lines, for
+// AgentShot's find_subjects tool. onnxruntime statically linked by scripts/build-ml.sh.
+//   ffmpeg … -vf scale=W:H -pix_fmt bgr24 -f rawvideo - | agentshot-vision --model yunet|yolox --file m.onnx --width W --height H
 // One line per frame: {"i":0,"d":[[x,y,w,h,score,class],…]} — boxes as fractions of the frame (x,y = top-left);
 // class is 0 for faces, the COCO class index for objects (0 person, 2 car, 16 dog…).
-//   manul-vision --info --file m.onnx     the model's inputs and outputs
+//   agentshot-vision --info --file m.onnx     the model's inputs and outputs
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +11,7 @@
 #include "onnxruntime_c_api.h"
 
 static const OrtApi *ort;
-#define CHECK(x) do { OrtStatus *st_ = (x); if (st_) { fprintf(stderr, "manul-vision: %s\n", ort->GetErrorMessage(st_)); exit(1); } } while (0)
+#define CHECK(x) do { OrtStatus *st_ = (x); if (st_) { fprintf(stderr, "agentshot-vision: %s\n", ort->GetErrorMessage(st_)); exit(1); } } while (0)
 
 typedef struct { float x, y, w, h, score; int cls; } Det;
 
@@ -54,11 +54,11 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--info")) info = 1;
   }
   if (!file || (!info && (!model || W <= 0 || H <= 0))) {
-    fprintf(stderr, "usage: manul-vision --model yunet|yolox --file model.onnx --width W --height H [--score S] [--threads N] < bgr24 frames\n");
+    fprintf(stderr, "usage: agentshot-vision --model yunet|yolox --file model.onnx --width W --height H [--score S] [--threads N] < bgr24 frames\n");
     return 2;
   }
   ort = OrtGetApiBase()->GetApi(ORT_API_VERSION);
-  OrtEnv *env; CHECK(ort->CreateEnv(ORT_LOGGING_LEVEL_ERROR, "manul-vision", &env));
+  OrtEnv *env; CHECK(ort->CreateEnv(ORT_LOGGING_LEVEL_ERROR, "agentshot-vision", &env));
   OrtSessionOptions *so; CHECK(ort->CreateSessionOptions(&so));
   CHECK(ort->SetIntraOpNumThreads(so, threads > 0 ? threads : 4));
   OrtSession *sess; CHECK(ort->CreateSession(env, file, so, &sess));
@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
           snprintf(nm, sizeof nm, "obj_%d", strides[si]); if (!strcmp(out_names[k], nm)) obj = output(outs[k]);
           snprintf(nm, sizeof nm, "bbox_%d", strides[si]); if (!strcmp(out_names[k], nm)) box = output(outs[k]);
         }
-        if (!cls || !obj || !box) { fprintf(stderr, "manul-vision: not a YuNet model\n"); return 1; }
+        if (!cls || !obj || !box) { fprintf(stderr, "agentshot-vision: not a YuNet model\n"); return 1; }
         int s = strides[si], cols = nw / s, rows = nh / s;
         for (int rr = 0; rr < rows; rr++) for (int cc = 0; cc < cols; cc++) {
           int idx = rr * cols + cc;

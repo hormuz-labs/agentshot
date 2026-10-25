@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build the embedded Headscale/Tailscale (tsnet) mesh node from scripts/mesh (Go).
-#   desktop (default): manul-mesh for this machine into resources/bin/<platform>-<arch>/
+#   desktop (default): agentshot-mesh for this machine into resources/bin/<platform>-<arch>/
 #   android:           mobile/android/app/libs/agentshotmesh.aar via gomobile (needs the Android SDK + NDK)
 # tailscale.com is pinned in scripts/mesh/go.mod at the client version the Headscale server supports.
 set -e
@@ -13,8 +13,8 @@ case "${1:-desktop}" in
       *) echo "unsupported platform"; exit 1 ;;
     esac
     mkdir -p "resources/bin/$TARGET"
-    (cd scripts/mesh && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o "../../resources/bin/$TARGET/manul-mesh" .)
-    echo "built resources/bin/$TARGET/manul-mesh"
+    (cd scripts/mesh && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o "../../resources/bin/$TARGET/agentshot-mesh" .)
+    echo "built resources/bin/$TARGET/agentshot-mesh"
     ;;
   android)
     export PATH="$PATH:$(go env GOPATH)/bin"

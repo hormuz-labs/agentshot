@@ -4,14 +4,14 @@ import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-export const NATIVE_TOOLS = ['ffmpeg', 'ffprobe', 'whisper-cli', 'manul-beats', 'manul-speakers', 'manul-vision', 'manul-mesh', 'bsk']
+export const NATIVE_TOOLS = ['ffmpeg', 'ffprobe', 'whisper-cli', 'agentshot-beats', 'agentshot-speakers', 'agentshot-vision', 'agentshot-mesh', 'bsk']
 export const NATIVE_MODELS = ['speaker-segmentation.onnx', 'speaker-embedding.onnx', 'faces-yunet.onnx', 'objects-yolox-tiny.onnx']
 export function checkNative(root, { platform = process.platform, arch = process.arch, packaged = false, runChecks = true } = {}) {
   if (!['darwin', 'linux'].includes(platform) || !['arm64', 'x64'].includes(arch)) throw new Error(`Unsupported native target: ${platform}-${arch}`)
   const bin = packaged ? join(root, 'bin') : join(root, 'resources', 'bin', `${platform}-${arch}`)
   const models = packaged ? join(root, 'models') : join(root, 'resources', 'models')
   const missing = []
-  for (const tool of [...NATIVE_TOOLS, ...(platform === 'linux' ? ['manul-fence'] : [])]) {
+  for (const tool of [...NATIVE_TOOLS, ...(platform === 'linux' ? ['agentshot-fence'] : [])]) {
     const path = join(bin, tool)
     try { accessSync(path, constants.X_OK) } catch { missing.push(path); continue }
     const bytes = readFileSync(path).subarray(0, 32)
@@ -31,10 +31,10 @@ export function checkNative(root, { platform = process.platform, arch = process.
       const result = spawnSync(join(bin, tool), ['-version'], { encoding: 'utf8', timeout: 10000 })
       if (result.error || result.status !== 0) missing.push(`${tool} (cannot execute)`)
     }
-    const vision = spawnSync(join(bin, 'manul-vision'), ['--info', '--file', join(models, 'faces-yunet.onnx')], { encoding: 'utf8', timeout: 15000 })
-    if (vision.error || vision.status !== 0) missing.push('manul-vision (cannot load bundled model)')
-    const speakers = spawnSync(join(bin, 'manul-speakers'), [], { encoding: 'utf8', timeout: 10000 })
-    if (speakers.error || speakers.status !== 2 || !/usage: manul-speakers/.test(speakers.stderr || '')) missing.push('manul-speakers (cannot execute)')
+    const vision = spawnSync(join(bin, 'agentshot-vision'), ['--info', '--file', join(models, 'faces-yunet.onnx')], { encoding: 'utf8', timeout: 15000 })
+    if (vision.error || vision.status !== 0) missing.push('agentshot-vision (cannot load bundled model)')
+    const speakers = spawnSync(join(bin, 'agentshot-speakers'), [], { encoding: 'utf8', timeout: 10000 })
+    if (speakers.error || speakers.status !== 2 || !/usage: agentshot-speakers/.test(speakers.stderr || '')) missing.push('agentshot-speakers (cannot execute)')
   }
   if (missing.length) throw new Error(`Native resources missing for ${platform}-${arch}:\n${missing.map(p => `- ${p}`).join('\n')}\nRun npm run setup:native before packaging. Release builds must contain every native tool and model.`)
   return { target: `${platform}-${arch}`, tools: NATIVE_TOOLS.length + (platform === 'linux' ? 1 : 0), models: NATIVE_MODELS.length }
@@ -42,7 +42,7 @@ export function checkNative(root, { platform = process.platform, arch = process.
 export default async function beforePack(context) {
   const arch = context.arch === 3 ? 'arm64' : context.arch === 1 ? 'x64' : String(context.arch)
   if (context.electronPlatformName !== process.platform || arch !== process.arch)
-    throw new Error('Manul packaging requires a native runner and Node architecture matching the target')
+    throw new Error('AgentShot packaging requires a native runner and Node architecture matching the target')
   if (context.electronPlatformName === 'win32') {
     const { checkPackaging } = await import('./check-packaging.mjs')
     checkPackaging({ root: context.packager.projectDir, platform: context.electronPlatformName, arch })

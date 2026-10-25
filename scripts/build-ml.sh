@@ -1,8 +1,8 @@
 #!/bin/sh
-# Build Manul's model runners for this machine into resources/bin/<platform>-<arch>/:
-#   manul-speakers   who speaks when (scripts/ml/manul-speakers.c on sherpa-onnx's speaker diarization)
-#   manul-vision     faces and objects in video frames (scripts/ml/manul-vision.c on onnxruntime)
-# and on Linux the agent's fence, manul-fence (scripts/ml/manul-fence.c, Landlock; macOS uses its built-in sandbox).
+# Build AgentShot's model runners for this machine into resources/bin/<platform>-<arch>/:
+#   agentshot-speakers   who speaks when (scripts/ml/agentshot-speakers.c on sherpa-onnx's speaker diarization)
+#   agentshot-vision     faces and objects in video frames (scripts/ml/agentshot-vision.c on onnxruntime)
+# and on Linux the agent's fence, agentshot-fence (scripts/ml/agentshot-fence.c, Landlock; macOS uses its built-in sandbox).
 # Both link sherpa-onnx's static release libraries (onnxruntime included) — one self-contained binary each.
 # Every download is SHA-256 checked. The models they run come from scripts/fetch-models.mjs. Needs curl + a C/C++ compiler.
 set -e
@@ -19,10 +19,10 @@ case "$(uname -s)-$(uname -m)" in
 esac
 OUT=resources/bin/$TARGET
 fresh() { [ -x "$OUT/$1" ] && [ "$(cat "$OUT/.$1.version" 2>/dev/null)" = "$VERSION" ] && [ "$OUT/$1" -nt "scripts/ml/$1.c" ]; }
-fence_ok() { [ "$(uname -s)" != Linux ] || { [ -x "$OUT/manul-fence" ] && [ "$OUT/manul-fence" -nt scripts/ml/manul-fence.c ]; }; }
-if fresh manul-speakers && fresh manul-vision && fence_ok; then echo "manul-speakers and manul-vision $VERSION already built"; exit 0; fi
+fence_ok() { [ "$(uname -s)" != Linux ] || { [ -x "$OUT/agentshot-fence" ] && [ "$OUT/agentshot-fence" -nt scripts/ml/agentshot-fence.c ]; }; }
+if fresh agentshot-speakers && fresh agentshot-vision && fence_ok; then echo "agentshot-speakers and agentshot-vision $VERSION already built"; exit 0; fi
 
-WORK=${TMPDIR:-/tmp}/manul-ml-$SHERPA-$TARGET
+WORK=${TMPDIR:-/tmp}/agentshot-ml-$SHERPA-$TARGET
 mkdir -p "$WORK/inc/sherpa-onnx/c-api"
 get() { # url, file, sha256
   if [ ! -f "$2" ] || [ "$(shasum -a 256 "$2" | cut -c1-64)" != "$3" ]; then
@@ -52,15 +52,15 @@ else
 fi
 mkdir -p "$OUT"
 # shellcheck disable=SC2086 # the library lists are split on purpose
-c++ -O2 -x c scripts/ml/manul-speakers.c -I"$WORK/inc" -L"$L" $GROUP_START $SHERPA_LIBS $GROUP_END $SYS -o "$OUT/manul-speakers"
+c++ -O2 -x c scripts/ml/agentshot-speakers.c -I"$WORK/inc" -L"$L" $GROUP_START $SHERPA_LIBS $GROUP_END $SYS -o "$OUT/agentshot-speakers"
 # shellcheck disable=SC2086
-c++ -O2 -x c scripts/ml/manul-vision.c -I"$WORK/inc" -L"$L" $GROUP_START -lonnxruntime $GROUP_END $SYS -o "$OUT/manul-vision"
-for b in manul-speakers manul-vision; do
+c++ -O2 -x c scripts/ml/agentshot-vision.c -I"$WORK/inc" -L"$L" $GROUP_START -lonnxruntime $GROUP_END $SYS -o "$OUT/agentshot-vision"
+for b in agentshot-speakers agentshot-vision; do
   strip "$OUT/$b" 2>/dev/null || true
   echo "$VERSION" > "$OUT/.$b.version"
 done
 if [ "$(uname -s)" = Linux ]; then
-  cc -O2 -Wall -o "$OUT/manul-fence" scripts/ml/manul-fence.c
-  strip "$OUT/manul-fence" 2>/dev/null || true
+  cc -O2 -Wall -o "$OUT/agentshot-fence" scripts/ml/agentshot-fence.c
+  strip "$OUT/agentshot-fence" 2>/dev/null || true
 fi
-echo "built $OUT/manul-speakers and $OUT/manul-vision ($VERSION)"
+echo "built $OUT/agentshot-speakers and $OUT/agentshot-vision ($VERSION)"

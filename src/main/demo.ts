@@ -34,7 +34,7 @@ export async function planDemo(p: Project, req: DemoOptions, transcript: (media:
     overlap: [Math.max(0, req.manualOffset), Math.min(screen.duration, req.manualOffset + camera.duration)],
   } : await syncMedia(p.dir, req.screen, req.camera, signal)
   if (!Number.isFinite(sync.offset) || !Number.isFinite(sync.rate) || sync.rate <= 0 || sync.overlap[1] <= sync.overlap[0]) throw new Error('These recordings have no usable overlap. Check the selected files or matching moments.')
-  if (!sync.reliable) throw new Error('The audio match is uncertain. Pick the same spoken word or clap in both videos and give its screen/camera times; Manul will use that manual alignment.')
+  if (!sync.reliable) throw new Error('The audio match is uncertain. Pick the same spoken word or clap in both videos and give its screen/camera times; AgentShot will use that manual alignment.')
   const audio = req.audio || (screen.hasAudio ? 'screen' : 'camera')
   if (!(audio === 'screen' ? screen : camera).hasAudio) throw new Error(`The ${audio} recording has no audio. Choose the other recording for narration.`)
   const width = Math.max(2, Math.round(screen.width / 2) * 2), height = Math.max(2, Math.round(screen.height / 2) * 2)

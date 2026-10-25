@@ -8,7 +8,7 @@ import { thumbnails } from '../src/main/thumbnails'
 
 let dir: string
 beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'manul-thumbnails-'))
+  dir = await mkdtemp(join(tmpdir(), 'agentshot-thumbnails-'))
   execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=red:s=320x180:r=10:d=1',
     '-f', 'lavfi', '-i', 'color=blue:s=320x180:r=10:d=1', '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'video.mp4')])

@@ -8,15 +8,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const FFMPEG = join(import.meta.dirname, '..', 'resources', 'bin', `${process.platform}-${process.arch}`, 'ffmpeg')
-const out = process.argv[2] || join(tmpdir(), 'manul-smoke')
+const out = process.argv[2] || join(tmpdir(), 'agentshot-smoke')
 const prompt = process.argv[3]
 mkdirSync(out, { recursive: true })
-const userData = mkdtempSync(join(tmpdir(), 'manul-ud-'))
+const userData = mkdtempSync(join(tmpdir(), 'agentshot-ud-'))
 const video = join(out, 'test-clip.mp4')
 // speech with fillers when macOS `say` exists (so the transcript and "cut the ums" can be exercised), else a tone
 let audio = ['-f', 'lavfi', '-i', 'sine=frequency=330:duration=12']
 try {
-  execFileSync('say', ['-o', join(out, 'speech.aiff'), 'Um, hello there. Uh, today we are, um, testing the Manul video editor. Uh, it should cut these fillers.'])
+  execFileSync('say', ['-o', join(out, 'speech.aiff'), 'Um, hello there. Uh, today we are, um, testing the AgentShot video editor. Uh, it should cut these fillers.'])
   audio = ['-i', join(out, 'speech.aiff')]
 } catch { /* not macOS */ }
 execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=12',

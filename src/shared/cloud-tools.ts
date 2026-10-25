@@ -1,4 +1,4 @@
-// Cloud tools: jobs too heavy for most computers, run on Manul's own worker instead of on demand.
+// Cloud tools: jobs too heavy for most computers, run on AgentShot's own worker instead of on demand.
 // Only the clip a tool needs is sent. They show in Tools as "Coming soon" until the worker serves them.
 export const WORKER_URL = 'https://worker.trypitch.co'
 
@@ -13,7 +13,7 @@ export type CloudTool = {
 export const CLOUD_TOOLS: CloudTool[] = [
   {
     id: 'upscale', name: 'Upscale (Real-ESRGAN)', endpoint: `${WORKER_URL}/upscale`, status: 'coming-soon',
-    description: 'Sharper, higher-resolution footage, 2× or 4× (up to 4K). Runs on Manul’s worker, so your computer stays free; only the shot you upscale is sent.',
+    description: 'Sharper, higher-resolution footage, 2× or 4× (up to 4K). Runs on AgentShot’s worker, so your computer stays free; only the shot you upscale is sent.',
   },
 ]
 

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:manul_mobile/bridge/client.dart';
-import 'package:manul_mobile/bridge/store.dart';
-import 'package:manul_mobile/main.dart';
-import 'package:manul_mobile/ui/project.dart';
+import 'package:agentshot_mobile/bridge/client.dart';
+import 'package:agentshot_mobile/bridge/store.dart';
+import 'package:agentshot_mobile/main.dart';
+import 'package:agentshot_mobile/ui/project.dart';
 
 class HistoryClient extends BridgeClient {
   @override
@@ -44,7 +44,7 @@ void main() {
       addTearDown(store.dispose);
       await tester.pumpWidget(
         MaterialApp(
-          theme: manulTheme(Brightness.dark),
+          theme: agentShotTheme(Brightness.dark),
           home: ProjectScreen(store: store),
         ),
       );

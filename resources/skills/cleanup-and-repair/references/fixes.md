@@ -1,4 +1,4 @@
-# Fix recipes (tested with Manul's bundled ffmpeg)
+# Fix recipes (tested with AgentShot's bundled ffmpeg)
 
 Replace file names and numbers. Combine the filters you need into ONE command per render (`-vf "a,b,c"`,
 `-af "x,y,z"`); per-shot fixes go inside the edit's filter graph on each shot's `trim` (video-editing's ffmpeg.md,

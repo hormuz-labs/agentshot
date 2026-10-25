@@ -1,5 +1,5 @@
-import type { ManulApi } from '../../preload/index'
+import type { AgentShotApi } from '../../preload/index'
 
 declare global {
-  interface Window { manul: ManulApi }
+  interface Window { agentshot: AgentShotApi }
 }

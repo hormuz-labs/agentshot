@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { Skills } from '../src/main/skills'
 
 function setup() {
-  const root = mkdtempSync(join(tmpdir(), 'manul-skills-'))
+  const root = mkdtempSync(join(tmpdir(), 'agentshot-skills-'))
   const bundled = join(root, 'bundled'), profiles = join(root, 'profiles')
   const skill = (dir: string, id: string, desc: string) => {
     mkdirSync(join(dir, id), { recursive: true })

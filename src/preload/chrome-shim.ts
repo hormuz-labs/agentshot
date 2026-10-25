@@ -1,4 +1,4 @@
-// The `chrome` extension API, rebuilt on Electron IPC so BrowserSkill runs unmodified inside Manul's browser. The
+// The `chrome` extension API, rebuilt on Electron IPC so BrowserSkill runs unmodified inside AgentShot's browser. The
 // background script (role "host", in a hidden page) and the content scripts (role "content", in each tab's isolated
 // world) both get one of these. Calls go to src/main/browser.ts; events come back on "ext:event". Callback and promise
 // styles both work, as in Chrome.

@@ -8,7 +8,7 @@ import { join } from 'node:path'
 
 export type HistoryEntry = { id: string; message: string; at: number }
 
-const AUTHOR = { name: 'Manul', email: 'history@manul.local' }
+const AUTHOR = { name: 'AgentShot', email: 'history@agentshot.local' }
 
 export class History {
   constructor(readonly dir: string) {}

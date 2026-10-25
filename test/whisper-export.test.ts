@@ -10,12 +10,12 @@ vi.mock('../src/main/media', () => ({
   probe: vi.fn(async () => ({ hasAudio: false })),
 }))
 
-process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'manul-export-tools-'))
+process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'agentshot-export-tools-'))
 const Tools = await import('../src/main/tools')
 const { exportTranscript, LARGE_EXPORT_LABEL, resolveEngine } = await import('../src/main/whisper')
 const { probe } = await import('../src/main/media')
 const { setConfig } = await import('../src/main/config')
-const dir = mkdtempSync(join(tmpdir(), 'manul-export-transcripts-'))
+const dir = mkdtempSync(join(tmpdir(), 'agentshot-export-transcripts-'))
 const cache = join(dir, 'film.large-v3.json')
 const transcript = (model: string) => ({ media: 'film.mp4', language: 'en', model, segments: [], createdAt: 1 })
 const installed = () => {

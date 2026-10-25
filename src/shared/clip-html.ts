@@ -1,4 +1,4 @@
-// Turns whatever HTML the agent (or a user) writes into a valid Manul clip: a full document with the clip's format on
+// Turns whatever HTML the agent (or a user) writes into a valid AgentShot clip: a full document with the clip's format on
 // <html>, GSAP (+ any plugins it uses) and the clip runtime loaded before the clip's own scripts, the house stylesheet,
 // a fixed-size stage, and nothing that points at the network (clips render offline and must be repeatable).
 

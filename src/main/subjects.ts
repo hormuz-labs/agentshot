@@ -1,4 +1,4 @@
-// Where the subject is: faces (YuNet) and objects (YOLOX, 80 COCO classes) found by manul-vision in sampled frames,
+// Where the subject is: faces (YuNet) and objects (YOLOX, 80 COCO classes) found by agentshot-vision in sampled frames,
 // linked into tracks, summarised per shot, with a crop path for a narrower shape (9:16, 1:1, 4:5) that follows the
 // main subject smoothly — and the ffmpeg crop expression for it — so vertical versions keep the subject in frame.
 import { spawn } from 'node:child_process'
@@ -203,7 +203,7 @@ function detect(file: string, model: 'yunet' | 'yolox', t0: number, t1: number, 
     ff.stderr.on('data', d => { err += d })
     ff.on('error', fail); vis.on('error', fail)
     vis.on('close', code => {
-      if (code) return fail(new Error(`manul-vision failed: ${err.slice(-800)}`))
+      if (code) return fail(new Error(`agentshot-vision failed: ${err.slice(-800)}`))
       const dets: Det[] = []
       for (const line of out.split('\n')) {
         if (!line) continue

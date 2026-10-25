@@ -2,7 +2,7 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/source-serif-4";
 
-/* Manul: Claude's near-white neutrals by day, the Pallas cat's dark fur by night; amber of its eyes in both.
+/* AgentShot: Claude's near-white neutrals by day, the Pallas cat's dark fur by night; amber of its eyes in both.
    Light is the default; html.dark switches every token at once. */
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;

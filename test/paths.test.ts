@@ -108,7 +108,7 @@ describe('native tools environment', () => {
   it('preserves a Windows Path value, uses semicolons, and leaves one canonical PATH key', () => {
     const env = { Path: 'C:\\Windows;C:\\User Tools', HOME: 'C:\\Users\\Me' }
     expect(envPath(env, 'win32')).toBe(env.Path)
-    expect(withToolPath(['C:\\Manul\\bin', 'C:\\Manul\\bin'], env, 'win32')).toEqual({ HOME: env.HOME, PATH: 'C:\\Manul\\bin;C:\\Windows;C:\\User Tools' })
+    expect(withToolPath(['C:\\AgentShot\\bin', 'C:\\AgentShot\\bin'], env, 'win32')).toEqual({ HOME: env.HOME, PATH: 'C:\\AgentShot\\bin;C:\\Windows;C:\\User Tools' })
     expect(env.Path).toBe('C:\\Windows;C:\\User Tools')
     expect(envPath({ PATH: 'first', Path: 'second' }, 'win32')).toBe('first')
   })

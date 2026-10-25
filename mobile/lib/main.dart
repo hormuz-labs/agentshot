@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'bridge/account.dart';
 import 'bridge/client.dart';
 import 'bridge/mesh.dart';
 import 'bridge/store.dart';
+import 'ui/computers.dart';
 import 'ui/home.dart';
 import 'ui/pair.dart';
 
@@ -17,10 +19,10 @@ void main() {
       ], await rootBundle.loadString('assets/fonts/$name-OFL.txt'));
     }
   });
-  runApp(const ManulApp());
+  runApp(const AgentShotApp());
 }
 
-ThemeData manulTheme(Brightness brightness) {
+ThemeData agentShotTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final scheme =
       ColorScheme.fromSeed(
@@ -80,22 +82,34 @@ ThemeData manulTheme(Brightness brightness) {
   );
 }
 
-class ManulApp extends StatefulWidget {
-  const ManulApp({super.key});
+class AgentShotApp extends StatefulWidget {
+  const AgentShotApp({super.key});
   @override
-  State<ManulApp> createState() => _ManulAppState();
+  State<AgentShotApp> createState() => _AgentShotAppState();
 }
 
-class _ManulAppState extends State<ManulApp> {
+class _AgentShotAppState extends State<AgentShotApp> {
   final client = BridgeClient();
+  final account = Account();
   late final store = BridgeStore(client);
   bool ready = false, paired = false;
+  // signed in, but pairing with a code instead (a computer that isn't signed in)
+  bool codes = false;
+  // why the phone is back on the connect screen, when the computer ended the connection
+  String? notice;
+  final navigator = GlobalKey<NavigatorState>();
   // an agentshot://pair link from the phone's camera, handed to the pair screen
   String? link;
   ThemeMode theme = ThemeMode.system;
   @override
   void initState() {
     super.initState();
+    store.addListener(_watch);
+    // listen for pairing links first: before anything that could fail on the way (reading saved state), so a
+    // scanned QR is never lost
+    Mesh.onLink((value) {
+      if (!paired && mounted) setState(() => link = value);
+    });
     _restore();
   }
 
@@ -106,14 +120,24 @@ class _ManulAppState extends State<ManulApp> {
       theme =
           ThemeMode.values.where((m) => m.name == saved).firstOrNull ??
           ThemeMode.system;
+    } catch (_) {
+      // the system's look, then
+    }
+    try {
+      await account.restore();
+      store.account = account;
+      client.renew = account.renew;
       paired = await client.restore();
       if (paired) client.listen();
-      Mesh.onLink((value) {
-        if (!paired && mounted) setState(() => link = value);
-      });
-      if (!paired) link = await Mesh.initialLink();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('AgentShot: could not restore the saved connection: $e');
       paired = false;
+    }
+    try {
+      // opened by a scanned QR (the link that started the app), unless a link already came in meanwhile
+      if (!paired) link ??= await Mesh.initialLink();
+    } catch (_) {
+      // no link to pair with
     } finally {
       if (mounted) setState(() => ready = true);
     }
@@ -126,10 +150,50 @@ class _ManulAppState extends State<ManulApp> {
   }
 
   Future<void> disconnect() async {
+    // a cloud worker goes back to AgentShot's pool for the next person
+    if (account.leased != null &&
+        client.connection?.machine == account.leased) {
+      await account.release();
+    }
     await client.disconnect();
     store.project = null;
     store.agents.clear();
     if (mounted) setState(() => paired = false);
+  }
+
+  Future<void> signIn() async {
+    await account.signIn();
+    if (mounted) setState(() => codes = false);
+  }
+
+  Future<void> signOut() async {
+    await account.signOut();
+    // a computer opened through the account goes too; one paired with a code stays
+    if (client.connection?.machine != null) await disconnect();
+    if (mounted) setState(() => codes = false);
+  }
+
+  /// The computer turned this phone away: back to connecting, from wherever the person is, saying why.
+  void _watch() {
+    if (!store.revoked || !paired) return;
+    store.revoked = false;
+    store.project = null;
+    store.agents.clear();
+    navigator.currentState?.popUntil((route) => route.isFirst);
+    setState(() {
+      paired = false;
+      notice = store.connectionError;
+    });
+  }
+
+  void connected() {
+    link = null;
+    setState(() {
+      paired = true;
+      codes = false;
+      notice = null;
+    });
+    client.listen();
   }
 
   @override
@@ -141,10 +205,11 @@ class _ManulAppState extends State<ManulApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
+    navigatorKey: navigator,
     title: 'AgentShot',
     debugShowCheckedModeBanner: false,
-    theme: manulTheme(Brightness.light),
-    darkTheme: manulTheme(Brightness.dark),
+    theme: agentShotTheme(Brightness.light),
+    darkTheme: agentShotTheme(Brightness.dark),
     themeMode: theme,
     home: !ready
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))
@@ -154,16 +219,29 @@ class _ManulAppState extends State<ManulApp> {
             theme: theme,
             onTheme: setTheme,
             onDisconnect: disconnect,
+            account: account.signedIn ? account : null,
+            onSignOut: signOut,
+          )
+        : account.signedIn && link == null && !codes
+        ? ComputersScreen(
+            account: account,
+            client: client,
+            onConnected: connected,
+            onSignOut: signOut,
+            onCodes: () => setState(() => codes = true),
+            notice: notice,
           )
         : PairScreen(
             key: ValueKey(link),
             client: client,
             link: link,
-            onPaired: () {
-              link = null;
-              setState(() => paired = true);
-              client.listen();
-            },
+            codes: codes,
+            notice: notice,
+            signedIn: account.signedIn,
+            onSignIn: account.signedIn
+                ? () async => setState(() => codes = false)
+                : signIn,
+            onPaired: connected,
           ),
   );
 }

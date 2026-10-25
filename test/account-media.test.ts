@@ -6,7 +6,7 @@ import { handle, MEDIA, price, type Env, type MediaConfig } from '../account/src
 import { memoryWallet } from '../account/src/wallet'
 import { creditsForCost } from '../account/src/plans'
 
-// Voice and music for Manul keys: the account service picks the vendor from media.json, makes it with Manul's key,
+// Voice and music for AgentShot keys: the account service picks the vendor from media.json, makes it with AgentShot's key,
 // takes the price (in credits) off the caller's wallet, and never says who made it. Fake Bifrost and fake vendors.
 const env: Env = { CLERK_ISSUER: 'https://clerk.test', CLERK_SECRET_KEY: 'sk', BIFROST_URL: 'https://gw.test', BIFROST_AUTH: 'Basic x', GEMINI_API_KEY: 'g-server', ELEVENLABS_API_KEY: 'el-server' }
 let vk: any
@@ -40,12 +40,12 @@ afterEach(() => vi.unstubAllGlobals())
 const as = { authorization: 'Bearer sk-bf-1', 'x-manul-key-id': 'vk_1', 'content-type': 'application/json' }
 const post = (path: string, body: object, e: Env = env) => handle(new Request(`https://account.test${path}`, { method: 'POST', headers: as, body: JSON.stringify(body) }), e, wallet)
 const withConfig = (c: MediaConfig): Env => {
-  const f = join(mkdtempSync(join(tmpdir(), 'manul-media-')), 'media.json')
+  const f = join(mkdtempSync(join(tmpdir(), 'agentshot-media-')), 'media.json')
   writeFileSync(f, JSON.stringify(c))
   return { ...env, MEDIA_CONFIG: f }
 }
 
-describe('voice and music with a Manul key', () => {
+describe('voice and music with an AgentShot key', () => {
   it('prices by characters, minutes or request', () => {
     expect(price({ per_1k_chars: 0.1 }, { text: 'x'.repeat(2500) })).toBe(0.25)
     expect(price({ per_minute: 0.3 }, { seconds: 90 })).toBe(0.45)
@@ -53,7 +53,7 @@ describe('voice and music with a Manul key', () => {
     expect(price(undefined, {})).toBeUndefined()
   })
 
-  it('makes music with the configured vendor and Manul’s key, charges the credit, and doesn’t say who made it', async () => {
+  it('makes music with the configured vendor and AgentShot’s key, charges the credit, and doesn’t say who made it', async () => {
     vendorAnswer = () => reply({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/mpeg', data: Buffer.from([0xff, 0xfb, 9]).toString('base64') } }] } }] })
     const r = await post('/v1/music', { prompt: 'Lo-fi bed', seconds: 30 })
     expect(r.status).toBe(200)
@@ -74,7 +74,7 @@ describe('voice and music with a Manul key', () => {
     expect(await left()).toBe(1000 - 120)
   })
 
-  it('voice: the Manul voice name becomes the vendor’s voice', async () => {
+  it('voice: the AgentShot voice name becomes the vendor’s voice', async () => {
     vendorAnswer = () => reply({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;rate=24000', data: 'AAAA' } }] } }] })
     const r = await post('/v1/voice', { text: 'Hello.', voice: 'anchor' })
     expect(r.status).toBe(200)
@@ -86,7 +86,7 @@ describe('voice and music with a Manul key', () => {
     await wallet.post('p_1', -980, 'usage', 'spent', 'spent')
     const r = await post('/v1/music', { prompt: 'x', seconds: 30 })
     expect(r.status).toBe(402)
-    expect((await r.json()).error).toMatch(/out of Manul credits.*needs 32 and 20 are left/)
+    expect((await r.json()).error).toMatch(/out of AgentShot credits.*needs 32 and 20 are left/)
     expect(vendor).toEqual([])
   })
 

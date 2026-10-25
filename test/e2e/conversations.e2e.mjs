@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 if (!process.env.GEMINI_API_KEY) { console.log('conversations e2e: skipped (no GEMINI_API_KEY)'); process.exit(0) }
 const root = join(import.meta.dirname, '..', '..')
-const out = mkdtempSync(join(tmpdir(), 'manul-conv-')), ud = mkdtempSync(join(tmpdir(), 'manul-ud-'))
+const out = mkdtempSync(join(tmpdir(), 'agentshot-conv-')), ud = mkdtempSync(join(tmpdir(), 'agentshot-ud-'))
 execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=320x240:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(out, 'cv.mp4')])
 const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${ud}`], env: { ...process.env, MANUL_PROJECTS: join(out, 'cvp') } })
 try {

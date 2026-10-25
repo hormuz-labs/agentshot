@@ -32,14 +32,14 @@ export function SettingsDialog({ section, onSection, onClose }: { section: Secti
   useEffect(() => {
     if (!open) { setTourIndex(null); return }
     let cancelled = false
-    window.manul.onboarding.settingsOpened().then(({ state }) => {
+    window.agentshot.onboarding.settingsOpened().then(({ state }) => {
       if (!cancelled && state.tourStatus === 'pending') { onSection('keys'); setTourIndex(0) }
     }).catch(e => console.error('Could not record Settings onboarding:', e))
     return () => { cancelled = true }
   }, [open, onSection])
   const finishTour = useCallback((status: 'completed' | 'skipped') => {
     setTourIndex(null)
-    void window.manul.onboarding.finishSettings(status).catch(e => console.error('Could not save Settings tour outcome:', e))
+    void window.agentshot.onboarding.finishSettings(status).catch(e => console.error('Could not save Settings tour outcome:', e))
   }, [])
   const changeStep = useCallback((index: number) => {
     onSection(SETTINGS_TOUR_STEPS[index].section)

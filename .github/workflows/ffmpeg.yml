@@ -1,5 +1,5 @@
-# Manul's own ffmpeg + ffprobe (scripts/ffmpeg/build.sh: Martin Riedl's build plus vid.stab and Rubber Band), for every
-# platform Manul ships. A pull request that changes the build builds it here to check it (once: later pushes that leave
+# AgentShot's own ffmpeg + ffprobe (scripts/ffmpeg/build.sh: Martin Riedl's build plus vid.stab and Rubber Band), for every
+# platform AgentShot ships. A pull request that changes the build builds it here to check it (once: later pushes that leave
 # the build alone reuse it from the cache, and a new push cancels the run before). Merging to main builds nothing: the
 # app uses the pinned prerelease, not main. Pushing a tag like ffmpeg-9.0.2-1 builds that commit and publishes the zips
 # as a GitHub prerelease under the tag (never "latest", so the app's updater and the Homebrew tap ignore it). Then pin
@@ -96,5 +96,5 @@ jobs:
           cat out/SHA256-*.txt > out/SHA256SUMS.txt
           rm out/SHA256-*.txt
           gh release create "$TAG" out/* -R "$GITHUB_REPOSITORY" --prerelease --latest=false \
-            --title "$TAG (bundled ffmpeg)" --notes "Manul's bundled ffmpeg/ffprobe, built by scripts/ffmpeg/build.sh. Not an app release."
+            --title "$TAG (bundled ffmpeg)" --notes "AgentShot's bundled ffmpeg/ffprobe, built by scripts/ffmpeg/build.sh. Not an app release."
           cat out/SHA256SUMS.txt

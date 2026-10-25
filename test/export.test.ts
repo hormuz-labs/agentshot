@@ -59,7 +59,7 @@ describe('export presets', () => {
   })
 
   it('renders for real: a 9:16 export with burned captions', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-export-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-export-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=25:duration=2', '-f', 'lavfi', '-i', 'sine=duration=2',
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(dir, 'in.mp4')])
     writeFileSync(join(dir, 'caps.srt'), toSrt([{ s: 0.2, e: 1.8, lines: ['Hello from Manul'] }]))
@@ -83,7 +83,7 @@ describe('filter path escaping', () => {
   })
 
   it('renders real captions and loads fonts from punctuation-heavy absolute paths', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-escape-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-escape-'))
     try {
       const fonts = join(dir, "My fonts [cut],; O'Brien %=set")
       mkdirSync(fonts)
@@ -104,7 +104,7 @@ describe('filter path escaping', () => {
   })
 
   it.skipIf(process.platform === 'win32')('passes drive-colon paths through real FFmpeg filter parsing on POSIX', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-drive-filter-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-drive-filter-'))
     try {
       const fonts = 'C:/My fonts [cut],; O\'Brien'
       const captions = 'D:/My captions [cut],; O\'Brien.srt'
@@ -124,7 +124,7 @@ describe('filter path escaping', () => {
 describe('burned captions look right', () => {
   /** rows (as fractions of the height) that contain white caption pixels, on a black video */
   async function captionRows(preset: 'original' | 'vertical', w: number, h: number) {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-cap-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-cap-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=black:s=${w}x${h}:rate=25:d=1`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'in.mp4')])
     writeFileSync(join(dir, 'caps.srt'), toSrt([{ s: 0, e: 1, lines: ['Hello from Manul'] }]))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', ...exportArgs({ preset, fit: 'crop', input: 'in.mp4', out: 'out.mp4', source: { width: w, height: h }, burnCaptions: 'caps.srt',

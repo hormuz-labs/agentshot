@@ -1,4 +1,4 @@
-# Manul's usage proxy: `npx wrangler deploy` from this folder (see telemetry/README.md).
+# AgentShot's usage proxy: `npx wrangler deploy` from this folder (see telemetry/README.md).
 name = "manul-telemetry"
 main = "worker.ts"
 compatibility_date = "2025-09-01"

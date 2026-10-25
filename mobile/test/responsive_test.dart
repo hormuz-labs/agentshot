@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:manul_mobile/main.dart';
-import 'package:manul_mobile/bridge/client.dart';
-import 'package:manul_mobile/bridge/store.dart';
-import 'package:manul_mobile/ui/home.dart';
-import 'package:manul_mobile/ui/pair.dart';
-import 'package:manul_mobile/ui/project.dart';
-import 'package:manul_mobile/ui/settings.dart';
+import 'package:agentshot_mobile/main.dart';
+import 'package:agentshot_mobile/bridge/account.dart';
+import 'package:agentshot_mobile/bridge/client.dart';
+import 'package:agentshot_mobile/bridge/store.dart';
+import 'package:agentshot_mobile/ui/computers.dart';
+import 'package:agentshot_mobile/ui/home.dart';
+import 'package:agentshot_mobile/ui/pair.dart';
+import 'package:agentshot_mobile/ui/project.dart';
+import 'package:agentshot_mobile/ui/settings.dart';
 
 class FakeClient extends BridgeClient {
   @override
@@ -28,9 +30,53 @@ class FakeClient extends BridgeClient {
       'providers:list' => {'providers': []},
       'account:status' => {'available': false},
       'whisper:status' => {'active': null},
+      'account:balance' => {'credits': 716824},
+      // a model whose name is far too long for the composer: it must be cut short, not overflow
+      'agent:models' => {
+        'current': {'modelId': 'long'},
+        'models': [
+          {
+            'modelId': 'long',
+            'name': 'A Remarkably Long Experimental Model Name Preview 2026',
+          },
+        ],
+      },
       _ => [],
     };
   }
+}
+
+/// Signed in, with two computers on (one with a long name) and no network.
+class FakeAccount extends Account {
+  FakeAccount() : super(browser: (_) async => '') {
+    email = 'maya@example.com';
+    key = 'k';
+  }
+  @override
+  Future<Json> balance() async => {
+    'credits': 12345,
+    'plan': {'name': 'Pro'},
+  };
+
+  @override
+  Future<List<Computer>> computers() async => [
+    for (final (id, name, platform) in [
+      ('a', 'Studio iMac', 'darwin'),
+      (
+        'b',
+        'Maya’s very long named Windows workstation in the edit suite',
+        'win32',
+      ),
+    ])
+      Computer.fromJson({
+        'id': id,
+        'name': name,
+        'urls': ['https://192.168.1.20:47821'],
+        'fingerprint': 'a' * 64,
+        'token': 'lease.1.x.y',
+        'capabilities': {'platform': platform},
+      }),
+  ];
 }
 
 void main() {
@@ -55,19 +101,48 @@ void main() {
         addTearDown(store.dispose);
         addTearDown(client.dispose);
         Widget host(Widget child) => MaterialApp(
-          theme: manulTheme(Brightness.light),
+          theme: agentShotTheme(Brightness.light),
           builder: (context, widget) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: TextScaler.linear(scale)),
+            data:
+                MediaQuery.of(
+                  context,
+                  // still Manul (reduced motion): pumpAndSettle can settle
+                ).copyWith(
+                  textScaler: TextScaler.linear(scale),
+                  disableAnimations: true,
+                ),
             child: widget!,
           ),
           home: child,
         );
         await tester.pumpWidget(
-          host(PairScreen(client: client, onPaired: () {})),
+          host(
+            PairScreen(
+              client: client,
+              onPaired: () {},
+              onSignIn: () async {},
+              codes: true,
+            ),
+          ),
         );
         await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(
+          host(
+            ComputersScreen(
+              account: FakeAccount(),
+              client: client,
+              onConnected: () {},
+              onSignOut: () async {},
+              onCodes: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'Your computers');
+        expect(find.text('12,345 credits · Pro plan'), findsOneWidget);
+        // tiny phones with large text scroll to the computers
+        await tester.scrollUntilVisible(find.text('Studio iMac'), 120);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(
           host(
@@ -76,6 +151,7 @@ void main() {
               theme: ThemeMode.system,
               onTheme: (_) {},
               onDisconnect: () async {},
+              onSignOut: () async {},
             ),
           ),
         );
@@ -91,9 +167,6 @@ void main() {
         store.project = {
           'dir': '/project',
           'title': 'A very long project title that must fit small screens',
-          'versions': [],
-          'current': '',
-          'proposal': 'pending',
           'notes': [
             {
               'text':
@@ -103,6 +176,17 @@ void main() {
             },
           ],
           'media': {},
+          // a new cut waiting: the conversation shows it, the Film tab has a dot
+          'versions': [
+            {'id': 'v1', 'title': 'Original'},
+            {
+              'id': 'v2',
+              'title':
+                  'Cut the ums, tightened the opening and moved the title card',
+            },
+          ],
+          'current': 'v1',
+          'proposal': 'v2',
           'files': {
             'media/a-long-original-filename-for-the-opening-shot.mp4': {
               'kind': 'video',
@@ -124,6 +208,40 @@ void main() {
         await tester.pumpWidget(host(ProjectScreen(store: store)));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
+        expect(find.byKey(const ValueKey('proposal-card')), findsOneWidget);
+        final dot = find.byKey(const ValueKey('tab-Film-dot'));
+        if (dot.evaluate().isNotEmpty) {
+          expect(tester.widget<Badge>(dot).isLabelVisible, isTrue);
+        }
+        // the model sits beside Send, its long name cut short
+        final model = tester.getRect(find.byKey(const ValueKey('model')));
+        final send = tester.getRect(find.byTooltip('Send'));
+        expect(model.width, lessThanOrEqualTo(200));
+        expect(send.left - model.right, lessThan(24));
+        expect(
+          model.left,
+          greaterThanOrEqualTo(
+            tester.getRect(find.byKey(const ValueKey('credits'))).right,
+          ),
+        );
+        // picking a model works: the picker closes cleanly with no error
+        // (with very large text on a short screen the composer scrolls)
+        await tester.ensureVisible(find.byKey(const ValueKey('model')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('model')));
+        await tester.pumpAndSettle();
+        // the picker scrolls too, when the text is very large
+        await tester.scrollUntilVisible(
+          find.text('Automatic'),
+          100,
+          scrollable: find.byType(Scrollable).last,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Automatic').last);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'Choosing a model');
+        // picked: the picker closed
+        expect(find.text('Choose a model'), findsNothing);
         // Simulate keyboard in a short viewport; composer must remain scrollable.
         tester.view.viewInsets = FakeViewPadding(bottom: size.height * .42);
         await tester.pumpAndSettle();
@@ -131,7 +249,7 @@ void main() {
         tester.view.resetViewInsets();
         await tester.pumpAndSettle();
         for (final label in ['Film', 'Files']) {
-          final chip = find.widgetWithText(ChoiceChip, label);
+          final chip = find.byKey(ValueKey('tab-$label'));
           if (chip.evaluate().isEmpty) continue;
           await tester.ensureVisible(chip);
           await tester.tap(chip);
@@ -155,6 +273,7 @@ void main() {
           theme: ThemeMode.system,
           onTheme: (_) {},
           onDisconnect: () async {},
+          onSignOut: () async {},
         );
         for (final open in [
           settings.keys,

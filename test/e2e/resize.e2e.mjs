@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-rz-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-rz-'))
 execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=1280x720:d=4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'clip.mp4')])
 const launch = () => electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'p') } })
 const width = (win, sel) => win.locator(sel).evaluate(e => Math.round(e.getBoundingClientRect().width))

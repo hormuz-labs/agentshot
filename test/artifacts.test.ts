@@ -34,7 +34,7 @@ describe('generated file delivery', () => {
   })
 
   it('restricts download sources to real project files, including symlink targets', async () => {
-    const parent = await mkdtemp(join(tmpdir(), 'manul-artifacts-'))
+    const parent = await mkdtemp(join(tmpdir(), 'agentshot-artifacts-'))
     const dir = join(parent, 'project')
     await mkdir(join(dir, 'renders'), { recursive: true })
     await writeFile(join(dir, 'renders', 'report.pdf'), 'report')
@@ -63,7 +63,7 @@ describe('generated file delivery', () => {
   })
 
   it.each(['renders', 'exports', 'documents', 'outputs', 'downloads', 'generated'])('discovers nested deliverables in %s without exposing scripts, hidden files or partial downloads', async folder => {
-    const dir = await mkdtemp(join(tmpdir(), 'manul-discovery-'))
+    const dir = await mkdtemp(join(tmpdir(), 'agentshot-discovery-'))
     const out = join(dir, folder, 'nested')
     await mkdir(join(out, '.private'), { recursive: true })
     for (const name of ['report.pdf', 'notes.txt', 'data.csv', 'page.html', 'bundle.zip', 'build.py', 'script.js', 'model.bin', 'report.pdf.part', '.hidden.txt']) await writeFile(join(out, name), 'fixture')
@@ -75,7 +75,7 @@ describe('generated file delivery', () => {
   })
 
   it('removes stale deliverables and old thumbnail entries without replacing existing imported metadata', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'manul-discovery-refresh-'))
+    const dir = await mkdtemp(join(tmpdir(), 'agentshot-discovery-refresh-'))
     await mkdir(join(dir, 'media'))
     await mkdir(join(dir, 'outputs'))
     await writeFile(join(dir, 'media', 'notes.txt'), 'imported')
@@ -93,7 +93,7 @@ describe('generated file delivery', () => {
   })
 
   it('discovers generated deliverables and groups nested output folders in Files', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'manul-generated-'))
+    const dir = await mkdtemp(join(tmpdir(), 'agentshot-generated-'))
     await mkdir(join(dir, 'renders', 'docs'), { recursive: true })
     await writeFile(join(dir, 'renders', 'docs', 'report.txt'), 'Generated report')
     await writeFile(join(dir, 'renders', 'build.py'), 'internal script')

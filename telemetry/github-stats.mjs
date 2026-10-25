@@ -1,4 +1,4 @@
-// Once a day (.github/workflows/github-stats.yml): Manul's public GitHub numbers as one PostHog event, so the
+// Once a day (.github/workflows/github-stats.yml): AgentShot's public GitHub numbers as one PostHog event, so the
 // dashboard shows downloads and stars next to usage. Run by hand: POSTHOG_TOKEN=phc_… node telemetry/github-stats.mjs
 // Installer downloads are GitHub's download_count: requests for an installer, not people or completed installs.
 // Auto-update .zip files, feeds and blockmaps are left out: running apps fetch those, not people.
@@ -8,7 +8,7 @@ const INSTALLERS = { '.dmg': 'mac', '.deb': 'deb', '.AppImage': 'appimage' }
 export async function githubStats({ token, fetchImpl = fetch } = {}) {
   const get = async path => {
     const res = await fetchImpl(REPO + path, { headers: {
-      accept: 'application/vnd.github+json', 'user-agent': 'manul-github-stats', 'x-github-api-version': '2022-11-28',
+      accept: 'application/vnd.github+json', 'user-agent': 'agentshot-github-stats', 'x-github-api-version': '2022-11-28',
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     } })
     if (!res.ok) throw new Error(`GitHub ${path}: HTTP ${res.status}`)

@@ -5,13 +5,13 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hoste
     throw 'Installer smoke is restricted to disposable GitHub-hosted Windows runners'
 }
 $registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
-function Get-ManulEntries {
+function Get-AgentShotEntries {
     @(Get-ChildItem $registry -ErrorAction SilentlyContinue | Get-ItemProperty | Where-Object { $_.DisplayName -match '^AgentShot(?:\s|$)' })
 }
-if ((Get-ManulEntries).Count -ne 0) { throw 'Refusing to touch an existing AgentShot installation' }
+if ((Get-AgentShotEntries).Count -ne 0) { throw 'Refusing to touch an existing AgentShot installation' }
 $installers = @(Get-ChildItem -LiteralPath $Dist -Filter 'AgentShot-*-windows-x64-Setup.exe')
 if ($installers.Count -ne 1) { throw 'Expected exactly one Windows x64 installer' }
-$tmp = Join-Path $env:RUNNER_TEMP ('manul installer ' + [guid]::NewGuid())
+$tmp = Join-Path $env:RUNNER_TEMP ('agentshot installer ' + [guid]::NewGuid())
 $installDir = Join-Path $tmp 'app'
 New-Item -ItemType Directory -Path $tmp | Out-Null
 $oldExe = $env:MANUL_PACKAGED_EXE
@@ -26,7 +26,7 @@ try {
     if ($p.ExitCode -ne 0) { throw "Installer exited $($p.ExitCode)" }
     $env:MANUL_PACKAGED_EXE = Join-Path $installDir 'AgentShot.exe'
     if (!(Test-Path -LiteralPath $env:MANUL_PACKAGED_EXE)) { throw 'Installer did not create AgentShot.exe in the requested path' }
-    if ((Get-ManulEntries).Count -ne 1) { throw 'Expected one per-user uninstall entry' }
+    if ((Get-AgentShotEntries).Count -ne 1) { throw 'Expected one per-user uninstall entry' }
     $shell = New-Object -ComObject WScript.Shell
     foreach ($link in @($desktopLink, $startLink)) {
         if (!(Test-Path -LiteralPath $link)) { throw "Installer did not create shortcut $link" }
@@ -45,7 +45,7 @@ try {
         if (!$p.WaitForExit(180000)) { $p.Kill(); throw 'Uninstaller timed out' }
         if ($p.ExitCode -ne 0) { throw "Uninstaller exited $($p.ExitCode)" }
         if (Test-Path -LiteralPath (Join-Path $installDir 'AgentShot.exe')) { throw 'Uninstaller left AgentShot.exe behind' }
-        if ((Get-ManulEntries).Count -ne 0) { throw 'Uninstaller left a per-user registry entry behind' }
+        if ((Get-AgentShotEntries).Count -ne 0) { throw 'Uninstaller left a per-user registry entry behind' }
         foreach ($link in @($desktopLink, $startLink)) {
             if (Test-Path -LiteralPath $link) { throw "Uninstaller left shortcut $link behind" }
         }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later (it is compiled together with aubio; see LICENSES/GPL-3.0.txt)
-// manul-beats: the beats, onsets and energy of a piece of music, as JSON on stdout, for Manul's analyze_music tool.
+// agentshot-beats: the beats, onsets and energy of a piece of music, as JSON on stdout, for AgentShot's analyze_music tool.
 // Built on aubio (GPL-3.0-or-later, https://aubio.org) by scripts/build-beats.sh. Reads 16/24/32-bit PCM WAV:
-// Manul decodes anything else to WAV with its ffmpeg first.
-//   manul-beats in.wav
+// AgentShot decodes anything else to WAV with its ffmpeg first.
+//   agentshot-beats in.wav
 // {"sr":44100,"duration":61.2,"bpm":120.1,"confidence":0.42,"beats":[0.51,1.01,…],
 //  "onsets":[[0.50,0.83],…],             onset time and its strength (aubio's onset descriptor at that moment)
 //  "env":{"rate":20,"rms":[…],"flux":[…]}}  loudness (linear RMS) and spectral flux, 20 values a second
@@ -17,13 +17,13 @@
 static void num(double v) { printf("%.4f", v); }
 
 int main(int argc, char **argv) {
-  if (argc != 2) { fprintf(stderr, "usage: manul-beats in.wav\n"); return 2; }
+  if (argc != 2) { fprintf(stderr, "usage: agentshot-beats in.wav\n"); return 2; }
   aubio_source_t *src = new_aubio_source(argv[1], 0, HOP);
-  if (!src) { fprintf(stderr, "manul-beats: cannot read %s (16/24/32-bit PCM WAV only)\n", argv[1]); return 1; }
+  if (!src) { fprintf(stderr, "agentshot-beats: cannot read %s (16/24/32-bit PCM WAV only)\n", argv[1]); return 1; }
   uint_t sr = aubio_source_get_samplerate(src);
   aubio_tempo_t *tempo = new_aubio_tempo("default", WIN, HOP, sr);
   aubio_onset_t *onset = new_aubio_onset("specflux", WIN, HOP, sr);
-  if (!tempo || !onset) { fprintf(stderr, "manul-beats: aubio could not start\n"); return 1; }
+  if (!tempo || !onset) { fprintf(stderr, "agentshot-beats: aubio could not start\n"); return 1; }
   aubio_onset_set_minioi_s(onset, 0.05);
   fvec_t *in = new_fvec(HOP), *beat = new_fvec(1), *on = new_fvec(1);
 

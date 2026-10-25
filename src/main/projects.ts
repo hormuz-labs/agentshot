@@ -1,9 +1,9 @@
-// Projects live in ~/Movies/Manul/<name>/ :
+// Projects live in ~/Movies/Manul/<name>/ (the folder keeps the app's former name so existing projects stay put):
 //   project.json   versions, notes, media info (the source of truth the UI and the agent share)
 //   media/         imported files (copied, so the project is self-contained): footage, music, subtitles, documents…
 //   renders/       the agent's outputs
 //   notes/         frame stills attached to notes
-//   fonts/         fonts the user added (copies, with Manul's Inter), the folder subtitles take fonts from
+//   fonts/         fonts the user added (copies, with AgentShot's Inter), the folder subtitles take fonts from
 import { app } from 'electron'
 import { execFile } from 'node:child_process'
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
@@ -132,8 +132,8 @@ export async function createFromFiles(files: string[], progress?: (done: number,
     if (!rel) {
       const about = Object.values(p.files!)[0]
       throw new Error(sources.length === 1
-        ? `${basename(file)} isn't a video Manul can play (${about?.summary || 'no playable video found'}). Include a video; other files can come with it.`
-        : 'Include at least one video Manul can play. Photos, audio and other files can come with it.')
+        ? `${basename(file)} isn't a video AgentShot can play (${about?.summary || 'no playable video found'}). Include a video; other files can come with it.`
+        : 'Include at least one video AgentShot can play. Photos, audio and other files can come with it.')
     }
     const info = p.media[rel]
     const v: Version = { id: id(), path: rel, title: 'Original', createdAt: Date.now(), by: 'import' }
@@ -205,7 +205,7 @@ async function register(p: Project, rel: string) {
 }
 
 /** Subtitles (libass) load every file in their fonts folder, so they can't take fonts from media/ beside the footage:
- *  a font the user adds is also copied into the project's fonts/, with Manul's Inter beside it. */
+ *  a font the user adds is also copied into the project's fonts/, with AgentShot's Inter beside it. */
 async function projectFont(p: Project, rel: string) {
   const dir = join(p.dir, 'fonts')
   await mkdir(dir, { recursive: true })
@@ -278,7 +278,7 @@ export function usedBy(p: Project, rel: string): string | null {
   return null
 }
 
-/** Take files out of the project: into the Trash (trash), with what Manul made from them (transcript, preview copy,
+/** Take files out of the project: into the Trash (trash), with what AgentShot made from them (transcript, preview copy,
  *  speakers, the subtitles link, a font's copy in fonts/). A folder whose files all go is trashed whole. Files the
  *  film uses stay, with the reason. */
 export async function removeFiles(p: Project, rels: string[], trash: (abs: string) => Promise<void>) {

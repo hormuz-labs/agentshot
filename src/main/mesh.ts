@@ -1,4 +1,4 @@
-// Userspace mesh helper manager: starts `manul-mesh` (tsnet) if present so workers and clients join Headscale without OS Tailscale.
+// Userspace mesh helper manager: starts `agentshot-mesh` (tsnet) if present so workers and clients join Headscale without OS Tailscale.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -11,7 +11,7 @@ export type MeshNode = {
 }
 
 export function meshBinPath(): string {
-  return process.env.MANUL_MESH_BIN || join(BIN, executableName('manul-mesh'))
+  return process.env.MANUL_MESH_BIN || join(BIN, executableName('agentshot-mesh'))
 }
 
 export async function startMeshNode(opts: {

@@ -23,7 +23,7 @@ export function tourTarget(name: string): HTMLElement | undefined {
     .find(el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden')
 }
 
-const example = (text: string) => `<div class="manul-tour-example">“${text}”</div>`
+const example = (text: string) => `<div class="agentshot-tour-example">“${text}”</div>`
 const key = (text: string) => `<kbd>${text}</kbd>`
 const step = (title: string, description: string, target?: string | (() => Element), side: 'top' | 'right' | 'bottom' | 'left' = 'bottom', options: Partial<Popover> = {}): DriveStep => ({
   // Resolve at highlight time: proposals and composer readiness can change during a tour.

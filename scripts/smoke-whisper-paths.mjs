@@ -15,11 +15,11 @@ export const MODEL = {
 
 export async function smokeWhisperPaths({ bin = join(import.meta.dirname, '..', 'resources', 'bin', 'win32-x64'), model = process.env.MANUL_TEST_WHISPER_MODEL, allowDownload = false } = {}) {
   if (!model && !allowDownload) throw new Error('Set MANUL_TEST_WHISPER_MODEL to the pinned multilingual ggml-base.bin, or explicitly allow its download')
-  const tmp = mkdtempSync(join(tmpdir(), 'manul whisper '))
+  const tmp = mkdtempSync(join(tmpdir(), 'agentshot whisper '))
   try {
     // Non-ASCII profile, app-data/model, media and output paths, with literal [] and spaces.
     const profile = join(tmp, '\u017dana \u7528\u6237 [profile]')
-    const modelDir = join(profile, 'AppData', 'Roaming', 'Manul', 'tools', 'whisper-model [base]')
+    const modelDir = join(profile, 'AppData', 'Roaming', 'AgentShot', 'tools', 'whisper-model [base]')
     const project = join(profile, 'Videos', '\u0444\u0438\u043b\u044c\u043c [edit]')
     mkdirSync(modelDir, { recursive: true })
     mkdirSync(project, { recursive: true })

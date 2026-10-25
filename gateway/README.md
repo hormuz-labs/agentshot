@@ -9,7 +9,7 @@ The gateway is [Bifrost](https://github.com/maximhq/bifrost). It holds the vendo
 
 ## How a request goes
 
-1. The app's agent (pi-ai) sends model `manul` to Bifrost's OpenAI Responses route, `/openai/responses`, with the Manul
+1. The app's agent (pi-ai) sends model `manul` to Bifrost's OpenAI Responses route, `/openai/responses`, with the AgentShot
    key as `Authorization: Bearer` ([src/main/gateway.ts](../src/main/gateway.ts)).
 2. Bifrost checks the virtual key (whether it's known, its budget, its rate limit and its allowed models).
 3. The **routing rule** `model == 'manul'` picks the provider and model ([k8s/config.json](k8s/config.json):
@@ -59,7 +59,7 @@ Gemini or OpenAI key still use it directly from the app.
   use `eleven_v3` and `music_v2_5` once `ELEVENLABS_API_KEY` is in the secret.
 - `prices`: what a person pays per model, as `per_1k_chars`, `per_minute` and/or `per_request` (USD). A model
   with no price is never used.
-- `voices` (optional): Manul's voice names (narrator, guide, anchor…) mapped to each vendor's voice, overriding
+- `voices` (optional): AgentShot's voice names (narrator, guide, anchor…) mapped to each vendor's voice, overriding
   `VOICES` in account/src/media.ts.
 
 To change it, run `kubectl -n manul edit configmap manul-media`. The service re-reads the file, so the change applies
@@ -74,7 +74,7 @@ docker compose up -d                  # gateway and dashboard on http://localhos
 ```
 
 The first time you open the dashboard, enter `BIFROST_SETUP_TOKEN` from `.env` and create the admin account. Then
-start the app against the gateway, and paste `MANUL_DEV_KEY` into Settings → Keys → Manul key:
+start the app against the gateway, and paste `MANUL_DEV_KEY` into Settings → Keys → AgentShot key:
 
 ```bash
 MANUL_GATEWAY=http://localhost:8089 npm run dev

@@ -24,7 +24,7 @@ const text = html => unescape(html.replace(/<br\s*\/?>/g, '\n').replace(/<!-- --
 async function get(url, tries = 3) {
   for (let i = 1; ; i++) {
     try {
-      const r = await fetch(url, { headers: { 'user-agent': 'Manul gallery fetch' } })
+      const r = await fetch(url, { headers: { 'user-agent': 'AgentShot gallery fetch' } })
       if (!r.ok) throw new Error(`${r.status} ${url}`)
       return await r.text()
     } catch (e) { if (i >= tries) throw e; await new Promise(r => setTimeout(r, 1000 * i)) }

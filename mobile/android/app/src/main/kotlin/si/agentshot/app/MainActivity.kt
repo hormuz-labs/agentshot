@@ -1,4 +1,4 @@
-package si.manul.manul_mobile
+package si.agentshot.app
 
 import android.content.Intent
 import android.content.pm.ApplicationInfo

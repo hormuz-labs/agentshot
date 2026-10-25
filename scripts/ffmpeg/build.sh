@@ -1,6 +1,6 @@
 #!/bin/sh
-# Build Manul's ffmpeg + ffprobe for this machine: Martin Riedl's build script (the same configuration the
-# downloaded builds had: x264, x265, libass, VideoToolbox…) plus the libraries Manul's analysis and editing need
+# Build AgentShot's ffmpeg + ffprobe for this machine: Martin Riedl's build script (the same configuration the
+# downloaded builds had: x264, x265, libass, VideoToolbox…) plus the libraries AgentShot's analysis and editing need
 # that those builds lack:
 #   vid.stab     vidstabdetect / vidstabtransform (measure and remove camera shake)
 #   Rubber Band  rubberband (speed changes without pitch change)
@@ -22,11 +22,11 @@ case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) TARGET=linux-x64 ;; Linux-aarch64) TARGET=linux-arm64 ;;
   *) echo "unsupported platform"; exit 1 ;;
 esac
-WORK=${MANUL_FFMPEG_WORK:-${TMPDIR:-/tmp}/manul-ffmpeg-$FFMPEG-$TARGET}
+WORK=${MANUL_FFMPEG_WORK:-${TMPDIR:-/tmp}/agentshot-ffmpeg-$FFMPEG-$TARGET}
 OUT=$REPO/dist/ffmpeg/$TARGET
 [ "$(uname -s)" = Darwin ] && export MACOSX_DEPLOYMENT_TARGET=12.0
 
-# the build script at a fixed commit, with Manul's modules and versions added
+# the build script at a fixed commit, with AgentShot's modules and versions added
 rm -rf "$WORK"
 mkdir -p "$WORK"
 # its downloads (plain curl) retry a few times: a moment's DNS or network failure shouldn't end an hour-long build
@@ -84,13 +84,13 @@ fi
 swap build-ffmpeg.sh 'EXTRA_VERSION="https://www.martin-riedl.de"' 'EXTRA_VERSION="manul"'
 
 # build.sh decides the GPL flags right after the last library: add ours just before that
-grep -q '^# check other ffmpeg flags$' "$S/build.sh" || { echo "build.sh changed: no '# check other ffmpeg flags' line to insert Manul's libraries before"; exit 1; }
+grep -q '^# check other ffmpeg flags$' "$S/build.sh" || { echo "build.sh changed: no '# check other ffmpeg flags' line to insert AgentShot's libraries before"; exit 1; }
 awk '
 /^# check other ffmpeg flags$/ {
   for (n = split("vidstab rubberband", lib, " "); i < n;) {
     l = lib[++i]
     print "START_TIME=$(currentTimeInSeconds)"
-    print "echoSection \"compile " l " (Manul)\""
+    print "echoSection \"compile " l " (AgentShot)\""
     print "$SCRIPT_DIR/build-" l ".sh \"$SCRIPT_DIR\" \"$SOURCE_DIR\" \"$TOOL_DIR\" \"$CPUS\" > \"$LOG_DIR/build-" l ".log\" 2>&1"
     print "checkStatus $? \"build " l "\""
     print "echoDurationInSections $START_TIME"
@@ -99,8 +99,8 @@ awk '
     print ""
   }
 }
-{ print }' "$S/build.sh" > "$S/build.manul.sh"
-chmod +x "$S/build.manul.sh"
+{ print }' "$S/build.sh" > "$S/build.agentshot.sh"
+chmod +x "$S/build.agentshot.sh"
 
 # Only what the build makes may end up in the binary: hide Homebrew/MacPorts libraries (an openjpeg tool once linked
 # Homebrew's lcms2 and broke). CMake ignores those prefixes; on macOS PATH holds just the system, cargo and autotools.
@@ -130,14 +130,14 @@ fi
 
 mkdir -p "$WORK/compile"
 cd "$WORK/compile"
-if ! "$S/build.manul.sh" -SKIP_BUNDLE=YES -SKIP_TEST=YES; then
+if ! "$S/build.agentshot.sh" -SKIP_BUNDLE=YES -SKIP_TEST=YES; then
   echo "--- build failed; last lines of each log:"
   for f in log/build-*.log; do echo "== $f"; tail -15 "$f"; done
   exit 1
 fi
 BIN=$WORK/compile/out/bin
 
-# what Manul relies on is really there, and nothing links to libraries a user's machine won't have
+# what AgentShot relies on is really there, and nothing links to libraries a user's machine won't have
 for f in vidstabdetect vidstabtransform rubberband drawtext subtitles scdet signalstats blackdetect freezedetect ebur128 loudnorm; do
   "$BIN/ffmpeg" -hide_banner -filters 2>/dev/null | grep -q " $f " || { echo "ffmpeg is missing the $f filter"; exit 1; }
 done

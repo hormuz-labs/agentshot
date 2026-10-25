@@ -6,7 +6,7 @@ const PREFER: { provider: string; pick: RegExp[] }[] = [
   { provider: 'anthropic', pick: [/^claude-opus-5/, /^claude-sonnet-5/, /^claude-opus/] },
   { provider: 'google', pick: [/^gemini-3\.8-flash$/, /^gemini-3.*flash$/, /^gemini/] },
   { provider: 'openai', pick: [/^gpt-5\.5$/, /^gpt-5/] },
-  { provider: 'manul', pick: [/^manul$/] }, // the Manul key (the gateway picks the model), after the user's own keys
+  { provider: 'manul', pick: [/^manul$/] }, // the AgentShot key (the gateway picks the model), after the user's own keys
 ]
 
 export function chooseModel(all: Available[], pick?: ModelRef | null): ModelRef | undefined {

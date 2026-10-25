@@ -55,7 +55,7 @@ pro editors can take an AgentShot rough cut into their own editor.
 
 ## 3. Core experience (v1)
 
-- **Start screen:** drop a video or paste a link, and type what you want in the same box. While you type, Manul reads the
+- **Start screen:** drop a video or paste a link, and type what you want in the same box. While you type, AgentShot reads the
   file details (ffprobe), makes a lighter preview copy, transcribes, and splits the footage into scenes.
 - **Screen view (main):** a full-bleed player, notes pinned on the scrubber, and the agent's input anchored to the
   playhead.
@@ -77,7 +77,7 @@ pro editors can take an AgentShot rough cut into their own editor.
     image". The agent changes only that element.
   - **Rules for every clip:**
     - Each movable element carries a stable id (`data-manul-id`).
-    - Animations run on Manul's clock, not wall-clock time: every GSAP timeline is paused and Manul calls
+    - Animations run on AgentShot's clock, not wall-clock time: every GSAP timeline is paused and AgentShot calls
       `seek(t)`, so any frame can be scrubbed and rendered exactly.
     - Rendering: the clip is stepped frame by frame in an offscreen Chromium, the frames are captured and piped to
       ffmpeg. A clip can also be **baked** to MP4 to save it as fixed footage.
@@ -87,7 +87,7 @@ pro editors can take an AgentShot rough cut into their own editor.
   chat log.
 - **Tracks drawer:** the full timeline and mix, for power users.
 - **Background tray:** renders, imports, downloads and agent background tasks, with one progress style.
-- **Agent browser:** the agent uses Manul's own built-in browser (the Browser panel), never the user's personal one.
+- **Agent browser:** the agent uses AgentShot's own built-in browser (the Browser panel), never the user's personal one.
   It is driven by a private, bundled BrowserSkill (bsk): its own daemon home and port, so a bsk the user installed in
   Chrome never sees it. The user browses and signs in in the same panel and can interrupt the agent there.
   Settings → Browser lets the user choose their own Chrome instead (their logins), on purpose.
@@ -102,11 +102,11 @@ pro editors can take an AgentShot rough cut into their own editor.
 | UI accents | libraries.dev (Thinking Orbs, Border Beam), transitions.dev, Dot Matrix loaders, driver.js onboarding tour, 3dicons (empty states only) | Polish where it counts, never in the way |
 | Agent runtime | **pi-durable** (pinned) + **pi-ai** for models | Conversations and tool calls are saved to SQLite before they're shown, so a crash or quit resumes mid-run |
 | Agent ↔ UI | **AG-UI protocol** (`@ag-ui/core`, `@ag-ui/client`) over Electron IPC | Standard events for tool calls, shared state (JSON Patch), interrupts, plan/activity, subagents. Later the same protocol works over HTTP for a cloud agent, mobile and review links |
-| Motion / generated footage | **HTML + GSAP** clips (`clip.html`), paused timelines seeked on Manul's clock, rendered offscreen frame by frame → ffmpeg | The agent makes footage it can edit; frame-exact scrub and export; GSAP is free incl. plugins (clear the no-code clause, §7) |
+| Motion / generated footage | **HTML + GSAP** clips (`clip.html`), paused timelines seeked on AgentShot's clock, rendered offscreen frame by frame → ffmpeg | The agent makes footage it can edit; frame-exact scrub and export; GSAP is free incl. plugins (clear the no-code clause, §7) |
 | Skills | Plain `SKILL.md` folders grouped into **profiles** | Readable, diffable, editable by the agent; they ship inside the app and update with it |
 | Memory | One fact per file, plus an index fed into the prompt | Survives across projects |
 | Media tools | **Bundled:** ffmpeg, ffprobe (static, per platform). **On demand:** demucs, whisper models, yt-dlp, rubberband… | Small install; heavy tools only when needed, with a size prompt first |
-| Python tools | Isolated Python environments managed by **uv**, inside Manul's support folder | Never touch the system Python |
+| Python tools | Isolated Python environments managed by **uv**, inside AgentShot's support folder | Never touch the system Python |
 | Keys | macOS Keychain / Linux secret store (`safeStorage`) | The renderer only ever learns "set" or "not set" |
 
 ### Models and voice
@@ -114,15 +114,15 @@ pro editors can take an AgentShot rough cut into their own editor.
 - **Text models:** Anthropic (Opus…), Gemini, OpenAI and anything pi-ai supports.
 - **Voice:** ElevenLabs, Gemini TTS, OpenAI TTS, all behind one `speak(text, voice, style) → audio` interface.
 - **Video generation (phase 2):** video models such as Veo, Runway, Kling and Sora, behind one
-  `generate(prompt, { frame?, box?, range?, aspect }) → clip` interface, with your own key or the Manul key.
+  `generate(prompt, { frame?, box?, range?, aspect }) → clip` interface, with your own key or the AgentShot key.
 - Every request goes through a **router that works by capability** (chat · image · voice · transcription · video), so the
-  later Manul key slots in without feature code changes.
+  later AgentShot key slots in without feature code changes.
 
 ### Keys screen
 
 - **Your own keys** tab (v1): Anthropic, Gemini, OpenAI, ElevenLabs. Each shows what it unlocks, plus a "what works
   with your keys" summary.
-- **Manul key** tab: paste a Manul key and the agent uses the model Manul's gateway picks (see phase 3).
+- **AgentShot key** tab: paste an AgentShot key and the agent uses the model AgentShot's gateway picks (see phase 3).
 
 ### Updates
 
@@ -143,7 +143,7 @@ pro editors can take an AgentShot rough cut into their own editor.
   manifest. Native Windows ARM64 is deferred until an architecture-specific toolchain and update flow are validated.
   Windows 32-bit is out of scope for the current Electron stack. This release targets x64 only.
 - **Speech recognition:** whisper.cpp already on the computer is found and used (paths saved, changeable, "Detect again");
-  otherwise Manul's own bundled whisper.cpp (static, Metal on macOS, ~4 MB) with the base model downloaded on first use
+  otherwise AgentShot's own bundled whisper.cpp (static, Metal on macOS, ~4 MB) with the base model downloaded on first use
   (148 MB, SHA-256 pinned); faster-whisper (Python) only where there is no bundled build. One transcription at a time.
 - **ffmpeg:** our own pinned FFmpeg 9.0.2 static builds (ffmpeg + ffprobe, same release) per platform; built from source
   in CI once the repo has CI.
@@ -166,7 +166,7 @@ pro editors can take an AgentShot rough cut into their own editor.
 - ⬜ Local usage meter (provider, model, tokens or characters, cost) for every request
 - ✅ Bundled ffmpeg/ffprobe; **Tools page** (installed, size, update, remove); on-demand installer with checksums
 - ⬜ First-run setup checks (dependency doctor)
-- ⬜ Email GSAP/Webflow for a written OK on Manul's use (AI-written GSAP + drag-to-edit clips)
+- ⬜ Email GSAP/Webflow for a written OK on AgentShot's use (AI-written GSAP + drag-to-edit clips)
 
 ### Phase 1: MVP (v0.1)
 - 🚧 Import: drop a file or link → read details, make a preview copy, transcribe, split into scenes, tag (details + transcription done)
@@ -175,7 +175,7 @@ pro editors can take an AgentShot rough cut into their own editor.
 - 🚧 Notes on the picture: element pick, box on the frame, timestamp/range (box + time + range done)
 - ✅ Before/after proposals: scrub, accept, reject, reply
 - ✅ **HTML motion clips:** the agent builds `clip.html` (slides, title cards, charts, kinetic type, GSAP motion
-      design) as timeline items next to MP4s and images. They are sandboxed, run on Manul's clock and render frame-exactly
+      design) as timeline items next to MP4s and images. They are sandboxed, run on AgentShot's clock and render frame-exactly
 - ✅ Clip renderer: offscreen Chromium frame stepping → ffmpeg; "bake to MP4"; final export mixes clips with footage
 - ✅ **Motion videos from nothing:** no footage needed. Start from one of 233 gallery examples (with the prompt that made it,
   credited to its maker), a video whose look to match, or a description; storyboard first, then one clip per scene
@@ -189,7 +189,7 @@ pro editors can take an AgentShot rough cut into their own editor.
       edit_timeline; renders only when saved as a version or exported, and a cut of one file renders fast: the picture
       between keyframes is copied as it is and only the frames at each cut are encoded (a 20-minute 1080p film with ten
       cuts: 10 s instead of 90 s). Still to come: more tracks, transitions, speed)
-- ✅ Agent browser with take-over (Manul's own browser via private bsk; Settings → Browser switches to the user's Chrome)
+- ✅ Agent browser with take-over (AgentShot's own browser via private bsk; Settings → Browser switches to the user's Chrome)
 - 🚧 Bring in your own footage, images and extra videos anywhere (files, folders and zips: subtitles, music, fonts,
       LUTs, logos; footage dragged onto the timeline goes into the edit at once)
 - ✅ Carry over the existing editor features: several projects and conversations, model picker, skills and profiles, memory,
@@ -204,7 +204,7 @@ pro editors can take an AgentShot rough cut into their own editor.
 - ⬜ driver.js first-run tour
 
 ### Phase 2: Generated shots, hand-off, publishing
-- ⬜ **Video capability in the router:** text-to-video and image-to-video models behind one interface; your key or the Manul key;
+- ⬜ **Video capability in the router:** text-to-video and image-to-video models behind one interface; your key or the AgentShot key;
       cost shown before each generation
 - ⬜ **B-roll on the fly:** "cut to the city at night here" → a few generated takes, pick one, it lands on that sentence
       (as a new version with before/after, like every other edit)
@@ -216,7 +216,7 @@ pro editors can take an AgentShot rough cut into their own editor.
 - ⬜ Export to **Premiere / DaVinci Resolve / Final Cut** (FCPXML, XML, EDL via OpenTimelineIO)
 - ⬜ YouTube publishing (upload, schedule, thumbnails, chapters)
 - ⬜ Spending view in Settings (from the usage meter)
-- ⬜ Manul key early-access sign-up live
+- ⬜ AgentShot key early-access sign-up live
 
 ### Phase 3: AgentShot key and Pro
 - 🚧 **AgentShot gateway** ([gateway/](gateway/README.md)): [Bifrost](https://github.com/maximhq/bifrost) holds our provider
@@ -228,14 +228,14 @@ pro editors can take an AgentShot rough cut into their own editor.
       through the gateway
 - ⬜ Optional accounts, licence check (works offline for a month), credits, top-ups
 - ⬜ Pro plan: AI included, cloud versions of heavy tools (demucs, upscaling), publishing automation, premium skill packs
-- 🚧 **Cloud tools on Manul's worker** (`worker.trypitch.co`): Upscale (Real-ESRGAN) has its place in Tools as *Coming soon*; only the shot being processed is sent
+- 🚧 **Cloud tools on AgentShot's worker** (`worker.trypitch.co`): Upscale (Real-ESRGAN) has its place in Tools as *Coming soon*; only the shot being processed is sent
 - ⬜ Integrations through **Composio**: Google Drive, Dropbox, OneDrive, Slack, Notion, Gmail, TikTok,
       Instagram, LinkedIn, X. Large files go by direct signed upload/download links, never through tool calls
 - ⬜ Phone capture over **local Wi-Fi** (QR pairing, free)
 
 ### Phase 4: Cloud, mobile, teams
 - ⬜ **AgentShot Cloud storage** (Cloudflare R2): base amount included in Pro, add-on blocks, pooled for teams
-- ✅ **Cloud &amp; home worker mesh** (`manul --worker`, `manul-mesh` userspace Headscale/WireGuard tunnel, cloud worker pool leasing, and peer-to-peer project delta-sync)
+- ✅ **Cloud &amp; home worker mesh** (`manul --worker`, `agentshot-mesh` userspace Headscale/WireGuard tunnel, cloud worker pool leasing, and peer-to-peer project delta-sync)
 - 🚧 **Mobile app** ([Flutter, Android/iOS](mobile/README.md)): desktop-paired capture/import with 6-digit OTP, AG-UI conversations,
       proposal review, notes and export download over local Wi-Fi or Tailscale. Native share extensions, full interaction parity,
       device QA and store releases remain; see [coverage](mobile/FEATURES.md).
@@ -249,7 +249,7 @@ pro editors can take an AgentShot rough cut into their own editor.
 | Plan | What's in it |
 |---|---|
 | **Free** | The full local editor, your own keys, all local tools, unlimited exports, no watermark |
-| **Pro** (~$15–20/mo, 💬) | Manul key (AI included, no keys needed), monthly credits, cloud tools, publishing automation, premium skills, storage allowance |
+| **Pro** (~$15–20/mo, 💬) | AgentShot key (AI included, no keys needed), monthly credits, cloud tools, publishing automation, premium skills, storage allowance |
 | **Team** (per seat) | Shared projects, client review links, shared brand kits and skills, pooled storage |
 | **Top-ups** | Credit packs, storage blocks |
 | **Marketplace** (later) | Revenue share on skill and style packs |
@@ -263,19 +263,19 @@ Rules:
 
 - **Licence:** the editor is open source under GPL-3.0-or-later, copyright agenthormuz@proton.me (Apache-2.0 from 2026-10-12,
   FSL-1.1-ALv2 from 2026-10-08; GPL-3.0 before that, and releases up to 0.1.1 and the code published before stay GPL). Contributors agree to the contributor agreement in CONTRIBUTING. The bundled GPL
-  programs (ffmpeg, manul-beats, manul-speakers) stay separate programs with their source. The paid cloud parts (Manul
+  programs (ffmpeg, agentshot-beats, agentshot-speakers) stay separate programs with their source. The paid cloud parts (AgentShot
   key gateway, storage) stay closed as separate services.
 - **Windows signing:** stay on the self-signed certificate (SmartScreen warns once) or move to a public CA, SignPath or
   Azure Trusted Signing for reputation?
 - **Personality:** how much manul (mascot, warm colours, orbs) versus a quiet pro tool?
-- **Video models:** which to support first, and whether generation runs only through the Manul key (simpler billing) or also with users' own keys.
+- **Video models:** which to support first, and whether generation runs only through the AgentShot key (simpler billing) or also with users' own keys.
 - Pro price point and credit size.
 - ffmpeg build: GPL (x264) or LGPL (hardware encoders only)?
 - **GSAP licence:** GSAP is 100% free, including commercial use and every plugin (SplitText, MorphSVG…), thanks to
   Webflow. Its licence also allows AI-generated GSAP code. **One clause to clear:** it prohibits using GSAP in
   "tools that allow users to build visual animations without code" in ways that compete with Webflow's visual animation
-  builder. Manul's drag-to-edit on motion clips is close to that line. Action: get written confirmation from GSAP/Webflow
-  for Manul's use case. Until then, keep GSAP behind the Manul-clock adapter (anime.js v4, MIT, as the fallback).
+  builder. AgentShot's drag-to-edit on motion clips is close to that line. Action: get written confirmation from GSAP/Webflow
+  for AgentShot's use case. Until then, keep GSAP behind the AgentShot-clock adapter (anime.js v4, MIT, as the fallback).
 - Where the apt repository is hosted (GitHub Pages, Cloudsmith, packagecloud…).
 
 ## How to contribute

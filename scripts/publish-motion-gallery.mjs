@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Ship the motion gallery: the app carries the catalogue and posters (a few MB); the videos stream from Manul's bucket.
+// Ship the motion gallery: the app carries the catalogue and posters (a few MB); the videos stream from AgentShot's bucket.
 // 1. Encode every video for streaming (longest side ≤ 1920, H.264 + AAC, moov first so playback starts at once)
 //    into resources/motion-gallery/stream/ (git-ignored).
 // 2. With --upload <gs://bucket/prefix>, sync them there with the posters (public; <base>/<id>.mp4, <base>/posters/<id>.jpg;

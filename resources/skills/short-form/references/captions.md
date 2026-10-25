@@ -1,6 +1,6 @@
 # Word-by-word captions with an .ass file
 
-Tested with Manul's bundled ffmpeg (libass). Write the file with the write tool into the project (e.g.
+Tested with AgentShot's bundled ffmpeg (libass). Write the file with the write tool into the project (e.g.
 `renders/captions.ass`), then burn it in the same ffmpeg command as the rest of the edit.
 
 ## 1. The template (1080×1920)

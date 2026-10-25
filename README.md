@@ -262,6 +262,8 @@ Hand renders and agent edits to a **Cloud Worker**, or your own workstation runn
 
 Away from home, the phone and your computer meet over AgentShot's own private mesh (Headscale/WireGuard, built into the app; no Tailscale install, no IP addresses, no port forwarding). Traffic stays end-to-end encrypted and pinned. <sub>Pairing from anywhere is on Android today; iOS pairs on the same Wi-Fi, with the code shown under the QR.</sub>
 
+**Cloud workers.** A cloud worker is AgentShot running headless as a lendable worker, leased to one person at a time. Your computer can hand it renders and agent edits (Settings → Mobile → Use cloud worker), and the phone can work on one when none of your computers is on (Your computers → Use a cloud worker). Whoever leases it sees only the projects they made there, and its own keys and settings stay its own. To lend one of your computers, turn on **Share this computer as a cloud worker** in Settings → Mobile and enter the pool key (the account service's `WORKER_POOL_SECRET`). That starts a separate background worker with its own profile and projects folder: none of your projects, keys or sign-in go with it. On a server, AgentShot started with `--worker` and `MANUL_POOL_SECRET` does the same.
+
 ---
 
 ## You stay in charge

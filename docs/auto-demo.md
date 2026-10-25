@@ -11,7 +11,7 @@ Natural pacing is the default; Tight shortens jointly idle
 pauses more, and Keep everything only synchronizes and composes. Circle, square, rectangle and rounded rectangle
 layouts support corner presets, a size slider and exact pixel dimensions. Pick the clearer narration microphone.
 
-The result appears as an Accept/Reject preview. In chat, Manul asks whether you want to adjust face placement, shape or
+The result appears as an Accept/Reject preview. In chat, AgentShot asks whether you want to adjust face placement, shape or
 size. **Yes, adjust layout** opens the live **Face camera** toolbox in the conversation (and uses a proposed demo as
 the editable starting point). **Looks good** dismisses the toolbox offer. No modal is involved.
 The adjustment offer is attached to the assistant reply that produced the version. It remains at that point in the
@@ -50,7 +50,7 @@ messages rather than silently hiding lost work; optional unavailable detection s
 
 ## Synchronization
 
-Both files normally need a recording of the same audio. Manul matches normalized audio envelopes over the complete
+Both files normally need a recording of the same audio. AgentShot matches normalized audio envelopes over the complete
 files, refines independent anchors with GCC-PHAT, and fits clock offset and drift. Computation runs in a worker to
 keep Electron responsive. Results are cached by file identity and analysis version. Ambiguous repeated takes and
 weak/inconsistent matches require a manual anchor instead of silently choosing a timestamp.

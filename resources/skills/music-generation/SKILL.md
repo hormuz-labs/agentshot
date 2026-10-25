@@ -13,13 +13,13 @@ it; the ffmpeg to fit it is in references/fitting.md. Numbers are defaults: when
   Generated music is original, so it passes video-editing's rule on rights. Music the user provided always wins.
 - Never ask for a named artist, song or voice ("like Hans Zimmer", "Blinding Lights"): the APIs block it, and it
   isn't ours to copy. Describe the sound instead (instruments, tempo, mood, era).
-- Each generation costs the user money (their own key, or their Manul credit). If they didn't ask for generated music
+- Each generation costs the user money (their own key, or their AgentShot credit). If they didn't ask for generated music
   themselves, ask once with `ask_user` (how long, what feel). Make **one take**; offer another instead of making several unasked.
 
 ## 2. Who makes it
-`generate_music` uses the user's own ElevenLabs or Gemini key when they have one, otherwise their Manul key (Manul
+`generate_music` uses the user's own ElevenLabs or Gemini key when they have one, otherwise their AgentShot key (AgentShot
 chooses the model). Don't call music APIs yourself. Pass `provider` only when the user asks for one of their own keys.
-If it says there is no key, tell the user in one line what unlocks it (sign in to Manul, or an ElevenLabs or Google
+If it says there is no key, tell the user in one line what unlocks it (sign in to AgentShot, or an ElevenLabs or Google
 Gemini key in Settings → Keys) and stop. Don't browse for random music instead.
 
 ## 3. The brief comes from the film
@@ -71,6 +71,6 @@ Gemini key in Settings → Keys) and stop. Don't browse for random music instead
 
 ## 7. Say what it is
 - One line: it's generated music and how long it is. With the user's own key, name the provider (generate_music says
-  it); with Manul, just say Manul made it. Generated tracks carry an AI watermark (C2PA or SynthID).
-- Rights follow the user's plan with that provider (or Manul's terms). If the film is for a client or ads, say so once.
+  it); with AgentShot, just say AgentShot made it. Generated tracks carry an AI watermark (C2PA or SynthID).
+- Rights follow the user's plan with that provider (or AgentShot's terms). If the film is for a client or ads, say so once.
 - When the user corrects the music for good ("never vocals", "always lo-fi"), `remember` it.

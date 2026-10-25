@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import type { AccountStatus, Balance, KeyInfo } from '../../../shared/types'
 import { ProvidersSection } from './ProvidersSection'
 
-const MANUL = 'MANUL_KEY'
+const AGENTSHOT_KEY = 'MANUL_KEY'
 
 const CAPS: { cap: string; label: string }[] = [
   { cap: 'text', label: 'Editing agent' },
@@ -15,22 +15,22 @@ const CAPS: { cap: string; label: string }[] = [
   { cap: 'voice', label: 'AI voice' },
 ]
 
-export function KeysPanel({ tourTab }: { tourTab?: 'own' | 'manul' } = {}) {
+export function KeysPanel({ tourTab }: { tourTab?: 'own' | 'agentshot' } = {}) {
   const [keys, setKeys] = useState<KeyInfo[]>([])
   const [tab, setTab] = useState('own')
   const [editing, setEditing] = useState<string | null>(null)
   const [value, setValue] = useState('')
   const [customKeyed, setCustomKeyed] = useState(false)
-  useEffect(() => { window.manul.keys.list().then(keys => { setKeys(keys); setTab(keys.some(k => k.env === MANUL && k.set) ? 'manul' : 'own') }) }, [])
+  useEffect(() => { window.agentshot.keys.list().then(keys => { setKeys(keys); setTab(keys.some(k => k.env === AGENTSHOT_KEY && k.set) ? 'agentshot' : 'own') }) }, [])
 
   const save = async (env: string, v: string) => {
-    setKeys(await window.manul.keys.set(env, v.trim()))
+    setKeys(await window.agentshot.keys.set(env, v.trim()))
     setEditing(null)
     setValue('')
   }
   const have = new Set([...keys.filter(k => k.set).flatMap(k => k.unlocks), ...(customKeyed ? ['text'] : [])])
-  const own = keys.filter(k => k.env !== MANUL)
-  const manul = keys.find(k => k.env === MANUL)
+  const own = keys.filter(k => k.env !== AGENTSHOT_KEY)
+  const agentshotKey = keys.find(k => k.env === AGENTSHOT_KEY)
 
   return (
     <div>
@@ -38,7 +38,7 @@ export function KeysPanel({ tourTab }: { tourTab?: 'own' | 'manul' } = {}) {
       <Tabs value={tourTab ?? tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger data-tour="own-key-tab" value="own"><KeyRound className="size-3.5" />Your own keys</TabsTrigger>
-          <TabsTrigger data-tour="manul-key-tab" value="manul"><Sparkles className="size-3.5" />AgentShot key{manul?.set && <span className="size-1.5 rounded-full bg-ok" />}</TabsTrigger>
+          <TabsTrigger data-tour="agentshot-key-tab" value="agentshot"><Sparkles className="size-3.5" />AgentShot key{agentshotKey?.set && <span className="size-1.5 rounded-full bg-ok" />}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="own" className="space-y-2">
@@ -80,8 +80,8 @@ export function KeysPanel({ tourTab }: { tourTab?: 'own' | 'manul' } = {}) {
           </div>
         </TabsContent>
 
-        <TabsContent value="manul">
-          <ManulKey manul={manul} onKeys={setKeys} />
+        <TabsContent value="agentshot">
+          <AgentShotKey agentshotKey={agentshotKey} onKeys={setKeys} />
         </TabsContent>
       </Tabs>
     </div>
@@ -90,25 +90,25 @@ export function KeysPanel({ tourTab }: { tourTab?: 'own' | 'manul' } = {}) {
 
 const message = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
-/** Manul key: sign in (the browser, then back here with the person's key), or paste a key. */
-function ManulKey({ manul, onKeys }: { manul?: KeyInfo; onKeys(k: KeyInfo[]): void }) {
+/** AgentShot key: sign in (the browser, then back here with the person's key), or paste a key. */
+function AgentShotKey({ agentshotKey, onKeys }: { agentshotKey?: KeyInfo; onKeys(k: KeyInfo[]): void }) {
   const [account, setAccount] = useState<AccountStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [pasting, setPasting] = useState(false)
   const [value, setValue] = useState('')
-  useEffect(() => { window.manul.account.status().then(setAccount) }, [])
-  const refresh = async (a?: AccountStatus) => { if (a) setAccount(a); onKeys(await window.manul.keys.list()) }
+  useEffect(() => { window.agentshot.account.status().then(setAccount) }, [])
+  const refresh = async (a?: AccountStatus) => { if (a) setAccount(a); onKeys(await window.agentshot.keys.list()) }
 
   const signIn = async () => {
     setBusy(true); setError('')
-    try { await refresh(await window.manul.account.signIn()) } catch (e) { setError(message(e)) } finally { setBusy(false) }
+    try { await refresh(await window.agentshot.account.signIn()) } catch (e) { setError(message(e)) } finally { setBusy(false) }
   }
-  const signOut = async () => refresh(await window.manul.account.signOut())
-  const paste = async () => { onKeys(await window.manul.keys.set(MANUL, value.trim())); setValue(''); setPasting(false) }
-  const remove = async () => onKeys(await window.manul.keys.set(MANUL, ''))
+  const signOut = async () => refresh(await window.agentshot.account.signOut())
+  const paste = async () => { onKeys(await window.agentshot.keys.set(AGENTSHOT_KEY, value.trim())); setValue(''); setPasting(false) }
+  const remove = async () => onKeys(await window.agentshot.keys.set(AGENTSHOT_KEY, ''))
 
-  if (!manul || !account) return null
+  if (!agentshotKey || !account) return null
   const row = 'mx-auto mt-4 flex max-w-md items-center gap-3 rounded-lg border border-line bg-bg px-3 py-2'
   return (
     <div className="rounded-lg border border-line bg-raised/60 p-5">
@@ -117,7 +117,7 @@ function ManulKey({ manul, onKeys }: { manul?: KeyInfo; onKeys(k: KeyInfo[]): vo
         <div className="text-[15px] font-semibold">One key for everything</div>
         <p className="mx-auto mt-1 max-w-sm text-dim">AgentShot picks the best model for the job and keeps it current. New accounts start with 1,000 credits; Pro and Max plans add more every month and unlock the Max and Ultra models. Your own keys, when set, are used first. On Pitch? Sign in with the same email: your plan and credits are here.</p>
       </div>
-      {account.email && manul.set ? (
+      {account.email && agentshotKey.set ? (
         <>
           <div className={row}>
             <span className="size-2 rounded-full bg-ok" />
@@ -126,7 +126,7 @@ function ManulKey({ manul, onKeys }: { manul?: KeyInfo; onKeys(k: KeyInfo[]): vo
           </div>
           <Credit />
         </>
-      ) : manul.set && !pasting ? (
+      ) : agentshotKey.set && !pasting ? (
         <div className={row}>
           <span className="size-2 rounded-full bg-ok" />
           <span className="flex-1 text-[13px]">AgentShot key added</span>
@@ -145,7 +145,7 @@ function ManulKey({ manul, onKeys }: { manul?: KeyInfo; onKeys(k: KeyInfo[]): vo
           {busy ? (
             <div className="flex items-center gap-2 text-[13px] text-dim">
               <Loader2 className="size-3.5 animate-spin" />Finish signing in in your browser…
-              <Button size="sm" variant="ghost" onClick={() => window.manul.account.cancel()}>Cancel</Button>
+              <Button size="sm" variant="ghost" onClick={() => window.agentshot.account.cancel()}>Cancel</Button>
             </div>
           ) : (
             <Button size="md" variant="primary" disabled={!account.available} onClick={signIn}>Sign in to AgentShot</Button>
@@ -165,7 +165,7 @@ function Credit() {
   const [error, setError] = useState('')
   const [opening, setOpening] = useState('')
   const [yearly, setYearly] = useState(false)
-  const load = () => window.manul.account.balance().then(x => { setB(x); setError('') }, e => setError(message(e)))
+  const load = () => window.agentshot.account.balance().then(x => { setB(x); setError('') }, e => setError(message(e)))
   useEffect(() => {
     load()
     window.addEventListener('focus', load) // back from paying in the browser
@@ -195,11 +195,11 @@ function Credit() {
           </p>
           <div className="mt-2 flex gap-2">
             {flex?.buyable && (
-              <Button size="sm" variant="primary" disabled={!!opening} onClick={() => open('flex', () => window.manul.account.checkout({ topup: 'flex' }))}>
+              <Button size="sm" variant="primary" disabled={!!opening} onClick={() => open('flex', () => window.agentshot.account.checkout({ topup: 'flex' }))}>
                 {opening === 'flex' ? 'Opening…' : `${n(flex.credits)} more credits · $${flex.price}`}
               </Button>
             )}
-            <Button size="sm" variant="ghost" disabled={!!opening} onClick={() => open('billing', () => window.manul.account.billing())}>
+            <Button size="sm" variant="ghost" disabled={!!opening} onClick={() => open('billing', () => window.agentshot.account.billing())}>
               {opening === 'billing' ? 'Opening…' : 'Manage billing'}
             </Button>
           </div>
@@ -212,7 +212,7 @@ function Credit() {
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {plans.map(p => (
-              <button key={p.key} disabled={!p.buyable || !!opening} onClick={() => open(p.key, () => window.manul.account.checkout({ plan: p.key }))}
+              <button key={p.key} disabled={!p.buyable || !!opening} onClick={() => open(p.key, () => window.agentshot.account.checkout({ plan: p.key }))}
                 className="rounded-lg border border-line px-3 py-2 text-left transition-colors hover:border-amber/60 disabled:opacity-50">
                 <div className="flex items-baseline gap-1">
                   <span className="text-[13px] font-semibold">{p.name}</span>

@@ -25,7 +25,7 @@ def main():
 
     from faster_whisper import WhisperModel
 
-    # Gentle on the machine: a few threads, int8 on CPU. One transcription runs at a time (Manul queues them).
+    # Gentle on the machine: a few threads, int8 on CPU. One transcription runs at a time (AgentShot queues them).
     threads = max(1, min(4, (os.cpu_count() or 4) // 2))
     model = WhisperModel(a.model, device="cpu", compute_type="int8", cpu_threads=threads)
     if a.download_only:
