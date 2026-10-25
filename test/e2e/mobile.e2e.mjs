@@ -303,8 +303,17 @@ try {
     run.stdout.on('data', d => {
       process.stdout.write(d)
       // the test "scans" the QR: open the pairing link on the device, as the camera would
-      for (const [, link] of String(d).matchAll(/PAIR_LINK (agentshot:\/\/pair\?d=[\w-]+)/g))
-        spawnSync('adb', ['-s', device, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', `'${link}'`, 'si.agentshot.app'])
+      for (const [, link] of String(d).matchAll(/PAIR_LINK (agentshot:\/\/pair\?d=[\w-]+)/g)) {
+        const opened = spawnSync('adb', ['-s', device, 'shell', 'am', 'start', '-W', '-a', 'android.intent.action.VIEW', '-d', `'${link}'`, 'si.agentshot.app'], { encoding: 'utf8' })
+        // what Android made of it, for when the app never hears the link (a CI emulator)
+        console.log(`e2e: opened the pairing link: ${(opened.stdout + opened.stderr).replace(/\s+/g, ' ').trim()}`)
+        setTimeout(() => {
+          const top = spawnSync('adb', ['-s', device, 'shell', 'dumpsys', 'activity', 'activities'], { encoding: 'utf8' }).stdout.match(/topResumedActivity.*|mResumedActivity.*/)?.[0]
+          const log = spawnSync('adb', ['-s', device, 'shell', 'logcat', '-d', '-t', '400'], { encoding: 'utf8' }).stdout.split('\n')
+            .filter(l => /ActivityTaskManager|NewIntent|BackgroundActivity|si.agentshot.app.*(Intent|Mesh|link)|flutter/i.test(l) && !/FrameTracker|Choreographer/.test(l)).slice(-12).join('\n  ')
+          console.log(`e2e: after the link, in front: ${top}\n  ${log}`)
+        }, 4000)
+      }
       // signing in: if the browser hasn't come back by itself, bring its answer back the way it would
       if (String(d).includes('SIGNING_IN')) setTimeout((before => () => {
         if (seen.callback && seen.exchanged === before) spawnSync('adb', ['-s', device, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', `'${seen.callback}'`])
