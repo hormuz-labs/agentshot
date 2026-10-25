@@ -1,5 +1,11 @@
 # Manul's gateway: Bifrost with the vendor keys, and one virtual key per Manul key. See README.md.
 services:
+  site:
+    profiles: [site]
+    build:
+      context: ../site
+    ports: ["127.0.0.1:4321:80"]
+    restart: unless-stopped
   bifrost:
     image: maximhq/bifrost:v2.2.6
     user: "0"

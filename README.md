@@ -35,6 +35,10 @@
 
 ## What is AgentShot
 
+This is the Manul monorepo: the desktop app (`src/`), [website](site/README.md) (`site/`),
+[account service](account/README.md), [AI gateway](gateway/README.md), and mobile clients (`mobile/`).
+See [workspace and hosting](docs/workspace.md) for development commands and deployment setup.
+
 AgentShot is **a video editor you direct by talking**. Drop in your footage, say what you want, and point at the frame when something's off. It makes the cut **on your own computer** and shows you a before / after of every change, to keep or send back. You never have to touch a timeline.
 
 <p align="center">

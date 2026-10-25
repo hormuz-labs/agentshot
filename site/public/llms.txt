@@ -1,0 +1,53 @@
+# AgentShot
+
+> AgentShot is an open-source AI video agent (Apache-2.0) for macOS, Windows and Linux, with an iPhone and Android companion app and optional cloud or home workers. Start from a blank canvas, a link, or your own footage: talk to it and it designs motion graphics, films narrated product walkthroughs in Chrome, syncs screen and facecam demos, generates voiceover and music, edits footage on the word, and exports the film. It runs on your own computer by default (or on a paired home or cloud worker when you want to offload heavy renders). Bring your own Claude, Gemini or OpenAI key (or any OpenAI- or Anthropic-compatible endpoint) and it is free forever, or sign in for one AgentShot key paid in credits.
+
+What it does today:
+- Create from nothing or from footage: motion graphics built scene by scene at 60 fps (start from one of 233 gallery examples with the prompt that made it, a reference video whose visual grammar it studies, or a plain-English brief), narrated product walkthroughs filmed live in AgentShot's browser or your Chrome (auto-zooms, cursor ripples, step-timed voiceover), synced screen + facecam demos (audio alignment, draggable circle/rounded PiP, dead-air cleanup), and full footage editing.
+- Measures before it cuts: local word timings (Whisper), speaker voice identification, shot boundaries and camera shake, face and subject tracking for 9:16 / 1:1 / 4:5 reframing, music beats and bars, and loudness (LUFS).
+- Direct on the picture: draw a box on a frame, drag across the timeline, or press N at a moment to attach an instruction to that exact spot and time; @-mention any project file, version or generated clip; generate voiceover and music (ElevenLabs, Gemini, OpenAI, or the AgentShot key); duck music under speech; export 16:9, 9:16 and 1:1 with burned-in or sidecar `.srt` captions; compare every edit as a before and after.
+- Mobile companion (iPhone, iPad & Android): pair in Settings → Mobile with a 6-digit code over Wi-Fi or Tailscale (encrypted and pinned to your computer's TLS certificate). Shoot and upload clips from your phone, browse projects, draw frame boxes, chat live with the agent, and review or share exports from anywhere.
+- Cloud & home workers (`manul --worker`): offload heavy rendering and agent edits to a leased AgentShot cloud worker or your own workstation running `manul --worker`, connected over a built-in userspace Headscale/WireGuard mesh (`manul-mesh`, no OS Tailscale install required) with peer-to-peer project delta-sync.
+- 12 craft skills (`talking-head`, `short-form`, `motion-design`, `product-walkthrough`, `demo-editor`, `promos-and-montages`, `tutorials`, `voiceover`, `music-generation`, `cleanup-and-repair`, `video-editing`, `browser-skill`) ship as `SKILL.md` files in the repo.
+- Next: generated camera shots only where asked (labelled as generated), timeline hand-off to Premiere/Resolve/Final Cut, direct YouTube publishing, and an API & MCP server.
+
+How it compares: timeline editors (Premiere Pro, Final Cut Pro, DaVinci Resolve, CapCut) are operated cut by cut; Descript edits through the transcript; HyperFrames and Remotion turn video into code an agent writes; AI generators (Runway, Sora, Veo) replace your footage with generated frames; hosted video agents lock your workflow in their cloud. AgentShot is an open-source video agent for creation and editing: it runs on your computer (or a worker you pick), works from a blank canvas or your footage, and lets you review every change before keeping it.
+
+## Pricing
+
+Launch offer: model usage on the AgentShot key is billed at 50% off its list rate, for a limited time. Credits are shared with Pitch (trypitch.co): Pitch accounts sign in to AgentShot with the same email and their plan and credits are already there. Subscribe in the app under Settings → Keys → AgentShot key.
+
+- Local: $0 forever with your own model keys. New AgentShot accounts also get 1,000 starter credits.
+- Pro: $45/month for 10,000 credits a month, or $432/year with 120,000 credits granted upfront.
+- Max: $80/month for 30,000 credits a month, or $768/year with 360,000 credits granted upfront.
+- Flex top-up: $20 for 5,000 credits, one-time, with an active Pro or Max plan.
+- Enterprise: custom volume, hello@hormuz-labs.dev.
+- Model tiers on the AgentShot key: Low, Medium and High for everyone; Max and Ultra (the strongest models) on Pro and Max.
+- Credits never expire once granted.
+- [Pricing page](https://agentshot.si/pricing/)
+
+## Install
+
+- [macOS (Homebrew)](https://github.com/hormuz-labs/homebrew-tap): `brew install hormuz-labs/tap/manul`
+- [Windows 10/11 x64](https://github.com/hormuz-labs/agentshot/releases/latest/download/AgentShot-windows-x64-Setup.exe): download and run `AgentShot-windows-x64-Setup.exe`
+- [Debian and Ubuntu (apt)](https://apt.agentshot.si): add the signed repository and install with the commands below
+- [All downloads (.dmg, .exe, .deb, AppImage)](https://github.com/hormuz-labs/agentshot/releases/latest)
+
+```bash
+curl -fsSL https://apt.agentshot.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &&
+echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.agentshot.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &&
+sudo apt update && sudo apt install manul
+```
+
+## Docs
+
+- [Install AgentShot (agent skill)](https://agentshot.si/skills/install-manul/SKILL.md): steps a coding agent can follow to install AgentShot on macOS, Windows or Linux
+- [README](https://github.com/hormuz-labs/agentshot/blob/main/README.md): what AgentShot is, features, install, and a prompt to give a coding agent so it installs AgentShot for you
+- [Roadmap](https://github.com/hormuz-labs/agentshot/blob/main/ROADMAP.md): phases, what's done, what's next (generated shots, hand-off to Premiere/Resolve/Final Cut, publishing, API & MCP)
+- [Contributing](https://github.com/hormuz-labs/agentshot/blob/main/CONTRIBUTING.md): run AgentShot from source
+
+## Optional
+
+- [Website](https://agentshot.si/): live demo, kinds of film, mobile & cloud workers, comparison, pricing, FAQ, and the 88-second film
+- [Source code](https://github.com/hormuz-labs/agentshot)
+- [License (Apache-2.0)](https://github.com/hormuz-labs/agentshot/blob/main/LICENSE)

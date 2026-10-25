@@ -1,0 +1,24 @@
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+/demo/*
+  Cache-Control: public, max-age=31536000
+/film/*
+  Cache-Control: public, max-age=31536000
+/timofey.*
+  Cache-Control: public, max-age=31536000
+/captions/*
+  Cache-Control: public, max-age=86400
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+/.well-known/ai-catalog.json
+  Content-Type: application/json; charset=utf-8
+  Access-Control-Allow-Origin: *
+/skills/*
+  Content-Type: text/markdown; charset=utf-8
+  Access-Control-Allow-Origin: *
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/motion/*
+  Cache-Control: public, max-age=31536000
+/paint/*
+  Cache-Control: public, max-age=31536000

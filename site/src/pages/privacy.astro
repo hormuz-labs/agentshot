@@ -1,0 +1,97 @@
+---
+import LegalPage from '../components/LegalPage.astro'
+---
+<LegalPage
+  title="Privacy Policy"
+  eyebrow="Your footage stays yours"
+  effective="October 24, 2026"
+  description="How Hormuz Labs handles information on the AgentShot website, in the AgentShot desktop and mobile applications, and across optional worker connections."
+>
+  <p class="intro">AgentShot is designed to edit on your computer, not in our cloud. This policy explains the limited information involved when you visit agentshot.si, install AgentShot, sign in to an AgentShot account, pay for a plan, or choose to send diagnostics. An account is optional: with your own model keys, AgentShot works without one.</p>
+
+  <section>
+    <h2 class="slate">Scope</h2>
+    <p>This policy applies to the AgentShot website, the AgentShot desktop application, and infrastructure operated by Hormuz Labs for AgentShot. It also applies to AgentShot accounts, which are shared with Pitch (trypitch.co), a Hormuz Labs product that is becoming part of AgentShot. Services run by others—including GitHub, your AI model provider, and sites opened in a browser—have their own privacy policies.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">The website</h2>
+    <p>The agentshot.si website has no sign-in, contact forms, advertising, or first-party analytics. We do not set cookies on the website. Accounts are created and used in the desktop app, as described below.</p>
+    <p>The site is hosted on Cloudflare Pages. Like other web hosts, Cloudflare may process standard request and security data when it serves a page, such as your IP address, request time, requested URL, browser or user-agent information, referring page, and signals used to detect abuse. Cloudflare processes that data under its own privacy commitments and may make limited operational logs available to us.</p>
+    <p>Links and downloads may take you to GitHub, Homebrew, the AgentShot apt repository, or another site. Those services receive the information ordinarily sent when your browser connects to them.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">The desktop app</h2>
+    <h3>Your projects stay local</h3>
+    <p>AgentShot stores and processes your projects, footage, audio, transcripts, edits, settings, and exports on your computer. Hormuz Labs does not receive those files merely because you use the app.</p>
+
+    <h3>AI providers you choose</h3>
+    <p>With your own key, AgentShot connects directly to the AI provider or compatible endpoint you select, and Hormuz Labs is not in between. That provider may receive your instructions, relevant transcript text, and a limited number of still frames when the model needs visual context. It does not receive your full video through AgentShot. Your provider’s terms and privacy policy govern its processing. API keys are stored in your operating system’s keychain.</p>
+
+    <h3>Browser and external tools</h3>
+    <p>When AgentShot searches the web, downloads a tool, or connects to a service at your direction, that service receives ordinary network request data and any information needed for the requested action. AgentShot uses its own browser by default; it accesses your browser only if you enable that option.</p>
+
+    <h3>Mobile companion and remote workers</h3>
+    <p>In <strong>Settings → Mobile</strong>, you can pair the AgentShot iOS or Android companion app with your computer using a 6-digit verification code over local Wi-Fi or Tailscale. Paired connections are encrypted and pinned to your computer’s certificate so footage, notes and exports move directly between your phone and your computer.</p>
+    <p>You can also connect AgentShot to a home worker you run yourself (<code>manul --worker</code>) or lease an AgentShot cloud worker. When you connect a worker, AgentShot coordinates the encrypted peer mesh (<code>manul-mesh</code>) and syncs the active project’s files to that worker so it can run edits and renders for you.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">AgentShot accounts</h2>
+    <p>You can sign in to AgentShot to use the AgentShot key, which covers models, voice and music without keys of your own, and to subscribe to a plan. Accounts are shared with Pitch: one email, one account, one plan and credit balance.</p>
+
+    <h3>Sign-in</h3>
+    <p>Sign-in is provided by Clerk. When you create an account or sign in, Clerk processes your email address, your name and profile picture if you sign in with Google or another identity provider, an account ID, sign-in times, and the device and network data needed to keep sessions secure. AgentShot keeps a session token for your account on your computer.</p>
+
+    <h3>The AgentShot gateway and usage records</h3>
+    <p>Requests made with the AgentShot key go through the AgentShot gateway, operated by Hormuz Labs, which forwards them to the model, voice and music providers we work with and returns the result. The same limits apply as with your own key: your instructions, relevant transcript text and a limited number of still frames, never your full video. The gateway logs usage per account so we can bill for it and prevent abuse: the time, the model tier and model, the amount used (such as tokens or seconds of audio), and the credits charged. Those usage logs do not store the text of your prompts or the replies.</p>
+
+    <h3>Billing</h3>
+    <p>Plans, top-ups and invoices are processed by Dodo Payments, which acts as merchant of record and handles your payment details, billing address and tax information under its own privacy policy. We do not receive or store full card numbers. We receive what we need to run your plan: the plan and billing period, payment and subscription IDs, amounts, currency, country, and status.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">Optional diagnostics</h2>
+    <p>On first run, release builds ask separately whether you want to send crash reports and usage statistics. Both choices start off, closing the prompt means no, and either choice can be changed at any time in <strong>Settings → About</strong>. Builds made from source send neither.</p>
+
+    <h3>Usage statistics</h3>
+    <p>If enabled, AgentShot sends a fixed set of product events through a Hormuz Labs Cloudflare Worker to PostHog. These events describe actions such as opening the app, creating a project, active time, the selected model and tool names used in an agent run, accepting an edit, completing an export, and installing a tool. Events also include app version, operating system, architecture, and a random installation ID that is not tied to your AgentShot account or identity, even when you are signed in.</p>
+
+    <h3>Crash reports</h3>
+    <p>If enabled, AgentShot sends uncaught errors and crash information to PostHog’s error tracking, through our proxy: the error’s type, message and stack trace. Local variables, console output, network requests, screenshots and crash dumps are excluded. File paths, computer names, and user details are removed.</p>
+
+    <h3>What diagnostics never include</h3>
+    <p>Diagnostics do not include your footage, file or folder names, paths, project titles, prompts, agent replies, transcripts, API keys, or visited URLs. We do not pass your IP address to PostHog. The complete, current event list is published in AgentShot’s <a href="https://github.com/hormuz-labs/agentshot/blob/main/telemetry/README.md">telemetry documentation</a>.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">How we use information</h2>
+    <p>We use the limited information described above to deliver and secure the website, distribute AgentShot, run accounts, the AgentShot key and billing, diagnose crashes, understand whether features work, improve the product, prevent abuse, and meet legal obligations. We do not sell personal information or use it for targeted advertising.</p>
+    <p>Where data-protection law requires a legal basis, we process data as necessary to provide the services you request (including accounts, plans and billing), for our legitimate interests in operating and improving AgentShot without overriding your rights, with your consent for optional diagnostics, or to comply with law.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">Sharing and retention</h2>
+    <p>We share information only with service providers needed for the purposes above, such as Cloudflare, Clerk, Dodo Payments, the model, voice and music providers behind the AgentShot key, and PostHog; when you direct us to connect to a third party; or when required to protect rights, safety, and the integrity of the service or to comply with law. These providers may process information in countries other than yours.</p>
+    <p>We retain information only as long as reasonably needed for those purposes, security, and legal obligations. Account data is kept while your account exists; usage and billing records are kept as long as needed for billing, disputes and tax law. Optional usage events may wait on your computer while offline, up to 500 events. Turning usage statistics off deletes unsent events and the random installation ID. A later opt-in creates a new ID.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">Your choices and rights</h2>
+    <ul>
+      <li>Leave crash reports and usage statistics off, or change either setting at any time.</li>
+      <li>Choose which AI provider AgentShot uses and manage data with that provider, or use AgentShot without an account at all.</li>
+      <li>Cancel a plan in the app under Settings → Keys → AgentShot key, and ask us to delete your account by writing to <a href="mailto:hello@hormuz-labs.dev">hello@hormuz-labs.dev</a>.</li>
+      <li>Delete local AgentShot projects and application data from your computer.</li>
+      <li>Depending on where you live, request access, correction, deletion, restriction, objection, or portability for personal information we control, and complain to your local data-protection authority.</li>
+    </ul>
+    <p>Diagnostic installation IDs are intentionally not linked to an account or identity, so we may be unable to identify a particular event as yours.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">Changes and contact</h2>
+    <p>We may update this policy as AgentShot changes. We will post the revised policy here and change the effective date.</p>
+    <p>For privacy questions or requests, including about your account, email <a href="mailto:hello@hormuz-labs.dev">hello@hormuz-labs.dev</a>. General questions can also go in the <a href="https://github.com/hormuz-labs/agentshot/issues">AgentShot repository</a>; do not include personal information in a public issue.</p>
+  </section>
+</LegalPage>

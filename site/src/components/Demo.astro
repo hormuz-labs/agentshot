@@ -1,0 +1,436 @@
+---
+// The hero: Manul, live and in miniature. Pick a request, point at the frame, compare, keep.
+// As in the app: the conversation first, the film beside it.
+// Every "after" is a real edit of the same clip (rendered with ffmpeg, the engine Manul drives).
+---
+<div class="demo" id="demo" data-state="idle">
+  <div class="win" role="group" aria-label="Interactive AgentShot demo">
+    <div class="main">
+    <div class="bar">
+      <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="name">timofey.mp4</span>
+      <span class="ver" id="ver"><b>v1</b><span id="ver-label">Original</span></span>
+      <span class="spacer"></span>
+      <span class="export" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 15V3m0 0 4 4m-4-4L8 7M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>Export
+      </span>
+    </div>
+
+    <div class="body">
+      <div class="stage-col">
+        <div class="stage" id="stage">
+          <video class="v-before" id="v-before" poster="/demo/before.webp" muted loop playsinline preload="none" aria-label="Original clip: a Pallas cat walking toward the camera"><track kind="captions" src="/captions/silent.vtt" srclang="en" label="No sound" /></video>
+          <div class="after" id="after" hidden>
+            <video class="v-blur" id="v-blur" muted loop playsinline preload="none" aria-hidden="true"><track kind="captions" src="/captions/silent.vtt" srclang="en" label="No sound" /></video>
+            <video class="v-after" id="v-after" muted loop playsinline preload="none" aria-label="Edited clip"><track kind="captions" src="/captions/silent.vtt" srclang="en" label="No sound" /></video>
+          </div>
+          <div class="split" id="split" hidden>
+            <span class="tag l">Before</span><span class="tag r">After</span>
+            <button class="handle" id="handle" aria-label="Drag to compare before and after" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6-6 6 6 6M15 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+          <div class="boxlayer" id="boxlayer" hidden>
+            <div class="hint" id="hint">Drag a box around his face <button type="button" id="autobox">or let me</button></div>
+            <div class="box" id="box" hidden><span>0:03.1 · box</span></div>
+          </div>
+          <div class="working" id="working" hidden><span></span>Rendering v2</div>
+        </div>
+        <div class="scrub" aria-hidden="true">
+          <div class="dots"><i style="left:22%"></i><i style="left:67%"></i></div>
+          <div class="track"><div class="fill" id="fill"></div><div class="head" id="head"></div></div>
+        </div>
+        <div class="tools" aria-hidden="true">
+          <span class="time" id="time">0:00.0 / 0:04.6</span>
+          <span class="spacer"></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M5 4h14a1 1 0 0 1 1 1v10l-5 5H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 9h8M8 13h5"/></svg>Note</span>
+          <span class="tool" id="boxtool"><svg viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/></svg>Box</span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Media</span>
+        </div>
+      </div>
+
+      <aside class="chat" aria-live="polite">
+        <div class="model"><span class="pill">Claude · Gemini · GPT</span></div>
+        <div class="log" id="log">
+          <p class="m manul">Here's your clip. What should I do with it?</p>
+        </div>
+        <div class="asks" id="asks">
+          <button type="button" class="ask" data-edit="zoom">Punch in on his face</button>
+          <button type="button" class="ask" data-edit="short">Make it a Short with a caption</button>
+          <button type="button" class="ask" data-edit="cinema">Make it cinematic, add his name</button>
+          <button type="button" class="restart" id="restart" hidden>Start over from the original</button>
+        </div>
+        <div class="decide" id="decide" hidden>
+          <button type="button" class="keep" id="keep">Keep</button>
+          <button type="button" class="back" id="back">Send back</button>
+        </div>
+        <div class="input" aria-hidden="true"><span id="typed">Ask for an edit…</span><i class="send"></i></div>
+      </aside>
+    </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* the app's own look (its near-white neutrals, warmed a touch to sit on the page's paper), amber for what Manul does,
+     a serif for its replies */
+  .demo {
+    position: relative;
+    --panel: #f8f5ef; --canvas: #efeae1; --surface: #fffdf9;
+    --panel-2: #eee8de; --panel-3: #e2dacc; --line: #e0d8ca;
+    --ink: #17140f; --ink-2: #4f4a42; --ink-3: #69635a;
+    --amber: #c06f12; --amber-ink: #fff; --amber-soft: rgba(192,111,18,.12);
+    --sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --serif: ui-serif, 'New York', Georgia, 'Times New Roman', serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-family: var(--sans); font-variation-settings: normal; color: var(--ink);
+  }
+  .win {
+    background: var(--panel);
+    border: 1px solid var(--paper-3, #d8d0bf);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 40px 80px -40px rgba(40,25,10,.45), 0 2px 6px rgba(40,25,10,.12);
+  }
+
+  .lights { display: flex; gap: 7px; margin-right: 6px; }
+  .lights i { width: 11px; height: 11px; border-radius: 50%; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+
+  .main { min-width: 0; display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+  .bar .name { color: var(--ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ver { display: inline-flex; gap: 8px; align-items: center; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: 13px; transition: background .3s, color .3s; white-space: nowrap; }
+  .ver b { font-weight: 600; color: var(--ink); }
+  .ver.bump { background: var(--amber-soft); color: var(--amber); }
+  .ver.bump b { color: var(--amber); }
+  .spacer { flex: 1; }
+  .export { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 9px; background: var(--amber); color: var(--amber-ink); font-weight: 600; font-size: 13px; }
+  .export svg, .tool svg, .handle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* the conversation first, the film beside it */
+  .body { flex: 1; display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); }
+  .stage-col { padding: 12px 14px 12px 16px; background: var(--canvas); min-width: 0; }
+  .stage { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .after { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--cut, 50%)); }
+  .after .v-blur { filter: blur(26px) brightness(.55) saturate(1.2); transform: scale(1.15); }
+  .after.vertical .v-after { object-fit: contain; }
+  .after:not(.vertical) .v-blur { display: none; }
+
+  .split { position: absolute; inset: 0; pointer-events: none; }
+  .split::before { content: ''; position: absolute; top: 0; bottom: 0; left: var(--cut, 50%); width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 18px rgba(0,0,0,.6); }
+  .handle { pointer-events: auto; position: absolute; top: 50%; left: var(--cut, 50%); transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 50%; border: 0; background: #fff; color: #111; display: grid; place-items: center; cursor: ew-resize; box-shadow: 0 6px 24px rgba(0,0,0,.5); touch-action: none; }
+  .handle svg { width: 20px; height: 20px; }
+  .tag { position: absolute; top: 12px; padding: 5px 9px; border-radius: 7px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); color: #fff; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+  .tag.l { left: 12px; } .tag.r { right: 12px; color: #f2a541; }
+
+  .boxlayer { position: absolute; inset: 0; cursor: crosshair; background: rgba(0,0,0,.18); }
+  .hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); padding: 9px 14px; border-radius: 10px; background: rgba(14,13,12,.82); backdrop-filter: blur(8px); color: #f3ece3; font-size: 14px; white-space: nowrap; animation: rise .4s ease both; }
+  .hint button { margin-left: 8px; background: none; border: 0; padding: 0; color: #f2a541; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .box { position: absolute; border: 2px solid #f2a541; border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35), 0 0 24px rgba(242,165,65,.45); }
+  .box span { position: absolute; top: -28px; left: -2px; padding: 3px 7px; border-radius: 6px; background: #f2a541; color: #1b1206; font: 600 11.5px/1.3 var(--sans); white-space: nowrap; }
+
+  .working { position: absolute; left: 14px; bottom: 14px; display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 10px; background: rgba(14,13,12,.82); backdrop-filter: blur(8px); font-size: 13px; color: #c9bfb2; }
+  .working span { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #3a332c; border-top-color: #f2a541; animation: spin .8s linear infinite; }
+
+  .scrub { position: relative; padding: 14px 4px 0; }
+  .dots { position: relative; height: 8px; }
+  .dots i { position: absolute; top: 0; width: 7px; height: 7px; margin-left: -3px; border-radius: 50%; background: #2f6bd0; }
+  .track { position: relative; height: 26px; margin-top: 6px; border-radius: 7px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+  .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--panel-2); }
+  .head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--amber); left: 0; }
+  .tools { display: flex; align-items: center; gap: 4px; padding-top: 10px; font-size: 13px; color: var(--ink-2); }
+  .time { font: 500 12.5px/1 var(--mono); color: var(--ink-3); }
+  .tool { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 8px; transition: background .2s, color .2s; }
+  .tool.on { background: var(--amber-soft); color: var(--amber); }
+
+  .chat { order: -1; display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 16px; background: var(--panel); border-right: 1px solid var(--line); min-height: 0; }
+  .model { display: flex; justify-content: flex-end; }
+  .pill { font-size: 12px; color: var(--ink-3); padding: 4px 8px; border-radius: 7px; background: var(--panel-2); }
+  .log { flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 56px; max-height: 300px; scrollbar-width: none; }
+  .log::-webkit-scrollbar { display: none; }
+  .log :global(.m) { margin: 0; font-size: 14.5px; line-height: 1.5; animation: rise .35s ease both; }
+  .log :global(.m.manul) { color: var(--ink); font: 400 16px/1.55 var(--serif); }
+  .log :global(.m.you) { align-self: flex-end; max-width: 88%; padding: 9px 13px; border-radius: 16px; background: var(--panel-2); }
+  .log :global(.m.you .note) { display: inline-flex; margin-bottom: 5px; padding: 2px 7px; border-radius: 6px; background: var(--amber-soft); color: var(--amber); font-size: 12px; font-weight: 600; }
+  .log :global(.card) { display: flex; gap: 9px; align-items: flex-start; padding: 8px 10px; border-radius: 9px; background: var(--panel-2); font-size: 13px; color: var(--ink-2); animation: rise .3s ease both; }
+  .log :global(.card code) { font: 12px/1.45 var(--mono); color: var(--ink-3); word-break: break-all; }
+  .log :global(.card .ic) { flex: none; width: 15px; height: 15px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--panel-3); border-top-color: var(--amber); animation: spin .8s linear infinite; }
+  .log :global(.card.done .ic) { animation: none; border: 0; background: var(--amber-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c06f12' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12 4 4 8-8'/%3E%3C/svg%3E") center/11px no-repeat; }
+  .asks { display: flex; flex-direction: column; gap: 7px; }
+  .ask { text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
+  .ask::before { content: '→'; color: var(--amber); margin-right: 8px; }
+  .ask:hover { border-color: var(--panel-3); background: var(--panel-2); transform: translateX(2px); }
+  .ask.done::before { content: '✓'; }
+  .ask.done { color: var(--ink-2); }
+  .restart { align-self: flex-start; margin-top: 2px; padding: 4px 2px; border: 0; background: none; color: var(--ink-3); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .restart:hover { color: var(--ink); }
+  .demo[data-state='idle'] .ask:first-child { animation: nudge 2.4s ease 1.8s infinite; }
+  .decide { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .decide button { height: 42px; border-radius: 10px; border: 0; font-weight: 600; cursor: pointer; }
+  .keep { background: var(--amber); color: var(--amber-ink); }
+  .back { background: var(--panel-2); }
+  .input { display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 7px 0 13px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 1px 2px rgba(40,25,10,.08), 0 6px 20px -12px rgba(40,25,10,.25); color: var(--ink-3); font-size: 14px; }
+  .input span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .input.typing { color: var(--ink); }
+  .send { width: 30px; height: 30px; border-radius: 8px; background: var(--panel-3); }
+  .input.typing .send { background: var(--amber); }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes nudge { 0%, 70%, 100% { box-shadow: 0 0 0 0 rgba(192,111,18,0); } 80% { box-shadow: 0 0 0 4px rgba(192,111,18,.25); } }
+  @media (prefers-reduced-motion: reduce) { .log :global(.m), .log :global(.card), .hint { animation: none; } .demo[data-state='idle'] .ask:first-child { animation: none; } }
+
+  @media (max-width: 900px) {
+    .body { grid-template-columns: 1fr; }
+    .chat { order: 0; min-height: 0; border: 0; border-top: 1px solid var(--line); padding: 12px 14px 14px; }
+    .log { max-height: 220px; min-height: 0; }
+    .bar .name { display: none; }
+    .tools .tool:not(#boxtool) { display: none; }
+  }
+  @media (max-width: 520px) {
+    .lights { display: none; }
+    .stage-col { padding: 10px 8px; }
+    .bar { gap: 8px; padding: 0 10px; }
+    .hint { font-size: 12.5px; white-space: normal; width: max-content; max-width: 90%; text-align: center; }
+  }
+</style>
+
+<script>
+  type Edit = 'zoom' | 'short' | 'cinema'
+  const EDITS: Record<Edit, { ask: string; label: string; steps: [string, string?][]; done: string; vertical?: boolean; box?: boolean }> = {
+    zoom: {
+      ask: 'Punch in on his face',
+      label: 'Punch-in',
+      box: true,
+      steps: [
+        ['Tracking your box across 4.6 s'],
+        ['ffmpeg', "-i timofey.mp4 -vf \"crop=800:450:x(t):y(t),scale=1920:1080\" v2.mp4"],
+        ['Checked: face stays centred in every frame'],
+      ],
+      done: 'Punched in 2.4× and followed his face as he walks. Drag to compare.',
+    },
+    short: {
+      ask: 'Make it a Short with a caption',
+      label: 'Short · 9:16',
+      vertical: true,
+      steps: [
+        ['Reframing to 9:16 around the cat'],
+        ['Caption: "when the meeting could have been an email"'],
+        ['ffmpeg', '-i timofey.mp4 -vf "crop=608:1080:…,drawtext=…" short.mp4'],
+      ],
+      done: 'A 9:16 Short, framed on him, with the caption burned in. Drag to compare.',
+    },
+    cinema: {
+      ask: 'Make it cinematic, add his name',
+      label: 'Cinematic',
+      steps: [
+        ['Grade: warmer highlights, cooler shadows'],
+        ['Letterbox 2.39:1 · lower third "Timofey"'],
+        ['ffmpeg', '-i timofey.mp4 -vf "eq=…,colorbalance=…,drawtext=…" v2.mp4'],
+      ],
+      done: 'Graded it like a nature doc, letterboxed, and set his name as a lower third. Drag to compare.',
+    },
+  }
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
+  const demo = $('demo'), stage = $('stage'), log = $('log'), asks = $('asks'), decide = $('decide')
+  const vb = $<HTMLVideoElement>('v-before'), va = $<HTMLVideoElement>('v-after'), vblur = $<HTMLVideoElement>('v-blur')
+  const after = $('after'), split = $('split'), handle = $('handle'), boxlayer = $('boxlayer'), box = $('box'), hint = $('hint')
+  const working = $('working'), typed = $('typed'), ver = $('ver'), verLabel = $('ver-label'), boxtool = $('boxtool')
+  const fill = $('fill'), head = $('head'), time = $('time')
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const wait = (ms: number) => new Promise(r => setTimeout(r, reduce ? Math.min(ms, 120) : ms))
+  let version = 1, busy = false, current: Edit | null = null
+  const kept = new Set<Edit>()
+
+  // the scrubber follows whatever is playing
+  const tick = () => {
+    const d = vb.duration || 4.6, t = vb.currentTime || 0
+    const p = (t / d) * 100
+    fill.style.width = p + '%'; head.style.left = p + '%'
+    time.textContent = `0:0${t.toFixed(1)} / 0:0${d.toFixed(1)}`
+    // keep the edit in step with the original, without seeking while a seek is still running
+    if (!after.hidden && !va.seeking && Math.abs(va.currentTime - t) > 0.15 && Math.abs(va.currentTime - t) < d - 0.3) va.currentTime = t
+    if (!after.hidden && !vblur.paused && !vblur.seeking && Math.abs(vblur.currentTime - va.currentTime) > 0.3) vblur.currentTime = va.currentTime
+    requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+  // autoplay can be refused (low power mode); the poster still shows and any tap starts it
+  // the clip loads only as the demo comes into view, so it never competes with the first paint
+  new IntersectionObserver((es, io) => {
+    if (!es[0].isIntersecting) return
+    io.disconnect()
+    vb.src = '/demo/before.mp4'
+    vb.play().catch(() => demo.addEventListener('pointerdown', () => vb.play(), { once: true }))
+  }, { rootMargin: '300px' }).observe(demo)
+
+  const say = (html: string, who: 'manul' | 'you' = 'manul') => {
+    const p = document.createElement('p'); p.className = `m ${who}`; p.innerHTML = html
+    log.append(p); log.scrollTop = log.scrollHeight; return p
+  }
+  const card = (text: string, code?: string) => {
+    const d = document.createElement('div'); d.className = 'card'
+    d.innerHTML = `<span class="ic"></span><span>${code ? `<code>$ ${text} ${code}</code>` : text}</span>`
+    log.append(d); log.scrollTop = log.scrollHeight; return d
+  }
+  async function type(text: string) {
+    typed.parentElement!.classList.add('typing')
+    for (let i = 1; i <= text.length; i++) { typed.textContent = text.slice(0, i); await wait(22) }
+    await wait(250)
+    typed.textContent = 'Ask for an edit…'; typed.parentElement!.classList.remove('typing')
+  }
+
+  // drawing a box: pointer drag on the frame, or "let me" draws it for you
+  function drawBox(): Promise<void> {
+    return new Promise(resolve => {
+      boxlayer.hidden = false; box.hidden = true; hint.hidden = false; boxtool.classList.add('on')
+      let x0 = 0, y0 = 0, dragging = false
+      const r = () => stage.getBoundingClientRect()
+      const place = (x: number, y: number, w: number, h: number) => {
+        Object.assign(box.style, { left: x + '%', top: y + '%', width: w + '%', height: h + '%' }); box.hidden = false
+      }
+      const finish = () => {
+        boxlayer.removeEventListener('pointerdown', down); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
+        hint.hidden = true; boxlayer.style.cursor = 'default'; boxtool.classList.remove('on')
+        setTimeout(() => { boxlayer.hidden = true; boxlayer.style.cursor = '' }, reduce ? 0 : 700)
+        resolve()
+      }
+      const pct = (e: PointerEvent) => { const b = r(); return [((e.clientX - b.left) / b.width) * 100, ((e.clientY - b.top) / b.height) * 100] }
+      const down = (e: PointerEvent) => {
+        if ((e.target as HTMLElement).closest('button')) return
+        dragging = true; [x0, y0] = pct(e); place(x0, y0, 0, 0); hint.hidden = true
+      }
+      const move = (e: PointerEvent) => {
+        if (!dragging) return
+        const [x, y] = pct(e)
+        place(Math.min(x, x0), Math.min(y, y0), Math.abs(x - x0), Math.abs(y - y0))
+      }
+      const up = () => {
+        if (!dragging) return
+        dragging = false
+        if (parseFloat(box.style.width) < 4 || parseFloat(box.style.height) < 4) { box.hidden = true; hint.hidden = false; return }
+        finish()
+      }
+      boxlayer.addEventListener('pointerdown', down); window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
+      $('autobox').onclick = async () => {
+        hint.hidden = true
+        // grow the box from his face outward
+        for (let i = 1; i <= 12; i++) { const k = i / 12; place(31 - 8.5 * k, 40 - 15 * k, 17 * k, 30 * k); await wait(18) }
+        finish()
+      }
+    })
+  }
+
+  // before/after: drag anywhere on the frame or the handle; arrow keys move it too
+  let cut = 50
+  const setCut = (v: number) => {
+    cut = Math.max(0, Math.min(100, v)); stage.style.setProperty('--cut', cut + '%'); handle.setAttribute('aria-valuenow', String(Math.round(cut)))
+  }
+  let sliding = false
+  const slideTo = (e: PointerEvent) => { const b = stage.getBoundingClientRect(); setCut(((e.clientX - b.left) / b.width) * 100) }
+  stage.addEventListener('pointerdown', e => { if (split.hidden || !boxlayer.hidden) return; sliding = true; slideTo(e); stage.setPointerCapture(e.pointerId) })
+  stage.addEventListener('pointermove', e => { if (sliding) slideTo(e) })
+  stage.addEventListener('pointerup', () => { sliding = false })
+  handle.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') setCut(cut - 5); if (e.key === 'ArrowRight') setCut(cut + 5) })
+
+  async function sweep(rest = 50) {
+    // a first look: the line glides across so the "after" reveals itself, then settles
+    if (reduce) { setCut(rest); return }
+    const low = Math.min(30, rest - 8)
+    for (let i = 0; i <= 40; i++) { setCut(96 - (i / 40) * (96 - low)); await wait(14) }
+    for (let i = 0; i <= 20; i++) { setCut(low + (i / 20) * (rest - low)); await wait(14) }
+  }
+
+  async function run(edit: Edit) {
+    if (busy) return
+    busy = true; current = edit; demo.dataset.state = 'working'
+    const e = EDITS[edit]
+    asks.hidden = true; decide.hidden = true
+    hideAfter()
+    // start fetching the edit while the agent "works"
+    va.src = `/demo/${edit}.mp4`; va.poster = `/demo/${edit}.webp`; va.preload = 'auto'; va.load()
+    if (e.vertical) { vblur.src = `/demo/${edit}.mp4`; vblur.preload = 'auto'; vblur.load() }
+
+    await type(e.ask)
+    const you = say(e.ask, 'you')
+    if (e.box) {
+      await wait(250)
+      say('Show me where: drag a box on the frame.')
+      await drawBox()
+      you.innerHTML = `<span class="note">0:03.1 · box</span><br>${e.ask}`
+    }
+    await wait(300)
+    working.hidden = false
+    for (const [t, code] of e.steps) {
+      const c = card(t, code); await wait(code ? 900 : 650); c.classList.add('done')
+    }
+    const ready = va.readyState >= 3 ? Promise.resolve() : new Promise(r => va.addEventListener('canplay', r, { once: true }))
+    await Promise.race([ready, wait(4000)])
+    working.hidden = true; box.hidden = true
+    const done = card(`Proposed v${version + 1} · “${e.label}”`); done.classList.add('done')
+    say(e.done)
+
+    after.classList.toggle('vertical', !!e.vertical)
+    after.hidden = false; split.hidden = false
+    // both start together from the top, so the comparison lines up frame for frame
+    vb.currentTime = 0; va.currentTime = 0
+    await Promise.all([vb.play(), va.play()].map(p => p.catch(() => {})))
+    if (e.vertical) { vblur.currentTime = 0; vblur.play().catch(() => {}) }
+    // a 9:16 Short sits in the middle third: rest the line just left of it so all of it shows
+    await sweep(e.vertical ? 31 : 50)
+    decide.hidden = false; demo.dataset.state = 'review'
+    busy = false
+  }
+
+  function hideAfter() { after.hidden = true; split.hidden = true; va.pause(); vblur.pause() }
+
+  $('keep').onclick = async () => {
+    if (!current) return
+    const e = EDITS[current]; kept.add(current); version++
+    ver.classList.add('bump'); ver.querySelector('b')!.textContent = 'v' + version; verLabel.textContent = e.label
+    setTimeout(() => ver.classList.remove('bump'), 1600)
+    // the kept version becomes what plays; compare mode ends
+    vb.src = va.src; vb.poster = va.poster; vb.currentTime = va.currentTime; vb.play().catch(() => {})
+    vb.style.objectFit = e.vertical ? 'contain' : 'cover'
+    stage.style.background = '#000'
+    hideAfter(); decide.hidden = true
+    say(`Kept as v${version}. Every version you keep is one click away.`)
+    offerNext()
+  }
+  $('back').onclick = () => {
+    if (!current) return
+    hideAfter(); decide.hidden = true
+    say('Sent back. Nothing changed: still on v' + version + '. Try another?')
+    offerNext()
+  }
+  // every request stays open, in any order: the ones kept are ticked, and any of them can be tried again
+  let toldAll = false
+  function offerNext() {
+    current = null; demo.dataset.state = 'idle'
+    asks.querySelectorAll<HTMLButtonElement>('.ask').forEach(b => {
+      const done = kept.has(b.dataset.edit as Edit)
+      b.classList.toggle('done', done); b.title = done ? 'Kept. Try it again' : ''
+    })
+    $('restart').hidden = kept.size === 0
+    if (kept.size === Object.keys(EDITS).length && !toldAll) {
+      toldAll = true
+      say('That\'s the whole idea. Now try it on your own footage. <a href="#get" style="color:var(--amber);font-weight:600">Get AgentShot →</a>')
+    }
+    asks.hidden = false
+  }
+  $('restart').onclick = () => {
+    if (busy) return
+    kept.clear(); version = 1; toldAll = false
+    ver.querySelector('b')!.textContent = 'v1'; verLabel.textContent = 'Original'
+    vb.src = '/demo/before.mp4'; vb.poster = '/demo/before.webp'; vb.style.objectFit = 'cover'; vb.play().catch(() => {})
+    hideAfter(); decide.hidden = true
+    log.innerHTML = '<p class="m manul">Here\'s your clip again, as it came. What should I do with it?</p>'
+    offerNext()
+  }
+  asks.addEventListener('click', ev => {
+    const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('.ask'); if (b) run(b.dataset.edit as Edit)
+  })
+
+</script>

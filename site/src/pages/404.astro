@@ -1,0 +1,30 @@
+---
+import '@fontsource-variable/albert-sans'
+import '../styles/global.css'
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Not found · AgentShot</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+</head>
+<body>
+  <main>
+    <div class="sky">
+      <p class="eyebrow">404 · cut from the film</p>
+      <h1 class="slate">This page didn’t make the <s>cut</s>.</h1>
+      <a class="btn" href="/">Back to AgentShot</a>
+    </div>
+  </main>
+  <style>
+    main { min-height: 100vh; padding: 8px; display: flex; }
+    .sky { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 24px; padding: 40px 20px; text-align: center; border-radius: var(--r-lg); background: url(/paint/dusk.webp) center / cover, #f1c79d; }
+    .eyebrow { margin: 0; padding: 7px 14px; border-radius: 999px; background: rgba(255, 255, 255, .6); font: 600 13.5px/1.2 var(--sans); }
+    h1 { margin: 0; max-width: 820px; font-size: clamp(44px, 7vw, 88px); letter-spacing: -.035em; }
+    s { text-decoration: line-through var(--ink) .08em; text-decoration-skip-ink: none; }
+  </style>
+</body>
+</html>

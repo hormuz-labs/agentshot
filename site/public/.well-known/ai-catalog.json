@@ -1,0 +1,55 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "AgentShot",
+    "identifier": "agentshot.si"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:agentshot.si:skills:install-manul",
+      "displayName": "Install AgentShot (agent skill)",
+      "type": "text/markdown; profile=\"urn:air:agent-skills\"",
+      "url": "https://agentshot.si/skills/install-manul/SKILL.md",
+      "description": "Steps a coding agent can follow to install AgentShot on macOS (Homebrew), Windows 10/11 (Setup.exe), Debian/Ubuntu (signed apt repository) or other Linux (AppImage).",
+      "representativeQueries": [
+        "Install AgentShot for me",
+        "How do I install the AgentShot video editor on Ubuntu?",
+        "Set up AgentShot with Homebrew"
+      ]
+    },
+    {
+      "identifier": "urn:air:agentshot.si:knowledge:llms-txt",
+      "displayName": "AgentShot knowledge index (llms.txt)",
+      "type": "text/markdown",
+      "url": "https://agentshot.si/llms.txt",
+      "description": "What AgentShot is (a free video editor you talk to, source on GitHub, for macOS, Windows and Linux), how to install it, and links to its README, roadmap and source.",
+      "representativeQueries": [
+        "What is AgentShot, the video editor you talk to?",
+        "How do I install AgentShot on macOS, Windows or Linux?",
+        "Is there a free alternative to CapCut or Premiere that edits by talking?"
+      ]
+    },
+    {
+      "identifier": "urn:air:agentshot.si:knowledge:readme",
+      "displayName": "AgentShot README",
+      "type": "text/markdown",
+      "url": "https://raw.githubusercontent.com/hormuz-labs/agentshot/main/README.md",
+      "description": "Features, install steps for macOS, Windows and Linux, and a ready-made prompt that lets a coding agent install AgentShot.",
+      "representativeQueries": [
+        "What can AgentShot edit?",
+        "How can a coding agent install AgentShot for me?"
+      ]
+    },
+    {
+      "identifier": "urn:air:agentshot.si:knowledge:roadmap",
+      "displayName": "AgentShot roadmap",
+      "type": "text/markdown",
+      "url": "https://raw.githubusercontent.com/hormuz-labs/agentshot/main/ROADMAP.md",
+      "description": "AgentShot's public plan: product principles, architecture decisions, and phases including generated shots and hand-off to other editors.",
+      "representativeQueries": [
+        "Will AgentShot generate b-roll or extend a frame?",
+        "Does AgentShot support mobile and cloud workers?"
+      ]
+    }
+  ]
+}
