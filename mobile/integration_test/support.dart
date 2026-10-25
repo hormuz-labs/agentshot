@@ -295,7 +295,7 @@ String codeOf(String link) =>
 ///  1. as if the phone's camera scanned it: the runner opens the agentshot://pair link on the device (it watches for
 ///     the PAIR_LINK line), and Android hands it to the app
 ///  2. Paste code (Android only lets the app in focus read the clipboard, which a CI emulator may not allow)
-///  3. typing the 6-digit code into the boxes (E2E_TYPE=true goes straight to this)
+///  3. typing the 6-digit code into the boxes, only with E2E_TYPE=true (on a phone on the same Wi-Fi)
 Future<void> enterCode(WidgetTester tester, String link) async {
   String? error() => find
       .textContaining(RegExp('Invalid|Could not|Try pairing'))
@@ -318,12 +318,19 @@ Future<void> enterCode(WidgetTester tester, String link) async {
   if (!const bool.fromEnvironment('E2E_TYPE')) {
     // ignore: avoid_print
     print('PAIR_LINK $link');
-    if (await waitStarted(const Duration(seconds: 10))) return;
+    // a slow CI emulator can take a while to hand the link over, or drop it while busy: once more after a while
+    if (await waitStarted(const Duration(seconds: 20))) return;
+    // ignore: avoid_print
+    print('PAIR_LINK $link');
+    if (await waitStarted(const Duration(seconds: 30))) return;
     await Clipboard.setData(ClipboardData(text: link));
     await showCodes(tester);
     await reveal(tester, find.text('Paste code'));
     await tester.tap(find.text('Paste code'));
-    if (await waitStarted(const Duration(seconds: 3))) return;
+    if (await waitStarted(const Duration(seconds: 5))) return;
+    // typing the code would send the phone looking for the computer on the network, which an emulator can't
+    // do (and which would bury the link if it came after all): say what went wrong instead
+    fail('Neither the pairing link nor Paste code reached the app');
   }
   final digits = codeOf(link);
   await showCodes(tester);
