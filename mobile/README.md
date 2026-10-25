@@ -140,6 +140,10 @@ repository root, with an emulator running (or an AVD it can boot):
 npm run test:e2e:mobile
 ```
 
+That runs all of them (`cd mobile && make e2e`, or `make e2e ONLY=editing,create` for some), about half an hour.
+CI runs the quick set on every pull request, pairing, projects, conversation and editing (`make e2e-smoke`, about
+10 minutes); the whole suite runs nightly on `main` and from Mobile checks → Run workflow.
+
 `test/e2e/mobile.e2e.mjs` starts desktop AgentShot with a throwaway profile, a
 project made from a test video and a scripted model (no API keys), turns on
 Settings → Mobile, and runs each test with a fresh pairing code. The desktop's

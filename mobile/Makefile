@@ -79,8 +79,11 @@ analyze: ## Static analysis (flutter analyze)
 test: ## Unit and widget tests (flutter test)
 	$(FLUTTER) test
 
-e2e: $(MESH_AAR) ## End-to-end tests on the emulator against the real desktop app (ONLY=editing,create runs some)
+e2e: $(MESH_AAR) ## All end-to-end tests on the emulator against the real desktop app (ONLY=editing,create runs some)
 	cd .. && MOBILE_E2E_ONLY=$(ONLY) npm run test:e2e:mobile
+
+e2e-smoke: $(MESH_AAR) ## The quick end-to-end set CI runs on every pull request (pairing, projects, conversation, editing)
+	cd .. && MOBILE_E2E_ONLY=pairing,projects,conversation,editing npm run test:e2e:mobile
 
 screenshots: $(MESH_AAR) ## Capture Play Store screenshots from the real app into build/store-screenshots
 	cd .. && npx electron-vite build && MOBILE_E2E_SHOTS=$(CURDIR)/build/store-screenshots MOBILE_E2E_ONLY=store_screenshots node scripts/run-headless.mjs node test/e2e/mobile.e2e.mjs

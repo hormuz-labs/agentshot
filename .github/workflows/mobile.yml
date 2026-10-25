@@ -4,7 +4,16 @@ on:
     paths: ['mobile/**', 'scripts/mesh/**', 'scripts/build-mesh.sh', 'src/main/mobile-*.ts', 'test/mobile-bridge.test.ts', '.github/workflows/mobile.yml']
   push:
     paths: ['mobile/**', 'scripts/mesh/**', 'scripts/build-mesh.sh', 'src/main/mobile-*.ts', 'test/mobile-bridge.test.ts', '.github/workflows/mobile.yml']
+  # "Run workflow" runs the whole end-to-end suite (or just the smoke set); so does the nightly run on main
   workflow_dispatch:
+    inputs:
+      suite:
+        description: End-to-end tests to run
+        type: choice
+        options: [full, smoke]
+        default: full
+  schedule:
+    - cron: '0 2 * * *'
 jobs:
   flutter:
     runs-on: ubuntu-latest
@@ -57,6 +66,10 @@ jobs:
   e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      # pull requests and pushes: the core path (pairing, projects, talking to the agent, an edit kept), about
+      # 10 minutes; the nightly run and "Run workflow" (full): all of it. Locally: cd mobile && make e2e.
+      MOBILE_E2E_ONLY: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite != 'smoke')) && 'all' || 'pairing,projects,conversation,editing' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

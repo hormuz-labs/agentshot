@@ -22,7 +22,8 @@ const electronBinary = createRequire(import.meta.url)('electron')
 const flutter = process.env.FLUTTER || 'flutter'
 // pairing first (from a phone that never paired), settings last (it disconnects the phone); MOBILE_E2E_ONLY=a,b runs some
 const all = ['pairing', 'projects', 'conversation', 'film', 'editing', 'create', 'examples', 'uploads', 'timeline', 'export', 'responsive', 'connection', 'change_computer', 'setup_ai', 'signin', 'cloud', 'settings_panels', 'settings']
-const tests = process.env.MOBILE_E2E_ONLY ? process.env.MOBILE_E2E_ONLY.split(',') : all
+const only = process.env.MOBILE_E2E_ONLY
+const tests = only && only !== 'all' ? only.split(',') : all
 // MOBILE_E2E_SHOTS=<folder> (with MOBILE_E2E_ONLY=store_screenshots): store screenshots, saved as the test asks
 const shots = process.env.MOBILE_E2E_SHOTS
 const project = 'Harbour walk', reply = shots
