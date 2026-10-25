@@ -37,10 +37,20 @@ jobs:
           path: site/dist
           include-hidden-files: true
           if-no-files-found: error
+      # A direct-upload Pages project, fed by this repo. (The old Git-connected `manul-site` project
+      # builds from the archived hormuz-labs/manul-site repo and cannot take direct uploads.)
+      - name: Create the Pages project if it is missing
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.SITE_DEPLOY_ENABLED == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create agentshot-site --production-branch=main
+        continue-on-error: true
       - name: Deploy to Cloudflare Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.SITE_DEPLOY_ENABLED == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy site/dist --project-name=manul-site --branch=main
+          command: pages deploy site/dist --project-name=agentshot-site --branch=main
