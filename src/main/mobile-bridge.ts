@@ -236,6 +236,12 @@ export class MobileBridge {
     if (url.pathname === '/hello' && req.method === 'GET') {
       return reply({ urls: this.status().addresses })
     }
+    // "Disconnect this device" on the phone: it forgets the desktop, and the desktop forgets it (and its live streams)
+    if (url.pathname === '/unpair' && req.method === 'POST') {
+      this.devices.delete(token); this.saveState()
+      for (const [stream, t] of this.clients) if (t === token) stream.end()
+      return reply(null)
+    }
     if (url.pathname === '/rpc' && req.method === 'POST') {
       const body = await this.json(req); const args = mobileArgs(body.method, body.args)
       if (projectArgument(body.method) && args.length) this.authorizeProject(args[0])
@@ -257,7 +263,7 @@ export class MobileBridge {
       if (!/^[^/\\\x00-\x1f]{1,180}$/.test(name) || name.startsWith('.') || name.includes(':')) throw new HttpError(400, 'Invalid file name')
       const size = Number(url.searchParams.get('size') ?? req.headers['x-upload-length'])
       if (!Number.isSafeInteger(size) || size <= 0 || size > 4 * 1024 ** 3) throw new HttpError(413, 'Upload a file between 1 byte and 4 GB')
-      const folder = await mkdtemp(join(tmpdir(), 'manul-upload-'))
+      const folder = await mkdtemp(join(tmpdir(), 'agentshot-upload-'))
       const file = join(folder, name)
       await writeFile(file, new Uint8Array(0), { mode: 0o600 })
       const id = secret()
@@ -301,7 +307,7 @@ export class MobileBridge {
       if (!Number.isSafeInteger(size) || size <= 0 || size > 4 * 1024 ** 3) throw new HttpError(413, 'Upload a file between 1 byte and 4 GB')
       this.activeUploads++; let folder: string | undefined
       try {
-        folder = await mkdtemp(join(tmpdir(), 'manul-mobile-'))
+        folder = await mkdtemp(join(tmpdir(), 'agentshot-mobile-'))
         const file = join(folder, name); let received = 0
         const limit = new Transform({ transform(chunk, _enc, cb) { received += chunk.length; cb(received > size ? new Error('Upload too large') : null, chunk) } })
         await pipeline(req, limit, createWriteStream(file, { flags: 'wx', mode: 0o600 }))

@@ -1,4 +1,4 @@
-name: manul_mobile
+name: agentshot_mobile
 description: Desktop-connected AgentShot video editor for Android and iOS.
 publish_to: none
 version: 0.1.0+1
@@ -17,6 +17,8 @@ dependencies:
   shared_preferences: ^2.5.6
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 flutter:

@@ -25,10 +25,7 @@ class Connection {
   final String fingerprint;
   final String token;
   Connection(this.url, this.fingerprint, this.token, [List<Uri>? urls])
-    : urls = <Uri>[
-        url,
-        ...?urls?.where((u) => u.toString() != url.toString()),
-      ];
+    : urls = <Uri>[url, ...?urls?.where((u) => u.toString() != url.toString())];
   static Uri _parseUrl(String raw) {
     final url = Uri.parse(raw);
     if (url.scheme != 'https' ||
@@ -76,7 +73,7 @@ class Connection {
 /// All remote traffic, including native-player media, uses certificate-pinned TLS.
 /// The localhost relay lets AVPlayer/ExoPlayer stream without bypassing their TLS checks.
 class BridgeClient {
-  static const _storageKey = 'manul.desktop.connection.v1';
+  static const _storageKey = 'agentshot.desktop.connection.v1';
   final FlutterSecureStorage storage;
   Connection? connection;
   HttpClient? _http;
@@ -124,22 +121,12 @@ class BridgeClient {
         cleanHost.contains(':') ? cleanHost : '$cleanHost:$defaultPort',
       );
     } else {
-      candidates.addAll([
-        '10.0.2.2:$defaultPort',
-        '127.0.0.1:$defaultPort',
-      ]);
+      candidates.addAll(['10.0.2.2:$defaultPort', '127.0.0.1:$defaultPort']);
       try {
-        final socket = await RawDatagramSocket.bind(
-          InternetAddress.anyIPv4,
-          0,
-        );
+        final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
         socket.broadcastEnabled = true;
         final payload = utf8.encode('manul-discover');
-        socket.send(
-          payload,
-          InternetAddress('255.255.255.255'),
-          defaultPort,
-        );
+        socket.send(payload, InternetAddress('255.255.255.255'), defaultPort);
         final found = Completer<Connection?>();
         final sub = socket.listen((event) {
           if (event != RawSocketEvent.read) return;
@@ -150,8 +137,7 @@ class BridgeClient {
             final urls = (data['urls'] as List? ?? const [])
                 .whereType<String>()
                 .toList();
-            final primary =
-                'https://${dg.address.address}:$defaultPort';
+            final primary = 'https://${dg.address.address}:$defaultPort';
             final c = Connection.fromJson({
               'url': urls.isNotEmpty ? urls.first : primary,
               'urls': <String>[primary, ...urls],
@@ -188,9 +174,10 @@ class BridgeClient {
     }
 
     Future<Connection?> probe(String authority) async {
-      final client = HttpClient(context: SecurityContext(withTrustedRoots: false))
-        ..connectionTimeout = const Duration(milliseconds: 600)
-        ..badCertificateCallback = (_, _, _) => true;
+      final client =
+          HttpClient(context: SecurityContext(withTrustedRoots: false))
+            ..connectionTimeout = const Duration(milliseconds: 600)
+            ..badCertificateCallback = (_, _, _) => true;
       try {
         final uri = Uri.parse('https://$authority/discover');
         final req = await client.getUrl(uri);
@@ -198,7 +185,9 @@ class BridgeClient {
           const Duration(milliseconds: 800),
         );
         if (res.statusCode != 200) return null;
-        final data = object(await utf8.decoder.bind(res).join().then(jsonDecode));
+        final data = object(
+          await utf8.decoder.bind(res).join().then(jsonDecode),
+        );
         final urls = (data['urls'] as List? ?? const [])
             .whereType<String>()
             .toList();
@@ -261,9 +250,7 @@ class BridgeClient {
     }
     Object? lastError;
     for (final candidate in target.urls) {
-      _configure(
-        Connection(candidate, target.fingerprint, '', target.urls),
-      );
+      _configure(Connection(candidate, target.fingerprint, '', target.urls));
       try {
         final result = object(
           await _post('/pair', {
@@ -315,16 +302,30 @@ class BridgeClient {
   Future<void> connectDirect(Connection target) async {
     Object? lastError;
     for (final candidate in target.urls) {
-      _configure(Connection(candidate, target.fingerprint, target.token, target.urls));
+      _configure(
+        Connection(candidate, target.fingerprint, target.token, target.urls),
+      );
       try {
-        final req = await _http!.openUrl('GET', candidate.replace(path: '/hello'));
+        final req = await _http!.openUrl(
+          'GET',
+          candidate.replace(path: '/hello'),
+        );
         req.followRedirects = false;
-        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.token}');
+        req.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer ${target.token}',
+        );
         final res = await req.close().timeout(const Duration(seconds: 6));
         if (res.statusCode != 200) {
-          throw BridgeException('Worker refused connection (${res.statusCode}).', res.statusCode);
+          throw BridgeException(
+            'Worker refused connection (${res.statusCode}).',
+            res.statusCode,
+          );
         }
-        await storage.write(key: _storageKey, value: jsonEncode(connection!.toJson()));
+        await storage.write(
+          key: _storageKey,
+          value: jsonEncode(connection!.toJson()),
+        );
         return;
       } catch (e) {
         lastError = e;
@@ -332,7 +333,8 @@ class BridgeClient {
     }
     _http?.close(force: true);
     connection = null;
-    throw lastError ?? BridgeException('Could not reach the worker on any address.');
+    throw lastError ??
+        BridgeException('Could not reach the worker on any address.');
   }
 
   Future<void> _refreshAddresses() async {
@@ -585,7 +587,7 @@ class BridgeClient {
       throw BridgeException('Download failed');
     }
     final directory = await Directory(
-      '${(await getTemporaryDirectory()).path}/manul-exports',
+      '${(await getTemporaryDirectory()).path}/agentshot-exports',
     ).create(recursive: true);
     final name = relative
         .split('/')
@@ -617,6 +619,13 @@ class BridgeClient {
 
   Future<void> disconnect() async {
     _generation++;
+    // Ask the desktop to forget this phone too; offline, it stays listed there until removed on the desktop.
+    try {
+      final request = await _request('POST', '/unpair');
+      await (await request.close()).drain<void>().timeout(
+        const Duration(seconds: 5),
+      );
+    } catch (_) {}
     _http?.close(force: true);
     _http = null;
     connection = null;

@@ -29,7 +29,7 @@ jobs:
         working-directory: mobile
       - uses: actions/upload-artifact@v4
         with:
-          name: manul-android-debug
+          name: agentshot-android-debug
           path: mobile/build/app/outputs/flutter-apk/app-debug.apk
   ios:
     runs-on: macos-latest
@@ -44,3 +44,42 @@ jobs:
         working-directory: mobile
       - run: flutter build ios --simulator --no-codesign
         working-directory: mobile
+  # The app on an Android emulator against the real desktop app (test/e2e/mobile.e2e.mjs): pairing, projects, talking
+  # to the agent, editing, a video from an idea, every screen at phone and tablet sizes with large text, disconnecting.
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - run: npm ci
+      # Electron downloads its executable lazily; keep that out of the test's launch timeout.
+      - run: node -e "require('electron')"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: mobile
+      - name: Let the emulator use hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          script: xvfb-run -a npm run test:e2e:mobile

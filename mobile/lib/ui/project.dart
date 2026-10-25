@@ -17,7 +17,10 @@ class ProjectScreen extends StatefulWidget {
 
 class _ProjectScreenState extends State<ProjectScreen> {
   final message = TextEditingController();
+  final chatScroll = ScrollController();
   final attachments = <String>{};
+  String chatShown = '';
+  bool follow = true;
   int section = 0;
   bool after = true, boxMode = false, sending = false, exporting = false;
   double position = 0;
@@ -29,6 +32,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
   @override
   void dispose() {
     message.dispose();
+    chatScroll.dispose();
     super.dispose();
   }
 
@@ -45,6 +49,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
         },
       ]);
       message.clear();
+      follow = true; // after sending, show what comes back
       if (mounted) {
         setState(() {
           anchor = null;
@@ -254,6 +259,9 @@ class _ProjectScreenState extends State<ProjectScreen> {
                         ],
                       );
                     }
+                    // A phone in landscape with the keyboard up leaves a sliver: give it all to the note being typed.
+                    // (Height alone: the Scaffold has already taken the keyboard out of this body's insets.)
+                    if (size.maxHeight < 200) return chat();
                     return Column(
                       children: [
                         SingleChildScrollView(
@@ -298,106 +306,137 @@ class _ProjectScreenState extends State<ProjectScreen> {
     },
   );
 
+  /// Keeps the newest message in view as the agent works, unless the person scrolled up to read.
+  void followChat(AgentState state) {
+    final shown =
+        '$dir:${state.messages.length}:${state.streaming.length}:${state.tools.length}:${state.busy}:${state.error}';
+    if (shown == chatShown) return;
+    chatShown = shown;
+    if (!follow) return;
+    void toEnd([int again = 2]) {
+      if (!mounted || !chatScroll.hasClients) return;
+      chatScroll.jumpTo(chatScroll.position.maxScrollExtent);
+      // the list builds lazily, so its true end is only known once the new items are laid out
+      if (again > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => toEnd(again - 1));
+      }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => toEnd());
+  }
+
   Widget chat() {
     final state = store.agent(dir);
     final messages = state.messages;
+    followChat(state);
     return LayoutBuilder(
       builder: (context, available) => Column(
         children: [
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                ConsentCards(store: store),
-                if (!state.loaded &&
-                    messages.isEmpty &&
-                    state.streaming.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('Loading conversation…'),
-                  ),
-                if (state.loaded && messages.isEmpty && state.streaming.isEmpty)
-                  const EmptyMessage(
-                    Icons.chat_bubble_outline,
-                    'Give notes. Get cuts.',
-                    'Ask for an edit, attach a file, or point at a moment in the Film tab.',
-                  ),
-                for (final m in messages)
-                  if (m['role'] == 'tool')
-                    ExpansionTile(
-                      title: const Text('Tool result'),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: SelectableText('${m['content'] ?? ''}'),
-                        ),
-                      ],
-                    )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Card(
-                        color: m['role'] == 'user'
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                m['role'] == 'user' ? 'You' : 'AgentShot',
-                                style: Theme.of(context).textTheme.labelMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              if ('${m['content'] ?? ''}'.isNotEmpty)
-                                SelectableText('${m['content']}'),
-                              for (final call in objects(m['toolCalls']))
-                                ExpansionTile(
-                                  tilePadding: EdgeInsets.zero,
-                                  title: Text(
-                                    '${call['function']?['name'] ?? 'Tool'}',
-                                  ),
-                                  children: [
-                                    SelectableText(
-                                      '${call['function']?['arguments'] ?? ''}',
-                                    ),
-                                  ],
+            child: NotificationListener<ScrollEndNotification>(
+              onNotification: (_) {
+                follow = chatScroll.position.extentAfter < 120;
+                return false;
+              },
+              child: ListView(
+                controller: chatScroll,
+                padding: const EdgeInsets.all(16),
+                children: [
+                  ConsentCards(store: store),
+                  if (!state.loaded &&
+                      messages.isEmpty &&
+                      state.streaming.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('Loading conversation…'),
+                    ),
+                  if (state.loaded &&
+                      messages.isEmpty &&
+                      state.streaming.isEmpty)
+                    const EmptyMessage(
+                      Icons.chat_bubble_outline,
+                      'Give notes. Get cuts.',
+                      'Ask for an edit, attach a file, or point at a moment in the Film tab.',
+                    ),
+                  for (final m in messages)
+                    if (m['role'] == 'tool')
+                      ExpansionTile(
+                        title: const Text('Tool result'),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: SelectableText('${m['content'] ?? ''}'),
+                          ),
+                        ],
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Card(
+                          color: m['role'] == 'user'
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest
+                              : null,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  m['role'] == 'user' ? 'You' : 'AgentShot',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.labelMedium,
                                 ),
-                            ],
+                                const SizedBox(height: 8),
+                                if ('${m['content'] ?? ''}'.isNotEmpty)
+                                  SelectableText('${m['content']}'),
+                                for (final call in objects(m['toolCalls']))
+                                  ExpansionTile(
+                                    tilePadding: EdgeInsets.zero,
+                                    title: Text(
+                                      '${call['function']?['name'] ?? 'Tool'}',
+                                    ),
+                                    children: [
+                                      SelectableText(
+                                        '${call['function']?['arguments'] ?? ''}',
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
+                  if (state.streaming.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: SelectableText(state.streaming),
                     ),
-                if (state.streaming.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: SelectableText(state.streaming),
-                  ),
-                for (final name in state.tools.values)
-                  ListTile(
-                    leading: const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                  for (final name in state.tools.values)
+                    ListTile(
+                      leading: const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      title: Text(name),
                     ),
-                    title: Text(name),
-                  ),
-                if (state.error != null)
-                  Text(
-                    state.error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                  if (state.error != null)
+                    Text(
+                      state.error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
-                  ),
-                if (state.busy) const LinearProgressIndicator(),
-                if (state.cost > 0)
-                  Text(
-                    'Session usage: \$${state.cost.toStringAsFixed(4)}',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-              ],
+                  if (state.busy) const LinearProgressIndicator(),
+                  if (state.cost > 0)
+                    Text(
+                      'Session usage: \$${state.cost.toStringAsFixed(4)}',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                ],
+              ),
             ),
           ),
           // Bound composer height under large text/landscape/keyboard constraints; content scrolls.

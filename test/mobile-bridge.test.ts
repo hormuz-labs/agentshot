@@ -12,7 +12,7 @@ const folders: string[] = []
 afterEach(async () => { await Promise.all(bridges.splice(0).map(b => b.stop())); await Promise.all(folders.splice(0).map(d => rm(d, { recursive: true, force: true }))) })
 
 async function fixture() {
-  const dir = await mkdtemp(join(tmpdir(), 'manul-bridge-test-')); folders.push(dir)
+  const dir = await mkdtemp(join(tmpdir(), 'agentshot-bridge-test-')); folders.push(dir)
   await writeFile(join(dir, 'film.mp4'), '0123456789')
   const invoke = vi.fn(async (method: string, args: unknown[]) => ({ method, args }))
   const importFile = vi.fn(async (file: string) => ({ name: basename(file), content: await readFile(file, 'utf8') }))
@@ -58,6 +58,17 @@ describe('mobile TLS bridge', () => {
     expect((await f.call('/rpc', { token: f.token, headers: { origin: 'https://evil.test' }, body: { method: 'project:recent', args: [] } })).status).toBe(403)
     f.bridge.revoke(f.bridge.status().devices[0].id)
     expect((await f.call('/rpc', { token: f.token, body: { method: 'project:recent', args: [] } })).status).toBe(401)
+  })
+  it('lets a phone unpair itself, and only itself', async () => {
+    const f = await fixture()
+    expect((await f.call('/unpair', { method: 'POST' })).status).toBe(401)
+    await f.bridge.start() // a second phone pairs with a fresh code
+    const other = JSON.parse((await f.call('/pair', { body: { code: f.bridge.status().code, name: 'Other phone' } })).body).token as string
+    expect(f.bridge.status().devices.map(d => d.name)).toEqual(['Test phone', 'Other phone'])
+    expect((await f.call('/unpair', { token: f.token, method: 'POST' })).status).toBe(200)
+    expect(f.bridge.status().devices.map(d => d.name)).toEqual(['Other phone'])
+    expect((await f.call('/rpc', { token: f.token, body: { method: 'project:recent', args: [] } })).status).toBe(401)
+    expect((await f.call('/rpc', { token: other, body: { method: 'project:recent', args: [] } })).status).toBe(200)
   })
   it('denies unknown projects, arbitrary IPC, traversal and symlink escapes', async () => {
     const f = await fixture()
@@ -128,7 +139,7 @@ it('validates anchors and rejects path-bearing or unknown fields', () => {
 
 describe('cloud & home worker extensions', () => {
   it('persists TLS cert, workerSecret and paired devices across restarts when stateFile is set', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'manul-worker-persist-')); folders.push(root)
+    const root = await mkdtemp(join(tmpdir(), 'agentshot-worker-persist-')); folders.push(root)
     const stateFile = join(root, 'bridge.json')
     const opts = {
       stateFile,
@@ -156,8 +167,8 @@ describe('cloud & home worker extensions', () => {
   })
 
   it('authenticates stateless HMAC worker lease tokens, resumable uploads, and Mac <-> Worker delta project sync', async () => {
-    const workerRoot = await mkdtemp(join(tmpdir(), 'manul-worker-projects-')); folders.push(workerRoot)
-    const macRoot = await mkdtemp(join(tmpdir(), 'manul-mac-projects-')); folders.push(macRoot)
+    const workerRoot = await mkdtemp(join(tmpdir(), 'agentshot-worker-projects-')); folders.push(workerRoot)
+    const macRoot = await mkdtemp(join(tmpdir(), 'agentshot-mac-projects-')); folders.push(macRoot)
     const knownProjects = new Set<string>()
     const syncedDirs: string[] = []
 

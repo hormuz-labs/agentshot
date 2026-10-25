@@ -107,8 +107,37 @@ Widget checks include 320px phones, landscape, tablets, 1–3× text scaling and
 keyboard insets, plus examples, activity, settings sheets, film proposals, files,
 timeline and mix controls. `flutter test scripts/preview_test.dart` captures
 light/dark fixture screenshots under `build/brand-preview/` for visual QA.
-Real-device camera, playback, TLS networking, interrupted
-transfers and iOS signing still need device testing before a store submission.
+Real-device camera, interrupted transfers and iOS signing still need device
+testing before a store submission.
+
+### End to end
+
+`integration_test/` runs the app on an Android emulator or phone against the
+real desktop app, over the real certificate-pinned connection. From the
+repository root, with an emulator running (or an AVD it can boot):
+
+```sh
+npm run test:e2e:mobile
+```
+
+`test/e2e/mobile.e2e.mjs` starts desktop AgentShot with a throwaway profile, a
+project made from a test video and a scripted model (no API keys), turns on
+Settings → Mobile, and runs each test with a fresh pairing code:
+
+| Test | Covers |
+|---|---|
+| `pairing` | wrong code refused, right code connects, still paired after a restart |
+| `projects` | search, open a project, play its film, see its files |
+| `conversation` | send a note, the agent's reply streams back, new and switched conversations |
+| `editing` | the agent cuts the film and proposes it; Before/After; Keep makes it current |
+| `create` | Start from an idea → 9:16 → the agent builds and renders a motion clip; play and keep it |
+| `responsive` | every screen, sheet and settings panel at 320×568, 393×852, phone landscape and tablet sizes, text ×1 and ×2: no overflow, nothing unreachable |
+| `settings` | desktop settings and providers, other tabs, disconnect |
+
+It then checks the desktop side: the notes reached the agent, the kept cut is
+the current version, the idea became a project, and the phone was unpaired.
+`MOBILE_E2E_ONLY=editing,create` runs some; `MOBILE_E2E_DEVICE` picks a device.
+CI runs it on an Android emulator (`.github/workflows/mobile.yml`).
 
 ## Distribution
 
