@@ -5,6 +5,7 @@ import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge
 import { projectArgument } from './mobile-contract'
 import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
 import { startMeshNode, type MeshNode } from './mesh'
+import QRCode from 'qrcode'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { copyFile, readFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
@@ -180,6 +181,35 @@ function joinMesh() {
   })().finally(() => { meshJoining = undefined })
   return meshJoining
 }
+// One QR per pairing code: agentshot://pair?d=<base64url JSON> opens the phone app from its own camera. With the mesh up
+// it carries a single-use mesh key, so the phone joins Headscale and reaches this computer from anywhere.
+let pairingQr: { code: string; qr: Promise<{ link: string; svg: string; mesh: boolean }> } | undefined
+function mobileQr() {
+  const st = mobile.status()
+  if (!st.running || !st.code || !st.fingerprint || !st.addresses.length) return null
+  // a new code, or the mesh coming up after the QR was made, needs a new QR
+  const id = `${st.code}|${st.mesh || ''}`
+  if (pairingQr?.code !== id) {
+    const qr = (async () => {
+      const key = st.mesh ? await meshJoin('client', undefined, { persistent: true }).catch(() => null) : null
+      const payload = {
+        v: 1,
+        code: st.code,
+        fingerprint: st.fingerprint,
+        // the mesh address goes last: it works from anywhere but the Wi-Fi address is quicker at home
+        url: st.addresses[0],
+        urls: st.addresses,
+        ...(key && st.mesh ? { mesh: { control: key.controlUrl, key: key.authKey, ip: st.mesh } } : {}),
+      }
+      const link = `agentshot://pair?d=${Buffer.from(JSON.stringify(payload)).toString('base64url')}`
+      return { link, svg: await QRCode.toString(link, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' }), mesh: !!payload.mesh }
+    })()
+    pairingQr = { code: id, qr }
+    qr.catch(() => { if (pairingQr?.qr === qr) pairingQr = undefined })
+  }
+  return pairingQr.qr
+}
+
 function stopMesh() {
   stopHeartbeat?.()
   stopHeartbeat = null
@@ -751,6 +781,7 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
 // ---------------------------------------------------------------- IPC
 function wire() {
   ipcMain.handle('mobile:status', () => mobile.status())
+  ipcMain.handle('mobile:qr', () => mobileQr())
   ipcMain.handle('mobile:start', () => startBridgeAndMesh())
   ipcMain.handle('mobile:stop', () => { stopMesh(); return mobile.stop() })
   ipcMain.handle('worker:status', () => workerClient.status())

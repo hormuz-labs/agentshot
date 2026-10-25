@@ -30,6 +30,6 @@ void main() {
     if (find.text('Confirm').evaluate().isNotEmpty) {
       await tester.tap(find.text('Confirm'));
     }
-    await waitFor(tester, find.text('Connect to desktop'));
+    await waitFor(tester, find.text('Scan QR code'));
   });
 }

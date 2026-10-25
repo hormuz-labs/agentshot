@@ -130,7 +130,7 @@ export type DiscoveredWorker = {
   expiresAt: number
 }
 
-export async function meshJoin(role: 'client' | 'worker', poolSecret?: string): Promise<{ controlUrl: string; authKey: string; tag: string }> {
+export async function meshJoin(role: 'client' | 'worker', poolSecret?: string, opts: { persistent?: boolean } = {}): Promise<{ controlUrl: string; authKey: string; tag: string }> {
   if (poolSecret) {
     const r = await fetch(`${AUTH.account()}/v1/mesh/join`, {
       method: 'POST',
@@ -141,7 +141,7 @@ export async function meshJoin(role: 'client' | 'worker', poolSecret?: string): 
     if (!r.ok || !body.controlUrl || !body.authKey) throw new Error(body.error || 'Could not join mesh.')
     return { controlUrl: body.controlUrl, authKey: body.authKey, tag: body.tag || 'tag:worker' }
   }
-  return (await asKey('/v1/mesh/join', { method: 'POST', body: JSON.stringify({ role }) })) as { controlUrl: string; authKey: string; tag: string }
+  return (await asKey('/v1/mesh/join', { method: 'POST', body: JSON.stringify({ role, ...opts }) })) as { controlUrl: string; authKey: string; tag: string }
 }
 
 export async function workerHeartbeat(body: Record<string, unknown>, poolSecret?: string): Promise<void> {

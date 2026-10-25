@@ -25,6 +25,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: scripts/mesh/go.mod
+          cache-dependency-path: scripts/mesh/go.sum
+      - name: Build the embedded mesh node (gomobile)
+        run: ./scripts/build-mesh.sh android
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.2'

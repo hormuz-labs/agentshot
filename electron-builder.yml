@@ -1,7 +1,7 @@
 # Native packaging: macOS (.dmg + .zip), Linux (.deb + AppImage), Windows x64 (per-user NSIS).
 appId: com.hormuzlabs.manul
 productName: AgentShot
-copyright: Copyright © 2026 Hormuz Labs
+copyright: Copyright © 2026 agenthormuz@proton.me
 directories:
   buildResources: build
   output: dist
@@ -18,7 +18,7 @@ extraResources:
     to: icon.png
   - from: resources/bin/${platform}-${arch}
     to: bin
-    filter: ["ffmpeg", "ffprobe", "whisper-cli", "agentshot-beats", "agentshot-speakers", "agentshot-vision", "agentshot-fence", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
+    filter: ["ffmpeg", "ffprobe", "whisper-cli", "agentshot-beats", "agentshot-speakers", "agentshot-vision", "agentshot-fence", "agentshot-mesh", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
   - from: resources/lib
     to: lib
   - from: resources/models

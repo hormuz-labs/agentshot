@@ -157,9 +157,8 @@ Releases (signing, Windows NSIS, Homebrew, apt) are covered in [RELEASING.md](RE
 
 ## License
 
-AgentShot is open source under the [Apache License 2.0](LICENSE); redistributions keep the attribution in [NOTICE](NOTICE). A few parts carry their own licence, marked at the top of the file:
-programs built together with GPL code (`scripts/beats/agentshot-beats.c`, `scripts/ml/agentshot-speakers.c`) are
-GPL-3.0-or-later, and the ffmpeg build modules are Apache-2.0 (texts in [LICENSES](LICENSES)).
+AgentShot is open source under the [GNU General Public License v3.0 or later](LICENSE), copyright agenthormuz@proton.me; redistributions keep the notices in [NOTICE](NOTICE). A few parts carry their own licence, marked at the top of the file:
+the ffmpeg build modules are Apache-2.0 (texts in [LICENSES](LICENSES)).
 
 ### Contributor agreement
 

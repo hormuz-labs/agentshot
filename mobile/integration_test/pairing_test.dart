@@ -11,14 +11,14 @@ void main() {
   testWidgets('pairs with the desktop and lists its projects', (tester) async {
     await const FlutterSecureStorage().deleteAll();
     await launch(tester);
-    expect(find.text('Connect to desktop'), findsOneWidget);
+    expect(find.text('Scan QR code'), findsOneWidget);
 
-    final wrong = code == '000000' ? '111111' : '000000';
-    await enterCode(tester, wrong);
+    final wrong = codeOf(pairLink) == '000000' ? '111111' : '000000';
+    await enterCode(tester, withCode(pairLink, wrong));
     await waitFor(tester, find.textContaining('Invalid or expired code'));
     expect(find.text('What are we making?'), findsNothing);
 
-    await enterCode(tester, code);
+    await enterCode(tester, pairLink);
     await waitFor(tester, find.text('What are we making?'));
     await reveal(tester, find.text('On your computer'));
     await reveal(tester, find.text(project));
@@ -26,6 +26,6 @@ void main() {
     // The connection survives a restart: the app comes back paired, not on the pair screen.
     await launch(tester);
     await reveal(tester, find.text('On your computer'));
-    expect(find.text('Connect to desktop'), findsNothing);
+    expect(find.text('Scan QR code'), findsNothing);
   });
 }

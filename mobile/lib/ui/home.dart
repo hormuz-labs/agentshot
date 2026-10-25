@@ -199,22 +199,29 @@ class _HomeScreenState extends State<HomeScreen> {
         body: SafeArea(
           child: Column(
             children: [
+              // never more than the screen shares out (a landscape phone with the keyboard up leaves a sliver)
               if (!store.connected)
-                Material(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.sync, size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            store.connectionError ??
-                                'Connecting to your desktop…',
+                Flexible(
+                  child: Material(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.sync, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              store.connectionError ??
+                                  'Connecting to your desktop…',
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

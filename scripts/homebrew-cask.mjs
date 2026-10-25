@@ -1,6 +1,7 @@
 // Render AgentShot's Homebrew cask. The hormuz-labs/homebrew-tap repository runs this from each release tag itself.
 //   node scripts/homebrew-cask.mjs <version> <arm64 dmg sha256> <x64 dmg sha256>  > Casks/manul.rb
 // auto_updates: AgentShot updates itself (electron-updater), so `brew upgrade` leaves it alone.
+// Releases are Developer ID signed and notarized (release.yml refuses to publish otherwise), so Gatekeeper opens it as is.
 import { fileURLToPath } from 'node:url'
 
 export function renderCask({ version, arm64, x64 }) {
@@ -29,15 +30,6 @@ export function renderCask({ version, arm64, x64 }) {
   depends_on macos: :monterey
 
   app "AgentShot.app"
-
-  # Not notarized yet: without this, macOS calls the downloaded app "damaged". Drop once releases are signed.
-  postflight_steps do
-    run "/usr/bin/xattr",
-        args:           ["-dr", "com.apple.quarantine", "AgentShot.app"],
-        chdir:          "{{appdir}}",
-        writable_paths: ["AgentShot.app"],
-        writable_base:  :appdir
-  end
 
   zap trash: [
     "~/Library/Application Support/AgentShot",

@@ -218,20 +218,30 @@ class _ProjectScreenState extends State<ProjectScreen> {
         body: SafeArea(
           child: Column(
             children: [
+              // banners take their size, but never more than the screen shares out (a landscape phone with
+              // the keyboard up leaves a sliver), and scroll within it
               if (!store.connected)
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(store.connectionError ?? 'Reconnecting…'),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      store.connectionError ?? 'Reconnecting…',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
               if (exporting)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: [
-                      Text(exportStatus ?? ''),
-                      const SizedBox(height: 8),
-                      const LinearProgressIndicator(),
-                    ],
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        Text(exportStatus ?? ''),
+                        const SizedBox(height: 8),
+                        const LinearProgressIndicator(),
+                      ],
+                    ),
                   ),
                 ),
               Expanded(

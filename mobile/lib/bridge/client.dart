@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
+import 'mesh.dart';
 
 typedef Json = Map<String, dynamic>;
 Json object(dynamic value) => Map<String, dynamic>.from(value as Map);
@@ -25,7 +26,10 @@ class Connection {
   final String fingerprint;
   final String token;
   Connection(this.url, this.fingerprint, this.token, [List<Uri>? urls])
-    : urls = <Uri>[url, ...?urls?.where((u) => u.toString() != url.toString())];
+    : urls = <Uri>[
+        url,
+        ...?urls?.where((u) => u.toString() != url.toString()),
+      ];
   static Uri _parseUrl(String raw) {
     final url = Uri.parse(raw);
     if (url.scheme != 'https' ||
@@ -74,6 +78,7 @@ class Connection {
 /// The localhost relay lets AVPlayer/ExoPlayer stream without bypassing their TLS checks.
 class BridgeClient {
   static const _storageKey = 'agentshot.desktop.connection.v1';
+  static const _meshStorageKey = 'agentshot.mesh.v1';
   final FlutterSecureStorage storage;
   Connection? connection;
   HttpClient? _http;
@@ -93,6 +98,11 @@ class BridgeClient {
     if (saved == null) return false;
     try {
       _configure(Connection.fromJson(object(jsonDecode(saved))));
+      // rejoin the mesh in the background; the reconnect loop retries until it is up
+      final mesh = await storage.read(key: _meshStorageKey);
+      if (mesh != null) {
+        unawaited(Mesh.start(mesh).catchError((Object _) {}));
+      }
       return true;
     } catch (_) {
       await storage.delete(key: _storageKey);
@@ -106,12 +116,44 @@ class BridgeClient {
     connection = value;
     _http = HttpClient(context: SecurityContext(withTrustedRoots: false))
       ..connectionTimeout = const Duration(seconds: 15)
+      ..findProxy = _proxyFor
       ..badCertificateCallback = (certificate, host, port) =>
           value.urls.any((u) => u.host == host && u.port == port) &&
           sha256.convert(certificate.der).toString() == value.fingerprint;
   }
 
   static const defaultPort = 47821;
+
+  static String _proxyFor(Uri uri) => Mesh.proxyPort != null && Mesh.isMeshHost(uri.host)
+      ? 'PROXY 127.0.0.1:${Mesh.proxyPort}'
+      : 'DIRECT';
+
+  /// The first of [target]'s addresses that answers, so pairing away from home doesn't wait on dead Wi-Fi addresses.
+  Future<Connection> _fastest(Connection target) async {
+    final found = Completer<Uri?>();
+    var pending = target.urls.length;
+    for (final candidate in target.urls) {
+      final client = HttpClient(context: SecurityContext(withTrustedRoots: false))
+        ..connectionTimeout = const Duration(seconds: 20)
+        ..findProxy = _proxyFor
+        ..badCertificateCallback = (certificate, host, port) =>
+            sha256.convert(certificate.der).toString() == target.fingerprint;
+      unawaited(() async {
+        try {
+          final req = await client.getUrl(candidate.replace(path: '/discover'));
+          final res = await req.close().timeout(const Duration(seconds: 20));
+          await res.drain<void>();
+          if (res.statusCode == 200 && !found.isCompleted) found.complete(candidate);
+        } catch (_) {
+        } finally {
+          client.close(force: true);
+          if (--pending == 0 && !found.isCompleted) found.complete(null);
+        }
+      }());
+    }
+    final first = await found.future;
+    return first == null ? target : Connection(first, target.fingerprint, target.token, target.urls);
+  }
 
   Future<Connection> _discover({String? host}) async {
     final candidates = <String>[];
@@ -121,12 +163,22 @@ class BridgeClient {
         cleanHost.contains(':') ? cleanHost : '$cleanHost:$defaultPort',
       );
     } else {
-      candidates.addAll(['10.0.2.2:$defaultPort', '127.0.0.1:$defaultPort']);
+      candidates.addAll([
+        '10.0.2.2:$defaultPort',
+        '127.0.0.1:$defaultPort',
+      ]);
       try {
-        final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+        final socket = await RawDatagramSocket.bind(
+          InternetAddress.anyIPv4,
+          0,
+        );
         socket.broadcastEnabled = true;
         final payload = utf8.encode('manul-discover');
-        socket.send(payload, InternetAddress('255.255.255.255'), defaultPort);
+        socket.send(
+          payload,
+          InternetAddress('255.255.255.255'),
+          defaultPort,
+        );
         final found = Completer<Connection?>();
         final sub = socket.listen((event) {
           if (event != RawSocketEvent.read) return;
@@ -137,7 +189,8 @@ class BridgeClient {
             final urls = (data['urls'] as List? ?? const [])
                 .whereType<String>()
                 .toList();
-            final primary = 'https://${dg.address.address}:$defaultPort';
+            final primary =
+                'https://${dg.address.address}:$defaultPort';
             final c = Connection.fromJson({
               'url': urls.isNotEmpty ? urls.first : primary,
               'urls': <String>[primary, ...urls],
@@ -174,10 +227,9 @@ class BridgeClient {
     }
 
     Future<Connection?> probe(String authority) async {
-      final client =
-          HttpClient(context: SecurityContext(withTrustedRoots: false))
-            ..connectionTimeout = const Duration(milliseconds: 600)
-            ..badCertificateCallback = (_, _, _) => true;
+      final client = HttpClient(context: SecurityContext(withTrustedRoots: false))
+        ..connectionTimeout = const Duration(milliseconds: 600)
+        ..badCertificateCallback = (_, _, _) => true;
       try {
         final uri = Uri.parse('https://$authority/discover');
         final req = await client.getUrl(uri);
@@ -185,9 +237,7 @@ class BridgeClient {
           const Duration(milliseconds: 800),
         );
         if (res.statusCode != 200) return null;
-        final data = object(
-          await utf8.decoder.bind(res).join().then(jsonDecode),
-        );
+        final data = object(await utf8.decoder.bind(res).join().then(jsonDecode));
         final urls = (data['urls'] as List? ?? const [])
             .whereType<String>()
             .toList();
@@ -217,8 +267,17 @@ class BridgeClient {
   }
 
   Future<void> pair(String code, {String? host}) async {
-    final trimmed = code.trim();
-    final Connection target;
+    var trimmed = code.trim();
+    // the desktop's QR: agentshot://pair?d=<base64url JSON with the code, addresses and a mesh key>
+    if (trimmed.startsWith('agentshot://')) {
+      try {
+        final data = Uri.parse(trimmed).queryParameters['d'] ?? '';
+        trimmed = utf8.decode(base64Url.decode(base64Url.normalize(data)));
+      } catch (_) {
+        throw BridgeException('That QR code is not an AgentShot pairing code.');
+      }
+    }
+    Connection target;
     final String pairCode;
     if (trimmed.startsWith('{')) {
       final Json input;
@@ -238,6 +297,16 @@ class BridgeClient {
         throw BridgeException('Connection code is missing.');
       }
       pairCode = input['code'] as String;
+      final mesh = input['mesh'];
+      if (mesh is Map && mesh['control'] is String && mesh['key'] is String) {
+        try {
+          await Mesh.start(mesh['control'] as String, mesh['key'] as String);
+          await storage.write(key: _meshStorageKey, value: mesh['control'] as String);
+        } catch (_) {
+          // still try the Wi-Fi and Tailscale addresses
+        }
+      }
+      target = await _fastest(target);
     } else {
       final digits = trimmed.replaceAll(RegExp(r'\D'), '');
       if (digits.length != 6) {
@@ -250,7 +319,9 @@ class BridgeClient {
     }
     Object? lastError;
     for (final candidate in target.urls) {
-      _configure(Connection(candidate, target.fingerprint, '', target.urls));
+      _configure(
+        Connection(candidate, target.fingerprint, '', target.urls),
+      );
       try {
         final result = object(
           await _post('/pair', {
@@ -302,30 +373,16 @@ class BridgeClient {
   Future<void> connectDirect(Connection target) async {
     Object? lastError;
     for (final candidate in target.urls) {
-      _configure(
-        Connection(candidate, target.fingerprint, target.token, target.urls),
-      );
+      _configure(Connection(candidate, target.fingerprint, target.token, target.urls));
       try {
-        final req = await _http!.openUrl(
-          'GET',
-          candidate.replace(path: '/hello'),
-        );
+        final req = await _http!.openUrl('GET', candidate.replace(path: '/hello'));
         req.followRedirects = false;
-        req.headers.set(
-          HttpHeaders.authorizationHeader,
-          'Bearer ${target.token}',
-        );
+        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.token}');
         final res = await req.close().timeout(const Duration(seconds: 6));
         if (res.statusCode != 200) {
-          throw BridgeException(
-            'Worker refused connection (${res.statusCode}).',
-            res.statusCode,
-          );
+          throw BridgeException('Worker refused connection (${res.statusCode}).', res.statusCode);
         }
-        await storage.write(
-          key: _storageKey,
-          value: jsonEncode(connection!.toJson()),
-        );
+        await storage.write(key: _storageKey, value: jsonEncode(connection!.toJson()));
         return;
       } catch (e) {
         lastError = e;
@@ -333,8 +390,7 @@ class BridgeClient {
     }
     _http?.close(force: true);
     connection = null;
-    throw lastError ??
-        BridgeException('Could not reach the worker on any address.');
+    throw lastError ?? BridgeException('Could not reach the worker on any address.');
   }
 
   Future<void> _refreshAddresses() async {
@@ -622,9 +678,7 @@ class BridgeClient {
     // Ask the desktop to forget this phone too; offline, it stays listed there until removed on the desktop.
     try {
       final request = await _request('POST', '/unpair');
-      await (await request.close()).drain<void>().timeout(
-        const Duration(seconds: 5),
-      );
+      await (await request.close()).drain<void>().timeout(const Duration(seconds: 5));
     } catch (_) {}
     _http?.close(force: true);
     _http = null;
@@ -632,6 +686,8 @@ class BridgeClient {
     await _relay?.close(force: true);
     _relay = null;
     await storage.delete(key: _storageKey);
+    await storage.delete(key: _meshStorageKey);
+    await Mesh.stop();
   }
 
   Future<void> dispose() async {

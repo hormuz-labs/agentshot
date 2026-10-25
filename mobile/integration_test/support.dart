@@ -1,16 +1,16 @@
 // Shared steps for the mobile end-to-end tests. They run on a real device or emulator against a real desktop
 // AgentShot that test/e2e/mobile.e2e.mjs starts and passes in with --dart-define:
-//   E2E_CODE     a fresh 6-digit pairing code (one per test file; a code pairs one device once)
-//   E2E_HOST     the desktop bridge as the device sees it, e.g. 10.0.2.2:47821 from the Android emulator
+//   E2E_PAIR     what the desktop's pairing QR carries (agentshot://pair?d=…), with a fresh code (one per test
+//                file; a code pairs one device once) and the address this device reaches the desktop at
 //   E2E_PROJECT  the title of the project the desktop made for the tests
 //   E2E_REPLY    what the desktop's scripted model answers to every message
+import 'dart:convert';
 import 'package:agentshot_mobile/main.dart' as app;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const code = String.fromEnvironment('E2E_CODE');
-const host = String.fromEnvironment('E2E_HOST');
+const pairLink = String.fromEnvironment('E2E_PAIR');
 const project = String.fromEnvironment('E2E_PROJECT');
 const reply = String.fromEnvironment('E2E_REPLY');
 
@@ -121,7 +121,7 @@ double area(ScrollableState s) {
 
 /// Starts the app and waits for either the pair screen or the home screen.
 Future<void> launch(WidgetTester tester) async {
-  expect(code, isNotEmpty, reason: 'Run through test/e2e/mobile.e2e.mjs');
+  expect(pairLink, isNotEmpty, reason: 'Run through test/e2e/mobile.e2e.mjs');
   app.main();
   await waitFor(
     tester,
@@ -129,29 +129,67 @@ Future<void> launch(WidgetTester tester) async {
   );
 }
 
-/// Types the code (and the desktop's address) on the pair screen, as a person would.
-Future<void> enterCode(WidgetTester tester, String value) async {
-  if (host.isNotEmpty &&
-      find.text('Computer IP, Tailscale or mesh address').evaluate().isEmpty) {
-    await reveal(tester, find.text('Away from home? Enter an address'));
-    await tester.tap(find.text('Away from home? Enter an address'));
-    await settle(tester, const Duration(milliseconds: 300));
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Computer IP, Tailscale or mesh address'),
-      host,
-    );
-  }
-  // Pasted, as most people bring the code over: Paste fills all six boxes and connects.
-  await Clipboard.setData(ClipboardData(text: value));
-  await reveal(tester, find.text('Paste'));
-  await tester.tap(find.text('Paste'));
+/// The same pairing link with another code, as if someone typed a wrong or stale one.
+String withCode(String link, String code) {
+  final data =
+      jsonDecode(
+            utf8.decode(
+              base64Url.decode(
+                base64Url.normalize(Uri.parse(link).queryParameters['d']!),
+              ),
+            ),
+          )
+          as Map<String, dynamic>;
+  data['code'] = code;
+  return 'agentshot://pair?d=${base64Url.encode(utf8.encode(jsonEncode(data))).replaceAll('=', '')}';
 }
 
-/// Starts the app paired with the desktop: pairs with [code] unless an earlier test file already did.
+String codeOf(String link) =>
+    (jsonDecode(
+              utf8.decode(
+                base64Url.decode(
+                  base64Url.normalize(Uri.parse(link).queryParameters['d']!),
+                ),
+              ),
+            )
+            as Map<String, dynamic>)['code']
+        as String;
+
+/// Pairs with a link from the desktop's QR, brought over with Paste code (the camera can't be scripted). Android only
+/// lets the app in focus read the clipboard, so where that fails (a CI emulator) the code is typed into the six boxes
+/// instead, the other way the pair screen offers. E2E_TYPE=true always types.
+Future<void> enterCode(WidgetTester tester, String link) async {
+  bool started() =>
+      find.text('Connecting…').evaluate().isNotEmpty ||
+      find.text('What are we making?').evaluate().isNotEmpty ||
+      find
+          .textContaining(RegExp('Invalid|Could not|Try pairing'))
+          .evaluate()
+          .isNotEmpty;
+  if (!const bool.fromEnvironment('E2E_TYPE')) {
+    await Clipboard.setData(ClipboardData(text: link));
+    await reveal(tester, find.text('Paste code'));
+    await tester.tap(find.text('Paste code'));
+    final end = DateTime.now().add(const Duration(seconds: 3));
+    while (!started() && DateTime.now().isBefore(end)) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    if (started()) return;
+  }
+  final digits = codeOf(link);
+  for (var i = 0; i < 6; i++) {
+    final box = find.byKey(ValueKey('otp-$i'));
+    await reveal(tester, box);
+    await tester.enterText(box, digits[i]);
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
+/// Starts the app paired with the desktop: pairs with [pairLink] unless an earlier test file already did.
 Future<void> launchPaired(WidgetTester tester) async {
   await launch(tester);
   if (find.text('What are we making?').evaluate().isEmpty) {
-    await enterCode(tester, code);
+    await enterCode(tester, pairLink);
   }
   await waitFor(tester, find.text('What are we making?'));
   // the desktop's projects have loaded (below the fold on a small phone)

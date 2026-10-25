@@ -35,6 +35,10 @@ if (!device) {
   await until('Android to finish booting', () => spawnSync('adb', ['-s', device, 'shell', 'getprop', 'sys.boot_completed'], { encoding: 'utf8' }).stdout?.trim() === '1', 300_000)
 }
 
+// Awake and unlocked: Android lets only the app in focus read the clipboard the tests paste from.
+for (const args of [['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'], ['shell', 'wm', 'dismiss-keyguard'], ['shell', 'input', 'keyevent', '82']])
+  spawnSync('adb', ['-s', device, ...args])
+
 const tmp = mkdtempSync(join(tmpdir(), 'agentshot-mobile-')), ud = join(tmp, 'ud'), projects = join(tmp, 'projects')
 const video = join(tmp, `${project}.mp4`)
 execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=640x360:d=3:r=30', '-f', 'lavfi', '-i', 'sine=f=440:d=3',
@@ -91,6 +95,14 @@ const desktopLog = join(tmp, 'desktop.log') // the desktop's side of a failure
 for (const s of [app.process().stdout, app.process().stderr]) s?.on('data', d => appendFileSync(desktopLog, d))
 try {
   if (process.platform === 'linux') await app.evaluate(({ safeStorage }) => safeStorage.setUsePlainTextEncryption(true))
+  // if the desktop goes away mid-run, say why (in desktop.log)
+  await app.evaluate(({ app: electronApp, BrowserWindow }) => {
+    electronApp.on('before-quit', () => console.log(`e2e: quitting\n${new Error().stack}`))
+    electronApp.on('render-process-gone', (_e, _w, d) => console.log(`e2e: renderer gone: ${d.reason} ${d.exitCode}`))
+    electronApp.on('child-process-gone', (_e, d) => console.log(`e2e: ${d.type} process gone: ${d.reason} ${d.exitCode}`))
+    for (const w of BrowserWindow.getAllWindows()) w.on('closed', () => console.log(`e2e: window closed\n${new Error().stack}`))
+    process.on('exit', code => console.log(`e2e: exit ${code}`))
+  })
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
   await dismissOnboarding(win)
@@ -100,8 +112,11 @@ try {
 
   let status = await win.evaluate(() => window.agentshot.mobile.start())
   assert.ok(status.running, 'the mobile bridge is running')
-  // The emulator reaches this computer at 10.0.2.2; a phone needs one of its network addresses.
-  const bridge = device.startsWith('emulator-') ? `10.0.2.2:${new URL(status.addresses[0]).port}` : new URL(status.addresses[0]).host
+  // The emulator reaches this computer at 10.0.2.2; a phone at one of its network addresses.
+  const bridge = device.startsWith('emulator-') ? `https://10.0.2.2:${new URL(status.addresses[0]).port}` : status.addresses[0]
+  // What the desktop's pairing QR carries (agentshot://pair?d=…), with the address this device can reach.
+  const pairLink = ({ code, fingerprint }) =>
+    `agentshot://pair?d=${Buffer.from(JSON.stringify({ v: 1, code, fingerprint, url: bridge, urls: [bridge] })).toString('base64url')}`
   for (const test of tests) {
     // Flutter reinstalls the app for each file, so each one pairs as a new phone. Before the last, forget them all
     // on the desktop: what is left after it disconnects shows whether Disconnect unpaired it there too.
@@ -112,10 +127,11 @@ try {
     console.log(`mobile e2e: ${test}`)
     // Not spawnSync: the scripted model above answers the desktop from this same process while the phone test runs.
     const run = spawn(flutter, ['test', `integration_test/${test}_test.dart`, '-d', device, '--no-pub',
-      `--dart-define=E2E_CODE=${status.code}`, `--dart-define=E2E_HOST=${bridge}`,
+      `--dart-define=E2E_PAIR=${pairLink(status)}`, `--dart-define=E2E_TYPE=${process.env.MOBILE_E2E_TYPE === '1'}`,
       `--dart-define=E2E_PROJECT=${project}`, `--dart-define=E2E_REPLY=${reply}`], { cwd: mobile, stdio: 'inherit', timeout: 15 * 60_000 })
     run.status = await new Promise(r => run.on('close', r))
-    assert.equal(run.status, 0, `mobile ${test} test failed (desktop log: ${desktopLog}; the model answered: ${turns.join(' | ') || 'nothing'})`)
+    const bridgeNow = run.status ? await win.evaluate(() => window.agentshot.mobile.status()).then(st => `bridge ${st.running ? 'up' : 'DOWN'} at ${st.addresses.join(' ')}`, e => `desktop gone: ${e.message}`) : ''
+    assert.equal(run.status, 0, `mobile ${test} test failed (${bridgeNow}) (desktop log: ${desktopLog}; the model answered: ${turns.join(' | ') || 'nothing'})`)
   }
 
   // The desktop saw it all: the phone's notes reached the agent, its edit was kept, its idea became a motion project,

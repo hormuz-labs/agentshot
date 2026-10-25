@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"tailscale.com/envknob"
+	"tailscale.com/logtail"
 	"tailscale.com/tsnet"
 )
 
@@ -31,6 +33,9 @@ func main() {
 	forwardPort := flag.Int("forward-port", 0, "local port on 127.0.0.1 to expose on mesh :47821")
 	meshPort := flag.Int("mesh-port", 47821, "mesh port to listen on when forwarding")
 	flag.Parse()
+	// a private Headscale mesh: never upload node logs to Tailscale's log service
+	envknob.SetNoLogsNoSupport()
+	logtail.Disable()
 
 	if *stateDir == "" {
 		fmt.Fprintln(os.Stderr, "--state-dir is required")
