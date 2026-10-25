@@ -1,4 +1,4 @@
-package si.manul.manul_mobile
+package si.agentshot.app
 
 import io.flutter.embedding.android.FlutterActivity
 

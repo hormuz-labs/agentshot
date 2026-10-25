@@ -14,7 +14,8 @@ Either way, `.github/workflows/release.yml` then:
 1. builds on five native runners (macOS arm64 + Intel, Linux x64 + arm64, Windows x64): bundled whisper.cpp, pinned ffmpeg, packaging tests, typecheck and runtime unit tests; Windows also runs selected runtime E2E and the native whisper Unicode-path regression;
 2. packages, **signs and notarizes** the Mac app (when the Apple secrets exist); then one job merges the two Mac update feeds and publishes `.dmg`, `.zip`,
    `.deb`, AppImage, signed Windows NSIS `.exe`, blockmaps and the `latest*.yml` update files to **GitHub Releases** — this is what installed apps update from;
-3. rebuilds and signs the **apt repository** and pushes its small metadata files to the `apt` branch (when `APT_GPG_KEY_ID` is set). Cloudflare Pages serves that branch; `.deb` downloads redirect to GitHub Releases.
+3. rebuilds and signs the **apt repository** and pushes its small metadata files to the `apt` branch (when `APT_GPG_KEY_ID` is set). Cloudflare Pages serves that branch; `.deb` downloads redirect to GitHub Releases;
+4. builds the signed Android App Bundle and uploads it to **Google Play** (`.github/workflows/play.yml`, when `PLAY_TRACK` is set). Version name is the tag, version code `major×1000000 + minor×1000 + patch`.
 
 Skills ship inside the app (`resources/skills`) and update with it: a skill change reaches users in the next release,
 together with the tools it relies on.
@@ -29,12 +30,40 @@ together with the tools it relies on.
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | repo secrets | notarization |
 | `WINDOWS_CERT_P12_BASE64`, `WINDOWS_CERT_PASSWORD` | repo secrets | Windows Authenticode certificate (.p12/.pfx, base64) and password, passed as `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` |
 | `WINDOWS_PUBLISHER_NAME` | repo variable | Exact certificate publisher common name, case-sensitive. Injected into `win.signtoolOptions.publisherName` and the packaged updater configuration; do not guess it from the product or company name |
-| `hormuz-labs/homebrew-tap` repository | GitHub | `brew install hormuz-labs/tap/manul`. Its own workflow checks Manul's releases hourly and rewrites the cask with `scripts/homebrew-cask.mjs` from the release tag, so no token is shared ("Run workflow" there to update at once) |
+| `hormuz-labs/homebrew-tap` repository | GitHub | `brew install hormuz-labs/tap/manul`. Its own workflow checks AgentShot's releases hourly and rewrites the cask with `scripts/homebrew-cask.mjs` from the release tag, so no token is shared ("Run workflow" there to update at once) |
 | Cloudflare Pages project tracking the `apt` branch | Cloudflare | Only package lists, signatures, public key and redirects are stored in git; large `.deb` files stay on GitHub Releases |
 | `APT_GPG_KEY_ID` (variable), `APT_GPG_PRIVATE_KEY` (secret) | repo settings | apt metadata signing; no R2 bucket/access-key configuration is used by the current workflow |
 | `apt.agentshot.si` custom domain on that Pages project | DNS | the line users add to their sources |
 
+| Google Play developer account ($25 once) | play.google.com/console | publishing the Android app; see "Google Play" below |
+| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | repo secrets | Play upload key (.jks, base64) |
+| `PLAY_SERVICE_ACCOUNT_JSON` | repo secret | Google Cloud service account key allowed to release in Play Console |
+| `PLAY_TRACK` (variable), `PLAY_RELEASE_STATUS` (optional variable) | repo settings | `internal`, `alpha`, `beta` or `production`; set status `draft` until the first release is live |
+
 Without the Apple secrets, releases still build but the Mac app is unsigned: the cask clears the quarantine flag for Homebrew users, and anyone downloading the .dmg directly must right-click → Open.
+
+## Google Play
+
+The application ID (`applicationId` in `mobile/android/app/build.gradle.kts`) can never change once an app exists in
+Play Console, so settle it before the first upload. The workflow reads it from that file.
+
+1. **Developer account.** Sign up at play.google.com/console with the Google account that should own the app, pay the
+   one-time $25 fee and complete identity verification (an organization account also needs a D-U-N-S number). New
+   *personal* accounts must run a closed test with at least 12 testers for 14 days before production access.
+2. **Upload key.** Locally, once; keep the file and passwords in a password manager, never in git:
+   ```bash
+   keytool -genkey -v -keystore ~/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+   ```
+   Copy `mobile/android/key.properties.example` to `key.properties` and fill it in for local release builds.
+3. **Create the app** in Play Console, fill in the store listing, content rating, data safety and privacy policy, and
+   upload the first bundle **by hand** (Play App Signing, enabled by default, keeps the app signing key; yours is
+   only the upload key). Build it with `flutter build appbundle --release` in `mobile/`.
+4. **API access.** In Google Cloud Console, enable the *Google Play Android Developer API*, create a service account and
+   a JSON key for it. In Play Console → Users and permissions, invite the service account's email with *Release apps to
+   testing tracks* (and *Release to production* if `PLAY_TRACK` is `production`) for this app.
+5. **Secrets.** `base64 -w0 ~/upload-keystore.jks` → `ANDROID_KEYSTORE_BASE64`; the passwords and alias (`upload`) to
+   the other `ANDROID_*` secrets; the JSON key file's contents → `PLAY_SERVICE_ACCOUNT_JSON`. Then set `PLAY_TRACK`
+   (start with `internal`), which turns the upload on. Test it with "Run workflow" on the Play workflow and an existing tag.
 
 ## Windows packaging
 
@@ -69,7 +98,7 @@ If the certificate requires hardware-backed/cloud signing rather than an exporta
 validate that signing provider before releasing; that alternative is not implemented here.
 
 CI builds whisper.cpp v1.9.4 using CMake/Visual Studio 2022 x64, `/MT`, no OpenMP or dynamic GGML backends,
-and an explicit SSE2 baseline. A Manul-owned CMake wrapper adds an **embedded UTF-8 activeCodePage
+and an explicit SSE2 baseline. An AgentShot-owned CMake wrapper adds an **embedded UTF-8 activeCodePage
 manifest**, leaving the pinned upstream checkout unchanged. Windows 10 1903/build 18362 is the first
 version honoring this process code page. This makes MSVC's narrow CLI arguments, input file checks,
 audio decoding and JSON/TXT/SRT file writes consistent with upstream's UTF-8-to-wide model loading,
@@ -98,7 +127,7 @@ using the one-click installer's `/D` override (last and unquoted), verify Deskto
 verify the **installed** whisper UTF-8 manifest, run E2E against the **installed** app, and uninstall/check
 HKCU registration and shortcut removal. `/S`
 suppresses normal auto-launch so E2E owns the test process. This smoke is restricted to
-disposable GitHub-hosted Windows runners and refuses an existing Manul installation. It uses the runner's
+disposable GitHub-hosted Windows runners and refuses an existing AgentShot installation. It uses the runner's
 real, disposable user profile; changing `USERPROFILE` alone would not isolate NSIS registry/shortcuts.
 Never run it against a developer profile. The workflow has not been exercised yet.
 

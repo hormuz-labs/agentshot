@@ -1,5 +1,6 @@
 # A tag like v0.2.0 → build, sign and notarize (macOS) on five native runners, then publish ONE GitHub release
-# (the auto-update feed) with every build's files and generated notes, and rebuild the apt repository (apt.yml).
+# (the auto-update feed) with every build's files and generated notes, rebuild the apt repository (apt.yml) and upload
+# the Android app to Google Play (play.yml).
 # Runs when a tag is pushed by hand, or when tag.yml tags a merge to main and calls it with that tag (a tag pushed by a
 # workflow doesn't start other workflows).
 # The Homebrew tap (hormuz-labs/homebrew-tap) picks up new releases on its own.
@@ -165,6 +166,14 @@ jobs:
     needs: publish
     if: ${{ vars.APT_GPG_KEY_ID != '' }}
     uses: ./.github/workflows/apt.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+    secrets: inherit
+
+  play:
+    needs: publish
+    if: ${{ vars.PLAY_TRACK != '' }}
+    uses: ./.github/workflows/play.yml
     with:
       tag: ${{ inputs.tag || github.ref_name }}
     secrets: inherit
