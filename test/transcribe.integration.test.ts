@@ -16,7 +16,7 @@ const fixture = join(import.meta.dirname, 'fixtures', 'speech', 'narration-music
 describe.skipIf(!ready)('transcription with whisper.cpp', () => {
   afterEach(() => { setConfig({ whisper: undefined }) })
   it('returns sentences with word timings', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-stt-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-stt-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=320x240:d=14', '-i', fixture,
       '-t', '14', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', join(dir, 'clip.mp4')])
     setConfig({ whisper: { engine: 'system', mode: 'custom', binary: bins[0], model } })
@@ -43,7 +43,7 @@ describe.skipIf(!ready)('transcription with whisper.cpp', () => {
 // The reference is a forced alignment of the clean voice; the pauses are where the clean voice is silent.
 async function narrationOverMusic(model: string, maxMedian: number) {
   const ref = JSON.parse(readFileSync(fixture.replace(/\.flac$/, '.reference.json'), 'utf8')) as { words: { w: string; s: number; e: number }[]; pauses: [number, number][] }
-  const dir = mkdtempSync(join(tmpdir(), 'manul-stt-'))
+  const dir = mkdtempSync(join(tmpdir(), 'agentshot-stt-'))
   setConfig({ whisper: { engine: 'system', mode: 'custom', binary: bins[0], model } })
   const t = await transcribe(fixture, join(dir, 'narration.json'), 'Transcribing narration-music.flac')
   const words = t.segments.flatMap(s => s.words)
@@ -89,7 +89,7 @@ function matchWords(a: string[], b: string[]): [number, number][] {
 
 describe('silent media', () => {
   it('gives an empty transcript instead of failing', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-silent-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-silent-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=160x120:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'silent.mp4')])
     const t = await transcribe(join(dir, 'silent.mp4'), join(dir, 't.json'), 'Transcribing silent.mp4')
     expect(t.segments).toEqual([])

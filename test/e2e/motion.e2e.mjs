@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-motion-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-motion-'))
 const shots = process.env.MANUL_E2E_SHOTS
 const ffmpeg = (...args) => execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', ...args])
 ffmpeg('-f', 'lavfi', '-i', 'testsrc2=size=320x240:r=25:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'reference.mp4'))
@@ -62,24 +62,24 @@ try {
   await win.locator('[data-picked-example]').waitFor()
   assert.equal(await win.getByRole('dialog').count(), 0, 'using an example closes the viewer')
   assert.equal(await win.locator('[data-tour="start-prompt"]').getAttribute('placeholder'), 'What’s your video about?')
-  await win.locator('[data-tour="start-prompt"]').fill('Launch video for Manul')
+  await win.locator('[data-tour="start-prompt"]').fill('Launch video for AgentShot')
   if (shots) await win.screenshot({ path: join(shots, 'picked.png'), scale: 'device' })
 
   await win.getByRole('button', { name: 'Start', exact: true }).click()
   await win.waitForSelector('[data-project-title]')
-  await win.waitForFunction(async () => (await window.manul.tabs.get()).active)
-  const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
+  await win.waitForFunction(async () => (await window.agentshot.tabs.get()).active)
+  const dir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
   const p = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
   assert.equal(p.motion.example.id, id, 'the project remembers the example')
   assert.equal(p.motion.reference, `media/${id}.mp4`, 'the example video comes in as the reference')
   assert.ok(p.motion.example.handle, 'with its maker')
-  assert.equal(p.title, 'Launch video for Manul')
+  assert.equal(p.title, 'Launch video for AgentShot')
   assert.equal(p.versions[0].path, 'media/canvas.mp4', 'the film starts on the blank canvas')
   assert.equal(p.timeline.fps, 60)
   await win.waitForFunction(() => !document.querySelector('[data-tour="start-prompt"]'))
   const sent = await app.evaluate(() => globalThis.__sent)
   assert.equal(sent.length, 1, 'the first request is sent once')
-  assert.equal(sent[0].text, 'Launch video for Manul')
+  assert.equal(sent[0].text, 'Launch video for AgentShot')
   assert.deepEqual(sent[0].files, [`media/${id}.mp4`], 'the reference comes with the request; the canvas does not')
 
   // Footage still means an edit: no gallery once a video is in the box.

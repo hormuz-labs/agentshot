@@ -1,4 +1,4 @@
-// Manul's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
+// AgentShot's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
 import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
 import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
 import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
@@ -523,7 +523,7 @@ const haltFile = () => join(takeState(), 'halted')
 const run = promisify(execFile)
 
 /** The bsks a walkthrough's session can be on: the user's own Chrome (their bsk; walkthroughs film there by default), then
- *  Manul's browser. Each with the CLI and environment that reach its daemon. */
+ *  AgentShot's browser. Each with the CLI and environment that reach its daemon. */
 function takeBsks() {
   const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
   return [
@@ -544,7 +544,7 @@ async function markTab(session: string, nonce: string) {
   throw new Error(`No browser has a bsk session ${session}${why ? ` (${why})` : ''}. Start one (chrome-bsk session start --json) and pass its id.`)
 }
 
-/** Film the session's tab the best way available, with nothing for the user to set up: CDP screencast in Manul's browser,
+/** Film the session's tab the best way available, with nothing for the user to set up: CDP screencast in AgentShot's browser,
  *  or in the user's Chrome when its remote debugging is on; otherwise through their bsk's screenshots. */
 async function startTake(p: Project, o: { session: string }) {
   if (takes.get(p.dir)) throw new Error('A take is already recording in this project. Stop it first (stopping keeps what it recorded).')
@@ -554,9 +554,9 @@ async function startTake(p: Project, o: { session: string }) {
   let capture: Capture
   const viaBsk = () => new BskCapture({ bin: b.bin, env: b.env, session: o.session, yieldDir: yieldDir(), haltFile: haltFile() })
   if (b.browser === 'manul') {
-    if (!browser) throw new Error('Manul\'s browser is not running.')
+    if (!browser) throw new Error('AgentShot\'s browser is not running.')
     capture = new ScreencastCapture((await browser.film(nonce)).cdp)
-  } else if (!process.env.MANUL_CHROME_BSK_HOME && devToolsPortFiles().some(f => existsSync(f))) { // (tests stand Manul's browser in for Chrome)
+  } else if (!process.env.MANUL_CHROME_BSK_HOME && devToolsPortFiles().some(f => existsSync(f))) { // (tests stand AgentShot's browser in for Chrome)
     capture = await chromeCdp(nonce, { timeoutMs: 30_000 }).then(cdp => new ScreencastCapture(cdp) as Capture)
       .catch(e => { console.info(`walkthrough: filming through bsk (${(e as Error).message.slice(0, 120)})`); return viaBsk() })
   } else capture = viaBsk()
@@ -699,10 +699,10 @@ async function exportFilm(p: Project, req: ExportRequest, outAbs: string, by: 'u
       srt = outAbs.replace(/\.[^.]+$/, '.srt')
       await writeFile(srt, toSrt(t ? captionCues(t) : []))
     }
-    const tmpSrt = req.captions === 'burn' && srt ? join(p.dir, '.manul-captions.srt') : undefined
+    const tmpSrt = req.captions === 'burn' && srt ? join(p.dir, '.agentshot-captions.srt') : undefined
     if (tmpSrt) await writeFile(tmpSrt, await readFile(srt!, 'utf8'))
     const args = exportArgs({ preset: req.preset, fit: req.fit, input: join(p.dir, v.path), out: outAbs, source: info,
-      burnCaptions: tmpSrt ? '.manul-captions.srt' : undefined, fontsDir: join(LIB, 'fonts'), captionColor: req.captionColor })
+      burnCaptions: tmpSrt ? '.agentshot-captions.srt' : undefined, fontsDir: join(LIB, 'fonts'), captionColor: req.captionColor })
     try {
       await new Promise<void>((ok, fail) => {
         const ff = spawn(FFMPEG, ['-y', '-loglevel', 'error', '-progress', 'pipe:1', '-nostats', ...args], { cwd: p.dir, windowsHide: true })
@@ -829,7 +829,7 @@ function wire() {
   })
   ipcMain.handle('keys:list', () => keyStatus())
   ipcMain.handle('keys:set', (_e, name: string, value: string) => { setKey(name, value); agent?.keysChanged(); return keyStatus() })
-  // signing in to Manul: the browser, then back here with the person's Manul key (account.ts)
+  // signing in to AgentShot: the browser, then back here with the person's AgentShot key (account.ts)
   ipcMain.handle('account:status', () => accountStatus())
   ipcMain.handle('account:signIn', async () => {
     const s = await signIn(url => shell.openExternal(url))
@@ -949,7 +949,7 @@ function wire() {
     for (const rel of rels) { ensureProxy(p, rel); autoTranscribe(p, rel) }
     return rels
   })
-  // into the Trash, with what Manul made from them; files the film uses stay (with the reason)
+  // into the Trash, with what AgentShot made from them; files the film uses stay (with the reason)
   ipcMain.handle('project:removeFiles', async (_e, dir: string, rels: string[]) => {
     const p = projectOf(dir)
     const r = await Projects.removeFiles(p, rels, abs => shell.trashItem(abs))
@@ -1053,7 +1053,7 @@ function telemetryState(): TelemetryState {
   return { usage: !!c?.usage, crashes: !!c?.crashes, asked: !!c?.asked, available: { usage: telemetry.available, crashes: CRASHES_AVAILABLE } }
 }
 
-/** One 'agent run' per agent turn: the model, which of Manul's tools it called, how it ended. Never what was said. */
+/** One 'agent run' per agent turn: the model, which of AgentShot's tools it called, how it ended. Never what was said. */
 const runs = new Map<string, { started: number; tools: string[]; failed: boolean }>()
 function agentRuns(dir: string, e: BaseEvent) {
   if (e.type === 'RUN_FINISHED' || e.type === 'RUN_ERROR') {
@@ -1141,15 +1141,15 @@ const startup = app.whenReady().then(async () => {
   mkdirSync(yieldDir(), { recursive: true })
   try {
     agent = await startAgent({
-      // which browser the agent's bsk reaches: Manul's own (private daemon) unless the user chose their Chrome
+      // which browser the agent's bsk reaches: AgentShot's own (private daemon) unless the user chose their Chrome
       shellEnv: () => {
         const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
         const env = agentEnv(browserMode(), { bundledDir: dirname(BSK_BIN), privateHome: bskd!.home, userHome: homedir(), userBsk, path: process.env.PATH || '' })
-        // bsk and chrome-bsk are Manul's wrappers (bskScript); the bsk wrapper runs the setting's real one
+        // bsk and chrome-bsk are AgentShot's wrappers (bskScript); the bsk wrapper runs the setting's real one
         return { ...env, PATH: `${agentBin}${delimiter}${env.PATH}`, MANUL_BSK_BIN: browserMode() === 'chrome' ? userBsk || BSK_BIN : BSK_BIN }
       },
       browserPrompt: () => browserPrompt(browserMode()),
-      // the agent's files and shell stay in the project: Manul's resources read-only, and the browser CLI's own state
+      // the agent's files and shell stay in the project: AgentShot's resources read-only, and the browser CLI's own state
       fence: (() => {
         const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
         return { resources, extraRw: [privateHome(app.getPath('userData'), homedir()), userBskHome(homedir()), takeState()], extraRo: [agentBin, ...(userBsk ? [dirname(userBsk)] : [])] }
@@ -1228,7 +1228,7 @@ const startup = app.whenReady().then(async () => {
   }
 })
 
-/** Manul's browser: its private bsk daemon (own home, own port) and the bundled extension running against its tabs. */
+/** AgentShot's browser: its private bsk daemon (own home, own port) and the bundled extension running against its tabs. */
 async function startBrowser(resources: string) {
   bskd = new BskDaemon({ bin: BSK_BIN, home: privateHome(app.getPath('userData'), homedir()), log: s => { if (/ERROR/.test(s)) console.warn('[bsk]', s.trim().slice(0, 300)) } })
   try {

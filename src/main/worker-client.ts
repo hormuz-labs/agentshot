@@ -545,7 +545,7 @@ function parseError(buf: Buffer, fallback: string): string {
   return fallback
 }
 
-/** Periodically registers a local or pooled worker with the Manul account service so signed-in devices find it. */
+/** Periodically registers a local or pooled worker with the AgentShot account service so signed-in devices find it. */
 export function startWorkerHeartbeat(opts: {
   bridge: MobileBridge
   workerId: string

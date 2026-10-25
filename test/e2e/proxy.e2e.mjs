@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-proxy-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-proxy-'))
 execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=25:duration=3',
   '-c:v', 'prores_ks', '-profile:v', '1', join(tmp, 'master.mov')])
 const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'p') } })
@@ -24,7 +24,7 @@ try {
   await win.waitForSelector('text=Making a preview copy for smooth playback…', { timeout: 10000 }).catch(() => {}) // may already be done
   await win.waitForFunction(() => document.querySelector('video')?.src.includes('/proxies/'), null, { timeout: 60000 })
   await win.waitForFunction(() => (document.querySelector('video')?.readyState ?? 0) >= 2, null, { timeout: 20000 })
-  const p = await win.evaluate(() => window.manul.project.recent().then(r => window.manul.project.open(r[0].dir)))
+  const p = await win.evaluate(() => window.agentshot.project.recent().then(r => window.agentshot.project.open(r[0].dir)))
   assert.match(p.proxies['media/master.mov'], /^proxies\/master-[a-f0-9]{12}\.mp4$/)
   assert.ok(existsSync(join(p.dir, p.proxies['media/master.mov'])))
   assert.equal(await win.locator('[data-preview-status]').count(), 0, 'a ready preview has no stuck status overlay')
@@ -38,7 +38,7 @@ try {
     project.versions.push({ id: 'new-render', path: 'renders/big.mp4', title: 'New render', createdAt: Date.now(), by: 'agent' })
     writeFileSync(`${dir}/project.json`, JSON.stringify(project))
     // Close makes openProject load the on-disk media list, as after a restart or restored project.
-  await win.evaluate(async dir => { await window.manul.project.close(dir); await window.manul.project.open(dir); await window.manul.project.setCurrent(dir, 'new-render') }, dir)
+  await win.evaluate(async dir => { await window.agentshot.project.close(dir); await window.agentshot.project.open(dir); await window.agentshot.project.setCurrent(dir, 'new-render') }, dir)
   await win.waitForFunction(() => document.querySelector('video')?.src.includes('/proxies/big-'), null, { timeout: 60000 })
   await win.waitForFunction(() => !document.querySelector('[data-preview-status]'))
   // A failed prepare must show recovery, never an everlasting spinner or full-screen blocker.
@@ -46,7 +46,7 @@ try {
     ipcMain.removeHandler('preview:prepare')
     ipcMain.handle('preview:prepare', (_e, _dir, _media, retry) => retry ? { status: 'ready', progress: 1 } : { status: 'failed', error: 'Test encoder failure' })
   })
-  await win.evaluate(async dir => { const p = await window.manul.project.open(dir); await window.manul.project.setCurrent(dir, p.versions[0].id) }, dir)
+  await win.evaluate(async dir => { const p = await window.agentshot.project.open(dir); await window.agentshot.project.setCurrent(dir, p.versions[0].id) }, dir)
   await win.getByRole('button', { name: 'Retry preview', exact: true }).waitFor()
   assert.equal(await win.getByText('Making a preview copy for smooth playback…', { exact: true }).count(), 0)
   await win.getByRole('button', { name: 'Retry preview', exact: true }).click()

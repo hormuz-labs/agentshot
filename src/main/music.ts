@@ -1,5 +1,5 @@
 // The rhythm of a piece of music, so cuts, hits and speed changes can land on it: tempo, every beat, bars (downbeats),
-// the strongest hits and how the energy moves (intro, build, drop, break, outro). manul-beats (aubio) does the
+// the strongest hits and how the energy moves (intro, build, drop, break, outro). agentshot-beats (aubio) does the
 // tracking; here the beat grid is completed back to the start, snapped to the real onsets, and grouped into bars.
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -146,7 +146,7 @@ export async function analyzeMusic(projectDir: string, file: string, signal?: Ab
   const dir = join(projectDir, '.cache', 'music')
   const beatsFile = join(dir, `${basename(file).replace(/\.[^.]+$/, '')}-${key}.beats.json`)
   try { return { music: JSON.parse(await readFile(beatsFile, 'utf8')), beatsFile } } catch { /* track it */ }
-  const tmp = await mkdtemp(join(tmpdir(), 'manul-music-'))
+  const tmp = await mkdtemp(join(tmpdir(), 'agentshot-music-'))
   try {
     const wav = join(tmp, 'a.wav')
     await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-i', file, '-vn', '-ac', '1', '-ar', '44100', '-c:a', 'pcm_s16le', wav], tmp, signal)

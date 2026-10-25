@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const userData = mkdtempSync(join(tmpdir(), 'manul-test-'))
+const userData = mkdtempSync(join(tmpdir(), 'agentshot-test-'))
 export const app = {
   isPackaged: false,
   getPath: (name: string) => (name === 'userData' ? userData : join(userData, name)),

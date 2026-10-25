@@ -24,7 +24,7 @@ describe('groupWords', () => {
 })
 
 describe('whisper.cpp discovery', () => {
-  const root = mkdtempSync(join(tmpdir(), 'manul-whisper-'))
+  const root = mkdtempSync(join(tmpdir(), 'agentshot-whisper-'))
   const bin = join(root, 'bin', 'whisper-cli')
   const model = (dir: string, name: string, mb = 20) => {
     mkdirSync(dir, { recursive: true })
@@ -88,7 +88,7 @@ describe('Windows whisper discovery', () => {
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
   it('finds .exe files through Path without executing which or requiring a shell', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'manul whisper-'))
+    const root = mkdtempSync(join(tmpdir(), 'agentshot whisper-'))
     const bin = join(root, 'whisper-cli.exe')
     writeFileSync(bin, 'not an executable')
     mkdirSync(join(root, 'whisper-cpp.exe')) // a directory is not a binary

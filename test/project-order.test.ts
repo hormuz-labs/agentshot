@@ -34,7 +34,7 @@ describe('stable project order', () => {
 })
 
 describe('recent project creation dates', () => {
-  const root = mkdtempSync(join(tmpdir(), 'manul-project-order-'))
+  const root = mkdtempSync(join(tmpdir(), 'agentshot-project-order-'))
   const recentFile = join(app.getPath('userData'), 'recent.json')
   const fixture = (name: string, createdAt: number) => {
     const dir = join(root, name)

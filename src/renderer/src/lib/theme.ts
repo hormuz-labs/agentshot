@@ -17,13 +17,13 @@ const paint = (t: Theme) => document.documentElement.classList.toggle('dark', t 
 export function startTheme() {
   paint(getTheme())
   dark.addEventListener('change', () => { if (getTheme() === 'system') paint('system') })
-  window.manul.theme.set(getTheme())
+  window.agentshot.theme.set(getTheme())
 }
 
 export function setTheme(t: Theme) {
   try { localStorage.setItem(KEY, t) } catch { /* private mode */ }
   paint(t)
-  window.manul.theme.set(t)
+  window.agentshot.theme.set(t)
   listeners.forEach(fn => fn(t))
 }
 

@@ -11,7 +11,7 @@ const ff = (...args: string[]) => execFileSync(FFMPEG, ['-v', 'error', '-y', ...
 
 describe('walkthrough rendering with the real bundled FFmpeg', () => {
   it('condenses a take, paces it to its voices and draws zoom, cursor and ripples', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-walk-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-walk-'))
     try {
       // a 24 s take at 1280x720 (a 640x360 page at 2x; small, so it stays quick on slow CI machines): a page that changes
       // only when something is done (a click at 3 s, typing at 10 s)

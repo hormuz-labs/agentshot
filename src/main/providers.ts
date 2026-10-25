@@ -39,7 +39,7 @@ export function removeProvider(id: string) {
 
 export const ompAvailable = () => existsSync(OMP_MODELS)
 
-/** Copy omp's custom providers (and their keys, when omp reads them from a file) into Manul. */
+/** Copy omp's custom providers (and their keys, when omp reads them from a file) into AgentShot. */
 export function importOmp(path = OMP_MODELS) {
   const found = fromOmp(loadYaml(readFileSync(path, 'utf8')), homedir())
   const added: { id: string; name: string; models: number; key: boolean }[] = []

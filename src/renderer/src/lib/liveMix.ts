@@ -51,7 +51,7 @@ export function useLiveMix(source: MixSource | null, dir: string, mix: Mix, regi
     const tick = () => {
       const { mix: m, regions: r } = live.current
       const gains = previewGains(clock.currentTime, clock.duration || 0, m, duckEnvelope(r, m.music?.duckDb || 0))
-      ;(window as unknown as { __manulLiveMix?: object }).__manulLiveMix = { t: clock.currentTime, ...gains, musicPlaying: !g.audio.paused } // for tests and debugging
+      ;(window as unknown as { __agentshotLiveMix?: object }).__agentshotLiveMix = { t: clock.currentTime, ...gains, musicPlaying: !g.audio.paused } // for tests and debugging
       g.film.gain.setTargetAtTime(gains.film, g.ctx.currentTime, 0.02)
       g.music.gain.setTargetAtTime(gains.music, g.ctx.currentTime, 0.02)
       for (const [el, node] of g.pieces) node.gain.setTargetAtTime(source.gainOf ? source.gainOf(el) : 1, g.ctx.currentTime, 0.01)

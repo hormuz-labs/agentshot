@@ -8,7 +8,7 @@ import type { MediaInfo, ToolStatus } from '../shared/types'
 import { executableName, withToolPath } from './paths'
 
 const run = promisify(execFile)
-// Manul's own pinned ffmpeg/ffprobe (scripts/fetch-ffmpeg.mjs): resources/bin/<platform>-<arch>/ in development,
+// AgentShot's own pinned ffmpeg/ffprobe (scripts/fetch-ffmpeg.mjs): resources/bin/<platform>-<arch>/ in development,
 // <app>/Contents/Resources/bin/ when packaged (electron-builder extraResources).
 export const BIN = app.isPackaged
   ? join(process.resourcesPath, 'bin')
@@ -16,13 +16,13 @@ export const BIN = app.isPackaged
 
 export const FFMPEG = join(BIN, executableName('ffmpeg'))
 export const FFPROBE = join(BIN, executableName('ffprobe'))
-/** Manul's own whisper.cpp (scripts/build-whisper.sh); its model is downloaded on demand. */
+/** AgentShot's own whisper.cpp (scripts/build-whisper.sh); its model is downloaded on demand. */
 export const WHISPER_CLI = join(BIN, executableName('whisper-cli'))
-/** Manul's beat tracker on aubio (scripts/build-beats.sh): tempo, beats, onsets and energy of music, as JSON. */
-export const BEATS = join(BIN, executableName('manul-beats'))
+/** AgentShot's beat tracker on aubio (scripts/build-beats.sh): tempo, beats, onsets and energy of music, as JSON. */
+export const BEATS = join(BIN, executableName('agentshot-beats'))
 /** Model runners (scripts/build-ml.sh): who speaks when, and faces/objects in frames. */
-export const SPEAKERS = join(BIN, executableName('manul-speakers'))
-export const VISION = join(BIN, executableName('manul-vision'))
+export const SPEAKERS = join(BIN, executableName('agentshot-speakers'))
+export const VISION = join(BIN, executableName('agentshot-vision'))
 /** Their models (scripts/fetch-models.mjs). */
 export const MODELS_DIR = app.isPackaged ? join(process.resourcesPath, 'models') : join(import.meta.dirname, '../../resources/models')
 

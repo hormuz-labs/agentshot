@@ -1,4 +1,4 @@
-/* No Driver.js theme is imported. Layout, typography, controls and surfaces use Manul's own tokens. */
+/* No Driver.js theme is imported. Layout, typography, controls and surfaces use AgentShot's own tokens. */
 .driver-active .driver-overlay { pointer-events: none; }
 .driver-active * { pointer-events: none; }
 .driver-active .driver-active-element, .driver-active .driver-active-element *, .driver-popover, .driver-popover * { pointer-events: auto; }
@@ -6,7 +6,7 @@
 .driver-active-element-parent-no-scroll { overflow: hidden !important; }
 .driver-active.driver-no-scroll { overflow: hidden; }
 
-.driver-popover.manul-tour {
+.driver-popover.agentshot-tour {
   box-sizing: border-box;
   position: fixed;
   z-index: 10001;
@@ -26,36 +26,36 @@
   box-shadow: 0 16px 48px -12px var(--color-shade), 0 2px 8px var(--color-shade);
   -webkit-app-region: no-drag;
 }
-.manul-tour-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-right: 20px; color: var(--color-faint); font-size: 11.5px; }
-.manul-tour-heading img { flex-shrink: 0; }
-.manul-tour .driver-popover-title { margin: 0 0 8px; font-family: var(--font-serif); font-size: 24px; font-weight: 400; line-height: 1.2; letter-spacing: -.01em; }
-.manul-tour .driver-popover-description { color: var(--color-dim); font-size: 13px; line-height: 1.65; }
-.manul-tour .driver-popover-description p { margin: 10px 0 0; }
-.manul-tour kbd { display: inline-flex; align-items: center; border: 1px solid var(--color-line-strong); border-radius: 4px; background: var(--color-raised); padding: 0 4px; font-family: var(--font-sans); font-size: 11px; line-height: 1.6; color: var(--color-dim); }
-.manul-tour-example { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--color-line); border-radius: 8px; background: var(--color-surface); font-family: var(--font-serif); font-size: 15px; color: var(--color-fg); }
-.manul-tour-track { height: 3px; margin-top: 18px; overflow: hidden; border-radius: 3px; background: var(--color-line); }
-.manul-tour-track span { display: block; height: 100%; border-radius: inherit; background: var(--color-amber); }
-.manul-tour .driver-popover-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
-.manul-tour .driver-popover-progress-text { margin-left: auto; color: var(--color-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
-.manul-tour .driver-popover-navigation-btns { display: flex; align-items: center; gap: 6px; }
-.manul-tour button { cursor: pointer; font-family: var(--font-sans); transition: background-color .15s, color .15s; }
-.manul-tour .driver-popover-footer-btn, .manul-tour-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; padding: 4px 10px; border: 1px solid var(--color-line); border-radius: 8px; background: var(--color-raised); color: var(--color-fg); font-size: 12px; font-weight: 500; line-height: 1.4; }
-.manul-tour .driver-popover-footer-btn:hover, .manul-tour-action:hover { background: var(--color-hover); }
-.manul-tour .driver-popover-next-btn { border-color: transparent; background: var(--color-amber); color: var(--color-on-amber); }
-.manul-tour .driver-popover-next-btn:hover { background: var(--color-amber-hover); }
-.manul-tour .driver-popover-prev-btn { border-color: transparent; background: transparent; color: var(--color-dim); }
-.manul-tour .driver-popover-btn-disabled { opacity: .4; pointer-events: none; }
-.manul-tour-skip { padding: 4px 0; border: 0; background: transparent; color: var(--color-faint); font-size: 11.5px; }
-.manul-tour-skip:hover { color: var(--color-fg); }
-.manul-tour-action { margin-top: 12px; }
-.manul-tour .driver-popover-close-btn { position: absolute; top: 12px; right: 12px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-faint); font-size: 20px; line-height: 1; }
-.manul-tour .driver-popover-close-btn:hover { background: var(--color-hover); color: var(--color-fg); }
-.manul-tour button:focus-visible { outline: 2px solid var(--color-amber); outline-offset: 2px; }
-/* The spotlight supplies the connection; a stock speech-bubble arrow would compete with Manul's cards. */
-.manul-tour .driver-popover-arrow { display: none; }
-@keyframes manul-tour-in { from { opacity: 0; } to { opacity: 1; } }
-.driver-fade .driver-overlay, .driver-fade .manul-tour { animation: manul-tour-in 220ms ease-out; }
+.agentshot-tour-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-right: 20px; color: var(--color-faint); font-size: 11.5px; }
+.agentshot-tour-heading img { flex-shrink: 0; }
+.agentshot-tour .driver-popover-title { margin: 0 0 8px; font-family: var(--font-serif); font-size: 24px; font-weight: 400; line-height: 1.2; letter-spacing: -.01em; }
+.agentshot-tour .driver-popover-description { color: var(--color-dim); font-size: 13px; line-height: 1.65; }
+.agentshot-tour .driver-popover-description p { margin: 10px 0 0; }
+.agentshot-tour kbd { display: inline-flex; align-items: center; border: 1px solid var(--color-line-strong); border-radius: 4px; background: var(--color-raised); padding: 0 4px; font-family: var(--font-sans); font-size: 11px; line-height: 1.6; color: var(--color-dim); }
+.agentshot-tour-example { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--color-line); border-radius: 8px; background: var(--color-surface); font-family: var(--font-serif); font-size: 15px; color: var(--color-fg); }
+.agentshot-tour-track { height: 3px; margin-top: 18px; overflow: hidden; border-radius: 3px; background: var(--color-line); }
+.agentshot-tour-track span { display: block; height: 100%; border-radius: inherit; background: var(--color-amber); }
+.agentshot-tour .driver-popover-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.agentshot-tour .driver-popover-progress-text { margin-left: auto; color: var(--color-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.agentshot-tour .driver-popover-navigation-btns { display: flex; align-items: center; gap: 6px; }
+.agentshot-tour button { cursor: pointer; font-family: var(--font-sans); transition: background-color .15s, color .15s; }
+.agentshot-tour .driver-popover-footer-btn, .agentshot-tour-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; padding: 4px 10px; border: 1px solid var(--color-line); border-radius: 8px; background: var(--color-raised); color: var(--color-fg); font-size: 12px; font-weight: 500; line-height: 1.4; }
+.agentshot-tour .driver-popover-footer-btn:hover, .agentshot-tour-action:hover { background: var(--color-hover); }
+.agentshot-tour .driver-popover-next-btn { border-color: transparent; background: var(--color-amber); color: var(--color-on-amber); }
+.agentshot-tour .driver-popover-next-btn:hover { background: var(--color-amber-hover); }
+.agentshot-tour .driver-popover-prev-btn { border-color: transparent; background: transparent; color: var(--color-dim); }
+.agentshot-tour .driver-popover-btn-disabled { opacity: .4; pointer-events: none; }
+.agentshot-tour-skip { padding: 4px 0; border: 0; background: transparent; color: var(--color-faint); font-size: 11.5px; }
+.agentshot-tour-skip:hover { color: var(--color-fg); }
+.agentshot-tour-action { margin-top: 12px; }
+.agentshot-tour .driver-popover-close-btn { position: absolute; top: 12px; right: 12px; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-faint); font-size: 20px; line-height: 1; }
+.agentshot-tour .driver-popover-close-btn:hover { background: var(--color-hover); color: var(--color-fg); }
+.agentshot-tour button:focus-visible { outline: 2px solid var(--color-amber); outline-offset: 2px; }
+/* The spotlight supplies the connection; a stock speech-bubble arrow would compete with AgentShot's cards. */
+.agentshot-tour .driver-popover-arrow { display: none; }
+@keyframes agentshot-tour-in { from { opacity: 0; } to { opacity: 1; } }
+.driver-fade .driver-overlay, .driver-fade .agentshot-tour { animation: agentshot-tour-in 220ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  .driver-fade .driver-overlay, .driver-fade .manul-tour { animation: none; }
-  .manul-tour button { transition: none; }
+  .driver-fade .driver-overlay, .driver-fade .agentshot-tour { animation: none; }
+  .agentshot-tour button { transition: none; }
 }

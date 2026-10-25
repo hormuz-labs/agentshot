@@ -18,7 +18,7 @@ what you cannot find out: once, for the storyboard. Never offer menus of options
   once (with several Chromes, `--browser <id>`: the one you remembered for this user, else the first; say in the
   storyboard question which window it is, and `remember` the right one if they correct you). Use `chrome-bsk` for every
   command of it. Never stop it and start another to try another profile or start over. None (bsk isn't in their
-  Chrome) → plain `bsk`, Manul's own browser.
+  Chrome) → plain `bsk`, AgentShot's own browser.
 - Open the product where its users work (the app, a dashboard), not only its home page: a marketing page's "Get
   started" leads to sign-up even for someone signed in. Find the path for what the user wants shown, the buttons and
   fields on the way, what loads slowly, and what state the product must be in at the start. Learn it until you could do
@@ -39,7 +39,7 @@ what you cannot find out: once, for the storyboard. Never offer menus of options
 4–8 steps, one idea each, about 30–90 s in all unless the user said otherwise. For each: a short title, what is done,
 and the line said over it, written for the ear (about 2.5 words a second, 6–25 words; say why, not just what: "Invite
 your team so everyone sees the same board", not "Click Invite"). Step 1's line says what the product is for.
-Send it as a short numbered list, then `ask_user` with two options: **Film it** (description: "Manul films it in one
+Send it as a short numbered list, then `ask_user` with two options: **Film it** (description: "AgentShot films it in one
 take and voices it; the voice uses a little of your credit or key") and **Change something**. Film nothing before.
 If something essential is missing (an account, sample data), ask for it in that same question.
 

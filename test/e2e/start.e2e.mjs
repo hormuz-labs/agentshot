@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-start-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-start-'))
 const ffmpeg = (...args) => execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', ...args])
 for (const name of ['film', 'second']) ffmpeg('-f', 'lavfi', '-i', 'testsrc2=size=320x240:r=25:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, `${name}.mp4`))
 ffmpeg('-f', 'lavfi', '-i', 'color=c=red:s=200x100', '-frames:v', '1', join(tmp, 'photo.png'))
@@ -67,7 +67,7 @@ try {
   }, tmp)
 
   // Models unlocked by a custom provider are available in the new-project chatbox before a project exists.
-  await win.evaluate(() => window.manul.providers.save({ name: 'Startup Azure', baseUrl: 'http://localhost:1/v1', models: ['gpt-6.1-sol', 'gpt-5.6-terra'] }, 'sk-e2e-local-only'))
+  await win.evaluate(() => window.agentshot.providers.save({ name: 'Startup Azure', baseUrl: 'http://localhost:1/v1', models: ['gpt-6.1-sol', 'gpt-5.6-terra'] }, 'sk-e2e-local-only'))
   const startupModel = win.getByRole('button', { name: 'Choose model for new project', exact: true })
   await startupModel.waitFor()
   assert.equal(await startupModel.evaluate(el => el.parentElement.parentElement.contains(document.querySelector('[data-tour="start-prompt"]'))), true, 'picker belongs to the new-project chatbox')
@@ -81,7 +81,7 @@ try {
   await win.getByRole('button', { name: /GPT-6.1 Sol Startup Azure/ }).click()
   await search.waitFor({ state: 'detached' })
   assert.equal(await startupModel.innerText(), 'GPT-6.1 Sol')
-  assert.equal((await win.evaluate(() => window.manul.tabs.get())).active, null, 'choosing a draft model does not create/open a project')
+  assert.equal((await win.evaluate(() => window.agentshot.tabs.get())).active, null, 'choosing a draft model does not create/open a project')
   await startupModel.click()
   assert.equal(await search.inputValue(), '', 'search resets after selection')
   assert.equal(await win.getByRole('button', { name: /GPT-6.1 Sol Startup Azure/ }).getAttribute('aria-pressed'), 'true')
@@ -121,8 +121,8 @@ try {
   await win.locator('[data-tour="start-prompt"]').fill('Combine these files into a film')
   await win.getByRole('button', { name: 'Start', exact: true }).click()
   await win.waitForSelector('[data-project-title]')
-  await win.waitForFunction(async () => (await window.manul.tabs.get()).active)
-  const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
+  await win.waitForFunction(async () => (await window.agentshot.tabs.get()).active)
+  const dir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
   const p = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
   const expected = ['media/photo.png', 'media/song.mp3', 'media/film.mp4', 'media/second.mp4', 'media/notes.md']
   assert.deepEqual(Object.keys(p.files), expected, 'the complete batch is persisted')
@@ -174,7 +174,7 @@ try {
   await draft.getByRole('button', { name: 'Remove film.mp4', exact: true }).waitFor({ state: 'detached' })
   await draft.getByRole('button', { name: 'Remove second.mp4', exact: true }).click()
   await draft.locator('textarea[placeholder="Ask for an edit, or @ a file, version or clip…"]').waitFor()
-  const automaticDir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
+  const automaticDir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
   assert.equal(JSON.parse(readFileSync(join(automaticDir, 'project.json'), 'utf8')).model, undefined, 'automatic choice leaves no explicit model override')
   assert.equal((await app.evaluate(() => globalThis.__sent)).length, 2, 'starting without a prompt does not send a request')
 
@@ -188,7 +188,7 @@ try {
     await win.locator('[data-tour="start-prompt"]').fill(prompt)
     await win.getByRole('button', { name: 'Start', exact: true }).click()
     await win.waitForFunction(() => !document.querySelector('[data-tour="start-prompt"]'))
-    const createdDir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
+    const createdDir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
     const created = JSON.parse(readFileSync(join(createdDir, 'project.json'), 'utf8'))
     assert.ok(created[kind], `created a ${kind} project`)
     assert.deepEqual(created.model, { provider: 'startup-azure', modelId: 'gpt-6.1-sol' })

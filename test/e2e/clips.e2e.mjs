@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-e2e-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-e2e-'))
 const video = join(tmp, 'src.mp4')
 execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=640x360:r=30:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video])
 
@@ -28,11 +28,11 @@ try {
   const win = await app.firstWindow()
   await win.waitForSelector('text=What are we making?')
   await dismissOnboarding(win)
-  const p = await win.evaluate(f => window.manul.project.create(f), video)
+  const p = await win.evaluate(f => window.agentshot.project.create(f), video)
   cpSync(join(root, 'test', 'fixtures', 'clips', 'slide'), join(p.dir, 'clips', 'slide'), { recursive: true })
 
   const t0 = Date.now()
-  const r = await win.evaluate(dir => window.manul.clips.render(dir, 'slide'), p.dir)
+  const r = await win.evaluate(dir => window.agentshot.clips.render(dir, 'slide'), p.dir)
   console.log(`rendered ${r.frames} frames in ${Date.now() - t0} ms`)
   const out = join(p.dir, r.video)
   const info = JSON.parse(execFileSync(bundledBinary('ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', out], { encoding: 'utf8' }))
@@ -54,16 +54,16 @@ try {
   assert.ok(r.poster.endsWith('.jpg'))
   // a clip cannot reach the network
   cpSync(join(root, 'test', 'fixtures', 'clips', 'net'), join(p.dir, 'clips', 'net'), { recursive: true })
-  const n = await win.evaluate(dir => window.manul.clips.render(dir, 'net'), p.dir)
+  const n = await win.evaluate(dir => window.agentshot.clips.render(dir, 'net'), p.dir)
   const px = pixel(join(p.dir, n.video), 0.1, 32, 32)
   assert.ok(px[1] > 200 && px[0] < 60, `network must be blocked (green), got ${px}`)
   // a bare snippet becomes a clip in the film: save → insert at 1 s → proposal of 2 + 1.5 s → accept keeps the clip
   const snippet = `<div data-manul-id="title" style="position:absolute;left:0;top:0;width:640px;height:360px;background:#0f0"></div>
     <script>gsap.from('[data-manul-id=title]', { opacity: 0, duration: 0.3 })</script>`
-  const saved = await win.evaluate(([dir, html]) => window.manul.clips.save(dir, 'card', 'Card', html, 1.5), [p.dir, snippet])
+  const saved = await win.evaluate(([dir, html]) => window.agentshot.clips.save(dir, 'card', 'Card', html, 1.5), [p.dir, snippet])
   assert.equal(saved.frames, 45)
-  const vid = await win.evaluate(dir => window.manul.clips.insert(dir, 'card', 1, 'Card added'), p.dir)
-  const after = await win.evaluate(dir => window.manul.project.open(dir), p.dir)
+  const vid = await win.evaluate(dir => window.agentshot.clips.insert(dir, 'card', 1, 'Card added'), p.dir)
+  const after = await win.evaluate(dir => window.agentshot.project.open(dir), p.dir)
   const prop = after.versions.find(v => v.id === vid)
   assert.equal(after.proposal, vid)
   assert.deepEqual(prop.timeline.items.map(i => i.kind), ['media', 'clip', 'media'])
@@ -73,16 +73,16 @@ try {
   assert.ok(pixel(film, 0.5, 320, 180)[2] > 180, 'before the clip: the blue source') // blue
   assert.ok(pixel(film, 2.0, 320, 180)[1] > 180, 'inside the clip: green card')
   assert.ok(pixel(film, 3.0, 320, 180)[2] > 180, 'after the clip: the source again')
-  const accepted = await win.evaluate(dir => window.manul.project.decide(dir, true), p.dir)
+  const accepted = await win.evaluate(dir => window.agentshot.project.decide(dir, true), p.dir)
   assert.deepEqual(accepted.timeline.items.map(i => i.kind), ['media', 'clip', 'media'])
   // an overlay clip: transparent, laid over the footage for a while (lower thirds, captions)
   const lower = `<div data-manul-id="name" style="position:absolute;left:20px;top:280px;width:300px;height:60px;background:#f00"></div>
     <script>gsap.from('[data-manul-id=name]', { x: -40, duration: 0.2 })</script>`
-  const ov = await win.evaluate(([dir, html]) => window.manul.clips.save(dir, 'lower', 'Name', html, 1, true), [p.dir, lower])
+  const ov = await win.evaluate(([dir, html]) => window.agentshot.clips.save(dir, 'lower', 'Name', html, 1, true), [p.dir, lower])
   assert.ok(ov.video.endsWith('overlay.mov'), ov.video)
-  const before = await win.evaluate(dir => window.manul.project.open(dir), p.dir)
-  const ovVid = await win.evaluate(dir => window.manul.clips.overlay(dir, 'lower', 0.5, 'Name added'), p.dir)
-  const withOv = (await win.evaluate(dir => window.manul.project.open(dir), p.dir)).versions.find(v => v.id === ovVid)
+  const before = await win.evaluate(dir => window.agentshot.project.open(dir), p.dir)
+  const ovVid = await win.evaluate(dir => window.agentshot.clips.overlay(dir, 'lower', 0.5, 'Name added'), p.dir)
+  const withOv = (await win.evaluate(dir => window.agentshot.project.open(dir), p.dir)).versions.find(v => v.id === ovVid)
   const ovFilm = join(p.dir, withOv.path)
   const ovDur = Number(JSON.parse(execFileSync(bundledBinary('ffprobe'), ['-v', 'error', '-print_format', 'json', '-show_format', ovFilm], { encoding: 'utf8' })).format.duration)
   const baseDur = (before.timeline.items).reduce((s, i) => s + (i.kind === 'media' ? i.out - i.in : i.dur), 0)
@@ -90,7 +90,7 @@ try {
   assert.ok(pixel(ovFilm, 0.8, 100, 300)[0] > 180, `overlay shows during its time: ${pixel(ovFilm, 0.8, 100, 300)}`)
   assert.ok(pixel(ovFilm, 0.8, 500, 100)[2] > 180, 'the footage shows through the transparent part')
   assert.ok(pixel(ovFilm, 0.2, 100, 300)[0] < 80, 'not before its start')
-  await win.evaluate(dir => window.manul.project.decide(dir, false), p.dir)
+  await win.evaluate(dir => window.agentshot.project.decide(dir, false), p.dir)
 
   // the clip editor: open the project, select the clip on the timeline strip, drag its element, click it
   await win.reload()
@@ -100,7 +100,7 @@ try {
   const handle = win.locator('div.cursor-move:has(span:text-is("title"))')
   await handle.waitFor({ timeout: 10000 })
   const b = await handle.boundingBox()
-  const versionsBefore = (await win.evaluate(dir => window.manul.project.open(dir), p.dir)).versions.length
+  const versionsBefore = (await win.evaluate(dir => window.agentshot.project.open(dir), p.dir)).versions.length
   // Use the element's interior: its top-left can be covered by the editor toolbar.
   const dragX = b.x + b.width / 2, dragY = b.y + b.height / 2
   await win.mouse.move(dragX, dragY)
@@ -111,7 +111,7 @@ try {
   for (let i = 0; i < 60 && !/translate:/.test(html); i++) { await win.waitForTimeout(250); html = readFileSync(join(p.dir, 'clips', 'card', 'clip.html'), 'utf8') }
   assert.match(html, /data-manul-id="title"[^>]*translate: \d+px 0px/, 'the drag is written into the clip')
   let moved
-  for (let i = 0; i < 80; i++) { moved = await win.evaluate(dir => window.manul.project.open(dir), p.dir); if (moved.versions.length > versionsBefore) break; await win.waitForTimeout(250) }
+  for (let i = 0; i < 80; i++) { moved = await win.evaluate(dir => window.agentshot.project.open(dir), p.dir); if (moved.versions.length > versionsBefore) break; await win.waitForTimeout(250) }
   assert.equal(moved.versions.length, versionsBefore + 1, 'the film was re-rendered')
   assert.equal(moved.current, moved.versions.at(-1).id, 'the user\'s own edit is applied, not proposed')
   await win.screenshot({ path: join(tmp, 'editor.png') })
@@ -127,7 +127,7 @@ try {
   // even when it resolves to false, so it does not wait for the history commit.
   let log = []
   for (let i = 0; i < 60; i++) {
-    log = await win.evaluate(dir => window.manul.history.log(dir), p.dir)
+    log = await win.evaluate(dir => window.agentshot.history.log(dir), p.dir)
     if (log[0]?.message === 'Moved title in card') break
     await win.waitForTimeout(250)
   }
@@ -135,16 +135,16 @@ try {
   assert.equal(msgs[0], 'Moved title in card')
   for (const m of ['Imported src.mp4', 'Made clip “Card”', 'Proposed “Card added”', 'Accepted “Card added”']) assert.ok(msgs.includes(m), `history has ${m}: ${msgs}`)
   const beforeDrag = log[1]
-  const restored = await win.evaluate(([dir, id]) => window.manul.history.restore(dir, id), [p.dir, beforeDrag.id])
+  const restored = await win.evaluate(([dir, id]) => window.agentshot.history.restore(dir, id), [p.dir, beforeDrag.id])
   assert.doesNotMatch(readFileSync(join(p.dir, 'clips', 'card', 'clip.html'), 'utf8'), /translate:/, 'the move is undone in the clip')
   assert.notEqual(restored.current, moved.current, 'the version from before the drag is back')
-  assert.match((await win.evaluate(dir => window.manul.history.log(dir), p.dir))[0].message, /^Restored/)
+  assert.match((await win.evaluate(dir => window.agentshot.history.log(dir), p.dir))[0].message, /^Restored/)
 
   // an overlay over an edit that isn't rendered yet: its HTML plays live over the pieces, only during its time
   await win.keyboard.press('Escape') // close the clip editor
-  await win.evaluate(dir => window.manul.clips.overlay(dir, 'lower', 0.5, 'Name added'), p.dir)
-  await win.evaluate(dir => window.manul.project.decide(dir, true), p.dir)
-  await win.evaluate(dir => window.manul.timeline.edit(dir, [{ op: 'split', at: 0.3 }]), p.dir)
+  await win.evaluate(dir => window.agentshot.clips.overlay(dir, 'lower', 0.5, 'Name added'), p.dir)
+  await win.evaluate(dir => window.agentshot.project.decide(dir, true), p.dir)
+  await win.evaluate(dir => window.agentshot.timeline.edit(dir, [{ op: 'split', at: 0.3 }]), p.dir)
   const frame = win.locator('iframe[data-overlay]')
   await frame.waitFor({ state: 'attached' })
   const seekTo = t => app.evaluate(({ BrowserWindow }, [d, t]) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().endsWith('index.html')).webContents.send('seek', d, t), [p.dir, t])

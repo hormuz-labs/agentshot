@@ -11,7 +11,7 @@ import type { Project, Transcript } from '../src/shared/types'
 
 it.skipIf(!process.env.MANUL_DEMO_REPRO)('composes the recorded demo without shortening its master timeline', async () => {
   const original = JSON.parse(readFileSync(join(process.env.MANUL_DEMO_REPRO!, 'project.json'), 'utf8')) as Project
-  const dir = mkdtempSync(join(tmpdir(), 'manul-demo-repro-'))
+  const dir = mkdtempSync(join(tmpdir(), 'agentshot-demo-repro-'))
   try {
     const p = { ...original, dir }
     mkdirSync(join(dir, 'media'))

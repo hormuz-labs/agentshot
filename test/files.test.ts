@@ -12,7 +12,7 @@ import { parseSubtitles } from '../src/shared/subtitles'
 import { chipGroups, fileRows } from '../src/renderer/src/views/FilesPanel'
 import type { FileInfo } from '../src/shared/types'
 
-const root = mkdtempSync(join(tmpdir(), 'manul-files-'))
+const root = mkdtempSync(join(tmpdir(), 'agentshot-files-'))
 process.env.MANUL_PROJECTS = join(root, 'projects')
 const Projects = await import('../src/main/projects')
 const src = join(root, 'src')
@@ -156,8 +156,8 @@ describe('adding files to a project', () => {
 
     expect((await add('warm.cube'))[1].summary).toBe('3D LUT, 2 points a side, for lut3d: “Warm look”')
     expect((await add('shots.csv'))[1].summary).toBe('CSV table, 2 rows; columns: “shot,scene,description”')
-    expect((await add('notes.xyz'))[1]).toMatchObject({ kind: 'other', summary: '.xyz file (1 KB) Manul doesn\'t know how to use' })
-    expect((await add('brief.pdf'))[1]).toMatchObject({ kind: 'other', summary: '.pdf file (1 KB) Manul doesn\'t know how to use' })
+    expect((await add('notes.xyz'))[1]).toMatchObject({ kind: 'other', summary: '.xyz file (1 KB) AgentShot doesn\'t know how to use' })
+    expect((await add('brief.pdf'))[1]).toMatchObject({ kind: 'other', summary: '.pdf file (1 KB) AgentShot doesn\'t know how to use' })
     // the same name twice gets a free one
     expect((await add('logo.png'))[0]).toBe('media/logo-2.png')
   })
@@ -220,7 +220,7 @@ describe('adding files to a project', () => {
   })
 
   it("won't start a project from something that isn't a video", async () => {
-    await expect(Projects.createFromFile(join(src, 'clip.fr.srt'))).rejects.toThrow(/isn't a video Manul can play/)
+    await expect(Projects.createFromFile(join(src, 'clip.fr.srt'))).rejects.toThrow(/isn't a video AgentShot can play/)
   })
 })
 

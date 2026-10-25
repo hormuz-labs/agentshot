@@ -1,6 +1,6 @@
-// Fetch Manul's pinned BrowserSkill (MIT, github.com/Tencent/BrowserSkill): the bsk CLI into resources/bin/<platform>-<arch>/
-// and the Chrome extension into resources/bsk-ext/. Manul runs both privately (its own daemon home and port; the
-// extension runs inside Manul's embedded browser), so a bsk the user installed in Chrome is never touched.
+// Fetch AgentShot's pinned BrowserSkill (MIT, github.com/Tencent/BrowserSkill): the bsk CLI into resources/bin/<platform>-<arch>/
+// and the Chrome extension into resources/bsk-ext/. AgentShot runs both privately (its own daemon home and port; the
+// extension runs inside AgentShot's embedded browser), so a bsk the user installed in Chrome is never touched.
 // Every download is SHA-256 checked against the hashes pinned here. Runs on `npm install`; packaging uses --all.
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -43,7 +43,7 @@ async function fetchCli(target) {
     console.log(`  ${target}/bsk ${CLI.version}`)
     return
   }
-  const tmp = mkdtempSync(join(tmpdir(), 'manul-bsk-'))
+  const tmp = mkdtempSync(join(tmpdir(), 'agentshot-bsk-'))
   writeFileSync(join(tmp, 'bsk.tar.gz'), await download(b.url, b.sha256))
   execFileSync('tar', ['xzf', join(tmp, 'bsk.tar.gz'), '-C', tmp])
   rmSync(bin, { force: true })

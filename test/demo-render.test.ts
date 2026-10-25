@@ -14,7 +14,7 @@ import type { Project, Transcript } from '../src/shared/types'
 const ff = (...args: string[]) => execFileSync(FFMPEG, ['-v', 'error', '-y', ...args])
 describe('demo rendering with the real bundled FFmpeg', () => {
   it('extracts and syncs actual media in a worker, then uses the cache', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-demo-sync-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-demo-sync-'))
     try {
       ff('-f', 'lavfi', '-i', "anoisesrc=seed=42:d=24:r=8000,volume='0.2+0.15*sin(1.3*t)+0.05*sin(3.7*t)':eval=frame", join(dir, 'screen.wav'))
       ff('-ss', '2.13', '-t', '18', '-i', join(dir, 'screen.wav'), join(dir, 'camera.wav'))
@@ -27,7 +27,7 @@ describe('demo rendering with the real bundled FFmpeg', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   it('matches a real spoken narration after lossy encoding and a different microphone gain', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-demo-speech-sync-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-demo-speech-sync-'))
     try {
       const speech = join(import.meta.dirname, 'fixtures', 'speech', 'narration-music.flac')
       ff('-t', '45', '-i', speech, '-c:a', 'aac', join(dir, 'screen.m4a'))
@@ -38,7 +38,7 @@ describe('demo rendering with the real bundled FFmpeg', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   it('matches shared audio on video timeline timestamps when the screen microphone starts late', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-demo-delayed-sync-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-demo-delayed-sync-'))
     try {
       ff('-f', 'lavfi', '-i', 'color=c=blue:s=320x200:r=25:d=24', '-itsoffset', '0.33', '-f', 'lavfi', '-i', "anoisesrc=seed=42:d=23:r=16000,volume='0.2+0.15*sin(1.3*t)+0.05*sin(3.7*t)':eval=frame", '-c:v', 'libx264', '-c:a', 'aac', join(dir, 'screen.mp4'))
       ff('-ss', '2.13', '-t', '18', '-i', join(dir, 'screen.mp4'), '-c:v', 'libx264', '-c:a', 'aac', join(dir, 'camera.mp4'))
@@ -48,7 +48,7 @@ describe('demo rendering with the real bundled FFmpeg', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   it.each(['circle', 'square', 'rectangle', 'rounded'] as CameraShape[])('renders %s without freezing a camera before or after coverage, including ripple cuts', async shape => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-demo-render-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-demo-render-'))
     try {
       ff('-f', 'lavfi', '-i', 'color=c=blue:s=320x180:r=25:d=6', '-f', 'lavfi', '-i', 'sine=f=440:d=6', '-c:v', 'libx264', '-c:a', 'aac', '-shortest', join(dir, 'screen.mp4'))
       ff('-f', 'lavfi', '-i', "color=c=red:s=160x120:r=30:d=3,drawbox=x=0:y=0:w=iw:h=ih:color=lime:t=fill:enable='gte(t,1.5)'", '-f', 'lavfi', '-i', 'sine=f=880:d=3', '-c:v', 'libx264', '-c:a', 'aac', '-shortest', join(dir, 'camera.mp4'))
@@ -90,7 +90,7 @@ describe('demo rendering with the real bundled FFmpeg', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   it('detects a local screen change but not a static screen', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-demo-activity-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-demo-activity-'))
     try {
       ff('-f', 'lavfi', '-i', "color=c=white:s=480x270:r=25:d=4,drawbox=x=100:y=100:w=80:h=30:color=black:t=fill:enable='between(t,1,2)'", '-c:v', 'libx264', join(dir, 'screen.mp4'))
       const a = await analyzeScreen(dir, 'screen.mp4')
@@ -99,7 +99,7 @@ describe('demo rendering with the real bundled FFmpeg', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   it('keeps segment durations and microphone start offsets for variable-rate screen recordings', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-demo-delayed-audio-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-demo-delayed-audio-'))
     try {
       ff('-f', 'lavfi', '-i', "testsrc2=s=320x200:r=30:d=8,select='not(mod(n,3))',setpts=PTS", '-itsoffset', '0.332687', '-f', 'lavfi', '-i', 'sine=f=440:d=7.6', '-fps_mode', 'vfr', '-c:v', 'libx264', '-c:a', 'aac', join(dir, 'screen.mov'))
       const info = await probe(join(dir, 'screen.mov'))
@@ -118,7 +118,7 @@ describe('demo rendering with the real bundled FFmpeg', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   it('plans cleanup on common source times while preserving static narration and silent UI activity', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-demo-plan-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-demo-plan-'))
     try {
       ff('-f', 'lavfi', '-i', "color=c=white:s=480x270:r=25:d=14,drawbox=x=100:y=100:w=80:h=30:color=black:t=fill:enable='between(t,9,10)'", '-f', 'lavfi', '-i', "sine=f=500:d=14,volume=enable='lt(t,3)+gt(t,5)':volume=0", '-c:v', 'libx264', '-c:a', 'aac', '-shortest', join(dir, 'screen.mp4'))
       ff('-f', 'lavfi', '-i', 'color=c=red:s=160x120:r=25:d=10', '-c:v', 'libx264', join(dir, 'camera.mp4'))

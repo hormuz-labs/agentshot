@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-playback-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-playback-'))
 const source = join(tmp, 'footage.mp4')
 execFileSync(bundledBinary('ffmpeg'), [
   '-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=red:s=640x360:r=60:d=2',
@@ -28,8 +28,8 @@ try {
   await win.click('[data-tour="import"]')
   await win.getByRole('button', { name: 'Start', exact: true }).click()
   await win.waitForFunction(() => document.querySelector('video')?.readyState >= 2)
-  await win.waitForFunction(async () => (await window.manul.tabs.get()).active)
-  const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
+  await win.waitForFunction(async () => (await window.agentshot.tabs.get()).active)
+  const dir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
   const framesReady = () => win.waitForFunction(() => {
     const images = [...document.querySelectorAll('[data-testid="timeline-filmstrip"] img')]
     return images.length >= 4 && images.every(img => img.complete && img.naturalWidth > 0)
@@ -80,14 +80,14 @@ try {
   p.versions.push({ id: 'proposal', path: 'renders/proposed.mp4', title: 'Proposed cut', createdAt: Date.now(), by: 'agent' })
   p.proposal = 'proposal'
   writeFileSync(join(dir, 'project.json'), JSON.stringify(p))
-  await win.evaluate(async dir => { await window.manul.project.close(dir); await window.manul.project.open(dir) }, dir)
+  await win.evaluate(async dir => { await window.agentshot.project.close(dir); await window.agentshot.project.open(dir) }, dir)
   await app.evaluate(({ BrowserWindow }, p) => BrowserWindow.getAllWindows().find(w => w.isVisible()).webContents.send('project', p), p)
   await win.waitForFunction(() => document.querySelector('[data-tour="picture"] video')?.src.includes('proposed.mp4'))
   await win.waitForFunction(() => document.querySelector('[data-tour="picture"] video')?.readyState >= 2)
   await checkPlayback('Proposal without a stored timeline')
 
-  await win.evaluate(dir => window.manul.project.decide(dir, false), dir)
-  await win.evaluate(dir => window.manul.timeline.edit(dir, [{ op: 'split', at: 2 }, { op: 'split', at: 4 }]), dir)
+  await win.evaluate(dir => window.agentshot.project.decide(dir, false), dir)
+  await win.evaluate(dir => window.agentshot.timeline.edit(dir, [{ op: 'split', at: 2 }, { op: 'split', at: 4 }]), dir)
   await win.waitForFunction(() => document.querySelectorAll('video[data-edit-player]').length === 2)
   await win.waitForFunction(() => [...document.querySelectorAll('video[data-edit-player]')].every(v => v.readyState >= 2))
   await win.locator('video[data-edit-player="0"]').evaluate(v => v.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })))

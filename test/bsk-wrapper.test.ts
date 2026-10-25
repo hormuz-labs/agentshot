@@ -9,7 +9,7 @@ import { bskScript, HALTED } from '../src/main/bsk'
 
 let dir: string
 const setup = (fake: string) => {
-  dir = mkdtempSync(join(tmpdir(), 'manul-wrap-'))
+  dir = mkdtempSync(join(tmpdir(), 'agentshot-wrap-'))
   writeFileSync(join(dir, 'fake-bsk'), `#!/bin/sh\n${fake}\n`); chmodSync(join(dir, 'fake-bsk'), 0o755)
   writeFileSync(join(dir, 'bsk'), bskScript({ name: 'bsk', stateDir: join(dir, 'state') })); chmodSync(join(dir, 'bsk'), 0o755)
   writeFileSync(join(dir, 'chrome-bsk'), bskScript({ name: 'chrome-bsk', bin: join(dir, 'fake-bsk'), bskHome: join(dir, 'home'), stateDir: join(dir, 'state') })); chmodSync(join(dir, 'chrome-bsk'), 0o755)
@@ -39,7 +39,7 @@ describe.skipIf(process.platform === 'win32')('the agent\'s bsk wrappers', () =>
     }
     expect(run('bsk', 'session', 'start', '--json').code).toBe(5) // no starting over in another window
     expect(run('chrome-bsk', 'session', 'stop', 'a').out).toBe('ok\n')
-    rmSync(join(dir, 'state', 'halted')) // what Manul does when the user sends a message
+    rmSync(join(dir, 'state', 'halted')) // what AgentShot does when the user sends a message
     expect(run('chrome-bsk', 'navigate', 'https://example.com', '--session', 'a').out).toBe('ok\n')
   })
 

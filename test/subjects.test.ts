@@ -45,7 +45,7 @@ describe('crop paths', () => {
   })
 
   let dir: string
-  beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), 'manul-subjects-')) })
+  beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), 'agentshot-subjects-')) })
   afterAll(async () => { await rm(dir, { recursive: true, force: true }) })
 
   it('the crop filter is valid ffmpeg and makes the vertical frame', async () => {
@@ -60,7 +60,7 @@ describe('crop paths', () => {
 describe.skipIf(process.platform === 'win32')('the vision runner', () => {
   let dir: string
   beforeAll(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'manul-vision-'))
+    dir = await mkdtemp(join(tmpdir(), 'agentshot-vision-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=1280x720:r=25:d=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'a.mp4')])
   })
   afterAll(async () => { await rm(dir, { recursive: true, force: true }) })

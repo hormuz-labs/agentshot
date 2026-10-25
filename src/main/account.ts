@@ -1,6 +1,6 @@
-// Signing in to Manul (Settings → Keys → Manul key): Clerk in the system browser (OAuth with PKCE, Manul being a public
-// client), back to a one-shot server on 127.0.0.1, then Manul's account service swaps the sign-in for the person's
-// Manul key (account/src/index.ts), kept in the keychain like any key. Who's signed in (their email, and the key's id
+// Signing in to AgentShot (Settings → Keys → AgentShot key): Clerk in the system browser (OAuth with PKCE, AgentShot being a public
+// client), back to a one-shot server on 127.0.0.1, then AgentShot's account service swaps the sign-in for the person's
+// AgentShot key (account/src/index.ts), kept in the keychain like any key. Who's signed in (their email, and the key's id
 // for asking about credits) is in config.json. Credits and plans are Pitch's (one wallet for both apps): a plan or a
 // top-up is a Dodo Payments checkout in the browser, managing it is Dodo's billing page.
 import { createServer, type Server } from 'node:http'
@@ -11,7 +11,7 @@ import { setKey } from './keys'
 import type { AccountStatus, Balance } from '../shared/types'
 import { brandPage } from '../shared/brand-page'
 
-/** Clerk's Frontend API (the OAuth issuer, production), the "Manul desktop" OAuth app's client id (public, PKCE), and the
+/** Clerk's Frontend API (the OAuth issuer, production), the "AgentShot desktop" OAuth app's client id (public, PKCE), and the
  *  account service. For the development instance: MANUL_AUTH_ISSUER=https://good-wildcat-5360.clerk.accounts.dev
  *  MANUL_AUTH_CLIENT_ID=5E3y3JppmCuVr1UD (and an account service pointed at it). */
 export const AUTH = {
@@ -88,8 +88,8 @@ async function asKeyRaw(path: string, init: RequestInit = {}) {
 }
 const asKey = async (path: string, init: RequestInit = {}) => await (await asKeyRaw(path, init)).json().catch(() => ({})) as Record<string, unknown>
 
-/** Voice or music made by Manul (it picks the vendor), paid with the signed-in person's credits. */
-export async function manulMedia(kind: 'voice' | 'music', body: unknown, signal?: AbortSignal) {
+/** Voice or music made by AgentShot (it picks the vendor), paid with the signed-in person's credits. */
+export async function agentshotMedia(kind: 'voice' | 'music', body: unknown, signal?: AbortSignal) {
   const r = await asKeyRaw(`/v1/${kind}`, { method: 'POST', body: JSON.stringify(body), signal })
   const type = r.headers.get('content-type') || ''
   return { data: new Uint8Array(await r.arrayBuffer()), ext: /wav/.test(type) ? 'wav' : 'mp3', cost: Number(r.headers.get('x-manul-cost')) || 0 }

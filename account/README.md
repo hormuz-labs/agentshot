@@ -31,8 +31,8 @@ App ◀── { key, email }  (key into the keychain, email shown in Settings)
 - **Starting credit:** a new person starts with **$2** (`FREE_CREDIT`). This is their key's budget in Bifrost, with a
   `100Y` reset period so it never resets. Bifrost stops the key with `402 budget_exceeded` when it runs out, and the
   app then says to add credit.
-- **Adding credit:** Settings → Keys → Manul key → **Add credit** calls `/v1/checkout`, which opens a Dodo Payments
-  checkout for the **Manul credit** product. It's a one-time product where the buyer picks the amount ($5 minimum, $10
+- **Adding credit:** Settings → Keys → AgentShot key → **Add credit** calls `/v1/checkout`, which opens a Dodo Payments
+  checkout for the **AgentShot credit** product. It's a one-time product where the buyer picks the amount ($5 minimum, $10
   suggested), with tax added on top.
 - **Applying a payment:** Dodo's signed `payment.succeeded` webhook to `/v1/dodo/webhook` raises the budget by the price
   before tax. The budget keeps what was already used. Each payment ID is applied once and recorded in the Clerk
@@ -53,7 +53,7 @@ as the key, return the audio. The request shapes and the vendor calls are in [sr
 app also uses with a person's own keys. The service picks the vendor and model from media.json (`MEDIA_CONFIG`; see
 [gateway/README.md → Voice and music](../gateway/README.md#voice-and-music)). It turns the request away when the
 credit left doesn't cover the price (402). It reserves the price from the budget before calling the vendor and
-refunds vendor failures. Disabled keys are refused (403). Errors never name the vendor. `GET /v1/voices` lists Manul's voice names.
+refunds vendor failures. Disabled keys are refused (403). Errors never name the vendor. `GET /v1/voices` lists AgentShot's voice names.
 
 ## Local development
 
@@ -90,7 +90,7 @@ Clerk application **AgentShot** runs on its **production** instance, `clerk.agen
 
 The account service needs that instance's secret key in `manul-secrets` as `CLERK_SECRET_KEY`.
 
-Google sign-in in production uses our own Google OAuth client. That's Google Cloud project **Manul**
+Google sign-in in production uses our own Google OAuth client. That's Google Cloud project **AgentShot**
 (`manul-511207`), whose consent screen is set to External, with redirect URI
 `https://clerk.agentshot.si/v1/oauth_callback`. Its client ID and secret go in Clerk → SSO connections → Google.
 

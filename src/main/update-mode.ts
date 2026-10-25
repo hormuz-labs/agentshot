@@ -1,4 +1,4 @@
-// Who updates this copy of Manul: the app itself (macOS .dmg/.zip and Homebrew cask, Linux AppImage), the package manager
+// Who updates this copy of AgentShot: the app itself (macOS .dmg/.zip and Homebrew cask, Linux AppImage), the package manager
 // (apt for the .deb), or nobody (development, or turned off).
 export type UpdateMode = { mode: 'self' | 'package-manager' | 'off'; why?: string }
 

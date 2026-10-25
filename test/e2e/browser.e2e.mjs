@@ -1,6 +1,6 @@
-// Manul's own browser, driven by bsk: the bundled extension connects to Manul's private daemon (own home, own port),
+// AgentShot's own browser, driven by bsk: the bundled extension connects to AgentShot's private daemon (own home, own port),
 // the agent's bsk session opens a tab in the Browser panel, reads and clicks a page, and the user's own Chrome bsk
-// never sees Manul. Settings → Browser switches the agent to the user's Chrome and back.
+// never sees AgentShot. Settings → Browser switches the agent to the user's Chrome and back.
 import { _electron as electron } from 'playwright-core'
 import { dismissOnboarding, dismissSettingsOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
@@ -31,7 +31,7 @@ const until = async (what, fn, ms = 20_000) => {
 }
 
 // a page for the agent to read and click
-const page = `<!doctype html><title>Manul test page</title><h1>Hello from the test page</h1>
+const page = `<!doctype html><title>AgentShot test page</title><h1>Hello from the test page</h1>
 <button onclick="document.querySelector('h1').textContent='Clicked by the agent'">Press me</button>`
 const srv = createServer((_q, r) => { r.setHeader('content-type', 'text/html'); r.end(page) })
 
@@ -49,19 +49,19 @@ try {
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForSelector('[data-project-title="film"]')
 
-  // 1. the private daemon: Manul's home, not bsk's default port, and the extension inside Manul connected to it
+  // 1. the private daemon: AgentShot's home, not bsk's default port, and the extension inside AgentShot connected to it
   const info = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8'))
-  assert.notEqual(info.ws_port, 52800, "Manul's daemon is not on bsk's default port")
-  const browsers = await until('Manul browser connects', async () => { const b = await bsk('browsers'); return b.length ? b : null })
+  assert.notEqual(info.ws_port, 52800, "AgentShot's daemon is not on bsk's default port")
+  const browsers = await until('AgentShot browser connects', async () => { const b = await bsk('browsers'); return b.length ? b : null })
   assert.equal(browsers.length, 1, 'exactly one browser on the private daemon')
-  assert.equal(browsers[0].label, 'Manul')
+  assert.equal(browsers[0].label, 'AgentShot')
 
-  // 2. the user's own bsk (if it is running) never sees Manul
+  // 2. the user's own bsk (if it is running) never sees AgentShot
   if (existsSync(join(homedir(), '.bsk', 'daemon.json'))) {
     const user = await run(bundledBinary('bsk'), ['browsers', '--json'], { env: { ...process.env, BSK_HOME: join(homedir(), '.bsk'), BSK_AUTO_START: '0', BSK_BROWSER_WAIT_MS: '0' }, timeout: 10_000 })
       .then(r => JSON.parse(r.stdout)).catch(() => [])
-    assert.ok(!user.some(b => b.label === 'Manul'), "the user's own bsk daemon does not list Manul")
-    console.log(`  user's own bsk lists ${user.length} browser(s), none of them Manul`)
+    assert.ok(!user.some(b => b.label === 'AgentShot'), "the user's own bsk daemon does not list AgentShot")
+    console.log(`  user's own bsk lists ${user.length} browser(s), none of them AgentShot`)
   } else console.log("  (no user bsk daemon running here: skipped the cross-check)")
 
   // 3. an agent session opens a tab in the Browser panel, reads the page and clicks
@@ -79,14 +79,14 @@ try {
   const shown = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(w => w.isVisible()).contentView.children.filter(v => v.getVisible()).length)
   assert.equal(await shown(), 1, 'the page is on screen')
   // no duplicate tabs: the address bar is the current tab; only the other tabs get pills
-  assert.match(await win.locator('[data-testid="browser-address"]').innerText(), /Manul test page/)
+  assert.match(await win.locator('[data-testid="browser-address"]').innerText(), /AgentShot test page/)
   assert.equal(await win.locator('[data-testid="browser-tab"]').count(), 0, 'one tab: no pills')
-  await win.evaluate(() => window.manul.browser.newTab())
+  await win.evaluate(() => window.agentshot.browser.newTab())
   await until('second tab', async () => (await win.locator('[data-testid="browser-tab"]').count()) === 1, 10_000)
-  assert.match(await win.locator('[data-testid="browser-tab"]').innerText(), /Manul test page/, 'the other tab is the pill')
+  assert.match(await win.locator('[data-testid="browser-tab"]').innerText(), /AgentShot test page/, 'the other tab is the pill')
   await win.locator('[data-testid="browser-tab"]').click() // back to the agent's tab
-  await until('back on one pill for the new tab', async () => /Manul test page/.test(await win.locator('[data-testid="browser-address"]').innerText().catch(() => '')), 10_000)
-  await win.evaluate(async () => { const st = await window.manul.browser.state(); for (const t of st.tabs) if (t.id !== st.active) await window.manul.browser.close(t.id) })
+  await until('back on one pill for the new tab', async () => /AgentShot test page/.test(await win.locator('[data-testid="browser-address"]').innerText().catch(() => '')), 10_000)
+  await win.evaluate(async () => { const st = await window.agentshot.browser.state(); for (const t of st.tabs) if (t.id !== st.active) await window.agentshot.browser.close(t.id) })
   await until('pill gone', async () => (await win.locator('[data-testid="browser-tab"]').count()) === 0, 5000)
   await win.screenshot({ path: join(tmp, 'browser.png') })
   // the page itself is a native view over the panel: capture it to prove it draws the clicked page
@@ -124,7 +124,7 @@ try {
   await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find(w => w.isVisible()).close() })
   let timer
   try {
-    await Promise.race([closed, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Closing the main window did not quit Manul')), 15_000) })])
+    await Promise.race([closed, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Closing the main window did not quit AgentShot')), 15_000) })])
   } finally { clearTimeout(timer) }
 } finally {
   if (session) await bsk('session', 'stop', session).catch(() => {})

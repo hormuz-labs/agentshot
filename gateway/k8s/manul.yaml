@@ -107,7 +107,7 @@ spec:
             # account events (signed in, checkout started) in Pitch's PostHog project
             - { name: POSTHOG_KEY, value: phc_mw5p4LNJDGfSdwSAaWdmRWTRXEqQVxiEpLEJNQ6CwJpR }   # the project token: public, it can only send events
             - { name: POSTHOG_HOST, valueFrom: { secretKeyRef: { name: manul-secrets, key: POSTHOG_HOST, optional: true } } }
-            # voice and music for Manul keys: which vendor and model, the voices and the prices (re-read every 30 s,
+            # voice and music for AgentShot keys: which vendor and model, the voices and the prices (re-read every 30 s,
             # so `kubectl -n manul edit configmap manul-media` applies within about a minute, no restart)
             - { name: MEDIA_CONFIG, value: /config/media.json }
             - { name: GEMINI_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: GEMINI_API_KEY, optional: true } } }

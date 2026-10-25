@@ -21,7 +21,7 @@ describe('preview copies', () => {
   it('images and audio never do', () => expect(needsProxy(info({ codec: 'none', width: 0, height: 0 }))).toBe(false))
 
   it('makes a 720p H.264 copy with frequent keyframes for scrubbing', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-proxy-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-proxy-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=3840x2160:rate=30:duration=2', '-f', 'lavfi', '-i', 'sine=duration=2',
       '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(dir, 'big.mp4')])
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', ...proxyArgs('big.mp4', 'proxy.mp4', process.platform)], { cwd: dir })

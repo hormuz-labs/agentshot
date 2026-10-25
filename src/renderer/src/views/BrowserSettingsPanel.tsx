@@ -1,4 +1,4 @@
-// Settings → Browser: which browser the agent's bsk drives. Manul's own (private, default) or the user's own Chrome
+// Settings → Browser: which browser the agent's bsk drives. AgentShot's own (private, default) or the user's own Chrome
 // through the bsk they installed there (their logins), on purpose and reversible.
 import { useEffect, useState } from 'react'
 import { AppWindow, MonitorSmartphone } from 'lucide-react'
@@ -9,8 +9,8 @@ import type { BrowserMode, ChromeBsk } from '../../../shared/types'
 export function BrowserSettingsPanel() {
   const [mode, setMode] = useState<BrowserMode | null>(null)
   const [chrome, setChrome] = useState<ChromeBsk | null>(null)
-  useEffect(() => { window.manul.browser.mode().then(setMode); window.manul.browser.chrome().then(setChrome) }, [])
-  const pick = async (m: BrowserMode) => setMode(await window.manul.browser.setMode(m))
+  useEffect(() => { window.agentshot.browser.mode().then(setMode); window.agentshot.browser.chrome().then(setChrome) }, [])
+  const pick = async (m: BrowserMode) => setMode(await window.agentshot.browser.setMode(m))
 
   const option = (m: BrowserMode, icon: React.ReactNode, title: string, body: React.ReactNode) => (
     <button

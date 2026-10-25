@@ -18,7 +18,7 @@ export function checkWhisperManifest(exe, mt) {
     mt = versions.map(v => join(sdk, v, 'x64', 'mt.exe')).find(existsSync)
     if (!mt) throw new Error('Windows SDK manifest tool mt.exe not found')
   }
-  const tmp = mkdtempSync(join(tmpdir(), 'manul manifest '))
+  const tmp = mkdtempSync(join(tmpdir(), 'agentshot manifest '))
   try {
     const output = join(tmp, 'embedded.manifest')
     execFileSync(mt, ['-nologo', `-inputresource:${resolve(exe)};#1`, `-out:${output}`], { stdio: 'pipe', timeout: 30000, windowsHide: true })

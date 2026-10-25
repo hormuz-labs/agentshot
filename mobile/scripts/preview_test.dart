@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:manul_mobile/main.dart';
-import 'package:manul_mobile/bridge/store.dart';
-import 'package:manul_mobile/ui/home.dart';
-import 'package:manul_mobile/ui/pair.dart';
-import 'package:manul_mobile/ui/project.dart';
+import 'package:agentshot_mobile/main.dart';
+import 'package:agentshot_mobile/bridge/store.dart';
+import 'package:agentshot_mobile/ui/home.dart';
+import 'package:agentshot_mobile/ui/pair.dart';
+import 'package:agentshot_mobile/ui/project.dart';
 import '../test/responsive_test.dart' show FakeClient;
 
 void main() {
@@ -76,7 +76,7 @@ void main() {
           RepaintBoundary(
             key: key,
             child: MaterialApp(
-              theme: manulTheme(brightness),
+              theme: agentShotTheme(brightness),
               debugShowCheckedModeBanner: false,
               home: entry.value,
             ),

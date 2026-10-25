@@ -14,7 +14,7 @@ describe.skipIf(!ready)('transcription with faster-whisper (downloaded)', () => 
     const { setConfig } = await import('../src/main/config')
     const { FFMPEG } = await import('../src/main/media')
     const { transcribe } = await import('../src/main/whisper')
-    const dir = mkdtempSync(join(tmpdir(), 'manul-stt-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-stt-'))
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', join(import.meta.dirname, 'fixtures', 'speech', 'narration-music.flac'), '-t', '14', '-c:a', 'aac', join(dir, 'clip.m4a')])
     setConfig({ whisper: { engine: 'managed', mode: 'custom' } })
     const t = await transcribe(join(dir, 'clip.m4a'), join(dir, 'clip.json'), 'Transcribing clip.m4a')

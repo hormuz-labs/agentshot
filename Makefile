@@ -5,7 +5,7 @@
 help: ## Show this help message
 	@grep -E '^[-a-zA-Z0-9_]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install dependencies and binaries (ffmpeg, bsk, models, whisper-cli, manul-beats, manul-speakers, manul-vision)
+install: ## Install dependencies and binaries (ffmpeg, bsk, models, whisper-cli, agentshot-beats, agentshot-speakers, agentshot-vision)
 	npm install
 	./scripts/build-whisper.sh
 	./scripts/build-beats.sh
@@ -14,13 +14,13 @@ install: ## Install dependencies and binaries (ffmpeg, bsk, models, whisper-cli,
 whisper: ## Build the bundled whisper-cli binary
 	./scripts/build-whisper.sh
 
-beats: ## Build the bundled beat tracker (manul-beats, on aubio)
+beats: ## Build the bundled beat tracker (agentshot-beats, on aubio)
 	./scripts/build-beats.sh
 
-ml: ## Build the bundled model runners (manul-speakers, manul-vision)
+ml: ## Build the bundled model runners (agentshot-speakers, agentshot-vision)
 	./scripts/build-ml.sh
 
-dev: ## Run Manul in development mode with hot reload
+dev: ## Run AgentShot in development mode with hot reload
 	npm run dev
 
 run: dev ## Alias for dev

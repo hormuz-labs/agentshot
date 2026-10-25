@@ -4,7 +4,7 @@ import * as Sentry from '@sentry/electron/renderer'
 import { keepCrumb, scrubCrumb, scrubEvent } from '../../../shared/telemetry'
 
 export async function startCrashReports() {
-  const st = await window.manul.telemetry.state().catch(() => null)
+  const st = await window.agentshot.telemetry.state().catch(() => null)
   if (!st?.available.crashes) return
   Sentry.init({
     dataCollection: { userInfo: false },

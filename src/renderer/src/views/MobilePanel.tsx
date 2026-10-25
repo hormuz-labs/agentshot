@@ -25,8 +25,8 @@ export function MobilePanel() {
   const [pairCode, setPairCode] = useState('')
   useEffect(() => {
     const refresh = () => {
-      window.manul.mobile.status().then(s => { setState(s); setNow(Date.now()) }).catch(e => setError(message(e)))
-      window.manul.worker?.status().then(w => setWorker(w)).catch(() => {})
+      window.agentshot.mobile.status().then(s => { setState(s); setNow(Date.now()) }).catch(e => setError(message(e)))
+      window.agentshot.worker?.status().then(w => setWorker(w)).catch(() => {})
     }
     void refresh()
     const timer = setInterval(refresh, 1000)
@@ -59,7 +59,7 @@ export function MobilePanel() {
             aria-checked={state.running}
             disabled={busy}
             data-testid="mobile-enable"
-            onClick={() => run(state.running ? window.manul.mobile.stop : window.manul.mobile.start)}
+            onClick={() => run(state.running ? window.agentshot.mobile.stop : window.agentshot.mobile.start)}
             className={cn('mt-0.5 h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors disabled:opacity-50', state.running ? 'bg-amber' : 'bg-line-strong')}
           >
             <span className={cn('block size-3 rounded-full bg-bg transition-transform', state.running && 'translate-x-3')} />
@@ -99,7 +99,7 @@ export function MobilePanel() {
                     >
                       {copied ? <><Check />Copied</> : <><Copy />Copy code</>}
                     </Button>
-                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(window.manul.mobile.start)}>
+                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(window.agentshot.mobile.start)}>
                       <RefreshCw />New code
                     </Button>
                   </div>
@@ -121,7 +121,7 @@ export function MobilePanel() {
             ) : (
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs text-dim">{state.devices.length ? 'Pair another phone or tablet with a new 6-digit code.' : 'That code expired.'}</p>
-                <Button size="sm" variant="primary" disabled={busy} onClick={() => run(window.manul.mobile.start)}>
+                <Button size="sm" variant="primary" disabled={busy} onClick={() => run(window.agentshot.mobile.start)}>
                   <Smartphone />New code
                 </Button>
               </div>
@@ -158,7 +158,7 @@ export function MobilePanel() {
                 <div key={d.id} className="flex items-center gap-3 rounded-lg border border-line bg-raised/60 px-3 py-2">
                   <Smartphone className="size-4 shrink-0 text-dim" />
                   <div className="min-w-0 flex-1 truncate font-medium">{d.name}</div>
-                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => window.manul.mobile.revoke(d.id))}>
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => window.agentshot.mobile.revoke(d.id))}>
                     Remove
                   </Button>
                 </div>
@@ -181,7 +181,7 @@ export function MobilePanel() {
               size="sm"
               variant="ghost"
               disabled={workerBusy}
-              onClick={() => runWorker(async () => setDiscovered(await window.manul.worker.discover()))}
+              onClick={() => runWorker(async () => setDiscovered(await window.agentshot.worker.discover()))}
             >
               <RefreshCw />Find workers
             </Button>
@@ -189,7 +189,7 @@ export function MobilePanel() {
               size="sm"
               variant="primary"
               disabled={workerBusy || !!worker?.active}
-              onClick={() => runWorker(async () => setWorker(await window.manul.worker.lease()))}
+              onClick={() => runWorker(async () => setWorker(await window.agentshot.worker.lease()))}
             >
               <Cloud />Use cloud worker
             </Button>
@@ -209,7 +209,7 @@ export function MobilePanel() {
                   disabled={workerBusy}
                   onClick={() => {
                     const act = worker.active!
-                    runWorker(async () => setWorker(await (act.pool ? window.manul.worker.release(act.id) : window.manul.worker.disconnect())))
+                    runWorker(async () => setWorker(await (act.pool ? window.agentshot.worker.release(act.id) : window.agentshot.worker.disconnect())))
                   }}
                 >
                   Disconnect
@@ -227,7 +227,7 @@ export function MobilePanel() {
                   </div>
                   <div className="truncate font-mono text-xs text-dim">{w.urls[0]}</div>
                 </div>
-                <Button size="sm" variant="primary" disabled={workerBusy} onClick={() => runWorker(async () => setWorker(await window.manul.worker.connect(w)))}>
+                <Button size="sm" variant="primary" disabled={workerBusy} onClick={() => runWorker(async () => setWorker(await window.agentshot.worker.connect(w)))}>
                   Connect
                 </Button>
               </div>
@@ -242,7 +242,7 @@ export function MobilePanel() {
               className="flex items-center gap-2 pt-1"
               onSubmit={e => {
                 e.preventDefault()
-                runWorker(async () => { setWorker(await window.manul.worker.pair({ url: pairUrl.trim(), code: pairCode })); setPairCode('') })
+                runWorker(async () => { setWorker(await window.agentshot.worker.pair({ url: pairUrl.trim(), code: pairCode })); setPairCode('') })
               }}
             >
               <input

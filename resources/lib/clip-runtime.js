@@ -1,6 +1,6 @@
-// Manul's clip runtime. Loaded by every motion clip after GSAP. It takes time away from the wall clock so that any
+// AgentShot's clip runtime. Loaded by every motion clip after GSAP. It takes time away from the wall clock so that any
 // frame can be shown or rendered exactly: GSAP's global timeline is frozen at 0 before the clip's script runs, then
-// Manul moves it to whatever time it needs (preview scrubbing, frame-by-frame rendering).
+// AgentShot moves it to whatever time it needs (preview scrubbing, frame-by-frame rendering).
 //   Authors: write normal GSAP (gsap.timeline(), gsap.to…). Don't pause it and don't use setTimeout/rAF for motion.
 //   CSS animations and the Web Animations API are driven too. For custom drawing use manul.onFrame(t => …).
 //   Give every element the user may move or ask about a data-manul-id.
@@ -50,7 +50,7 @@
     })
   }
 
-  // Inside Manul's editor (an iframe): show frames on request, report where elements are, move them live while dragged.
+  // Inside AgentShot's editor (an iframe): show frames on request, report where elements are, move them live while dragged.
   if (window.parent !== window) {
     var reply = function (t) { parent.postMessage({ manul: 'elements', t: t, list: window.__manulElements() }, '*') }
     addEventListener('message', function (e) {

@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-files-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-files-'))
 const shots = process.env.MANUL_E2E_SHOTS
 execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:r=25:d=4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, 'film.mp4')])
 writeFileSync(join(tmp, 'film.srt'), '1\n00:00:00,500 --> 00:00:02,000\nHello there\n\n2\n00:00:02,200 --> 00:00:03,500\nGoodbye\n')
@@ -37,7 +37,7 @@ try {
   await win.click('[data-tour="import"]')
   await win.locator('button:has(svg.lucide-arrow-up)').click()
   await win.waitForSelector('video')
-  const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
+  const dir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
 
   // Files → + in the project tree (the dialog answered with three things: subtitles, a note, a folder)
   await app.evaluate(({ ipcMain }, fs) => { ipcMain.removeHandler('project:pickFiles'); ipcMain.handle('project:pickFiles', () => fs) },
@@ -103,7 +103,7 @@ try {
   if (shots) await win.screenshot({ path: join(shots, 'files-sent.png') })
 
   // more in the project, for @ below
-  for (const f of ['b.mp4', 'song.mp3']) await win.evaluate(([d, f]) => window.manul.project.import(d, f), [dir, join(tmp, f)])
+  for (const f of ['b.mp4', 'song.mp3']) await win.evaluate(([d, f]) => window.agentshot.project.import(d, f), [dir, join(tmp, f)])
 
   // @ in the message box: a list of what's in the project; Escape closes it, picking one puts its name in and attaches it
   const box = win.locator('textarea[aria-autocomplete="list"]')

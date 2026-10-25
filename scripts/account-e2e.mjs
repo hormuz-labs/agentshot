@@ -1,5 +1,5 @@
 // Production smoke test for accounts and the wallet, run inside the cluster (gateway/k8s/e2e.sh): a throwaway person
-// with a Manul key, a real request on every model tier, the spend coming off Pitch's ledger, a plan unlocking Max and
+// with an AgentShot key, a real request on every model tier, the spend coming off Pitch's ledger, a plan unlocking Max and
 // Ultra, and a live Dodo checkout link (made, never paid). Everything it makes is removed at the end.
 import { randomUUID } from 'node:crypto'
 import pg from 'pg'
@@ -10,8 +10,8 @@ import { postgresWallet } from '../account/src/wallet.ts'
 const env = process.env
 const ACCOUNT = 'http://account:8080', GATEWAY = 'http://bifrost:8080'
 const email = `e2e-${Date.now()}@agentshot.si`, sub = 'e2e_' + Date.now()
-const manulDb = `postgresql://${encodeURIComponent(env.PG_USER)}:${encodeURIComponent(env.PG_PASSWORD)}@${env.PG_HOST}:5432/bifrost?sslmode=require&uselibpqcompat=true`
-const wallet = await postgresWallet(env.WALLET_DATABASE_URL, manulDb)
+const agentshotDb = `postgresql://${encodeURIComponent(env.PG_USER)}:${encodeURIComponent(env.PG_PASSWORD)}@${env.PG_HOST}:5432/bifrost?sslmode=require&uselibpqcompat=true`
+const wallet = await postgresWallet(env.WALLET_DATABASE_URL, agentshotDb)
 const pitch = new pg.Pool({ connectionString: env.WALLET_DATABASE_URL, max: 2 })
 const admin = (path, init = {}) => fetch(`${GATEWAY}/api/governance${path}`, { ...init, headers: { authorization: env.BIFROST_AUTH, 'content-type': 'application/json' } })
 let failed = 0
@@ -21,7 +21,7 @@ const available = async userId => (await wallet.account(userId)).available
 let userId, keyId, customerId
 try {
   userId = await wallet.link(email, sub)
-  await wallet.post(userId, STARTER_CREDITS, 'promo', 'Manul starter credits', `manul:starter:${userId}`)
+  await wallet.post(userId, STARTER_CREDITS, 'promo', 'AgentShot starter credits', `manul:starter:${userId}`)
   const c = await (await admin('/customers', { method: 'POST', body: JSON.stringify({ name: email }) })).json()
   customerId = c.customer.id
   const v = await (await admin('/virtual-keys', { method: 'POST', body: JSON.stringify({ name: sub, description: email, customer_id: customerId, is_active: true, budgets: [{ max_limit: 0.000001, reset_duration: '100Y' }], rate_limit: { request_max_limit: 300, request_reset_duration: '1h' } }) })).json()
@@ -94,7 +94,7 @@ try {
     await pitch.query(`DELETE FROM "Subscription" WHERE "userId" = $1`, [userId])
     await pitch.query(`DELETE FROM "UserProfile" WHERE id = $1`, [userId])
   }
-  const own = new pg.Pool({ connectionString: manulDb, max: 1 })
+  const own = new pg.Pool({ connectionString: agentshotDb, max: 1 })
   if (keyId) await own.query('DELETE FROM manul_gateway_charges WHERE key_id = $1', [keyId])
   await own.query(`DELETE FROM manul_workers WHERE id LIKE 'e2e-worker-%'`)
   await own.end(); await pitch.end(); await wallet.close()

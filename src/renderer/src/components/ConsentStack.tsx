@@ -6,7 +6,7 @@ import type { ConsentRequest } from '../../../shared/types'
 
 export function useConsents() {
   const [list, setList] = useState<ConsentRequest[]>([])
-  useEffect(() => { window.manul.consent.list().then(setList); return window.manul.consent.onChange(setList) }, [])
+  useEffect(() => { window.agentshot.consent.list().then(setList); return window.agentshot.consent.onChange(setList) }, [])
   return list
 }
 
@@ -16,8 +16,8 @@ export function ConsentCard({ c }: { c: ConsentRequest }) {
       <div className="mb-1 flex items-center gap-2 font-medium"><Download className="size-4 text-amber" />{c.title}</div>
       <p className="mb-3 text-xs leading-relaxed text-dim">{c.body}</p>
       <div className="flex justify-end gap-1.5">
-        <Button size="sm" variant="ghost" onClick={() => window.manul.consent.answer(c.id, false)}>Not now</Button>
-        <Button size="sm" variant="primary" onClick={() => window.manul.consent.answer(c.id, true)}>{c.confirm}</Button>
+        <Button size="sm" variant="ghost" onClick={() => window.agentshot.consent.answer(c.id, false)}>Not now</Button>
+        <Button size="sm" variant="primary" onClick={() => window.agentshot.consent.answer(c.id, true)}>{c.confirm}</Button>
       </div>
     </div>
   )

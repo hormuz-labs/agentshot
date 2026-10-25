@@ -1,6 +1,6 @@
 // Product walkthrough, end to end in the real app with no paid model or voice: asking for one on the start screen
 // (no switch: the request says it) makes the project; a scripted model (a local OpenAI-compatible server added as a custom provider) has the agent
-// open a test product with bsk in Manul's own browser, film one take with walkthrough_record (a click, visible typing,
+// open a test product with bsk in AgentShot's own browser, film one take with walkthrough_record (a click, visible typing,
 // a smooth scroll), stop it, and compose_walkthrough the film without narration. Checks the take's events, the
 // proposed film and its frames.
 import { _electron as electron } from 'playwright-core'
@@ -16,9 +16,9 @@ const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync('/tmp/mw-') // short: the bsk daemon's socket path must stay under macOS's limit
 const ud = join(tmp, 'ud'), projects = join(tmp, 'p'), out = process.argv.slice(2).find(a => !a.startsWith('--')) || tmp
 mkdirSync(ud, { recursive: true })
-// Two ways, both with the real bsk: Manul's own browser (CDP screencast), or with --chrome the way the user's own Chrome
-// is filmed when its remote debugging is off: the agent on chrome-bsk, filmed through bsk's screenshots. Manul's browser
-// stands in for that Chrome (MANUL_CHROME_BSK_HOME points chrome-bsk at Manul's bsk daemon).
+// Two ways, both with the real bsk: AgentShot's own browser (CDP screencast), or with --chrome the way the user's own Chrome
+// is filmed when its remote debugging is off: the agent on chrome-bsk, filmed through bsk's screenshots. AgentShot's browser
+// stands in for that Chrome (MANUL_CHROME_BSK_HOME points chrome-bsk at AgentShot's bsk daemon).
 const shots = process.argv.includes('--chrome')
 const cli = shots ? 'chrome-bsk' : 'bsk'
 const until = async (what, fn, ms = 60_000) => {

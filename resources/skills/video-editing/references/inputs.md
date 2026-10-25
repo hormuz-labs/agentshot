@@ -3,14 +3,14 @@
 Users add more than footage: music, voice-over, logos, photos, subtitles, fonts, LUTs. Each is
 copied into `media/` (a folder or .zip keeps its layout) and listed in `project_state` under `files` as
 `path — what it is`. A message lists the files attached to it under `[attached files]`. Commands below were tested with
-Manul's bundled ffmpeg.
+AgentShot's bundled ffmpeg.
 
 ## Rules for every file
 - Attached to a request = meant for it. A file in the project that the request doesn't mention: use it only when the
   request clearly needs it ("add my logo" and there is one logo). Two candidates (two logos, two .srt files): ask.
 - Say which files you used and how ("burned in clip.en.srt with your Brand Bold font").
 - Never change files in `media/`. Write what you derive (retimed subtitles, an ASS file, a cut list) to `renders/`.
-- A summary that says Manul can't read or decode a file means you can't either: say so and ask for another format.
+- A summary that says AgentShot can't read or decode a file means you can't either: say so and ask for another format.
 
 ## Subtitles (.srt, .vtt, .ass, .ssa, .sbv)
 The summary gives the cue count, time span and first words; `goes with media/x.mp4` means its times are on that file's
@@ -38,7 +38,7 @@ clock. Non-UTF-8 files were converted on import.
 
 ## Fonts (.ttf, .otf, .ttc)
 The summary gives the family and style: `font “Brand Sans” Bold (Brand Sans Bold)`.
-- **Captions and subtitles: `fontsdir=fonts`** (the project's fonts/ folder: every font the user added, plus Manul's
+- **Captions and subtitles: `fontsdir=fonts`** (the project's fonts/ folder: every font the user added, plus AgentShot's
   Inter) and `Fontname=` the family exactly as listed; for a Bold style add `Bold=1` (ASS: `-1`), the family stays the
   same. Never `fontsdir=media`: libass loads every file in that folder, footage included. A wrong name falls back to a
   system font silently: `look` at a frame to check.
@@ -85,6 +85,6 @@ the speaker's sound continues under it.
 Read them directly. A CSV shot list: one row per shot. An EDL or FCPXML from another editor: the source ranges of an
 edit; rebuild it with the same in and out points when the sources are in media/ (match by file or reel name).
 
-## Files Manul doesn't read
+## Files AgentShot doesn't read
 Documents (PDF, Word, slides, spreadsheets) and archives other than .zip are only listed. If the request depends on one,
 ask the user to paste the text into the chat or send the files themselves.

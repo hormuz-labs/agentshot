@@ -1,5 +1,5 @@
-// Who speaks when: speaker turns from manul-speakers (sherpa-onnx diarization: pyannote segmentation + a speaker
-// embedding + clustering), then regrouped by Manul: each turn's voice embedding, voices whose centres sound alike
+// Who speaks when: speaker turns from agentshot-speakers (sherpa-onnx diarization: pyannote segmentation + a speaker
+// embedding + clustering), then regrouped by AgentShot: each turn's voice embedding, voices whose centres sound alike
 // merged, a few seconds of a voice folded into the nearest real one, and transcript lines no turn covers given the
 // nearest voice. sherpa's one-threshold clustering splits a person whenever the sound changes (378 voices in a
 // 2h20 film, most of them seconds long); regrouped, the film's main characters come out as one voice each.
@@ -103,7 +103,7 @@ const diarize = (args: string[], onProgress?: (p: number) => void, signal?: Abor
     if (m && onProgress && Number(m[2]) > 0) onProgress(Number(m[1]) / Number(m[2]))
   })
   child.on('error', fail)
-  child.on('close', code => (code === 0 ? ok(out) : fail(new Error(`manul-speakers failed: ${err.split('\n').filter(l => !l.startsWith('progress')).join('\n').slice(-1500)}`))))
+  child.on('close', code => (code === 0 ? ok(out) : fail(new Error(`agentshot-speakers failed: ${err.split('\n').filter(l => !l.startsWith('progress')).join('\n').slice(-1500)}`))))
 })
 
 /** Bumped when the result changes meaning (2: regrouped by embeddings, lines labelled). */
@@ -211,7 +211,7 @@ async function embedRanges(wav: string, ranges: [number, number][], tmp: string,
     child.stdout.on('data', d => { o += d })
     child.stderr.on('data', d => { err += d; const m = /embedded (\d+)\s*$/.exec(String(d).trim()); if (m && onProgress) onProgress(Number(m[1]) / ranges.length) })
     child.on('error', fail)
-    child.on('close', code => (code === 0 ? ok(o) : fail(new Error(`manul-speakers --embed failed: ${err.slice(-800)}`))))
+    child.on('close', code => (code === 0 ? ok(o) : fail(new Error(`agentshot-speakers --embed failed: ${err.slice(-800)}`))))
   })
   return (JSON.parse(out) as { embeddings: (number[] | null)[] }).embeddings
 }
@@ -236,7 +236,7 @@ export async function analyzeSpeakers(projectDir: string, file: string, o: { spe
   const dir = join(projectDir, '.cache', 'speakers')
   try { const r = JSON.parse(await readFile(out, 'utf8')); if (r.v === VERSION) return { result: r, file: out } } catch { /* run it */ }
   if (!speakerDetectionReady()) throw new Error('Speaker detection is not installed completely. For a source checkout, run npm run build:ml and node scripts/fetch-models.mjs. Transcription, syncing and demo composition can continue without speaker detection.')
-  const tmp = await mkdtemp(join(tmpdir(), 'manul-speakers-'))
+  const tmp = await mkdtemp(join(tmpdir(), 'agentshot-speakers-'))
   try {
     const wav = join(tmp, 'a.wav')
     await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-i', file, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav], o.signal)

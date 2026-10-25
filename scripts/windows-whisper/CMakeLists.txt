@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(manul_whisper LANGUAGES C CXX)
+project(agentshot_whisper LANGUAGES C CXX)
 
 if(NOT WIN32 OR NOT MSVC OR NOT MANUL_WHISPER_SOURCE)
   message(FATAL_ERROR "Native Windows MSVC and MANUL_WHISPER_SOURCE are required")

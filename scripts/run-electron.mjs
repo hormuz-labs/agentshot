@@ -18,7 +18,7 @@ export async function prepareElectron() {
 
   const source = join(dirname(electron), '../..')
   const icon = join(root, 'build/icon.icns')
-  const cache = join(root, 'node_modules/.cache/manul')
+  const cache = join(root, 'node_modules/.cache/agentshot')
   const bundle = join(cache, 'AgentShot.app')
   const executable = join(bundle, 'Contents/MacOS/Electron')
   const stamp = join(cache, 'branding.sha256')

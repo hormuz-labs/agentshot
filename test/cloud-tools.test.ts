@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CLOUD_TOOLS, WORKER_URL, cloudTool } from '../src/shared/cloud-tools'
 
 describe('cloud tools', () => {
-  it('live on Manul’s worker', () => {
+  it('live on AgentShot’s worker', () => {
     expect(WORKER_URL).toBe('https://worker.trypitch.co')
     for (const t of CLOUD_TOOLS) expect(t.endpoint.startsWith(`${WORKER_URL}/`)).toBe(true)
   })

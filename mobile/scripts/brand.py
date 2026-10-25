@@ -1,4 +1,4 @@
-"""Generate native brand assets from the repository's canonical Manul artwork.
+"""Generate native brand assets from the repository's canonical Manul cat artwork.
 
 Run from anywhere: python3 mobile/scripts/brand.py
 Requires Pillow; fontTools + brotli are needed only to regenerate bundled fonts.
@@ -57,4 +57,4 @@ try:
         (target.parent / f'{name}-OFL.txt').write_text((ROOT / f'node_modules/@fontsource-variable/{package}/LICENSE').read_text())
 except ImportError:
     print('Fonts skipped; install fontTools and brotli to regenerate them.')
-print('Generated Manul launcher, splash, store and in-app assets.')
+print('Generated AgentShot launcher, splash, store and in-app assets.')

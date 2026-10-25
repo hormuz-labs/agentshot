@@ -1,11 +1,11 @@
 // The model dropdown in new-project drafts and the agent panel: every model the keys unlock. In existing projects
-// with only the Manul key it's just a label: Manul's gateway picks the model.
+// with only the AgentShot key it's just a label: AgentShot's gateway picks the model.
 import { useEffect, useMemo, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { Check, ChevronDown, Image as ImageIcon, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Info = Awaited<ReturnType<typeof window.manul.agent.models>>
+type Info = Awaited<ReturnType<typeof window.agentshot.agent.models>>
 
 const k = (n?: number) => (n == null ? '' : n >= 1e6 ? `${(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : `${Math.round(n / 1000)}k`)
 
@@ -22,9 +22,9 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
   const [open, setOpen] = useState(false)
   useEffect(() => {
     let live = true
-    const refresh = () => window.manul.agent.models(dir).then(value => { if (live) { setInfo(value); setError('') } }).catch(() => { if (live) setError('Could not load models. Try reopening the dropdown.') })
+    const refresh = () => window.agentshot.agent.models(dir).then(value => { if (live) { setInfo(value); setError('') } }).catch(() => { if (live) setError('Could not load models. Try reopening the dropdown.') })
     refresh()
-    const off = window.manul.agent.onReady(refresh)
+    const off = window.agentshot.agent.onReady(refresh)
     return () => { live = false; off() }
   }, [dir, picked?.provider, picked?.modelId, open])
   const list = useMemo(() => (info?.models || []).filter(m => !q || `${m.name} ${m.providerLabel}`.toLowerCase().includes(q.toLowerCase())), [info, q])
@@ -37,7 +37,7 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
     if (disabled) return
     if (onPick) { onPick(m ?? undefined); setOpen(false); setQ(''); return }
     if (!dir) return
-    try { await window.manul.agent.setModel(dir, m); setOpen(false); setQ(''); setInfo(await window.manul.agent.models(dir)); setError('') }
+    try { await window.agentshot.agent.setModel(dir, m); setOpen(false); setQ(''); setInfo(await window.agentshot.agent.models(dir)); setError('') }
     catch { setError('Could not change the model. Please try again.') }
   }
 

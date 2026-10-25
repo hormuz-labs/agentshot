@@ -11,7 +11,7 @@ import { prepareElectron } from '../../scripts/run-electron.mjs'
 import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '../..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-mascot-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-mascot-'))
 const out = process.argv[2] || join(tmp, 'screenshots')
 mkdirSync(out, { recursive: true })
 const executablePath = await prepareElectron()

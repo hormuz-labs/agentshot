@@ -1,4 +1,4 @@
-// Pure pieces of the Chrome extension API that Manul's browser rebuilds for BrowserSkill: match patterns, tab queries
+// Pure pieces of the Chrome extension API that AgentShot's browser rebuilds for BrowserSkill: match patterns, tab queries
 // and storage areas. Used by src/main/browser.ts and the tab preload.
 
 const esc = (s: string) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')

@@ -12,7 +12,7 @@ const dirs: string[] = []
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }) })
 
 function setup(status = 200) {
-  const dir = mkdtempSync(join(tmpdir(), 'manul-usage-'))
+  const dir = mkdtempSync(join(tmpdir(), 'agentshot-usage-'))
   dirs.push(dir)
   const file = join(dir, 'usage.json')
   let now = 0
@@ -29,7 +29,7 @@ function setup(status = 200) {
 
 describe('usage statistics', () => {
   it('starts with the default monotonic clock and sends nothing without an endpoint', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-clock-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-clock-'))
     dirs.push(dir)
     const usage = new UsageTelemetry({ file: join(dir, 'usage.json'), endpoint: '', token: '', enabled: () => true, focused: () => true, idleSeconds: () => 0 })
     expect(usage.available).toBe(false)

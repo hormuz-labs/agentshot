@@ -6,15 +6,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { allowed, FencedEnv, fenceFor, realish } from '../src/main/fence'
 import { BIN } from '../src/main/media'
 
-// A project in a temp folder (temp is writable), Manul's resources inside the home folder (like a dev checkout in
+// A project in a temp folder (temp is writable), AgentShot's resources inside the home folder (like a dev checkout in
 // ~/Documents/manul: readable, not writable), and a "secret" in the home folder (like ~/.claude) the agent must never reach.
 let root: string, project: string, resources: string, secretDir: string, secretLink: string
 beforeAll(() => {
-  root = mkdtempSync(join(tmpdir(), 'manul-fence-'))
+  root = mkdtempSync(join(tmpdir(), 'agentshot-fence-'))
   project = join(root, 'proj')
   mkdirSync(project)
   writeFileSync(join(project, 'a.txt'), 'inside')
-  secretDir = mkdtempSync(join(homedir(), '.manul-fence-test-'))
+  secretDir = mkdtempSync(join(homedir(), '.agentshot-fence-test-'))
   writeFileSync(join(secretDir, 'secret.txt'), 'secret')
   resources = join(secretDir, 'res')
   mkdirSync(resources)
@@ -50,7 +50,7 @@ describe('what the agent may touch', () => {
 })
 
 describe('the fenced environment', () => {
-  const env = () => new FencedEnv({ cwd: project }, fenceFor({ project, resources }), { home: homedir(), fenceBin: join(BIN, 'manul-fence') })
+  const env = () => new FencedEnv({ cwd: project }, fenceFor({ project, resources }), { home: homedir(), fenceBin: join(BIN, 'agentshot-fence') })
 
   it('file tools read and write the project, and refuse the home folder', async () => {
     const e = env()

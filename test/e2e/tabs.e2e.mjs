@@ -9,7 +9,7 @@ import { join, sep } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-tabs-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-tabs-'))
 for (const [name, color] of [['alpha', 'red'], ['beta', 'blue'], ['gamma', 'green']])
   execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=${color}:s=320x240:d=6`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(tmp, `${name}.mp4`)])
 const row = name => `[data-project-row$=${JSON.stringify(`${sep}${name}`)}]`

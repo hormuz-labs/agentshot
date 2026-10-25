@@ -40,7 +40,7 @@ export function decodeText(buf: Buffer): { text: string; encoding: string } {
 
 // ---------------------------------------------------------------- subtitles
 export function subtitlesSummary(cues: Cue[], format: string) {
-  if (!cues.length) return `${format.toUpperCase()} subtitles with no cues Manul could read`
+  if (!cues.length) return `${format.toUpperCase()} subtitles with no cues AgentShot could read`
   const end = Math.max(...cues.map(c => c.e))
   return `${format.toUpperCase()} subtitles: ${count(cues.length, 'cue')}, ${clock(cues[0].s)}–${clock(end)}, ${count(cues.reduce((n, c) => n + words(c.text), 0), 'word')}; ` +
     `starts ${quote(cues[0].text)}`
@@ -133,7 +133,7 @@ export async function inspect(projectDir: string, rel: string, probe: Probe): Pr
   if (kind === null || kind === 'video' || kind === 'audio' || (kind === 'image' && format !== 'svg')) {
     const m = await probe(abs).catch(() => null)
     if (!m || (!m.width && !m.hasAudio)) {
-      return { info: kind ? info(kind, `${format.toUpperCase()} ${kind} Manul can't decode`) : info('other', otherSummary(format, size)) }
+      return { info: kind ? info(kind, `${format.toUpperCase()} ${kind} AgentShot can't decode`) : info('other', otherSummary(format, size)) }
     }
     // the name decides between audio and a picture (an MP3's cover art is a picture stream); animation makes a video
     const moving = m.duration > 0.5
@@ -156,14 +156,14 @@ export async function inspect(projectDir: string, rel: string, probe: Probe): Pr
   if (kind === 'font') {
     if (format === 'woff' || format === 'woff2') return { info: info('font', `web font (${format.toUpperCase()}): for motion clips; ffmpeg text needs a TTF or OTF`) }
     const names = fontNames(await readFile(abs))
-    return { info: names ? info('font', `font “${names.family}” ${names.style} (${names.full})`, { font: { family: names.family, style: names.style } }) : info('font', `${format.toUpperCase()} font Manul couldn't read`) }
+    return { info: names ? info('font', `font “${names.family}” ${names.style} (${names.full})`, { font: { family: names.family, style: names.style } }) : info('font', `${format.toUpperCase()} font AgentShot couldn't read`) }
   }
   return { info: info('other', otherSummary(format, size)) }
 }
 
 function otherSummary(format: string, size: number) {
-  if (['rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz'].includes(format)) return `.${format} archive (${bytes(size)}) Manul doesn't unpack: ask for a .zip or the files themselves`
-  return `${format ? `.${format}` : 'a'} file (${bytes(size)}) Manul doesn't know how to use`
+  if (['rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz'].includes(format)) return `.${format} archive (${bytes(size)}) AgentShot doesn't unpack: ask for a .zip or the files themselves`
+  return `${format ? `.${format}` : 'a'} file (${bytes(size)}) AgentShot doesn't know how to use`
 }
 
 // ---------------------------------------------------------------- copying in

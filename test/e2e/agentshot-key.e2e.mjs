@@ -1,4 +1,4 @@
-// Settings → Keys → Manul key: offers signing in; pasting a key instead makes the agent use "Manul" (Manul's gateway picks the real model, see
+// Settings → Keys → AgentShot key: offers signing in; pasting a key instead makes the agent use "AgentShot" (AgentShot's gateway picks the real model, see
 // gateway.ts), the key never comes back to the page, and removing it takes the model away. Talks to no gateway.
 import { _electron as electron } from 'playwright-core'
 import { dismissOnboarding, dismissSettingsOnboarding } from './onboarding.mjs'
@@ -8,17 +8,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-key-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-key-'))
 const out = process.argv[2] || tmp
 const env = { ...process.env, MANUL_PROJECTS: join(tmp, 'p') }
-for (const k of ['GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'MANUL_KEY']) delete env[k] // only the Manul key
+for (const k of ['GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'MANUL_KEY']) delete env[k] // only the AgentShot key
 const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env })
 try {
   const win = await app.firstWindow()
   await win.setViewportSize({ width: 1440, height: 900 }).catch(() => {})
   await win.waitForSelector('text=What are we making?')
   await dismissOnboarding(win)
-  const models = () => win.evaluate(() => window.manul.agent.models())
+  const models = () => win.evaluate(() => window.agentshot.agent.models())
   assert.equal((await models()).models.length, 0, 'no keys, no models')
 
   await win.click('[aria-label="Settings"]')
@@ -30,7 +30,7 @@ try {
   await win.fill('[aria-label="AgentShot key"]', 'sk-bf-e2e-secret')
   await win.click('button:has-text("Save")')
   await win.waitForSelector('text=AgentShot key added')
-  await win.screenshot({ path: join(out, 'manul-key.png') })
+  await win.screenshot({ path: join(out, 'agentshot-key.png') })
   assert.ok(!(await win.content()).includes('sk-bf-e2e-secret'), 'the key never comes back to the page')
 
   const m = await models()
@@ -40,7 +40,7 @@ try {
   await win.click('button:has-text("Remove")')
   await win.waitForSelector('button:has-text("Sign in to AgentShot")')
   assert.equal((await models()).models.length, 0, 'removing the key takes its models away')
-  console.log('manul key e2e ok:', join(out, 'manul-key.png'))
+  console.log('AgentShot key e2e ok:', join(out, 'agentshot-key.png'))
 } finally {
   await app.close()
 }

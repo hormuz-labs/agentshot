@@ -5,11 +5,11 @@ import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// The bundled BrowserSkill extension's preloads (its background page; every tab of Manul's browser). Tabs are
+// The bundled BrowserSkill extension's preloads (its background page; every tab of AgentShot's browser). Tabs are
 // sandboxed, so each preload must be one self-contained file: built apart from index.cjs so nothing is split out.
 function extensionPreloads(): Plugin {
   return {
-    name: 'manul-extension-preloads',
+    name: 'agentshot-extension-preloads',
     async closeBundle() {
       await build({
         entryPoints: { 'ext-host': resolve('src/preload/ext-host.ts'), 'ext-tab': resolve('src/preload/ext-tab.ts') },

@@ -10,14 +10,14 @@ let wired = false
 function wire() {
   if (wired) return
   wired = true
-  window.manul.agent.onEvent((dir, e) => {
+  window.agentshot.agent.onEvent((dir, e) => {
     states.set(dir, reduce(states.get(dir) || emptyAgentState(), e as BaseEvent & Record<string, any>))
     listeners.forEach(l => l())
   })
 }
 
 export function useAgent(dir: string | null): AgentState {
-  useEffect(() => { wire(); if (dir) window.manul.agent.attach(dir) }, [dir])
+  useEffect(() => { wire(); if (dir) window.agentshot.agent.attach(dir) }, [dir])
   return useSyncExternalStore(
     cb => { listeners.add(cb); return () => listeners.delete(cb) },
     () => (dir && states.get(dir)) || EMPTY,

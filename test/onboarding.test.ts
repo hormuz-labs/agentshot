@@ -8,7 +8,7 @@ import { OnboardingStore } from '../src/main/onboarding'
 const dirs: string[] = []
 afterEach(() => { dirs.splice(0).forEach(dir => rmSync(dir, { recursive: true, force: true })) })
 const setup = () => {
-  const dir = mkdtempSync(join(tmpdir(), 'manul-onboarding-'))
+  const dir = mkdtempSync(join(tmpdir(), 'agentshot-onboarding-'))
   dirs.push(dir)
   return join(dir, 'onboarding.sqlite')
 }

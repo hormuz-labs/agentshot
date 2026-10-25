@@ -6,7 +6,7 @@ description: Making footage look and sound right: diagnosing from measurements, 
 # Cleanup and repair
 
 Users say "make it look better", "it's shaky", "it's too dark", "the sound is bad". Diagnose with measurements, offer
-the fixes, apply them gently, and prove the improvement with the same measurements. Commands (tested with Manul's
+the fixes, apply them gently, and prove the improvement with the same measurements. Commands (tested with AgentShot's
 ffmpeg) are in references/fixes.md.
 
 ## 1. Diagnose (numbers first)

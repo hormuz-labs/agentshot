@@ -23,7 +23,7 @@ const titleOf = (prompt: string, example: GalleryExample | null) =>
 
 /** The home screen: one message box, and below it the motion gallery. Files with a video make an edit; no footage (a
  *  brief, an example or a reference video) makes a motion video on a blank canvas, or, when the brief asks for a
- *  walkthrough of a product, a walkthrough Manul films in the browser. Selected files come with the first message. */
+ *  walkthrough of a product, a walkthrough AgentShot films in the browser. Selected files come with the first message. */
 export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, prompt?: string, files?: string[]) => void; onKeys: () => void; onTools?: () => void; ready: boolean; lead?: ReactNode }) {
   const [files, setFiles] = useState<string[]>([])
   const [prompt, setPrompt] = useState('')
@@ -61,7 +61,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
   const pickReference = async () => {
     if (busy) return
     try {
-      const video = (await window.manul.project.pick()).find(f => kindByName(f) === 'video')
+      const video = (await window.agentshot.project.pick()).find(f => kindByName(f) === 'video')
       if (video) { setReference(video); setError(null); focus() } else setError('A reference has to be a video.')
     } catch (e) { setError(message(e)) }
   }
@@ -71,17 +71,17 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
     setError(null)
     try {
       if (walkthrough) {
-        const p = await window.manul.project.createMotion({ title: titleOf(prompt, null), aspect: '16:9', walkthrough: true, files, model })
+        const p = await window.agentshot.project.createMotion({ title: titleOf(prompt, null), aspect: '16:9', walkthrough: true, files, model })
         onOpen(p, prompt.trim(), Object.keys(p.files || {}).filter(f => f !== p.walkthrough?.canvas))
         return
       }
       if (motion) {
-        const p = await window.manul.project.createMotion({ title: titleOf(prompt, example), aspect, example: example?.id, reference: reference ?? undefined, files, model })
+        const p = await window.agentshot.project.createMotion({ title: titleOf(prompt, example), aspect, example: example?.id, reference: reference ?? undefined, files, model })
         const ask = prompt.trim() || (example ? `Make a video like “${example.title}”.` : 'Make a motion video in the style of the reference.')
         onOpen(p, ask, Object.keys(p.files || {}).filter(f => f !== p.motion?.canvas))
         return
       }
-      const p = await window.manul.project.create(files, model)
+      const p = await window.agentshot.project.create(files, model)
       onOpen(p, prompt.trim() || undefined, Object.keys(p.files || {}))
     } catch (e) {
       setError(message(e))
@@ -90,7 +90,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
   }
   const pickFiles = async () => {
     if (busy) return
-    try { choose(await window.manul.project.pick()) } catch (e) { setError(message(e)) }
+    try { choose(await window.agentshot.project.pick()) } catch (e) { setError(message(e)) }
   }
 
   const placeholder = footage || files.length ? 'Tell AgentShot what to do with it…'
@@ -103,7 +103,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
       className="flex h-full flex-col"
       onDragOver={e => { e.preventDefault(); if (!busy) setOver(true) }}
       onDragLeave={e => { if (e.currentTarget === e.target) setOver(false) }}
-      onDrop={e => { e.preventDefault(); setOver(false); choose(Array.from(e.dataTransfer.files).map(f => window.manul.pathForFile(f)).filter(Boolean)) }}
+      onDrop={e => { e.preventDefault(); setOver(false); choose(Array.from(e.dataTransfer.files).map(f => window.agentshot.pathForFile(f)).filter(Boolean)) }}
     >
       <div className={cn('drag flex h-[52px] shrink-0 items-center gap-1 pr-3', lead ? 'pl-[88px]' : 'pl-3')}>
         {lead}

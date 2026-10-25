@@ -1,6 +1,6 @@
 # ffmpeg recipes for editing
 
-All tested with Manul's bundled ffmpeg. Replace `in.mp4`, times (seconds) and sizes. Put the whole edit in ONE command.
+All tested with AgentShot's bundled ffmpeg. Replace `in.mp4`, times (seconds) and sizes. Put the whole edit in ONE command.
 
 ## Find the shots
 `analyze_video` lists every shot with its cut times (and much more). Only if you need a different sensitivity:

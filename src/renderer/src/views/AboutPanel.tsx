@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { FileText, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-type St = Awaited<ReturnType<typeof window.manul.updates.state>>
-type Tel = Awaited<ReturnType<typeof window.manul.telemetry.state>>
+type St = Awaited<ReturnType<typeof window.agentshot.updates.state>>
+type Tel = Awaited<ReturnType<typeof window.agentshot.telemetry.state>>
 
 const README = 'https://github.com/hormuz-labs/agentshot/blob/main/telemetry/README.md'
 
@@ -32,7 +32,7 @@ export function AboutPanel() {
   const [info, setInfo] = useState<{ version: string; platform: string } | null>(null)
   const [st, setSt] = useState<St>()
   const [tel, setTel] = useState<Tel | null>(null)
-  useEffect(() => { window.manul.info().then(setInfo); window.manul.updates.state().then(setSt); window.manul.telemetry.state().then(setTel); return window.manul.updates.onChange(setSt) }, [])
+  useEffect(() => { window.agentshot.info().then(setInfo); window.agentshot.updates.state().then(setSt); window.agentshot.telemetry.state().then(setTel); return window.agentshot.updates.onChange(setSt) }, [])
   const line = !st ? '' : st.mode === 'off' ? `Updates are off (${st.why}).` : st.mode === 'package-manager' ? `Updates come from your package manager (${st.why?.replace(/^installed with apt: /, '')}).`
     : st.status === 'checking' ? 'Checking for updates…' : st.status === 'downloading' ? `Downloading ${st.version ?? 'an update'}… ${Math.round((st.progress || 0) * 100)}%`
     : st.status === 'ready' ? `AgentShot ${st.version} is ready.` : st.status === 'none' ? 'AgentShot is up to date.' : st.status === 'error' ? `Couldn't check: ${st.error}` : 'AgentShot checks for updates in the background.'
@@ -50,18 +50,18 @@ export function AboutPanel() {
         <div className="mb-2 font-medium">Updates</div>
         <p className="mb-3 text-xs text-dim">{line}</p>
         <div className="flex gap-1.5">
-          {st?.mode === 'self' && st.status !== 'ready' && <Button size="sm" onClick={async () => setSt(await window.manul.updates.check())} disabled={st.status === 'checking' || st.status === 'downloading'}>
+          {st?.mode === 'self' && st.status !== 'ready' && <Button size="sm" onClick={async () => setSt(await window.agentshot.updates.check())} disabled={st.status === 'checking' || st.status === 'downloading'}>
             {st.status === 'checking' ? <Loader2 className="animate-spin" /> : <RefreshCw />}Check now</Button>}
-          {st?.status === 'ready' && <Button size="sm" variant="primary" onClick={() => window.manul.updates.install()}>Restart to update</Button>}
+          {st?.status === 'ready' && <Button size="sm" variant="primary" onClick={() => window.agentshot.updates.install()}>Restart to update</Button>}
         </div>
       </div>
       {tel && (tel.available.usage || tel.available.crashes) && <div className="mb-3 rounded-lg border border-line bg-raised/60 p-3">
         <div className="mb-2 font-medium">Crash reports and usage</div>
         <TelemetryChoices available={tel.available} usage={tel.usage} crashes={tel.crashes}
-          onUsage={usage => window.manul.telemetry.set({ usage, crashes: tel.crashes }).then(setTel)}
-          onCrashes={crashes => window.manul.telemetry.set({ usage: tel.usage, crashes }).then(setTel)} />
+          onUsage={usage => window.agentshot.telemetry.set({ usage, crashes: tel.crashes }).then(setTel)}
+          onCrashes={crashes => window.agentshot.telemetry.set({ usage: tel.usage, crashes }).then(setTel)} />
       </div>}
-      <Button size="sm" variant="ghost" onClick={() => window.manul.notices()}><FileText />Open-source licences</Button>
+      <Button size="sm" variant="ghost" onClick={() => window.agentshot.notices()}><FileText />Open-source licences</Button>
     </div>
   )
 }

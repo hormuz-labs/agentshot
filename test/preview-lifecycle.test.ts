@@ -10,7 +10,7 @@ import type { Project } from '../src/shared/types'
 const ff = (...args: string[]) => execFileSync(FFMPEG, ['-y', '-v', 'error', ...args])
 describe('preview lifecycle', () => {
   it('publishes a real preview, uses unique names for identically named sources and recovers deleted copies', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-preview-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-preview-'))
     try {
       mkdirSync(join(dir, 'media')); mkdirSync(join(dir, 'renders'))
       for (const folder of ['media', 'renders']) ff('-f', 'lavfi', '-i', 'color=c=red:s=320x180:r=25:d=1', '-c:v', 'prores_ks', join(dir, folder, 'same.mov'))
@@ -28,7 +28,7 @@ describe('preview lifecycle', () => {
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   it('falls back from hardware encoding, clears stale mappings, and stops spinning after failure until retry', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'manul-preview-fail-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-preview-fail-'))
     try {
       ff('-f', 'lavfi', '-i', 'color=c=red:s=320x180:r=25:d=1', '-c:v', 'prores_ks', join(dir, 'source.mov'))
       mkdirSync(join(dir, 'proxies')); writeFileSync(join(dir, 'proxies/bad.mp4'), 'interrupted render')

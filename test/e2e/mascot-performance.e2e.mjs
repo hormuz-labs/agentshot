@@ -11,7 +11,7 @@ import { bundledBinary } from './helpers.mjs'
 import { dismissOnboarding } from './onboarding.mjs'
 
 const root = join(import.meta.dirname, '../..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-mascot-perf-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-mascot-perf-'))
 const env = { ...process.env, MANUL_PROJECTS: join(tmp, 'projects') }
 delete env.ELECTRON_RENDERER_URL
 const app = await electron.launch({ cwd: root, executablePath: await prepareElectron(), args: ['.', `--user-data-dir=${join(tmp, 'ud')}`], env })
@@ -48,7 +48,7 @@ try {
     await win.evaluate(project => {
       window.__perf = { received: [], displayed: [], longTasks: [] }
       const pending = []
-      window.__perfOff = window.manul.agent.onEvent((dir, e) => {
+      window.__perfOff = window.agentshot.agent.onEvent((dir, e) => {
         if (dir !== project || e.type !== 'TEXT_MESSAGE_CONTENT') return
         window.__perf.received.push(Date.now() - e.timestamp)
         pending.push({ text: e.delta.trim(), sent: e.timestamp })

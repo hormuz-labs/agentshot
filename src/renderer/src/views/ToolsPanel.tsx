@@ -11,15 +11,15 @@ const modelName = (p: string) => p.split('/').pop()!.replace(/^ggml-|\.bin$/g, '
 
 function SpeechSection({ onChange }: { onChange(): void }) {
   const [st, setSt] = useState<WhisperStatus | null>(null)
-  useEffect(() => { window.manul.whisper.status().then(setSt) }, [])
+  useEffect(() => { window.agentshot.whisper.status().then(setSt) }, [])
   if (!st) return null
-  const apply = async (c: Parameters<typeof window.manul.whisper.set>[0]) => { setSt(await window.manul.whisper.set(c)); onChange() }
+  const apply = async (c: Parameters<typeof window.agentshot.whisper.set>[0]) => { setSt(await window.agentshot.whisper.set(c)); onChange() }
   const sys = st.active?.engine === 'system' ? st.active : null
   const engineButton = (engine: 'bundled' | 'managed', label: string) =>
     st.active?.engine !== engine && <Button size="sm" variant="ghost" onClick={() => apply({ mode: 'custom', engine })}>{label}</Button>
   const custom = st.config?.mode === 'custom'
   const pick = async (what: 'binary' | 'model') => {
-    const path = await window.manul.whisper.pick(what)
+    const path = await window.agentshot.whisper.pick(what)
     if (path) apply({ mode: 'custom', engine: 'system', binary: what === 'binary' ? path : sys?.binary || st.found.binaries[0], model: what === 'model' ? path : sys?.model || st.found.models[0] })
   }
   return (
@@ -70,7 +70,7 @@ export function ToolsPanel() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const jobs = useJobs().filter(j => j.kind === 'install' || j.kind === 'download')
-  const refresh = () => { window.manul.tools.bundled().then(setBundled); window.manul.tools.list().then(setTools) }
+  const refresh = () => { window.agentshot.tools.bundled().then(setBundled); window.agentshot.tools.list().then(setTools) }
   useEffect(() => { refresh() }, [])
 
   const act = async (id: string, fn: () => Promise<void>) => {
@@ -104,9 +104,9 @@ export function ToolsPanel() {
                 <div className="text-xs text-faint">{t.installed ? `${t.version ?? 'installed'} · ${mb(t.diskBytes)}` : `about ${t.sizeMB} MB`}</div>
               </div>
               {busy === t.id ? <Loader2 className="size-4 animate-spin text-amber" /> : t.installed ? (
-                <Button size="sm" variant="ghost" onClick={() => act(t.id, () => window.manul.tools.remove(t.id))}><Trash2 />Remove</Button>
+                <Button size="sm" variant="ghost" onClick={() => act(t.id, () => window.agentshot.tools.remove(t.id))}><Trash2 />Remove</Button>
               ) : (
-                <Button size="sm" onClick={() => act(t.id, () => window.manul.tools.install(t.id))}><Download />Install</Button>
+                <Button size="sm" onClick={() => act(t.id, () => window.agentshot.tools.install(t.id))}><Download />Install</Button>
               )}
             </div>
             <p className="mt-1 text-xs leading-relaxed text-dim">{t.description}</p>

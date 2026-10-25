@@ -21,14 +21,14 @@ describe('motion videos', () => {
     expect(motionBrief(undefined)).toBe('')
   })
 
-  it('gives the agent the example’s prompt, its maker, and Manul’s way to build it', () => {
+  it('gives the agent the example’s prompt, its maker, and AgentShot’s way to build it', () => {
     const lookup = () => ex({ prompt: '<inputs>\nAsk me for: one hero word.\n</inputs>\n<build>One HTML file, seek(t)</build>' })
     const b = motionBrief(project({ aspect: '16:9', canvas: 'media/canvas.mp4', reference: 'media/ultimaxbt-bbebf5.mp4',
       example: { id: 'ultimaxbt-bbebf5', title: 'Orange dot motion system', handle: 'ultimaxbt', post: 'https://x.com/ultimaxbt/status/1' } }), lookup)
     expect(b).toContain('1920x1080')
     expect(b).toContain('"Orange dot motion system" by @ultimaxbt (https://x.com/ultimaxbt/status/1)')
     expect(b).toContain('<example_prompt>\n<inputs>\nAsk me for: one hero word.')
-    expect(b).toMatch(/use Manul's motion clips instead/)
+    expect(b).toMatch(/use AgentShot's motion clips instead/)
     expect(b).toContain('Reference video: media/ultimaxbt-bbebf5.mp4')
     expect(b).toMatch(/Storyboard before any code/)
   })

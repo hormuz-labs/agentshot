@@ -1,5 +1,5 @@
 // Motion clips: agent-made HTML + GSAP in clips/<id>/clip.html, rendered frame-exact into clips/<id>/clip.mp4.
-// Rendering happens in an offscreen window on a separate, network-less session: for each frame Manul moves the clip's
+// Rendering happens in an offscreen window on a separate, network-less session: for each frame AgentShot moves the clip's
 // clock (__manulSeek), waits for the paint, captures the bitmap and pipes it to ffmpeg.
 import { BrowserWindow, session } from 'electron'
 import { spawn } from 'node:child_process'
@@ -15,14 +15,14 @@ export type RenderResult = ClipFormat & { video: string; poster: string; frames:
 
 export const clipUrl = encodeMediaPath
 
-/** The session clips run in: only manul:// (project files, Manul's libraries) and inline data; no network. */
+/** The session clips run in: only manul:// (project files, AgentShot's libraries) and inline data; no network. */
 let clipSession: Electron.Session | null = null
 let handler: ((req: Request) => Response | Promise<Response>) | null = null
 /** The manul:// handler (protocol handlers are per session, so the clip session needs it too). */
 export const setClipProtocol = (h: typeof handler) => { handler = h }
 export function clipsSession() {
   if (clipSession) return clipSession
-  clipSession = session.fromPartition('manul-clips')
+  clipSession = session.fromPartition('agentshot-clips')
   if (handler) clipSession.protocol.handle('manul', handler)
   clipSession.webRequest.onBeforeRequest((d, cb) => cb({ cancel: !/^(manul|data|blob|devtools):/.test(d.url) }))
   clipSession.setPermissionRequestHandler((_wc, _p, cb) => cb(false))
@@ -50,7 +50,7 @@ export async function renderClip(projectDir: string, id: string, j?: JobHandle, 
   try {
     await win.loadURL(clipUrl(html))
     const fmt = (await win.webContents.executeJavaScript('window.__manulReady')) as ClipFormat | undefined
-    if (!fmt) throw new Error('The clip did not load Manul\'s runtime (manul://lib/clip-runtime.js).')
+    if (!fmt) throw new Error('The clip did not load AgentShot\'s runtime (manul://lib/clip-runtime.js).')
     const { width, height, fps, duration } = fmt
     win.setContentSize(width, height)
     await win.webContents.executeJavaScript('window.__manulSeek(0)')

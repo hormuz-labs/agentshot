@@ -18,7 +18,7 @@ export function useAttached(dir: string): string[] {
 /** Copy files, folders or .zips into the project, and attach what came in to the next message. */
 export async function addFiles(dir: string, paths: string[]) {
   for (const f of paths) {
-    try { attachFiles(dir, await window.manul.project.import(dir, f)) } catch (e) { alert((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')) }
+    try { attachFiles(dir, await window.agentshot.project.import(dir, f)) } catch (e) { alert((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')) }
   }
 }
-export const pickFiles = async (dir: string) => addFiles(dir, await window.manul.project.pickFiles())
+export const pickFiles = async (dir: string) => addFiles(dir, await window.agentshot.project.pickFiles())

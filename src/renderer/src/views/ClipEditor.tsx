@@ -58,7 +58,7 @@ export function ClipEditor({ dir, clip, width, height, time, picked, onPick, onC
               if (!d) return
               if (Math.abs(d.dx) < 2 && Math.abs(d.dy) < 2) { onPick(el.id); return }
               setSaving(true)
-              try { await window.manul.clips.move(dir, clip.id, el.id, d.dx, d.dy) } finally { setSaving(false) }
+              try { await window.agentshot.clips.move(dir, clip.id, el.id, d.dx, d.dy) } finally { setSaving(false) }
             }}
           >
             <span className="absolute -top-5 left-0 whitespace-nowrap rounded bg-black/70 px-1 text-[10px] text-amber">{el.id}</span>

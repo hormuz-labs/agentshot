@@ -1,6 +1,6 @@
-// A CDP connection to the page a walkthrough films. In Manul's own browser it is the tab's webContents.debugger (shared
+// A CDP connection to the page a walkthrough films. In AgentShot's own browser it is the tab's webContents.debugger (shared
 // with the bsk extension, see Browser.film); in the user's Chrome it is Chrome's own remote debugging, which the user
-// turns on at chrome://inspect/#remote-debugging and approves when Chrome asks. Manul connects to it alongside their
+// turns on at chrome://inspect/#remote-debugging and approves when Chrome asks. AgentShot connects to it alongside their
 // bsk extension, only to film the tab their bsk session drives, and only while a take is recording.
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -18,7 +18,7 @@ export type Cdp = {
   close(): Promise<void>
 }
 
-/** The attribute the agent's bsk session sets on the page it drives, so Manul films that tab and no other. */
+/** The attribute the agent's bsk session sets on the page it drives, so AgentShot films that tab and no other. */
 export const TAKE_ATTR = 'data-manul-take'
 /** The page script reports what happens on the page through this CDP binding. */
 export const BINDING = '__manulTake'
@@ -41,7 +41,7 @@ export function parsePortFile(text: string): { port: number; path: string } | nu
 
 /** One step for the user, said once (the agent asks it with a single Done). */
 export const CHROME_HELP = 'To film in your Chrome, turn on remote debugging once: open chrome://inspect/#remote-debugging in Chrome and switch on ' +
-  '“Allow remote debugging”. Then click Allow when Chrome asks. Manul films only the walkthrough\'s tab, only while it records.'
+  '“Allow remote debugging”. Then click Allow when Chrome asks. AgentShot films only the walkthrough\'s tab, only while it records.'
 
 /** A browser-level CDP WebSocket with flattened sessions. */
 class Wire {
@@ -104,7 +104,7 @@ export async function chromeCdp(nonce: string, o: { files?: string[]; timeoutMs?
       wire.close()
     } catch (e) { lastError = e; wire?.close() }
   }
-  throw lastError instanceof Error ? lastError : new Error('Manul could not find the walkthrough\'s tab in Chrome. Keep the bsk session\'s tab open and try again.')
+  throw lastError instanceof Error ? lastError : new Error('AgentShot could not find the walkthrough\'s tab in Chrome. Keep the bsk session\'s tab open and try again.')
 }
 
 function pageOf(wire: Wire, sessionId: string): Cdp {

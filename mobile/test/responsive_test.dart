@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:manul_mobile/main.dart';
-import 'package:manul_mobile/bridge/client.dart';
-import 'package:manul_mobile/bridge/store.dart';
-import 'package:manul_mobile/ui/home.dart';
-import 'package:manul_mobile/ui/pair.dart';
-import 'package:manul_mobile/ui/project.dart';
-import 'package:manul_mobile/ui/settings.dart';
+import 'package:agentshot_mobile/main.dart';
+import 'package:agentshot_mobile/bridge/client.dart';
+import 'package:agentshot_mobile/bridge/store.dart';
+import 'package:agentshot_mobile/ui/home.dart';
+import 'package:agentshot_mobile/ui/pair.dart';
+import 'package:agentshot_mobile/ui/project.dart';
+import 'package:agentshot_mobile/ui/settings.dart';
 
 class FakeClient extends BridgeClient {
   @override
@@ -55,7 +55,7 @@ void main() {
         addTearDown(store.dispose);
         addTearDown(client.dispose);
         Widget host(Widget child) => MaterialApp(
-          theme: manulTheme(Brightness.light),
+          theme: agentShotTheme(Brightness.light),
           builder: (context, widget) => MediaQuery(
             data: MediaQuery.of(
               context,

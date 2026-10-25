@@ -5,8 +5,8 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const out = process.argv[2] || mkdtempSync(join(tmpdir(), 'manul-tools-e2e-'))
-const app = await electron.launch({ args: ['.', `--user-data-dir=${mkdtempSync(join(tmpdir(), 'manul-ud-'))}`] })
+const out = process.argv[2] || mkdtempSync(join(tmpdir(), 'agentshot-tools-e2e-'))
+const app = await electron.launch({ args: ['.', `--user-data-dir=${mkdtempSync(join(tmpdir(), 'agentshot-ud-'))}`] })
 try {
   const win = await app.firstWindow()
   await win.setViewportSize({ width: 1440, height: 900 }).catch(() => {})

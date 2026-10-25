@@ -1,4 +1,4 @@
-// Preload of every tab (and frame) in Manul's browser: BrowserSkill's content scripts, run in this isolated world (the
+// Preload of every tab (and frame) in AgentShot's browser: BrowserSkill's content scripts, run in this isolated world (the
 // page's own scripts cannot see it), with a `chrome` object bridged to the extension host. Also answers
 // chrome.scripting.executeScript calls for the isolated world.
 import { ipcRenderer } from 'electron'

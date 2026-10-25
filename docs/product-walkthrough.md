@@ -1,6 +1,6 @@
 # Product walkthroughs
 
-Ask Manul for a walkthrough of a website or web app and it makes the whole film: it uses the product in a browser,
+Ask AgentShot for a walkthrough of a website or web app and it makes the whole film: it uses the product in a browser,
 films it, narrates it and cuts it. There is nothing to configure. On the start screen the request itself says it is a
 walkthrough (`wantsWalkthrough`: a walkthrough, demo or tour of a site or app, unless it asks for animation), and a line
 under the box says what will happen; in a project, the agent reads the same intent from the message.
@@ -27,7 +27,7 @@ went wrong can be done again as a new step and the failed one left out (`skip`).
 
 Walkthroughs are filmed in **the user's own Chrome**, with their logins, whatever Settings → Browser says: the agent drives
 it with `chrome-bsk`, bsk's commands on the user's bsk daemon (`src/main/bsk.ts`, `chromeBskScript`; installed for the
-agent at start). Without bsk in their Chrome, the agent uses plain `bsk`, Manul's own browser. Manul finds which bsk has
+agent at start). Without bsk in their Chrome, the agent uses plain `bsk`, AgentShot's own browser. AgentShot finds which bsk has
 the session (it marks the session's page with a one-off attribute through each in turn) and films it the best way
 available, with nothing for the user to set up:
 
@@ -35,7 +35,7 @@ available, with nothing for the user to set up:
 | --- | --- | --- |
 | The user's Chrome, remote debugging on (`DevToolsActivePort` in its profile) | CDP screencast over Chrome's own remote debugging; Chrome asks the user to allow it | 30–60 a second, 2560×1440 |
 | The user's Chrome otherwise | bsk's own screenshots, on the agent's session | about 10 a second, at the screen's scale (2560×1440 on Retina) |
-| Manul's browser | CDP screencast on the tab's `webContents.debugger` | 30–60 a second, 2560×1440 |
+| AgentShot's browser | CDP screencast on the tab's `webContents.debugger` | 30–60 a second, 2560×1440 |
 
 **Through bsk** (`BskCapture`): bsk's screenshot is itself a CDP capture, but bsk hides its overlay and waits a frame
 around each one, so about 10 a second is the most it gives, whatever the size. The page is never emulated here: a capture
@@ -43,12 +43,12 @@ while the page is emulated at another size or scale than its window makes Chrome
 flash ten times a second, measured on screen). Instead bsk's Agent Window is resized until the page is 1280×720 (bsk sizes
 the whole window, so the tab strip and debugging bar are learned from the page's size after a resize), filmed at the
 screen's own scale, and put back afterwards. A bsk session runs one command at a time (anything sent meanwhile is turned away as `session_busy`, never sent), so
-Manul's calls go one by one and are sent again when turned away; each of the agent's `chrome-bsk` commands leaves a mark in
+AgentShot's calls go one by one and are sent again when turned away; each of the agent's `chrome-bsk` commands leaves a mark in
 `<userData>/takes/yield` while it runs, and the screenshots wait for it, so the agent is never turned away either. Scrolls
 are started in the page and filmed while they play. The remote-debugging toggle is never asked for; the agent mentions it
 only if the user finds the motion choppy.
 
-**Manul's browser**: while a tab is filmed its debugger stays attached (the extension sees a detach), its screencast
+**AgentShot's browser**: while a tab is filmed its debugger stays attached (the extension sees a detach), its screencast
 frames are not passed to the extension, and it keeps painting when the Browser panel is hidden (one pixel instead of
 hidden: Chromium paints nothing for a hidden view). The panel opens when a take starts and shows **Recording**.
 
@@ -100,10 +100,10 @@ npm run test:walkthrough
 
 `walkthrough-render` renders a synthetic take with stand-in voices and checks the size, length, sound, zoom and that
 unchanged lines are not voiced again. `walkthrough-chrome` films a page in a throwaway Chromium (Playwright's, or
-`MANUL_CHROMIUM`) through its `DevToolsActivePort`, as Manul does with the user's Chrome; it is skipped without one. The
-desktop test runs twice: in Manul's own browser, and with `--chrome` the way the user's Chrome is filmed without remote
-debugging (the agent on `chrome-bsk`, filmed through bsk's screenshots), with Manul's browser standing in for that Chrome
+`MANUL_CHROMIUM`) through its `DevToolsActivePort`, as AgentShot does with the user's Chrome; it is skipped without one. The
+desktop test runs twice: in AgentShot's own browser, and with `--chrome` the way the user's Chrome is filmed without remote
+debugging (the agent on `chrome-bsk`, filmed through bsk's screenshots), with AgentShot's browser standing in for that Chrome
 (`MANUL_CHROME_BSK_HOME`). It runs the real agent loop with a scripted model (a local OpenAI-compatible server as a custom provider, so no
-paid model or voice): from a request on the start screen (the hint shows, no format to pick), it films a test product in Manul's own browser
+paid model or voice): from a request on the start screen (the hint shows, no format to pick), it films a test product in AgentShot's own browser
 (clicks, typing, a pause, a scroll), composes it, and checks the take's events, that bsk's overlay is not on film, that the
 page scrolled, that the panel showed Recording only while filming, and the proposed film.

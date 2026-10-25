@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later (it is linked with sherpa-onnx's libraries, which include espeak-ng; see
 // LICENSES/GPL-3.0.txt)
-// manul-speakers: who speaks when, as JSON on stdout, for Manul's speakers tool.
+// agentshot-speakers: who speaks when, as JSON on stdout, for AgentShot's speakers tool.
 // sherpa-onnx's offline speaker diarization (pyannote segmentation + a speaker-embedding model, then clustering),
-// statically linked by scripts/build-ml.sh. Reads 16 kHz mono 16-bit WAV (Manul's ffmpeg makes it).
-//   manul-speakers --segmentation seg.onnx --embedding emb.onnx [--speakers N] [--threshold 0.5] in.wav
+// statically linked by scripts/build-ml.sh. Reads 16 kHz mono 16-bit WAV (AgentShot's ffmpeg makes it).
+//   agentshot-speakers --segmentation seg.onnx --embedding emb.onnx [--speakers N] [--threshold 0.5] in.wav
 // {"speakers":2,"segments":[[0.32,4.81,0,0.93],…]}   start, end (seconds), speaker (0-based), confidence
 // Progress goes to stderr as "progress <done>/<total>" lines.
-//   manul-speakers --embedding emb.onnx --embed ranges.txt in.wav
-// A voice embedding for each "start end" line (seconds) of ranges.txt, for Manul to group voices and label every line:
+//   agentshot-speakers --embedding emb.onnx --embed ranges.txt in.wav
+// A voice embedding for each "start end" line (seconds) of ranges.txt, for AgentShot to group voices and label every line:
 // {"dim":192,"embeddings":[[0.0123,…],null,…]}   null for a range under 0.3 s
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +20,7 @@ static int32_t progress(int32_t done, int32_t total, void *arg) {
   return 0;
 }
 
-/** One embedding per range of the wave (null when too short): Manul's own grouping of voices works on these. */
+/** One embedding per range of the wave (null when too short): AgentShot's own grouping of voices works on these. */
 static int embed(const char *model, const char *ranges, const char *wav) {
   SherpaOnnxSpeakerEmbeddingExtractorConfig config;
   memset(&config, 0, sizeof(config));
@@ -28,11 +28,11 @@ static int embed(const char *model, const char *ranges, const char *wav) {
   config.num_threads = 2;
   config.provider = "cpu";
   const SherpaOnnxSpeakerEmbeddingExtractor *ex = SherpaOnnxCreateSpeakerEmbeddingExtractor(&config);
-  if (!ex) { fprintf(stderr, "manul-speakers: could not load %s\n", model); return 1; }
+  if (!ex) { fprintf(stderr, "agentshot-speakers: could not load %s\n", model); return 1; }
   const SherpaOnnxWave *wave = SherpaOnnxReadWave(wav);
-  if (!wave) { fprintf(stderr, "manul-speakers: cannot read %s\n", wav); return 1; }
+  if (!wave) { fprintf(stderr, "agentshot-speakers: cannot read %s\n", wav); return 1; }
   FILE *f = fopen(ranges, "r");
-  if (!f) { fprintf(stderr, "manul-speakers: cannot read %s\n", ranges); return 1; }
+  if (!f) { fprintf(stderr, "agentshot-speakers: cannot read %s\n", ranges); return 1; }
   int32_t dim = SherpaOnnxSpeakerEmbeddingExtractorDim(ex);
   printf("{\"dim\":%d,\"embeddings\":[", dim);
   double s, e;
@@ -76,8 +76,8 @@ int main(int argc, char **argv) {
   }
   if (ranges && emb && wav) return embed(emb, ranges, wav);
   if (!seg || !emb || !wav) {
-    fprintf(stderr, "usage: manul-speakers --segmentation seg.onnx --embedding emb.onnx [--speakers N] [--threshold 0.5] in.wav\n"
-                    "       manul-speakers --embedding emb.onnx --embed ranges.txt in.wav\n");
+    fprintf(stderr, "usage: agentshot-speakers --segmentation seg.onnx --embedding emb.onnx [--speakers N] [--threshold 0.5] in.wav\n"
+                    "       agentshot-speakers --embedding emb.onnx --embed ranges.txt in.wav\n");
     return 2;
   }
 
@@ -96,18 +96,18 @@ int main(int argc, char **argv) {
   config.min_duration_off = 0.5f;
 
   const SherpaOnnxOfflineSpeakerDiarization *sd = SherpaOnnxCreateOfflineSpeakerDiarization(&config);
-  if (!sd) { fprintf(stderr, "manul-speakers: could not load the models\n"); return 1; }
+  if (!sd) { fprintf(stderr, "agentshot-speakers: could not load the models\n"); return 1; }
   const SherpaOnnxWave *wave = SherpaOnnxReadWave(wav);
-  if (!wave) { fprintf(stderr, "manul-speakers: cannot read %s\n", wav); return 1; }
+  if (!wave) { fprintf(stderr, "agentshot-speakers: cannot read %s\n", wav); return 1; }
   int32_t want = SherpaOnnxOfflineSpeakerDiarizationGetSampleRate(sd);
   if (wave->sample_rate != want) {
-    fprintf(stderr, "manul-speakers: %s is %d Hz; it must be %d Hz\n", wav, wave->sample_rate, want);
+    fprintf(stderr, "agentshot-speakers: %s is %d Hz; it must be %d Hz\n", wav, wave->sample_rate, want);
     return 1;
   }
 
   const SherpaOnnxOfflineSpeakerDiarizationResult *r =
       SherpaOnnxOfflineSpeakerDiarizationProcessWithCallback(sd, wave->samples, wave->num_samples, progress, NULL);
-  if (!r) { fprintf(stderr, "manul-speakers: diarization failed\n"); return 1; }
+  if (!r) { fprintf(stderr, "agentshot-speakers: diarization failed\n"); return 1; }
   int32_t n = SherpaOnnxOfflineSpeakerDiarizationResultGetNumSegments(r);
   const SherpaOnnxOfflineSpeakerDiarizationSegment *s = SherpaOnnxOfflineSpeakerDiarizationResultSortByStartTime(r);
 

@@ -16,10 +16,10 @@ void main() {
       ], await rootBundle.loadString('assets/fonts/$name-OFL.txt'));
     }
   });
-  runApp(const ManulApp());
+  runApp(const AgentShotApp());
 }
 
-ThemeData manulTheme(Brightness brightness) {
+ThemeData agentShotTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final scheme =
       ColorScheme.fromSeed(
@@ -79,13 +79,13 @@ ThemeData manulTheme(Brightness brightness) {
   );
 }
 
-class ManulApp extends StatefulWidget {
-  const ManulApp({super.key});
+class AgentShotApp extends StatefulWidget {
+  const AgentShotApp({super.key});
   @override
-  State<ManulApp> createState() => _ManulAppState();
+  State<AgentShotApp> createState() => _AgentShotAppState();
 }
 
-class _ManulAppState extends State<ManulApp> {
+class _AgentShotAppState extends State<AgentShotApp> {
   final client = BridgeClient();
   late final store = BridgeStore(client);
   bool ready = false, paired = false;
@@ -136,8 +136,8 @@ class _ManulAppState extends State<ManulApp> {
   Widget build(BuildContext context) => MaterialApp(
     title: 'AgentShot',
     debugShowCheckedModeBanner: false,
-    theme: manulTheme(Brightness.light),
-    darkTheme: manulTheme(Brightness.dark),
+    theme: agentShotTheme(Brightness.light),
+    darkTheme: agentShotTheme(Brightness.dark),
     themeMode: theme,
     home: !ready
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))

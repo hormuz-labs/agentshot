@@ -136,7 +136,7 @@ export type GalleryExample = {
 export type RecentProject = { id: string; title: string; dir: string; openedAt: number; createdAt?: number; thumb?: string }
 
 export type KeyInfo = { env: string; label: string; unlocks: string[]; hint: string; set: boolean }
-/** Who is signed in to Manul (never their key), and whether this build can sign in at all. */
+/** Who is signed in to AgentShot (never their key), and whether this build can sign in at all. */
 export type AccountStatus = { email?: string; available: boolean }
 /** The signed-in person's credits and plan (shared with Pitch), from the account service. */
 export type AccountPlan = { key: string; name: string; every: 'month' | 'year'; credits: number; renews: boolean; until: string }
@@ -153,7 +153,7 @@ export type Balance = {
 
 export type ToolStatus = { name: string; version?: string; path?: string; bundled: boolean; ok: boolean }
 
-/** A tool Manul downloads only when it is first needed. */
+/** A tool AgentShot downloads only when it is first needed. */
 export type OnDemandTool = {
   id: string
   name: string
@@ -187,10 +187,10 @@ export type Job = {
 export type ConsentRequest = { id: string; project?: string; title: string; body: string; sizeMB?: number; confirm: string }
 
 /**
- * Which speech-to-text engine Manul uses, in order of preference when nothing is set:
+ * Which speech-to-text engine AgentShot uses, in order of preference when nothing is set:
  *   system   whisper.cpp already on this computer (whisper-cli + a ggml model): found automatically or set by the user
- *   bundled  Manul's own whisper.cpp, with the base model downloaded on first use
- *   managed  faster-whisper in a Python environment Manul downloads (for platforms without a bundled build)
+ *   bundled  AgentShot's own whisper.cpp, with the base model downloaded on first use
+ *   managed  faster-whisper in a Python environment AgentShot downloads (for platforms without a bundled build)
  * mode "auto" re-detects the system engine when its saved paths disappear; "custom" keeps the user's paths as they are.
  */
 export type WhisperConfig = {
@@ -208,7 +208,7 @@ export type WhisperStatus = {
   /** whisper.cpp binaries and models found on this computer. */
   found: { binaries: string[]; models: string[] }
   managedInstalled: boolean
-  /** Manul ships whisper.cpp for this platform (the model may still need downloading). */
+  /** AgentShot ships whisper.cpp for this platform (the model may still need downloading). */
   bundledBinary: boolean
   bundledReady: boolean
 }
@@ -221,7 +221,7 @@ export type Transcript = { media: string; language: string; model: string; segme
 /** recording: a product walkthrough is filming this tab */
 export type BrowserTab = { id: number; title: string; url: string; loading: boolean; agent: boolean; recording?: boolean; canBack: boolean; canForward: boolean }
 export type BrowserState = { tabs: BrowserTab[]; active: number | null; bsk: { connected: boolean; status: string } }
-/** manul: Manul's own browser with its private bsk (default). chrome: the user's own Chrome through their bsk. */
+/** manul: AgentShot's own browser with its private bsk (default). chrome: the user's own Chrome through their bsk. */
 export type BrowserMode = 'manul' | 'chrome'
 /** What Settings → Browser shows about the user's own Chrome bsk. */
 export type ChromeBsk = { cli: string | null; daemon: boolean; browsers: { id: string; label: string }[] }

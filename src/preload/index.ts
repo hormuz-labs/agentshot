@@ -132,7 +132,7 @@ const api = {
     list: () => ipcRenderer.invoke('keys:list') as Promise<KeyInfo[]>,
     set: (name: string, value: string) => ipcRenderer.invoke('keys:set', name, value) as Promise<KeyInfo[]>,
   },
-  /** Signing in to Manul: brings the person's Manul key (stays in the main process); only who is signed in comes back. */
+  /** Signing in to AgentShot: brings the person's AgentShot key (stays in the main process); only who is signed in comes back. */
   account: {
     status: () => ipcRenderer.invoke('account:status') as Promise<AccountStatus>,
     signIn: () => ipcRenderer.invoke('account:signIn') as Promise<AccountStatus>,
@@ -152,7 +152,7 @@ const api = {
     remove: (id: string) => ipcRenderer.invoke('providers:remove', id) as Promise<ProvidersState>,
     importOmp: () => ipcRenderer.invoke('providers:import-omp') as Promise<ProvidersState & { added: { id: string; name: string; models: number; key: boolean }[] }>,
   },
-  /** Manul's own browser (the Browser panel) and which browser the agent drives. */
+  /** AgentShot's own browser (the Browser panel) and which browser the agent drives. */
   browser: {
     state: () => ipcRenderer.invoke('browser:state') as Promise<BrowserState>,
     onState: on<[BrowserState]>('browser:state'),
@@ -226,5 +226,5 @@ const api = {
   onNotice: on<[string]>('notice'),
 }
 
-export type ManulApi = typeof api
-contextBridge.exposeInMainWorld('manul', api)
+export type AgentShotApi = typeof api
+contextBridge.exposeInMainWorld('agentshot', api)

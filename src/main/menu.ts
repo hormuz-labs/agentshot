@@ -7,7 +7,7 @@ export function buildMenu(win: () => BrowserWindow | null) {
   const mac = process.platform === 'darwin'
   const undo = (what: 'undo' | 'redo') => {
     const focused = webContents.getFocusedWebContents()
-    if (focused && focused !== win()?.webContents) focused[what]() // Manul's browser
+    if (focused && focused !== win()?.webContents) focused[what]() // AgentShot's browser
     else win()?.webContents.send('menu', what)
   }
   const template: MenuItemConstructorOptions[] = [

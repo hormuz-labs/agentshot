@@ -49,7 +49,7 @@ describe('rhythm from the tracker\'s beats', () => {
 describe.skipIf(process.platform === 'win32')('tracking a real file', () => {
   let dir: string
   beforeAll(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'manul-music-'))
+    dir = await mkdtemp(join(tmpdir(), 'agentshot-music-'))
     // 12 s of clicks at 120 BPM from 0.25 s, the first of every four louder and higher
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
       "aevalsrc='if(lt(mod(t+0.25,0.5),0.04), sin(2*PI*(if(lt(mod(t+0.25,2),0.04),1500,800))*t)*(if(lt(mod(t+0.25,2),0.04),1,0.4)), 0)':s=44100:d=12",

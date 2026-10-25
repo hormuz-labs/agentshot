@@ -1,9 +1,9 @@
-// Manul's own browser: real Chromium tabs (WebContentsViews on one persistent session, separate from any browser the
+// AgentShot's own browser: real Chromium tabs (WebContentsViews on one persistent session, separate from any browser the
 // user has) shown in the Browser panel, plus a hidden extension host that runs the bundled BrowserSkill extension's
 // background script against these tabs. Electron implements only part of Chrome's extension API, so the host page gets
 // a complete `chrome` object (src/preload/chrome-shim.ts) whose calls land here: tabs, windows, debugger (CDP through
 // webContents.debugger), scripting, webNavigation, storage, downloads, notifications. Content scripts run in every
-// tab's isolated world (src/preload/ext-tab.ts). The extension is preset to Manul's private bsk daemon (src/main/bsk.ts).
+// tab's isolated world (src/preload/ext-tab.ts). The extension is preset to AgentShot's private bsk daemon (src/main/bsk.ts).
 import { app, BrowserWindow, ipcMain, Notification, session as electronSession, WebContentsView, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents, type WebFrameMain } from 'electron'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -18,7 +18,7 @@ type Any = any
 
 /** BrowserSkill's extension id (fixed by its manifest key): the daemon only accepts sockets from this origin. */
 export const BSK_ID = 'hhcmgoofomhgciiibhipgmgkgnoenaoi'
-/** Logins made in Manul's browser persist here, apart from the user's own browsers. */
+/** Logins made in AgentShot's browser persist here, apart from the user's own browsers. */
 export const WEB_PARTITION = 'persist:manul-web'
 const HOST_PARTITION = 'persist:manul-bsk-host'
 const HOME_URL = 'https://www.google.com/'
@@ -63,10 +63,10 @@ export class Browser {
     mkdirSync(o.dataDir, { recursive: true })
     let saved: Record<string, unknown> = {}
     try { saved = JSON.parse(readFileSync(this.storeFile, 'utf8')) } catch { /* first run */ }
-    // the daemon port and label are Manul's, every start (never whatever was stored before)
+    // the daemon port and label are AgentShot's, every start (never whatever was stored before)
     this.local = new Store({ ...saved, ...o.storagePreset }, c => { this.saveStore(); this.event('storage.onChanged', c, 'local') })
     this.manifest = JSON.parse(readFileSync(join(o.extDir, 'manifest.json'), 'utf8'))
-    this.ses.setUserAgent(this.ses.getUserAgent().replace(/\s?(Electron|manul)\/\S+/gi, '')) // sites refuse "Electron/…"
+    this.ses.setUserAgent(this.ses.getUserAgent().replace(/\s?(Electron|AgentShot|manul)\/\S+/gi, '')) // sites refuse "Electron/…"
     this.ipc()
     this.downloadsSetup()
   }
@@ -411,11 +411,11 @@ export class Browser {
       // notifications
       case 'notifications.create': {
         const id = typeof a === 'string' ? a : `n${Date.now()}`, o = typeof a === 'string' ? b : a
-        if (Notification.isSupported()) { const n = new Notification({ title: o?.title || 'Manul browser', body: o?.message || '' }); n.on('click', () => this.event('notifications.onClicked', id)); n.show() }
+        if (Notification.isSupported()) { const n = new Notification({ title: o?.title || 'AgentShot browser', body: o?.message || '' }); n.on('click', () => this.event('notifications.onClicked', id)); n.show() }
         return id
       }
       case 'notifications.clear': return true
-      default: throw new Error(`chrome.${name} is not available in Manul's browser`)
+      default: throw new Error(`chrome.${name} is not available in AgentShot's browser`)
     }
   }
 
@@ -433,7 +433,7 @@ export class Browser {
       const v = await x.view.webContents.executeJavaScript(matchExpression, true).catch(() => null)
       if (v === nonce) { t = x; break }
     }
-    if (!t) throw new Error('Manul could not find the walkthrough\'s tab in its browser. Keep the bsk session\'s tab open and try again.')
+    if (!t) throw new Error('AgentShot could not find the walkthrough\'s tab in its browser. Keep the bsk session\'s tab open and try again.')
     if (this.filming.has(t.id)) throw new Error('That tab is already being recorded.')
     const wc = t.view.webContents
     if (!wc.debugger.isAttached()) wc.debugger.attach('1.3')

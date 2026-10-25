@@ -22,9 +22,9 @@ export function recordedTranscriptEnv(tmp) {
 
 // Exercise persisted transcripts and real export/mix, independently of model downloads or local STT engines.
 export async function loadRecordedTranscript(win, words) {
-  await win.waitForFunction(async () => !!(await window.manul.tabs.get()).active)
-  const dir = await win.evaluate(() => window.manul.tabs.get().then(t => t.active))
-  await win.evaluate(d => window.manul.project.close(d), dir)
+  await win.waitForFunction(async () => !!(await window.agentshot.tabs.get()).active)
+  const dir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
+  await win.evaluate(d => window.agentshot.project.close(d), dir)
   const p = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
   const media = p.versions[0].path
   const segments = []
@@ -41,6 +41,6 @@ export async function loadRecordedTranscript(win, words) {
   writeFileSync(join(dir, 'project.json'), JSON.stringify(p))
   await win.reload()
   await win.waitForSelector('video')
-  await win.waitForFunction(d => window.manul.project.open(d).then(proj => Object.keys(proj.transcripts || {}).length > 0), dir)
+  await win.waitForFunction(d => window.agentshot.project.open(d).then(proj => Object.keys(proj.transcripts || {}).length > 0), dir)
   return dir
 }

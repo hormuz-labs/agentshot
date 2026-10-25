@@ -9,7 +9,7 @@ export function ArtifactCard({ dir, path }: { dir: string; path: string }) {
   const image = /\.(png|jpe?g|webp|gif|avif)$/i.test(path)
   const download = async () => {
     setBusy(true); setError(''); setSaved(false)
-    try { setSaved(!!await window.manul.project.downloadFile(dir, path)) }
+    try { setSaved(!!await window.agentshot.project.downloadFile(dir, path)) }
     catch (e) { setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')) }
     finally { setBusy(false) }
   }
@@ -21,7 +21,7 @@ export function ArtifactCard({ dir, path }: { dir: string; path: string }) {
       <button type="button" onClick={download} disabled={busy} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-amber hover:bg-hover disabled:opacity-50" aria-label={`Download ${path.split('/').pop()}`}>
         {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}Download
       </button>
-      <button type="button" aria-label={`Show ${path.split('/').pop()} in folder`} className="rounded p-1.5 text-dim hover:bg-hover" onClick={() => window.manul.project.revealFile(dir, path).catch(e => setError((e as Error).message))}><FolderOpen className="size-3.5" /></button>
+      <button type="button" aria-label={`Show ${path.split('/').pop()} in folder`} className="rounded p-1.5 text-dim hover:bg-hover" onClick={() => window.agentshot.project.revealFile(dir, path).catch(e => setError((e as Error).message))}><FolderOpen className="size-3.5" /></button>
     </div>
     {error && <p role="alert" className="px-3 pb-3 text-bad">{error}</p>}
   </div>

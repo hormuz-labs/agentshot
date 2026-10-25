@@ -116,7 +116,7 @@ describe('timeline render coordination', () => {
 
 describe('private render files', () => {
   it('publishes concurrent real FFmpeg renders to distinct complete files without overwriting earlier versions', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'manul-render-race-'))
+    const dir = await mkdtemp(join(tmpdir(), 'agentshot-render-race-'))
     try {
       const old = await renderOutput(dir, 'timeline', false, async o => {
         await run(FFMPEG, ['-v', 'error', '-f', 'lavfi', '-i', 'color=blue:s=160x90:r=25:d=1', '-c:v', 'libx264', join(dir, o.final)])
@@ -145,7 +145,7 @@ describe('private render files', () => {
     } finally { await rm(dir, { recursive: true, force: true }) }
   })
   it('removes partial outputs after encoding fails', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'manul-render-fail-'))
+    const dir = await mkdtemp(join(tmpdir(), 'agentshot-render-fail-'))
     try {
       let partial = ''
       await expect(renderOutput(dir, 'timeline', false, async o => {

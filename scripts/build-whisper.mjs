@@ -34,7 +34,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (existsSync(join(out, 'whisper-cli.exe')) && existsSync(stamp) && readFileSync(stamp, 'utf8') === identity) {
       console.log(`whisper-cli ${identity.trim()} already built`)
     } else {
-      const tmp = mkdtempSync(join(tmpdir(), 'manul-whisper-'))
+      const tmp = mkdtempSync(join(tmpdir(), 'agentshot-whisper-'))
       try {
         const src = join(tmp, 'src')
         const build = join(tmp, 'build')

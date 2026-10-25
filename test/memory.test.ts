@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Memory } from '../src/main/memory'
 
-const mem = () => new Memory(mkdtempSync(join(tmpdir(), 'manul-mem-')))
+const mem = () => new Memory(mkdtempSync(join(tmpdir(), 'agentshot-mem-')))
 
 describe('long-term memory', () => {
   it('saves one fact per file with an index line', () => {

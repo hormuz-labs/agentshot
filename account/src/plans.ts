@@ -39,7 +39,7 @@ export const costForCredits = (credits: number, rate = RATE) => Math.max(0, cred
 /** Credits for a retail price in dollars (voice and music are priced as billable usage already). */
 export const creditsForPrice = (usd: number) => Math.ceil(Math.round((usd / CREDIT_USD) * 1e6) / 1e6)
 
-/** What a new Manul account starts with (Pitch's sign-up promo is separate and smaller). */
+/** What a new AgentShot account starts with (Pitch's sign-up promo is separate and smaller). */
 export const STARTER_CREDITS = 1_000
 
 export type Tier = 'low' | 'medium' | 'high' | 'max' | 'ultra'

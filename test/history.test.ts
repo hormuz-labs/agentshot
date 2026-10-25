@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { History } from '../src/main/history'
 
 function project() {
-  const dir = mkdtempSync(join(tmpdir(), 'manul-hist-'))
+  const dir = mkdtempSync(join(tmpdir(), 'agentshot-hist-'))
   mkdirSync(join(dir, 'clips', 'title'), { recursive: true })
   mkdirSync(join(dir, 'media'))
   writeFileSync(join(dir, 'project.json'), '{"v":1}')

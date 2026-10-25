@@ -1,8 +1,8 @@
-// Manul's usage proxy, a Cloudflare Worker in front of PostHog. The app sends its batches here, so:
+// AgentShot's usage proxy, a Cloudflare Worker in front of PostHog. The app sends its batches here, so:
 // - PostHog never sees users' IP addresses (nothing from the request but the batch is passed on);
 // - only the events and properties in src/shared/telemetry.ts get through, rebuilt from scratch, and crash reports
 //   ($exception, PostHog error tracking) rebuilt by cleanException;
-// - each IP is rate-limited, and the proxy only sends to Manul's own PostHog project.
+// - each IP is rate-limited, and the proxy only sends to AgentShot's own PostHog project.
 // Deploy: see telemetry/README.md.
 import { cleanException, USAGE_EVENTS } from '../../src/shared/telemetry'
 

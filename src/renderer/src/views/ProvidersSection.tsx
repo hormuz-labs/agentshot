@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { PROVIDER_APIS, type CustomProviderInfo, type ProviderApi } from '../../../shared/providers'
 
-type State = Awaited<ReturnType<typeof window.manul.providers.list>>
+type State = Awaited<ReturnType<typeof window.agentshot.providers.list>>
 type Form = { name: string; baseUrl: string; api: ProviderApi; keyHeader: string; models: string; key: string }
 const EMPTY: Form = { name: '', baseUrl: '', api: 'openai-responses', keyHeader: '', models: '', key: '' }
 const field = 'h-8 w-full rounded-lg border border-line bg-bg px-2.5 text-xs outline-none placeholder:text-faint focus:border-amber/60'
@@ -18,7 +18,7 @@ export function ProvidersSection({ onKeyed }: { onKeyed?: (keyed: boolean) => vo
   const [form, setForm] = useState<Form>(EMPTY)
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
-  useEffect(() => { window.manul.providers.list().then(setState) }, [])
+  useEffect(() => { window.agentshot.providers.list().then(setState) }, [])
   useEffect(() => { onKeyed?.(state.providers.some(p => p.keySet)) }, [state, onKeyed])
 
   const edit = (p?: CustomProviderInfo) => {
@@ -31,14 +31,14 @@ export function ProvidersSection({ onKeyed }: { onKeyed?: (keyed: boolean) => vo
       const models = form.models.split(/[\s,]+/).filter(Boolean)
       const old = state.providers.find(p => p.id === editing)
       const keep = new Map((old?.models || []).map(m => [m.id, m]))
-      setState(await window.manul.providers.save({ name: form.name, baseUrl: form.baseUrl, api: form.api, keyHeader: form.keyHeader, models: models.map(id => keep.get(id) || { id }) },
+      setState(await window.agentshot.providers.save({ name: form.name, baseUrl: form.baseUrl, api: form.api, keyHeader: form.keyHeader, models: models.map(id => keep.get(id) || { id }) },
         form.key.trim() || undefined, editing || undefined))
       setEditing(null)
     } catch (e) { setError(String((e as Error).message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')) }
   }
   const importOmp = async () => {
     try {
-      const r = await window.manul.providers.importOmp()
+      const r = await window.agentshot.providers.importOmp()
       setState(r)
       setNote(r.added.length ? `Imported ${r.added.map(a => `${a.name} (${a.models} model${a.models === 1 ? '' : 's'}${a.key ? '' : ', add its key'})`).join(', ')}.` : 'omp has no custom providers to import.')
     } catch (e) { setNote(`Couldn't read omp's models.yml: ${(e as Error).message}`) }
@@ -91,7 +91,7 @@ export function ProvidersSection({ onKeyed }: { onKeyed?: (keyed: boolean) => vo
               </div>
               {editing !== p.id && (
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={async () => setState(await window.manul.providers.remove(p.id))}>Remove</Button>
+                  <Button size="sm" variant="ghost" onClick={async () => setState(await window.agentshot.providers.remove(p.id))}>Remove</Button>
                   <Button size="sm" onClick={() => edit(p)}>{p.keySet ? 'Edit' : 'Add key'}</Button>
                 </div>
               )}

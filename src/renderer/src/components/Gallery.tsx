@@ -23,7 +23,7 @@ export function inputsOf(prompt?: string) {
 
 export function useGallery() {
   const [list, setList] = useState<GalleryExample[]>([])
-  useEffect(() => { window.manul.gallery.list().then(setList).catch(() => setList([])) }, [])
+  useEffect(() => { window.agentshot.gallery.list().then(setList).catch(() => setList([])) }, [])
   return list
 }
 

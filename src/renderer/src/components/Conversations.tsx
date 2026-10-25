@@ -19,7 +19,7 @@ export function Conversations({ project }: { project: Project }) {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="start" sideOffset={6} className="z-50 w-72 rounded-card border border-line bg-panel p-1 shadow-2xl shadow-shade">
-          <button onClick={async () => { await window.manul.agent.newConversation(project.dir); setOpen(false) }}
+          <button onClick={async () => { await window.agentshot.agent.newConversation(project.dir); setOpen(false) }}
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-amber hover:bg-hover">
             <MessageSquarePlus className="size-3.5" />New conversation
           </button>
@@ -28,12 +28,12 @@ export function Conversations({ project }: { project: Project }) {
             {list.map(c => (
               <div key={c.id} className={cn('group flex items-center gap-1 rounded-md px-2 py-1.5 hover:bg-hover', c.id === project.conversation && 'bg-raised')}>
                 {renaming?.id === c.id ? (
-                  <form className="flex-1" onSubmit={async e => { e.preventDefault(); await window.manul.agent.renameConversation(project.dir, c.id, renaming.title); setRenaming(null) }}>
+                  <form className="flex-1" onSubmit={async e => { e.preventDefault(); await window.agentshot.agent.renameConversation(project.dir, c.id, renaming.title); setRenaming(null) }}>
                     <input autoFocus value={renaming.title} onChange={e => setRenaming({ ...renaming, title: e.target.value })} onBlur={() => setRenaming(null)}
                       className="h-6 w-full rounded border border-line bg-bg px-1.5 text-xs outline-none" />
                   </form>
                 ) : (
-                  <button className="min-w-0 flex-1 text-left" onClick={async () => { await window.manul.agent.switchConversation(project.dir, c.id); setOpen(false) }}>
+                  <button className="min-w-0 flex-1 text-left" onClick={async () => { await window.agentshot.agent.switchConversation(project.dir, c.id); setOpen(false) }}>
                     <div className="truncate text-xs text-fg">{c.title}</div>
                     <div className="text-[10.5px] text-faint">{new Date(c.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                   </button>

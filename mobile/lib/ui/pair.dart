@@ -203,9 +203,7 @@ class _PairScreenState extends State<PairScreen> {
                         showHost ? Icons.expand_less : Icons.expand_more,
                         size: 18,
                       ),
-                      label: const Text(
-                        'Away from home? Enter an address',
-                      ),
+                      label: const Text('Away from home? Enter an address'),
                     ),
                   ),
                   if (showHost) ...[

@@ -1,7 +1,7 @@
 // The motion gallery: examples from prompt-motion.com with the prompt (or skill) behind each, their tags and their
 // makers (scripts/fetch-motion-gallery.mjs). The start screen shows them; using one gives a motion project the example's
 // prompt as its brief and its video as the reference. The app carries the catalogue and posters (manul://gallery/…);
-// videos stream from Manul's bucket (scripts/publish-motion-gallery.mjs), or come from resources/motion-gallery/media/
+// videos stream from AgentShot's bucket (scripts/publish-motion-gallery.mjs), or come from resources/motion-gallery/media/
 // when a developer has fetched them.
 import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
@@ -44,7 +44,7 @@ export const example = (id: string) => examples().find(e => e.id === id)
 const localVideo = (id: string) => join(GALLERY, 'media', `${id}.mp4`)
 
 /** The example's video on disk, to copy into a project as its reference: a developer's local copy, else downloaded once
- *  from the bucket into Manul's cache. */
+ *  from the bucket into AgentShot's cache. */
 export async function exampleVideo(id: string) {
   if (existsSync(localVideo(id))) return localVideo(id)
   const dir = join(app.getPath('userData'), 'gallery-cache')

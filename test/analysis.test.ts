@@ -69,7 +69,7 @@ describe('measuring a real file', () => {
   let dir: string
   const vidstab = () => execFileSync(FFMPEG, ['-hide_banner', '-filters']).toString().includes(' vidstabdetect ')
   beforeAll(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'manul-analysis-'))
+    dir = await mkdtemp(join(tmpdir(), 'agentshot-analysis-'))
     // 2 s of a still test card (testsrc2's own movement would read as shake), a hard cut, 2 s of another card shaken
     // by a jittering crop; a tone, then silence
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error',

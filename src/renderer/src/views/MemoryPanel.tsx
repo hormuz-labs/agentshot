@@ -1,4 +1,4 @@
-// What Manul remembers about the user across projects. Readable, editable, deletable.
+// What AgentShot remembers about the user across projects. Readable, editable, deletable.
 import { useEffect, useState } from 'react'
 import { Brain, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,8 +9,8 @@ type Item = { name: string; description: string; body: string }
 export function MemoryPanel() {
   const [items, setItems] = useState<Item[]>([])
   const [edit, setEdit] = useState<Item | null>(null)
-  useEffect(() => { window.manul.memory.list().then(setItems) }, [])
-  const save = async () => { if (!edit?.name.trim()) return; setItems(await window.manul.memory.save(edit.name, edit.description, edit.body)); setEdit(null) }
+  useEffect(() => { window.agentshot.memory.list().then(setItems) }, [])
+  const save = async () => { if (!edit?.name.trim()) return; setItems(await window.agentshot.memory.save(edit.name, edit.description, edit.body)); setEdit(null) }
 
   return (
     <div>
@@ -33,7 +33,7 @@ export function MemoryPanel() {
             <div className="flex items-center gap-2">
               <span className="flex-1 font-medium">{m.name}</span>
               <button className="text-faint opacity-0 hover:text-fg group-hover:opacity-100" onClick={() => setEdit(m)} title="Edit"><Pencil className="size-3.5" /></button>
-              <button className="text-faint opacity-0 hover:text-bad group-hover:opacity-100" onClick={async () => setItems(await window.manul.memory.forget(m.name))} title="Delete"><Trash2 className="size-3.5" /></button>
+              <button className="text-faint opacity-0 hover:text-bad group-hover:opacity-100" onClick={async () => setItems(await window.agentshot.memory.forget(m.name))} title="Delete"><Trash2 className="size-3.5" /></button>
             </div>
             <div className="text-xs text-dim">{m.description}</div>
             <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-faint" data-selectable>{m.body}</div>

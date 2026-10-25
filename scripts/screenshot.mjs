@@ -55,7 +55,7 @@ try {
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows().find(x => x.isVisible()) || BrowserWindow.getAllWindows()[0]; w.setSize(1440, 860); w.center() })
   await win.waitForSelector('text=What are we making?')
   // a placeholder key so the agent's input shows (nothing is sent)
-  await win.evaluate(() => window.manul.keys.set('GEMINI_API_KEY', 'screenshot-placeholder'))
+  await win.evaluate(() => window.agentshot.keys.set('GEMINI_API_KEY', 'screenshot-placeholder'))
   await win.reload()
   await win.waitForSelector('text=What are we making?')
   await win.locator('textarea').fill('Cut the ums, then add a lower third that says “Otocolobus manul” when the cat is named')
@@ -66,8 +66,8 @@ try {
   await win.click('text=Drop a video here')
   await win.locator('button[aria-label="Start"]').click()
   await win.waitForSelector('[data-project-title]', { timeout: 30_000 })
-  await win.waitForFunction(d => window.manul.project.open(d).then(p => Object.keys(p.transcripts || {}).length > 0),
-    await win.evaluate(() => window.manul.tabs.get().then(t => t.active)), { timeout: 120_000, polling: 1000 }) // transcribed
+  await win.waitForFunction(d => window.agentshot.project.open(d).then(p => Object.keys(p.transcripts || {}).length > 0),
+    await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active)), { timeout: 120_000, polling: 1000 }) // transcribed
   // the speakers job and the filmstrip finish first (each sends the project again, which would replace what's staged)
   await win.waitForSelector('text=Finding who speaks', { state: 'detached', timeout: 180_000 }).catch(() => {})
   await win.waitForFunction(() => { const i = [...document.querySelectorAll('[data-testid="timeline-filmstrip"] img')]; return i.length > 2 && i.every(x => x.complete) }, null, { timeout: 60_000 }).catch(() => {})
@@ -75,10 +75,10 @@ try {
 
   // stage what the agent would have done: a proposed version, a note boxed on the frame, the conversation
   const dir = await win.locator('[data-project-row][aria-current="true"]').getAttribute('data-project-row')
-  const [rel] = await win.evaluate(([d, f]) => window.manul.project.import(d, f), [dir, join(tmp, 'v2 Ums cut, lower third.mp4')])
+  const [rel] = await win.evaluate(([d, f]) => window.agentshot.project.import(d, f), [dir, join(tmp, 'v2 Ums cut, lower third.mp4')])
   await win.waitForTimeout(1500)
   await win.waitForSelector('text=Finding who speaks', { state: 'detached', timeout: 180_000 }).catch(() => {}) // the import's own job
-  const p = await win.evaluate(d => window.manul.project.open(d), dir)
+  const p = await win.evaluate(d => window.agentshot.project.open(d), dir)
   const film = p.versions[0].path
   const staged = {
     ...p,

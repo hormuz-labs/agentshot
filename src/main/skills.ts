@@ -81,7 +81,7 @@ export class Skills {
     const on = this.enabled()
     if (!on.length) return ''
     return `Skills (profile "${this.profile().name}"). Each holds how a kind of work should be done. Before work a skill covers, read its ` +
-      `SKILL.md (and any files it names) with the read tool, and follow it. Skills are part of Manul and read-only; when the user ` +
+      `SKILL.md (and any files it names) with the read tool, and follow it. Skills are part of AgentShot and read-only; when the user ` +
       `corrects how something should be done for good, save it with remember.\n` +
       on.map(k => `- ${k.id} (${k.path}): ${k.description.slice(0, 400)}`).join('\n')
   }

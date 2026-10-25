@@ -1,6 +1,6 @@
 // Crash reports, only when the user said yes. Imported first by index.ts: the crash SDK must start before the app is
 // ready to catch native crashes and to register its protocol for the renderer. Sentry's SDK only catches and scrubs:
-// its transport below sends each report as a PostHog error tracking event ($exception), through Manul's proxy like
+// its transport below sends each report as a PostHog error tracking event ($exception), through AgentShot's proxy like
 // usage statistics, and never to Sentry. It starts whenever the build has telemetry, but sends nothing unless the user
 // agreed, so saying yes or no takes effect at once, and crashes from before a yes are never sent later. Local variables,
 // console output, URLs and file paths are kept out of reports; minidumps never leave the machine.
@@ -23,7 +23,7 @@ export const crashReportsOn = () => CRASHES_AVAILABLE && !!getConfig().telemetry
 // put keys in the query), and window screenshots.
 const DROPPED = new Set(['LocalVariables', 'Console', 'NodeFetch', 'ElectronNet', 'Screenshots', 'Http'])
 /** The SDK only runs with a DSN; this one is never contacted (the transport doesn't use it). */
-const LOCAL_DSN = 'https://manul@crash.invalid/1'
+const LOCAL_DSN = 'https://agentshot@crash.invalid/1'
 /** Reports from one run share an id, so PostHog can group them; it means nothing outside that run. */
 const RUN = randomUUID()
 

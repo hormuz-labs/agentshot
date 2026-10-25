@@ -1,7 +1,7 @@
 #!/bin/sh
-# Build manul-beats (scripts/beats/manul-beats.c on aubio: tempo, beats, onsets and energy of music) for this machine
+# Build agentshot-beats (scripts/beats/agentshot-beats.c on aubio: tempo, beats, onsets and energy of music) for this machine
 # into resources/bin/<platform>-<arch>/. aubio's sources are compiled straight into the one static binary with a fixed
-# config: no optional libraries (it reads WAV; Manul's ffmpeg decodes everything else), the same built-in FFT on every
+# config: no optional libraries (it reads WAV; AgentShot's ffmpeg decodes everything else), the same built-in FFT on every
 # platform so beats come out the same everywhere. Needs git + a C compiler. CI runs this per target.
 set -e
 AUBIO=ad5cf975aed08cc4562dd008cf9f83b12b82ffb8 # github.com/aubio/aubio master, April 2026 (0.5.0 in progress)
@@ -13,9 +13,9 @@ case "$(uname -s)-$(uname -m)" in
   *) echo "unsupported platform"; exit 1 ;;
 esac
 OUT=resources/bin/$TARGET
-if [ -x "$OUT/manul-beats" ] && [ "$(cat "$OUT/.manul-beats.version" 2>/dev/null)" = "$VERSION" ] && \
-   [ "$OUT/manul-beats" -nt scripts/beats/manul-beats.c ]; then echo "manul-beats $VERSION already built"; exit 0; fi
-SRC=${TMPDIR:-/tmp}/manul-aubio-$AUBIO
+if [ -x "$OUT/agentshot-beats" ] && [ "$(cat "$OUT/.agentshot-beats.version" 2>/dev/null)" = "$VERSION" ] && \
+   [ "$OUT/agentshot-beats" -nt scripts/beats/agentshot-beats.c ]; then echo "agentshot-beats $VERSION already built"; exit 0; fi
+SRC=${TMPDIR:-/tmp}/agentshot-aubio-$AUBIO
 if [ ! -d "$SRC/src" ]; then
   rm -rf "$SRC"
   git init -q "$SRC"
@@ -40,8 +40,8 @@ EOF
 FILES=$(find "$SRC/src" -name '*.c' | sort)
 mkdir -p "$OUT"
 # shellcheck disable=SC2086 # FILES is a list of paths without spaces, split on purpose
-cc -O2 -std=c99 -DHAVE_CONFIG_H -I"$SRC/build" -I"$SRC/src" -I"$SRC/build/include" -w $FILES scripts/beats/manul-beats.c \
-  -lm $( [ "$(uname -s)" = Darwin ] && echo "-mmacosx-version-min=12.0" ) -o "$OUT/manul-beats"
-strip "$OUT/manul-beats" 2>/dev/null || true
-echo "$VERSION" > "$OUT/.manul-beats.version"
-echo "built $OUT/manul-beats ($VERSION)"
+cc -O2 -std=c99 -DHAVE_CONFIG_H -I"$SRC/build" -I"$SRC/src" -I"$SRC/build/include" -w $FILES scripts/beats/agentshot-beats.c \
+  -lm $( [ "$(uname -s)" = Darwin ] && echo "-mmacosx-version-min=12.0" ) -o "$OUT/agentshot-beats"
+strip "$OUT/agentshot-beats" 2>/dev/null || true
+echo "$VERSION" > "$OUT/.agentshot-beats.version"
+echo "built $OUT/agentshot-beats ($VERSION)"

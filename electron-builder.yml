@@ -12,26 +12,26 @@ files:
 asar: true
 beforePack: scripts/check-native.mjs
 afterPack: scripts/check-packaged-native.mjs
-# Manul's own tools and assets live next to the app, never inside the asar archive
+# AgentShot's own tools and assets live next to the app, never inside the asar archive
 extraResources:
   - from: build/icon.png
     to: icon.png
   - from: resources/bin/${platform}-${arch}
     to: bin
-    filter: ["ffmpeg", "ffprobe", "whisper-cli", "manul-beats", "manul-speakers", "manul-vision", "manul-fence", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
+    filter: ["ffmpeg", "ffprobe", "whisper-cli", "agentshot-beats", "agentshot-speakers", "agentshot-vision", "agentshot-fence", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
   - from: resources/lib
     to: lib
   - from: resources/models
     to: models
   - from: resources/skills
     to: skills
-  # BrowserSkill's extension, run inside Manul's own browser (scripts/fetch-bsk.mjs)
+  # BrowserSkill's extension, run inside AgentShot's own browser (scripts/fetch-bsk.mjs)
   - from: resources/bsk-ext
     to: bsk-ext
     filter: ["**/*", "!.sha256"]
   - from: resources/py
     to: py
-  # The motion gallery: catalogue and posters only (~4 MB); the videos stream from Manul's bucket (scripts/publish-motion-gallery.mjs)
+  # The motion gallery: catalogue and posters only (~4 MB); the videos stream from AgentShot's bucket (scripts/publish-motion-gallery.mjs)
   - from: resources/motion-gallery
     to: motion-gallery
     filter: ["catalog.json", "posters/*.jpg"]

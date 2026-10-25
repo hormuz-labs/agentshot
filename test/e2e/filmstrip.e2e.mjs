@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { bundledBinary, decodeMediaPath } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-filmstrip-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-filmstrip-'))
 const source = join(tmp, 'footage #1.mp4')
 execFileSync(bundledBinary('ffmpeg'), [
   '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=red:s=640x360:r=60:d=2',

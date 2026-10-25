@@ -43,7 +43,7 @@ type Def = Omit<OnDemandTool, 'installed' | 'diskBytes' | 'version'> & { install
 const DEFS: Def[] = [
   {
     id: 'uv', name: 'Python runtime (uv)', sizeMB: 40,
-    description: 'Runs Manul\'s Python-based tools in their own sandboxed environments.',
+    description: 'Runs AgentShot\'s Python-based tools in their own sandboxed environments.',
     async install(j) {
       const build = UV_BUILDS[`${process.platform}-${process.arch}`]
       if (!build) throw new Error(`No uv build for ${process.platform}-${process.arch}`)
@@ -67,7 +67,7 @@ const DEFS: Def[] = [
   },
   {
     id: 'whisper-model', name: 'Speech recognition (Whisper base model)', sizeMB: 148,
-    description: 'Lets Manul\'s built-in whisper.cpp transcribe speech with word timings, so you (and Manul) can edit by text: cut the ums, remove a sentence, find a moment.',
+    description: 'Lets AgentShot\'s built-in whisper.cpp transcribe speech with word timings, so you (and AgentShot) can edit by text: cut the ums, remove a sentence, find a moment.',
     async install(j) {
       await download(WHISPER_MODEL_URL, whisperModelPath(), WHISPER_MODEL_SHA256, j, 'Downloading the Whisper model')
       return 'ggml-base'
@@ -83,7 +83,7 @@ const DEFS: Def[] = [
   },
   {
     id: 'whisper', name: 'Speech recognition (Python engine)', sizeMB: 330, needs: ['uv'],
-    description: 'faster-whisper in its own Python. Only needed on systems where Manul has no built-in whisper.cpp.',
+    description: 'faster-whisper in its own Python. Only needed on systems where AgentShot has no built-in whisper.cpp.',
     async install(j) {
       const env = pyEnv()
       j.progress(null, `Installing Python ${PYTHON}`)
@@ -211,7 +211,7 @@ async function download(url: string, to: string, sha256: string, j: JobHandle, l
       got += chunk.length
       j.progress(total ? got / total : null, `${label} · ${(got / 1e6).toFixed(1)} MB`)
     }
-    if (hash.digest('hex') !== sha256) throw new Error(`Checksum mismatch for ${url}: the download was not what Manul expected, so it was discarded.`)
+    if (hash.digest('hex') !== sha256) throw new Error(`Checksum mismatch for ${url}: the download was not what AgentShot expected, so it was discarded.`)
     await file.close()
     await rename(partial, to)
   } finally {

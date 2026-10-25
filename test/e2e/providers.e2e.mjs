@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..', '..')
-const tmp = mkdtempSync(join(tmpdir(), 'manul-providers-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-providers-'))
 const home = join(tmp, 'home')
 mkdirSync(join(home, '.omp/agent'), { recursive: true })
 writeFileSync(join(home, 'foundry-key'), 'sk-e2e-secret\n')
@@ -61,14 +61,14 @@ try {
   await win.screenshot({ path: join(tmp, 'providers.png') })
 
   // 3. the agent offers their models, labelled by provider
-  const { models } = await win.evaluate(() => window.manul.agent.models())
+  const { models } = await win.evaluate(() => window.agentshot.agent.models())
   const ids = models.map(m => `${m.providerLabel}/${m.name}`)
   for (const want of ['Azure Foundry/GPT-5.6 Terra', 'Azure Foundry/GPT-5.6 Luna', 'Local server/Qwen Coder', 'Local server/Llama 4']) assert.ok(ids.includes(want), `${want} missing from ${ids}`)
 
   // 4. remove one: its models go too
   await dlg.locator('div.rounded-lg:has-text("Local server") >> button:has-text("Remove")').click()
   await dlg.locator('text=Qwen Coder · Llama 4').waitFor({ state: 'detached' })
-  const after = (await win.evaluate(() => window.manul.agent.models())).models.map(m => m.provider)
+  const after = (await win.evaluate(() => window.agentshot.agent.models())).models.map(m => m.provider)
   assert.ok(!after.includes('local-server'), 'removed provider still offered')
   console.log('providers e2e ok:', join(tmp, 'providers.png'))
 } finally {

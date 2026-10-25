@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Type } from 'typebox'
 import { createModels, createProvider } from '@earendil-works/pi-ai/models'
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy'
-import { manulProvider } from '../src/main/gateway'
+import { agentshotProvider } from '../src/main/gateway'
 
 const GATEWAY = process.env.BIFROST_PROBE || ''
 const KEY = 'sk-bf-dev-change-me'
@@ -70,7 +70,7 @@ describe.skipIf(!GATEWAY)("Bifrost's translation through the OpenAI Responses ro
   it.each([['probe-gemini', 'R0VNSU5JU0lH'], ['probe-claude', 'Q0xBVURFU0lH'], ['probe-gpt', 'R1BUU0lH']])('%s: a tool call round trip keeps the vendor state and the image', async (name, state) => {
     bodies.length = 0
     const models = createModels({ authContext: { env: async (n: string) => (n === 'MANUL_KEY' ? KEY : undefined), fileExists: async () => false } })
-    const base = (manulProvider(GATEWAY) as any).getModels()[0]   // the app's model, under the probe's routed name
+    const base = (agentshotProvider(GATEWAY) as any).getModels()[0]   // the app's model, under the probe's routed name
     models.setProvider(createProvider({ id: 'manul', auth: { apiKey: { name: 'k', resolve: async () => ({ auth: { apiKey: KEY }, source: 'MANUL_KEY' }) } } as any, models: [{ ...base, id: name }] as any, api: openAIResponsesApi() }) as any)
     const model = models.getModel('manul', name)!
     const tools = [{ name: 'get_time', description: 'The time', parameters: Type.Object({ zone: Type.String() }) }]

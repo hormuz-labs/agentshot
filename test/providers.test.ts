@@ -8,7 +8,7 @@ import { fromOmp, isProviderKeyEnv, keyEnv, modelName, normalizeProvider } from 
 import { buildProviders, importOmp, listProviders, providerInfo, removeProvider, saveProvider } from '../src/main/providers'
 import { describeModels } from '../src/main/models'
 
-const tmp = mkdtempSync(join(tmpdir(), 'manul-providers-'))
+const tmp = mkdtempSync(join(tmpdir(), 'agentshot-providers-'))
 
 describe('custom providers: config', () => {
   it('names models the way people say them', () => {

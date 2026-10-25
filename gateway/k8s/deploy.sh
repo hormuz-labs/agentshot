@@ -1,5 +1,5 @@
 #!/bin/sh
-# Deploy Manul's gateway and account service to the current kubectl context (see gateway/README.md → Production).
+# Deploy AgentShot's gateway and account service to the current kubectl context (see gateway/README.md → Production).
 # The secrets (manul-secrets) are created once by hand; the production keys in gateway/.env, if present, are written into it.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)

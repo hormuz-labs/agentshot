@@ -107,7 +107,7 @@ describe('what can be cut by copying', () => {
 })
 
 // ---------------------------------------------------------------- real renders
-const dir = mkdtempSync(join(tmpdir(), 'manul-cuts-'))
+const dir = mkdtempSync(join(tmpdir(), 'agentshot-cuts-'))
 // ffmpeg runs beside the test, never blocking it: a render that holds the worker for a minute (the full render, on a
 // slow Intel Mac) leaves Vitest's worker unable to answer, and the run fails with "Timeout calling onTaskUpdate"
 const run = promisify(execFile)

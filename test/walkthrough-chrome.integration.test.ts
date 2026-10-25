@@ -1,4 +1,4 @@
-// A take in a separate Chromium, reached the way Manul reaches the user's Chrome: the DevToolsActivePort file that
+// A take in a separate Chromium, reached the way AgentShot reaches the user's Chrome: the DevToolsActivePort file that
 // Chrome's remote debugging writes, then the tab carrying the take's mark. Uses a throwaway Chromium with its own
 // profile (Playwright's, or MANUL_CHROMIUM); skipped when there is none.
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -33,7 +33,7 @@ describe.skipIf(!bin)('a walkthrough take in Chrome, over its remote debugging',
 <ul>${Array.from({ length: 80 }, (_, i) => `<li>Row ${i}</li>`).join('')}</ul>`)
     }).listen(0, '127.0.0.1')
     await new Promise(r => site.once('listening', r))
-    profile = mkdtempSync(join(tmpdir(), 'manul-chrome-'))
+    profile = mkdtempSync(join(tmpdir(), 'agentshot-chrome-'))
     chrome = spawn(bin!, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--window-size=1400,900',
       `http://127.0.0.1:${(site.address() as { port: number }).port}/`], { stdio: 'ignore' })
     for (let i = 0; i < 100 && !existsSync(join(profile, 'DevToolsActivePort')); i++) await new Promise(r => setTimeout(r, 100))
@@ -53,7 +53,7 @@ describe.skipIf(!bin)('a walkthrough take in Chrome, over its remote debugging',
     }
     expect(cdp).toBeTruthy()
     await expect(chromeCdp('not-there', { files: [file], timeoutMs: 5000 })).rejects.toThrow()
-    const dir = mkdtempSync(join(tmpdir(), 'manul-chrome-take-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-chrome-take-'))
     try {
       const r = new Recorder({ capture: new ScreencastCapture(cdp!), dir, rel: 'walkthroughs/c1', id: 'c1', browser: 'chrome' })
       await r.start()
