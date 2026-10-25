@@ -105,6 +105,11 @@ class _AgentShotAppState extends State<AgentShotApp> {
   void initState() {
     super.initState();
     store.addListener(_watch);
+    // listen for pairing links first: before anything that could fail on the way (reading saved state), so a
+    // scanned QR is never lost
+    Mesh.onLink((value) {
+      if (!paired && mounted) setState(() => link = value);
+    });
     _restore();
   }
 
@@ -115,17 +120,24 @@ class _AgentShotAppState extends State<AgentShotApp> {
       theme =
           ThemeMode.values.where((m) => m.name == saved).firstOrNull ??
           ThemeMode.system;
+    } catch (_) {
+      // the system's look, then
+    }
+    try {
       await account.restore();
       store.account = account;
       client.renew = account.renew;
       paired = await client.restore();
       if (paired) client.listen();
-      Mesh.onLink((value) {
-        if (!paired && mounted) setState(() => link = value);
-      });
-      if (!paired) link = await Mesh.initialLink();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('AgentShot: could not restore the saved connection: $e');
       paired = false;
+    }
+    try {
+      // opened by a scanned QR (the link that started the app), unless a link already came in meanwhile
+      if (!paired) link ??= await Mesh.initialLink();
+    } catch (_) {
+      // no link to pair with
     } finally {
       if (mounted) setState(() => ready = true);
     }
