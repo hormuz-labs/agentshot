@@ -186,7 +186,7 @@ describe('a cut, rendered', () => {
     const full = performance.now() - t
     console.log(`cut: ${Math.round(fast)} ms, full render: ${Math.round(full)} ms`)
     expect(fast).toBeLessThan(process.platform === 'win32' ? full * 0.75 : full / 2)
-  }, 120_000)
+  }, 300_000) // two real renders of a minute of film: GitHub's Intel Macs need well over two minutes
 
   it('leaves the tmp files out of the project', async () => {
     const { readdirSync, mkdirSync } = await import('node:fs')
