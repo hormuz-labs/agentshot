@@ -272,6 +272,14 @@ try {
   // What the desktop's pairing QR carries (agentshot://pair?d=…), with the address this device can reach.
   const pairLink = ({ code, fingerprint }) =>
     `agentshot://pair?d=${Buffer.from(JSON.stringify({ v: 1, code, fingerprint, url: bridge, urls: [bridge] })).toString('base64url')}`
+  // The first build on a fresh machine (Gradle, the NDK, CMake) can take longer than a pairing code lives (5 minutes):
+  // build once now, before any code is made, so each test file's own build is a quick incremental one
+  {
+    const started = Date.now()
+    const warm = spawn(flutter, ['build', 'apk', '--debug', '--no-pub'], { cwd: mobile, stdio: ['ignore', 'inherit', 'inherit'] })
+    const code = await new Promise(r => warm.on('close', r))
+    console.log(`mobile e2e: app built in ${Math.round((Date.now() - started) / 1000)} s${code ? ` (exit ${code}; each test builds it anyway)` : ''}`)
+  }
   for (const test of tests) {
     // Flutter reinstalls the app for each file, so each one pairs as a new phone. Before the last, forget them all
     // on the desktop: what is left after it disconnects shows whether Disconnect unpaired it there too.
