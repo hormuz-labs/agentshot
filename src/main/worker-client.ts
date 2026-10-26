@@ -560,6 +560,9 @@ export function startWorkerHeartbeat(opts: {
   activity?: () => { user: string; idleMs: number; busy: boolean } | undefined
 }): (() => void) & { beat: () => Promise<void> } {
   let stopped = false
+  // said once when heartbeats start failing, and once when they work again: a worker the account can't see is
+  // invisible to phones, and shouldn't be silently so
+  let failing = false
   const tick = async () => {
     if (stopped) return
     const creds = opts.bridge.workerCredentials()
@@ -585,10 +588,15 @@ export function startWorkerHeartbeat(opts: {
           opts.poolSecret,
         )
         .then(reply => {
+          if (failing) console.log('worker heartbeat: reaching the account again')
+          failing = false
           if (!opts.poolSecret || !reply) return
           opts.onLease?.(reply.leasedTo && reply.leasedUntil ? { userId: reply.leasedTo, until: reply.leasedUntil } : undefined)
         })
-        .catch(() => {})
+        .catch((e: unknown) => {
+          if (!failing) console.warn('worker heartbeat failed (phones can’t see this worker):', e instanceof Error ? e.message : e)
+          failing = true
+        })
     }
   }
   void tick()

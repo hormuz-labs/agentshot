@@ -4,7 +4,7 @@ import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, po
 import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
 import { projectArgument } from './mobile-contract'
 import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
-import { startMeshNode, type MeshNode } from './mesh'
+import { startMeshNode, stopAllMesh, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
 import { closeSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } from 'node:fs'
 import { copyFile, readFile } from 'node:fs/promises'
@@ -262,6 +262,8 @@ function stopMesh() {
   meshNode?.stop()
   meshNode = null
   meshIp = undefined
+  // and one still joining (a worker restarts seconds after a lease, long before its helper is up)
+  stopAllMesh()
 }
 
 const hostSlug = () => (hostname() || 'host').replace(/[^a-zA-Z0-9._-]/g, '-')
