@@ -253,9 +253,9 @@ class ProblemCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.fromLTRB(14, 12, 6, 10),
       decoration: BoxDecoration(
-        color: scheme.errorContainer.withValues(alpha: .55),
+        color: scheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: scheme.error.withValues(alpha: .35)),
+        border: Border.all(color: scheme.error.withValues(alpha: .45)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,7 +274,7 @@ class ProblemCard extends StatelessWidget {
                 // (the title already says what didn't happen: the computer's "Couldn't …." would say it twice)
                 Text(
                   plain(error).replaceFirst(_whatFailed, ''),
-                  style: TextStyle(color: scheme.onErrorContainer),
+                  style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
                 if (onRetry != null)
                   Padding(

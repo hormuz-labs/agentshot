@@ -1153,7 +1153,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
               ),
               title: Text(
                 entry.key.split('/').last,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
               subtitle: Text(
