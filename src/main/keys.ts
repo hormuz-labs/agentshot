@@ -29,8 +29,17 @@ export function loadKeys() {
 /** Kept like a key but never offered as one: what lets this computer run a cloud worker (index.ts, cloud worker). */
 export const CLOUD_WORKER_SECRET = 'MANUL_CLOUD_WORKER_SECRET'
 
+/** A cloud worker (--worker) holds keys in memory only: the key of whoever leases it is never written to its disk, and
+ *  it has no keychain to encrypt with anyway (no desktop session). Gone when the lease moves on or the worker restarts. */
+const inMemoryOnly = () => process.argv.includes('--worker') || process.env.MANUL_WORKER === '1'
+
 export function setKey(name: string, value: string) {
   if (!KEYS.some(k => k.env === name) && !isProviderKeyEnv(name) && name !== CLOUD_WORKER_SECRET) throw new Error(`unknown key ${name}`)  // or a custom provider's (providers.ts)
+  if (inMemoryOnly()) {
+    if (value) process.env[name] = value
+    else delete process.env[name]
+    return
+  }
   if (value) {
     store[name] = safeStorage.encryptString(value).toString('base64')
     process.env[name] = value

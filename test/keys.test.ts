@@ -17,4 +17,16 @@ describe('keys', () => {
     expect(process.env.GEMINI_API_KEY).toBeUndefined()
   })
   it('rejects unknown keys', () => expect(() => setKey('NOPE', 'x')).toThrow())
+  it('on a cloud worker, holds a key in memory only: never on its disk', () => {
+    process.env.MANUL_WORKER = '1'
+    try {
+      setKey('MANUL_KEY', 'lessee-key')
+      expect(process.env.MANUL_KEY).toBe('lessee-key')
+      delete process.env.MANUL_KEY
+      loadKeys()
+      expect(process.env.MANUL_KEY).toBeUndefined()
+    } finally {
+      delete process.env.MANUL_WORKER
+    }
+  })
 })

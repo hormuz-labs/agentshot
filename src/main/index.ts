@@ -159,6 +159,7 @@ const mobile = new MobileBridge(
 )
 
 let meshJoining: Promise<void> | undefined
+let meshRetry: ReturnType<typeof setInterval> | undefined
 // joins Headscale in the background: the pairing code must not wait on the mesh (up to ~90 s when the control server is slow)
 function joinMesh() {
   const poolSecret = process.env.MANUL_POOL_SECRET
@@ -169,7 +170,8 @@ function joinMesh() {
     if (!joined || !port) return
     const node = await startMeshNode({
       stateDir: join(app.getPath('userData'), 'mesh-worker'),
-      hostname: `manul-${(hostname() || 'worker').replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`,
+      // its own name per worker (several can run on one computer: pool-shanur-pc-2), else the computer's
+      hostname: `manul-${(process.env.MANUL_WORKER_ID || hostname() || 'worker').replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`,
       controlUrl: joined.controlUrl,
       authKey: joined.authKey,
       // mesh peers dial 47821 (the only port the Headscale ACL allows), forwarded to wherever the bridge actually bound
@@ -300,6 +302,8 @@ async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
   // a worker waits a while for the mesh (its address from anywhere), but never stays unlisted for it: after 45 s it
   // reports itself with what it has, and the mesh address joins the next heartbeat once it's up
   if (opts.waitForMesh) await Promise.race([joining, new Promise(done => setTimeout(done, 45_000))])
+  // a worker that couldn't join yet (started before the network was up) keeps trying, every minute, until it's in
+  if (WORKER_MODE) meshRetry ??= setInterval(() => { if (!meshNode && mobile.listenPort()) void joinMesh() }, 60_000)
   // "New code" calls this again; keep the one heartbeat
   stopHeartbeat ??= startWorkerHeartbeat({
     bridge: mobile,

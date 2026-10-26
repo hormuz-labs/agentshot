@@ -80,6 +80,20 @@ const text = c => (typeof c === 'string' ? c : (c || []).map(p => p.text || '').
 const model = createServer(async (req, res) => {
   let raw = ''
   for await (const c of req) raw += c
+  // the AgentShot gateway (a cloud worker using the person's credits) speaks OpenAI's Responses API: a plain reply
+  if (req.url.endsWith('/responses')) {
+    const asked = (JSON.parse(raw).input || []).filter(m => m.role === 'user').map(m => text(m.content)).pop() || ''
+    notes.push(asked); turns.push(`${asked.slice(0, 40)} → reply (gateway)`)
+    const item = { type: 'message', id: 'msg_e2e', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: reply, annotations: [] }] }
+    const send = event => res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+    res.setHeader('content-type', 'text/event-stream')
+    send({ type: 'response.created', response: { id: 'resp_e2e', status: 'in_progress', output: [] } })
+    send({ type: 'response.output_item.added', output_index: 0, item: { ...item, status: 'in_progress', content: [] } })
+    send({ type: 'response.output_text.delta', output_index: 0, item_id: item.id, content_index: 0, delta: reply })
+    send({ type: 'response.output_item.done', output_index: 0, item })
+    send({ type: 'response.completed', response: { id: 'resp_e2e', status: 'completed', output: [item], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } })
+    return res.end()
+  }
   if (!req.url.endsWith('/chat/completions')) { res.statusCode = 404; return res.end() }
   // a tool that returns an image (create_clip's frame) adds a user message carrying it: that isn't the person asking
   const messages = JSON.parse(raw).messages, at = messages.findLastIndex(m => m.role === 'user' && !/^Attached image/.test(text(m.content)))
@@ -225,7 +239,8 @@ async function startCloudWorker() {
   writeFileSync(join(ud, 'providers.json'), readFileSync(join(tmp, 'ud', 'providers.json')))
   const log = join(dir, 'worker.log')
   const child = spawn(electronBinary, [root, '--worker', `--user-data-dir=${ud}`, ...(process.platform === 'linux' ? ['--password-store=basic'] : [])], {
-    env: { ...env, MANUL_WORKER: '1', MANUL_POOL_SECRET: poolSecret, MANUL_WORKER_ID: 'pool-e2e', MANUL_WORKER_NAME: 'E2E Cloud', MANUL_PROJECTS: projects },
+    // no model key of its own, like a real cloud worker: the phone hands over its AgentShot credits
+    env: { ...Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'MANUL_PROVIDER_SCRIPTED_KEY')), MANUL_WORKER: '1', MANUL_POOL_SECRET: poolSecret, MANUL_WORKER_ID: 'pool-e2e', MANUL_WORKER_NAME: 'E2E Cloud', MANUL_PROJECTS: projects },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   for (const s of [child.stdout, child.stderr]) s.on('data', d => appendFileSync(log, d))
