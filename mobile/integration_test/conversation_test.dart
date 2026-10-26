@@ -131,5 +131,20 @@ void main() {
       DateTime.now().difference(started),
       lessThan(const Duration(seconds: 18)),
     );
+
+    // the app in the background while the agent works: an ongoing notification says it's following the work (and
+    // keeps it connected), and when the turn ends a notification says so, with the reply. The runner reads both.
+    await sendNote(tester, 'Mobile e2e slow: tell me when you are done');
+    await waitFor(tester, find.byTooltip('Stop'));
+    // (work that lasts is followed: past its first second)
+    await settle(tester, const Duration(seconds: 3));
+    cue('home');
+    // (Android shows a new ongoing notification after up to 10 s)
+    await Future<void>.delayed(const Duration(seconds: 12));
+    cue('notifications');
+    await Future<void>.delayed(const Duration(seconds: 24));
+    cue('notifications');
+    cue('front');
+    await waitFor(tester, find.byTooltip('Send'), timeout: const Duration(minutes: 1));
   });
 }

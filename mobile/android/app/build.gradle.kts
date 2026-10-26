@@ -18,6 +18,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // flutter_local_notifications (notifications when work is done) uses newer Java APIs
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -58,4 +60,5 @@ flutter {
 dependencies {
     // the embedded Headscale/Tailscale node, built from scripts/mesh/mobile by scripts/build-mesh.sh
     implementation(files("libs/agentshotmesh.aar"))
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

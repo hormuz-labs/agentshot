@@ -24,49 +24,65 @@ void main() {
       await settle(tester);
     }
 
+    // appearance, one tap each: dark, light, and back to the system's
+    Brightness brightness() =>
+        Theme.of(tester.element(find.text('Settings').first)).brightness;
+    final appearance = find.byKey(const ValueKey('appearance'));
+    Future<void> appear(String pick) async {
+      await reveal(tester, appearance);
+      await tester.tap(
+        find.descendant(of: appearance, matching: find.text(pick)),
+      );
+      await settle(tester);
+    }
+
     Future<void> choose(String now, String pick) async {
       await press(tester, find.text(now).last);
       await tester.tap(find.text(pick).last);
       await settle(tester);
     }
 
-    // appearance: dark, light, and back to the system's
-    Brightness brightness() =>
-        Theme.of(tester.element(find.text('Settings').first)).brightness;
-    await choose('Follow system', 'Dark');
+    await appear('Dark');
     expect(brightness(), Brightness.dark);
-    await choose('Dark', 'Light');
+    await appear('Light');
     expect(brightness(), Brightness.light);
-    await choose('Light', 'Follow system');
+    await appear('System');
 
-    // an AI key: added (it says so), then removed
-    await open('AI keys', 'Bring your own keys');
-    final unset = find.byWidgetPredicate(
-      (w) =>
-          w is ListTile &&
-          w.subtitle is Text &&
-          ((w.subtitle as Text).data ?? '').endsWith('No key configured') &&
-          (w.title as Text).data != 'Scripted',
+    // AI: what the computer uses now in a line (here its own provider, the scripted model), then an own key added
+    // (Added) and in the line, and removed again (asking first)
+    final ai = find.byKey(const ValueKey('settings-ai'));
+    await reveal(tester, ai);
+    await waitFor(
+      tester,
+      find.descendant(of: ai, matching: find.text('Your Scripted')),
     );
-    await waitFor(tester, unset);
-    final label = (tester.widget<ListTile>(unset.first).title as Text).data!;
-    final tile = find.widgetWithText(ListTile, label);
+    await open('AI models', 'Your own keys');
+    await reveal(tester, find.text('Your providers'));
+    expect(find.byKey(const ValueKey('ai-credits')), findsOneWidget);
+    final tile = find.byKey(const ValueKey('key-OPENAI_API_KEY'));
+    await reveal(tester, tile);
+    expect(
+      find.descendant(of: tile, matching: find.text('Add')),
+      findsOneWidget,
+    );
     await tester.tap(tile);
     await answer(tester, 'e2e-not-a-real-key');
     await waitFor(
       tester,
-      find.descendant(of: tile, matching: find.textContaining('Key is set')),
+      find.descendant(of: tile, matching: find.text('Added')),
     );
     await tester.tap(tile);
-    await answer(tester, '');
+    await waitFor(tester, find.text('Remove the OpenAI key?'));
+    await tester.tap(find.text('Remove'));
     await waitFor(
       tester,
-      find.descendant(
-        of: tile,
-        matching: find.textContaining('No key configured'),
-      ),
+      find.descendant(of: tile, matching: find.text('Add')),
     );
     await closeSheet(tester);
+    await waitFor(
+      tester,
+      find.descendant(of: ai, matching: find.text('Your Scripted')),
+    );
 
     // skills: a new profile, back to the first; a skill off and on again
     await open('Skills & profiles', 'Profile');

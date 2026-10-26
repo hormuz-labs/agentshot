@@ -97,7 +97,7 @@ class _PairScreenState extends State<PairScreen> {
         for (final c in digits) {
           c.clear();
         }
-        setState(() => error = '$e');
+        setState(() => error = plain(e));
       }
     } finally {
       if (mounted) {
@@ -136,7 +136,7 @@ class _PairScreenState extends State<PairScreen> {
     try {
       await widget.onSignIn();
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) setState(() => error = plain(e));
     } finally {
       if (mounted) setState(() => signingIn = false);
     }

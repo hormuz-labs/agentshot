@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -5,10 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'bridge/account.dart';
 import 'bridge/client.dart';
 import 'bridge/mesh.dart';
+import 'bridge/notify.dart';
 import 'bridge/store.dart';
 import 'ui/computers.dart';
 import 'ui/home.dart';
 import 'ui/pair.dart';
+import 'ui/project.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -92,6 +95,8 @@ class _AgentShotAppState extends State<AgentShotApp> {
   final client = BridgeClient();
   final account = Account();
   late final store = BridgeStore(client);
+  // when work on the computer is done or needs the person, and they aren't looking
+  late final notifier = Notifier(store)..onOpen = _openFromNotification;
   bool ready = false, paired = false;
   // signed in, but pairing with a code instead (a computer that isn't signed in)
   bool codes = false;
@@ -129,6 +134,8 @@ class _AgentShotAppState extends State<AgentShotApp> {
       client.renew = account.renew;
       paired = await client.restore();
       if (paired) client.listen();
+      await notifier.start();
+      if (paired) unawaited(notifier.askPermission());
     } catch (e) {
       debugPrint('AgentShot: could not restore the saved connection: $e');
       paired = false;
@@ -186,7 +193,22 @@ class _AgentShotAppState extends State<AgentShotApp> {
     });
   }
 
+  /// A notification about a project was tapped: that project, open.
+  Future<void> _openFromNotification(String dir) async {
+    if (!paired) return;
+    try {
+      await store.open(dir);
+      navigator.currentState?.popUntil((route) => route.isFirst);
+      await navigator.currentState?.push(
+        MaterialPageRoute<void>(builder: (_) => ProjectScreen(store: store)),
+      );
+    } catch (e) {
+      debugPrint('AgentShot: could not open $dir: $e');
+    }
+  }
+
   void connected() {
+    unawaited(notifier.askPermission());
     link = null;
     setState(() {
       paired = true;
@@ -198,6 +220,7 @@ class _AgentShotAppState extends State<AgentShotApp> {
 
   @override
   void dispose() {
+    notifier.dispose();
     store.dispose();
     client.dispose();
     super.dispose();

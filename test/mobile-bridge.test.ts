@@ -78,7 +78,8 @@ describe('mobile TLS bridge', () => {
     expect(r.status).toBe(409)
     expect(JSON.parse(r.body)).toEqual({ error: 'AgentShot on your computer has no AI to edit with yet.', code: 'needs-key' })
     f.invoke.mockRejectedValueOnce(new Error('something internal'))
-    expect(JSON.parse((await f.call('/rpc', { token: f.token, body: { method: 'project:recent', args: [] } })).body)).toEqual({ error: 'Request failed. Check the desktop and try again.' })
+    // anything else: in plain words, with what to try, never the raw error
+    expect(JSON.parse((await f.call('/rpc', { token: f.token, body: { method: 'project:recent', args: [] } })).body)).toEqual({ error: 'Something went wrong on the computer. Try again; if it keeps happening, restart AgentShot there.' })
   })
   it('lists phones signed in to the same account (account tokens), by the name they give', async () => {
     const f = await fixture()

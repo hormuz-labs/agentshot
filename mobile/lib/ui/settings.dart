@@ -36,165 +36,282 @@ class SettingsScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-    // room at the end to scroll clear of the + and the bar
-    padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
-    children: [
-      Text('Settings', style: Theme.of(context).textTheme.headlineMedium),
-      const SizedBox(height: 24),
-      dropdown('Appearance', theme.name, const {
-        'system': 'Follow system',
-        'light': 'Light',
-        'dark': 'Dark',
-      }, (v) => onTheme(ThemeMode.values.byName(v))),
-      const SizedBox(height: 20),
-      ListTile(
-        leading: const Icon(Icons.computer),
-        title: Text(store.client.connection?.name ?? 'Your computer'),
-        subtitle: Text(store.connected ? 'Connected' : 'Connecting…'),
-      ),
-      ListTile(
-        leading: const Icon(Icons.key_outlined),
-        title: const Text('AI keys'),
-        subtitle: const Text('Keys are stored on your desktop'),
-        onTap: () => keys(context),
-      ),
-      ListTile(
-        leading: const Icon(Icons.auto_awesome_outlined),
-        title: const Text('Skills & profiles'),
-        onTap: () => skills(context),
-      ),
-      ListTile(
-        leading: const Icon(Icons.psychology_outlined),
-        title: const Text('Memory'),
-        subtitle: const Text('Your taste, across projects'),
-        onTap: () => memory(context),
-      ),
-      ListTile(
-        leading: const Icon(Icons.build_outlined),
-        title: const Text('Desktop tools'),
-        onTap: () => tools(context),
-      ),
-      ListTile(
-        leading: const Icon(Icons.language),
-        title: const Text('Agent browser'),
-        subtitle: const Text('Browser runs on your computer'),
-        onTap: () => browser(context),
-      ),
-      ListTile(
-        leading: const Icon(Icons.account_circle_outlined),
-        title: const Text('AgentShot account'),
-        subtitle: Credits(store: store),
-        onTap: () => panel(
-          context,
-          'AgentShot account',
-          'account:status',
-          (data, reload) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                data['email'] == null
-                    ? 'Sign in through AgentShot on your desktop.'
-                    : 'Signed in as ${data['email']}',
-              ),
-              const SizedBox(height: 12),
-              if (data['email'] != null)
-                AsyncPanel(
-                  load: () => store.client.call('account:balance'),
-                  builder: (value, _) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Credits: ${value['credits']}'),
-                      Text('Plan: ${value['plan']?['name'] ?? 'Free'}'),
-                      for (final tier in objects(value['tiers']))
-                        ListTile(
-                          title: Text('${tier['name']}'),
-                          subtitle: Text(
-                            tier['available'] == true
-                                ? 'Available'
-                                : 'Unavailable',
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-      ListTile(
-        leading: const Icon(Icons.dns_outlined),
-        title: const Text('Model providers'),
-        onTap: () => panel(
-          context,
-          'Model providers',
-          'providers:list',
-          (data, reload) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Custom provider endpoints are configured on the desktop. Pick their models inside any project.',
-              ),
-              for (final provider in objects(data['providers']))
-                ListTile(
-                  title: Text('${provider['name'] ?? provider['id']}'),
-                  subtitle: Text('${provider['baseUrl'] ?? ''}'),
-                ),
-            ],
-          ),
-        ),
-      ),
-      ListTile(
-        leading: const Icon(Icons.info_outline),
-        title: const Text('About AgentShot'),
-        onTap: () => showAboutDialog(
-          context: context,
-          applicationName: 'AgentShot',
-          applicationIcon: Image.asset(
-            'assets/manul.png',
-            width: 48,
-            height: 48,
-          ),
-          applicationVersion: '0.1.0',
-          applicationLegalese:
-              '© 2026 agenthormuz@proton.me · GPL-3.0-or-later',
-          children: [
-            const Text(
-              'A video editor you direct by talking. Mobile companion for Android and iOS.\nagentshot.si',
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 20),
-      if (account != null) ...[
-        if (account!.email != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text('Signed in as ${account!.email}'),
-          ),
-        OutlinedButton.icon(
-          onPressed: () => leaving(context, onDisconnect),
-          icon: const Icon(Icons.swap_horiz),
-          label: const Text('Switch computer'),
-        ),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final cloud = store.onCloud;
+    final computer = store.client.connection?.name ?? 'Your computer';
+    final signedIn = account?.signedIn == true ? account : null;
+    return ListView(
+      // room at the end to scroll clear of the + and the bar
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
+      children: [
+        Text('Settings', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: () => leaving(context, onSignOut),
-          icon: const Icon(Icons.logout),
-          label: const Text('Sign out'),
-        ),
-      ] else ...[
-        OutlinedButton.icon(
-          onPressed: () => guard(context, onDisconnect),
-          icon: const Icon(Icons.link_off),
-          label: const Text('Disconnect this device'),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'You can also remove this phone on your computer, in AgentShot → Settings → Mobile.',
-        ),
+        // who this is: the account this phone signed in with (its credits), or the computer's when paired by code
+        Section('Account', [
+          ListTile(
+            key: const ValueKey('settings-account'),
+            leading: CircleAvatar(
+              backgroundColor: scheme.primaryContainer,
+              foregroundColor: scheme.onPrimaryContainer,
+              child: signedIn?.email?.isNotEmpty == true
+                  ? Text(signedIn!.email![0].toUpperCase())
+                  : const Icon(Icons.person_outline),
+            ),
+            title: Text(
+              signedIn?.email != null
+                  ? 'Signed in as ${signedIn!.email}'
+                  : 'AgentShot account',
+            ),
+            subtitle: Credits(store: store),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => accountDetails(context),
+          ),
+          if (signedIn != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => leaving(context, onSignOut),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign out'),
+                ),
+              ),
+            ),
+        ], divided: false),
+        // what this phone works on now, and how to change it
+        Section(cloud ? 'AgentShot Cloud' : 'Computer', [
+          ListTile(
+            leading: Icon(cloud ? Icons.cloud_outlined : Icons.computer),
+            title: Text(computer),
+            subtitle: Row(
+              children: [
+                Icon(
+                  Icons.circle,
+                  size: 10,
+                  color: store.connected ? Colors.green : scheme.outline,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(store.connected ? 'Connected' : 'Connecting…'),
+                ),
+              ],
+            ),
+          ),
+          if (cloud)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                'Your projects, conversations and settings live in your own space, kept for you between visits.',
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: signedIn != null
+                  ? OutlinedButton.icon(
+                      onPressed: () => leaving(context, onDisconnect),
+                      icon: const Icon(Icons.swap_horiz),
+                      label: const Text('Switch computer'),
+                    )
+                  : OutlinedButton.icon(
+                      onPressed: () => guard(context, onDisconnect),
+                      icon: const Icon(Icons.link_off),
+                      label: const Text('Disconnect this device'),
+                    ),
+            ),
+          ),
+          if (signedIn == null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text(
+                'You can also remove this phone on your computer, in AgentShot → Settings → Mobile.',
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ),
+        ], divided: false),
+        // how AgentShot thinks, in one line, and where to change it
+        Section('AI', [AiTile(store: store)]),
+        // the computer's own: not a cloud worker's, which keeps them to itself
+        if (!cloud)
+          Section('On $computer', [
+            ListTile(
+              leading: const Icon(Icons.auto_awesome_outlined),
+              title: const Text('Skills & profiles'),
+              subtitle: const Text('What the agent knows how to do'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => skills(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.psychology_outlined),
+              title: const Text('Memory'),
+              subtitle: const Text('Your taste, across projects'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => memory(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.build_outlined),
+              title: const Text('Desktop tools'),
+              subtitle: const Text('Speech recognition and extras'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => tools(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.language),
+              title: const Text('Agent browser'),
+              subtitle: const Text('The browser the agent uses'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => browser(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.dns_outlined),
+              title: const Text('Model providers'),
+              subtitle: const Text('Custom endpoints set up on the computer'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => providers(context),
+            ),
+          ]),
+        Section('App', [
+          // light or dark at a tap (or as the phone is set)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Appearance'),
+                const SizedBox(height: 10),
+                SegmentedButton<ThemeMode>(
+                  key: const ValueKey('appearance'),
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: ThemeMode.system,
+                      icon: Icon(Icons.brightness_auto_outlined),
+                      label: Text('System'),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.light,
+                      icon: Icon(Icons.light_mode_outlined),
+                      label: Text('Light'),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.dark,
+                      icon: Icon(Icons.dark_mode_outlined),
+                      label: Text('Dark'),
+                    ),
+                  ],
+                  selected: {theme},
+                  onSelectionChanged: (v) => onTheme(v.first),
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('About AgentShot'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showAboutDialog(
+              context: context,
+              applicationName: 'AgentShot',
+              applicationIcon: Image.asset(
+                'assets/manul.png',
+                width: 48,
+                height: 48,
+              ),
+              applicationVersion: '0.1.0',
+              applicationLegalese:
+                  '© 2026 agenthormuz@proton.me · GPL-3.0-or-later',
+              children: [
+                const Text(
+                  'A video editor you direct by talking. Mobile companion for Android and iOS.\nagentshot.si',
+                ),
+              ],
+            ),
+          ),
+        ]),
       ],
-    ],
+    );
+  }
+
+  /// The account in full: who, credits, plan and what it unlocks. This phone's account when it signed in, else the
+  /// computer's.
+  void accountDetails(BuildContext context) {
+    final mine = account?.signedIn == true ? account : null;
+    panel(context, 'AgentShot account', 'account:status', (data, reload) {
+      final email = mine?.email ?? data['email'] as String?;
+      if (email == null) {
+        return const Text('Sign in through AgentShot on your desktop.');
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Signed in as $email'),
+          const SizedBox(height: 16),
+          AsyncPanel(
+            load: () async => mine != null
+                ? await mine.balance()
+                : object(await store.client.call('account:balance')),
+            builder: (value, _) {
+              final tiers = objects(value['tiers']);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    Credits.describe(object(value)).split(' · ').first,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  Text('${value['plan']?['name'] ?? 'Free'} plan'),
+                  if (tiers.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'Models',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    for (final tier in tiers)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          tier['available'] == true
+                              ? Icons.check_circle_outline
+                              : Icons.lock_outline,
+                        ),
+                        title: Text('${tier['name']}'),
+                        subtitle: Text(
+                          tier['available'] == true
+                              ? 'Included'
+                              : 'Not on this plan',
+                        ),
+                      ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      );
+    });
+  }
+
+  void providers(BuildContext context) => panel(
+    context,
+    'Model providers',
+    'providers:list',
+    (data, reload) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Custom provider endpoints are configured on the desktop. Pick their models inside any project.',
+        ),
+        for (final provider in objects(data['providers']))
+          ListTile(
+            title: Text('${provider['name'] ?? provider['id']}'),
+            subtitle: Text('${provider['baseUrl'] ?? ''}'),
+          ),
+      ],
+    ),
   );
 
   void keys(BuildContext context) => showKeys(context, store);
@@ -513,5 +630,109 @@ class Credits extends StatelessWidget {
           ? 'Not signed in'
           : 'Checking credits…',
     ),
+  );
+}
+
+/// A titled group of settings on a card.
+class Section extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  /// A line between rows (off for a card that is one item with its actions).
+  final bool divided;
+  const Section(this.title, this.children, {super.key, this.divided = true});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (i, child) in children.indexed) ...[
+                if (divided && i > 0) const Divider(height: 1, indent: 16),
+                child,
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Settings → AI in a line: how AgentShot on the computer thinks now (credits, own keys, or not set up yet). Opens
+/// the AI sheet, and reads again when it closes.
+class AiTile extends StatefulWidget {
+  final BridgeStore store;
+  const AiTile({super.key, required this.store});
+  @override
+  State<AiTile> createState() => _AiTileState();
+}
+
+class _AiTileState extends State<AiTile> {
+  late Future<String?> summary = _read();
+
+  /// keys:list and the computer's providers, in a line.
+  Future<String?> _read() async {
+    final keys = objects(await widget.store.client.call('keys:list'));
+    final listed = await widget.store.client
+        .call('providers:list')
+        .catchError((Object _) => null);
+    // an older computer may not say: none, then
+    final providers = listed is Map ? objects(listed['providers']) : <Json>[];
+    return aiSummary(keys, providers);
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<String?>(
+    future: summary,
+    builder: (context, snapshot) {
+      final done =
+          snapshot.connectionState == ConnectionState.done &&
+          !snapshot.hasError;
+      final line = snapshot.data;
+      final missing = done && line == null;
+      final scheme = Theme.of(context).colorScheme;
+      return ListTile(
+        key: const ValueKey('settings-ai'),
+        leading: Icon(
+          missing ? Icons.error_outline : Icons.auto_awesome,
+          color: missing ? scheme.error : scheme.primary,
+        ),
+        title: const Text('AI models'),
+        subtitle: Text(
+          snapshot.hasError
+              ? 'Couldn’t check'
+              : !done
+              ? 'Checking…'
+              : line ?? 'Not set up yet: choose credits or a key',
+          style: missing ? TextStyle(color: scheme.error) : null,
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () async {
+          await showKeys(context, widget.store);
+          if (mounted) {
+            setState(() {
+              summary = _read();
+            });
+          }
+        },
+      );
+    },
   );
 }

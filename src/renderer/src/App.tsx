@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAgent } from '@/lib/agui'
 import { ConsentStack } from '@/components/ConsentStack'
+import { ImportProblems } from '@/components/ImportProblems'
 import { TelemetryConsent } from '@/components/TelemetryConsent'
 import { ProductTour } from '@/components/ProductTour'
 import { CommandPalette } from '@/components/CommandPalette'
@@ -152,6 +153,7 @@ export function App() {
           <button className="text-xs text-faint hover:text-fg" onClick={() => setReady2update(null)}>Later</button>
         </div>
       )}
+      <ImportProblems project={tabs.active} />
       {notice && (
         <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-bad/30 bg-surface px-4 py-2 text-bad shadow-xl shadow-shade" onClick={() => setNotice(null)}>{notice}</div>
       )}

@@ -75,10 +75,9 @@ void main() {
 
     // the same conversation in the dark theme, switched in Settings → Appearance
     await tester.tap(find.text('Settings').last);
-    await waitFor(tester, find.text('Appearance'));
-    await tester.tap(find.text('Appearance'));
-    await settle(tester);
-    await tester.tap(find.text('Dark').last);
+    final appearance = find.byKey(const ValueKey('appearance'));
+    await reveal(tester, appearance);
+    await tester.tap(find.descendant(of: appearance, matching: find.text('Dark')));
     await settle(tester);
     await tester.tap(find.text('Projects').last);
     await reveal(tester, find.text('On your computer'));

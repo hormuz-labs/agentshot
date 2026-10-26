@@ -10,6 +10,7 @@ import { closeSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } fro
 import { copyFile, readFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import { artifactPath } from './artifacts'
+import { explain } from './explain'
 import { startAgent, type AgentHandle } from './agent'
 import { renderCuts } from './cuts'
 import { renderOutput, TimelineRenders } from './timeline-renders'
@@ -170,6 +171,14 @@ const mobile = new MobileBridge(
     importFile: async (file, dir) => dir
       ? handlers.get('project:import')!(undefined as unknown as Electron.IpcMainInvokeEvent, dir, file)
       : handlers.get('project:create')!(undefined as unknown as Electron.IpcMainInvokeEvent, [file]),
+    // a frame from the middle of a video (cached), or a photo as it is
+    thumbnail: async (dir, rel) => {
+      const p = projectOf(dir)
+      const kind = p.files?.[rel]?.kind, info = p.media[rel]
+      if (kind === 'image') return join(p.dir, rel)
+      if (!info?.width || !(info.duration > 0)) return undefined
+      return (await thumbnails(p.dir, rel, info.duration, 1, 0, info.duration, info.fps))[0]
+    },
     galleryFile: (url, range) => mediaResponse(new Request(url, { headers: range ? { range } : {} }), LIB, [Projects.projectsRoot(), ...open.keys()], Gallery.GALLERY),
     meshIp: () => meshIp,
   },
@@ -917,6 +926,15 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
   await agent!.send(dir, content)
 }
 
+/** An import that failed: said once, in plain words, where the person is looking (a card in the window), and thrown
+ *  on in the same words (to the phone, or whoever asked). The raw error goes to the log. */
+function importFailed(file: string, e: unknown): never {
+  const why = explain(e)
+  console.warn(`import of ${pathBasename(file)} failed:`, e instanceof Error ? e.message : e)
+  send('import:failed', { file: pathBasename(file), why })
+  throw new Error(why)
+}
+
 // ---------------------------------------------------------------- IPC
 function wire() {
   ipcMain.handle('mobile:status', () => mobileState())
@@ -1072,7 +1090,7 @@ function wire() {
     }
     const created = await asJob(`Importing ${sources.length === 1 ? 'project files' : `${sources.length} items`}`, 'import', j => {
       return Projects.createFromFiles(sources, (done, total, file) => j.progress(done / total, `${done} of ${total} · ${file}`), model)
-    }, { doneTitle: 'Project files imported' })
+    }, { doneTitle: 'Project files imported' }).catch(e => importFailed(sources[0], e))
     const p = await openProject(created.dir)
     telemetry.track('project created', {})
     await checkpoint(p, `Imported ${sources.length === 1 ? pathBasename(sources[0]) : `${Object.keys(p.files || {}).length} files`}`)
@@ -1133,7 +1151,7 @@ function wire() {
   // any file, a folder or a .zip; returns the new paths in media/
   ipcMain.handle('project:import', async (_e, dir: string, file: string) => {
     const p = projectOf(dir)
-    const rels = await Projects.addFiles(p, file)
+    const rels = await Projects.addFiles(p, file).catch(e => importFailed(file, e))
     send('project', p)
     for (const rel of rels) { ensureProxy(p, rel); autoTranscribe(p, rel) }
     return rels

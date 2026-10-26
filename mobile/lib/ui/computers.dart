@@ -81,7 +81,7 @@ class _ComputersScreenState extends State<ComputersScreen> {
       if (mounted) {
         setState(() {
           computers ??= [];
-          error = '$e';
+          error = plain(e);
         });
       }
       if (!widget.account.signedIn) await widget.onSignOut();

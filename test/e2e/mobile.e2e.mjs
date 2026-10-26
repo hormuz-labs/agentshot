@@ -130,6 +130,7 @@ const machines = new Map()
 // wallet and lease rules. The cloud test can shorten them (CLOUD … cues) to see a lease end without waiting for real.
 const pool = memoryWallet(), poolSecret = 'e2e-pool-secret-0123456789abcdef'
 const lease = { idle: 15 * 60_000, limits: { ...LEASE_LIMITS } }
+seen.notifications = []
 seen.leases = 0; seen.releases = 0; seen.lessees = []; seen.capped = 0; seen.told = new Map()
 let bridgeUrl = ''
 const workerToken = (secret, userId, expiresAt, isPool = false) => signWorkerToken(secret, userId, isPool, expiresAt)
@@ -241,6 +242,8 @@ for (const [name, colour] of [['Pier jump.mp4', 'purple'], ['Gull flyby.mp4', 'y
   execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `testsrc2=s=640x360:d=3:r=30,drawbox=c=${colour}@0.5:t=fill`, '-f', 'lavfi', '-i', 'sine=f=330:d=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(media, name)])
 execFileSync(bundledBinary('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=f=262:d=6', '-c:a', 'aac', join(media, 'Theme music.m4a')])
 writeFileSync(join(media, 'Shot list.txt'), 'Opening: the pier. Then the gulls.\n')
+// a "video" that isn't one: the uploads test sees the computer turn it away, saying why
+writeFileSync(join(media, 'Broken clip.mp4'), 'not a video at all\n'.repeat(64))
 // a page for the desktop's agent browser to open
 writeFileSync(join(media, 'page.html'), '<!doctype html><title>E2E page</title><h1>E2E page</h1>')
 const fixtures = createServer((req, res) => {
@@ -378,6 +381,14 @@ try {
       `--dart-define=E2E_PAIR=${pairLink(status)}`, `--dart-define=E2E_TYPE=${process.env.MOBILE_E2E_TYPE === '1'}`,
       `--dart-define=E2E_PROJECT=${project}`, `--dart-define=E2E_REPLY=${reply}`, `--dart-define=E2E_COMPUTER=${computer}`,
       `--dart-define=E2E_FIXTURES=${at(fixtures, '10.0.2.2')}/fixtures`, `--dart-define=E2E_DESKTOP_PAGE=${at(fixtures, '127.0.0.1')}/fixtures/page.html`, `--dart-define=AUTH_ISSUER=${at(clerk, '10.0.2.2')}`, '--dart-define=AUTH_CLIENT_ID=e2e-client', `--dart-define=ACCOUNT_URL=${at(accounts, '10.0.2.2')}`], { cwd: mobile, stdio: ['ignore', 'pipe', 'inherit'], timeout: 15 * 60_000 })
+    // the app asks to send notifications once it connects (Android 13 and later): allowed here as soon as flutter has
+    // installed it, so the system's question never stands over a test (the conversation test checks them)
+    // (the whole run long: flutter reinstalls the app partway, and a grant to the install before it doesn't carry over;
+    // granting again is a no-op)
+    const grant = setInterval(() => {
+      spawnSync('adb', ['-s', device, 'shell', 'pm', 'grant', 'si.agentshot.app', 'android.permission.POST_NOTIFICATIONS'], { encoding: 'utf8' })
+    }, 700)
+    run.on('close', () => clearInterval(grant))
     run.stdout.on('data', d => {
       process.stdout.write(d)
       // the test "scans" the QR: open the pairing link on the device, as the camera would
@@ -412,7 +423,18 @@ try {
         if (what === 'roomy') rmSync(filler, { force: true })
         console.log(`e2e: cloud ${what}`)
       }
-      for (const [, what] of String(d).matchAll(/DESKTOP (stop|start|revoke|back|camera|signout|signin)/g)) {
+      for (const [, what] of String(d).matchAll(/DESKTOP (stop|start|revoke|back|camera|signout|signin|home|front|notifications)/g)) {
+        // the app to the background (Home) and to the front again; what the phone shows in its notifications now
+        if (what === 'home') spawnSync('adb', ['-s', device, 'shell', 'input', 'keyevent', 'KEYCODE_HOME'])
+        if (what === 'front') spawnSync('adb', ['-s', device, 'shell', 'am', 'start', '-n', 'si.agentshot.app/.MainActivity'])
+        if (what === 'notifications') {
+          // this app's notifications only, each as its title and text (the whole dump is large: room for it)
+          const dump = spawnSync('adb', ['-s', device, 'shell', 'dumpsys', 'notification', '--noredact'], { encoding: 'utf8', maxBuffer: 64 << 20 }).stdout || ''
+          const shown = dump.split('NotificationRecord(').filter(r => r.includes('pkg=si.agentshot.app'))
+            .map(r => [...r.matchAll(/android\.(?:title|text)=\S+ \((.*)\)/g)].map(m => m[1]).join(' — ')).join('\n')
+          seen.notifications.push(shown)
+          console.log(`e2e: notifications now:\n${shown.split('\n').map(l => '  ' + l).join('\n')}`)
+        }
         // a system screen (the share sheet) covers the app: Back, until the app is in front again
         // (it may take a while to come: a render first): Back once it shows, done when the app is in front again
         if (what === 'back') void (async () => {
@@ -442,8 +464,16 @@ try {
     run.status = await new Promise(r => run.on('close', r))
     const bridgeNow = run.status ? await win.evaluate(() => window.agentshot.mobile.status()).then(st => `bridge ${st.running ? 'up' : 'DOWN'} at ${st.addresses.join(' ')}`, e => `desktop gone: ${e.message}`) : ''
     if (test === 'uploads' && !run.status) {
+      // the desktop said so too, in view: which file and why, in words
+      const card = win.locator('[data-import-problem="Broken clip.mp4"]').first()
+      await card.waitFor({ timeout: 10_000 })
+      const said = await card.innerText()
+      assert.match(said, /Couldn’t add Broken clip\.mp4[\s\S]*(can’t be read|isn['’]t a video|can['’]t (play|decode))/, `the desktop shows the failed import plainly (${said})`)
+      assert.doesNotMatch(said, /Error invoking|ENOENT|\/tmp\//, 'nothing of the machine')
+      await win.locator('[data-import-problem] button:text-is("Dismiss")').first().click()
       // on the desktop: one project per import, each with every file the phone picked
-      const byTitle = Object.fromEntries(readdirSync(projects).map(d => JSON.parse(readFileSync(join(projects, d, 'project.json'), 'utf8'))).map(p => [p.title, Object.keys(p.files || {}).map(f => f.split('/').pop()).sort()]))
+      // (a project the broken file never became has no project.json)
+      const byTitle = Object.fromEntries(readdirSync(projects).filter(d => existsSync(join(projects, d, 'project.json'))).map(d => JSON.parse(readFileSync(join(projects, d, 'project.json'), 'utf8'))).map(p => [p.title, Object.keys(p.files || {}).map(f => f.split('/').pop()).sort()]))
       assert.deepEqual(byTitle['Surf session'], ['Harbour drone.mp4', 'Surf session.mp4'], 'several videos, one project')
       assert.deepEqual(byTitle['From 3 photos'], ['Dunes 1.jpg', 'Dunes 2.jpg', 'Dunes 3.jpg', 'canvas.mp4'], 'photos only: a made-from-scratch project (its blank canvas) with the photos')
       assert.deepEqual(byTitle['Sunset walk'], ['Dunes 1.jpg', 'Dunes 2.jpg', 'Dunes 3.jpg', 'Sunset walk.mp4'], 'the mix, plus the photos attached to a note')
@@ -471,6 +501,14 @@ try {
       assert.ok(!seen.lapsedBusy, 'no lease ended while work ran')
       assert.ok(seen.capped >= 1, 'a new lease was refused after the longest run')
       assert.ok(!existsSync(join(cloud.shared, 'users', 'user_e2e', 'e2e-filler.bin')), 'the space was made roomy again')
+    }
+    if (test === 'conversation' && !run.status) {
+      // in the background: first the ongoing one while the agent worked, then the turn's end with its reply
+      const [during, after] = seen.notifications.slice(-2)
+      assert.match(during || '', /AgentShot is working/, `while it worked (it showed: ${during})`)
+      assert.match(after || '', /AgentShot is done/, `when it was done (it showed: ${after})`)
+      assert.match(after || '', /Mobile e2e reply/, 'with the reply')
+      assert.doesNotMatch(after || '', /AgentShot is working/, 'and the ongoing one gone')
     }
     if (test === 'signin' && !run.status) {
       // the desktop saw the phone that signed in; then it signs out, so the agent goes back to the scripted model

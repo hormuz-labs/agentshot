@@ -14,6 +14,7 @@ import { artifactPath } from './artifacts'
 import { mobileArgs, mobileSchemas, projectArgument } from './mobile-contract'
 import { emptyAgentState, reduce, type AgentState } from '../shared/agui-state'
 import { SpaceError } from './user-space'
+import { forPhone } from './explain'
 type Options = {
   invoke(method: string, args: unknown[]): Promise<unknown>
   projects(): { dir: string }[]
@@ -32,6 +33,8 @@ type Options = {
    *  is left in it (user-space.ts). */
   session?: () => string | undefined
   quota?: { ensureRoom(bytes: number): void; add(bytes: number): void }
+  /** A small picture of a project file (a frame of a video, or the photo itself), for the phone's lists. */
+  thumbnail?: (dir: string, rel: string) => Promise<string | undefined>
   /** Work still running on this computer (the agent, a render or another job): a lease isn't idle while it runs. */
   busy?: () => boolean
 }
@@ -55,6 +58,8 @@ const WRITES = new Set(['project:create', 'project:createMotion', 'agent:send', 
 /** An upload nobody has sent a chunk to for this long no longer counts as work running; after [UPLOAD_GONE], it's dropped. */
 const UPLOAD_IDLE = 10 * 60_000, UPLOAD_GONE = 60 * 60_000
 const secret = () => randomBytes(32).toString('base64url')
+/** What each request was for (an RPC method, or "upload"), so a failure can say what didn't happen. */
+const doingOf = new WeakMap<IncomingMessage, string>()
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message) } }
 export function isTailscale(ip: string) {
   const p = ip.split('.').map(Number)
@@ -244,8 +249,10 @@ export class MobileBridge {
           return
         }
         if (!expected) console.warn('Mobile bridge request failed', error instanceof Error ? error.message : 'unknown')
+        // anything else in words the person can act on (what didn't happen, and why), never the raw error: no paths
+        // or internals of this computer reach the phone
         res.writeHead(expected ? error.status : 400, { 'content-type': 'application/json', 'cache-control': 'no-store' })
-        res.end(JSON.stringify({ error: expected ? error.message : 'Request failed. Check the desktop and try again.' }))
+        res.end(JSON.stringify({ error: expected ? error.message : forPhone(doingOf.get(req), error) }))
       })
     })
     server.requestTimeout = 30 * 60_000; server.headersTimeout = 15_000
@@ -387,7 +394,7 @@ export class MobileBridge {
       return reply(null)
     }
     if (url.pathname === '/rpc' && req.method === 'POST') {
-      const body = await this.json(req); const args = mobileArgs(body.method, body.args)
+      const body = await this.json(req); doingOf.set(req, String(body.method)); const args = mobileArgs(body.method, body.args)
       const lessee = device.lessee
       // the worker's own settings aren't a lessee's to read or change
       if (lessee && WORKER_PRIVATE.test(body.method)) throw new HttpError(403, 'Not available on a cloud worker')
@@ -409,6 +416,7 @@ export class MobileBridge {
       const heartbeat = setInterval(() => { if (!this.verifyAuth(token)) res.end(); else res.write(': heartbeat\n\n') }, 15_000)
       res.on('close', () => { clearInterval(heartbeat); this.clients.delete(res) }); return
     }
+    if (url.pathname.startsWith('/upload')) doingOf.set(req, 'upload')
     if (url.pathname === '/upload/init' && req.method === 'POST') {
       await this.dropStaleUploads()
       if (this.uploads.size >= 8) throw new HttpError(429, 'Too many active uploads')
@@ -476,6 +484,21 @@ export class MobileBridge {
         await rm(folder, { recursive: true, force: true }); folder = undefined
         return reply(result)
       } finally { this.activeUploads--; if (folder) await rm(folder, { recursive: true, force: true }) }
+    }
+    if (url.pathname === '/thumbnail' && req.method === 'GET') {
+      const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee)
+      const rel = url.searchParams.get('file') || ''
+      // a file of this project's, by its project-relative path: never a way elsewhere
+      await artifactPath(dir, rel)
+      const file = await this.options.thumbnail?.(dir, rel)
+      if (!file) throw new HttpError(404, 'No picture for this file')
+      const ext = extname(file).toLowerCase()
+      res.writeHead(200, {
+        'content-type': ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg',
+        'content-length': String((await stat(file)).size),
+        'cache-control': 'private, max-age=3600',
+      })
+      await pipeline(createReadStream(file), res); return
     }
     if (url.pathname === '/media' && (req.method === 'GET' || req.method === 'HEAD')) {
       const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee); const file = await artifactPath(dir, url.searchParams.get('file') || ''); const size = (await stat(file)).size

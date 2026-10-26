@@ -8,6 +8,7 @@ import 'home.dart' show ConsentCards;
 import 'markdown.dart';
 import 'mascot.dart';
 import 'player.dart';
+import 'cut_card.dart';
 import 'settings.dart' show Credits;
 import 'import.dart';
 import 'setup_ai.dart';
@@ -36,6 +37,9 @@ class _ProjectScreenState extends State<ProjectScreen> {
   /// The new cut the person has looked at in the Film tab (no dot on the tab for it any more).
   String? seen;
   bool after = true, boxMode = false, sending = false, exporting = false;
+
+  /// Why the last note didn't go (shown above the composer, the note kept there to try again).
+  Object? sendError;
   double position = 0;
   Json? anchor;
   String? exportStatus;
@@ -51,8 +55,11 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   Future<void> send() async {
     if (message.text.trim().isEmpty || sending) return;
-    setState(() => sending = true);
-    await guard(context, () async {
+    setState(() {
+      sending = true;
+      sendError = null;
+    });
+    try {
       await sendToAgent(context, store, dir, {
         'text': message.text.trim(),
         if (anchor != null) 'anchor': anchor,
@@ -67,7 +74,9 @@ class _ProjectScreenState extends State<ProjectScreen> {
           attachments.clear();
         });
       }
-    });
+    } catch (e) {
+      if (mounted) setState(() => sendError = e);
+    }
     if (mounted) setState(() => sending = false);
   }
 
@@ -621,12 +630,24 @@ class _ProjectScreenState extends State<ProjectScreen> {
                         ),
                       ),
                     if (project['proposal'] != null && !state.busy)
-                      proposalCard(),
+                      proposalCard()
+                    else if (!state.busy && messages.isNotEmpty)
+                      ?latestCutCard(),
                   ],
                 ),
               ),
             ),
           ),
+          if (sendError != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              child: ProblemCard(
+                title: 'Your note didn’t send',
+                error: sendError!,
+                onRetry: send,
+                onDismiss: () => setState(() => sendError = null),
+              ),
+            ),
           // Bound composer height under large text/landscape/keyboard constraints; content scrolls.
           ConstrainedBox(
             constraints: BoxConstraints(
@@ -840,72 +861,65 @@ class _ProjectScreenState extends State<ProjectScreen> {
   });
 
   /// In the conversation, under the agent's reply: a new cut is waiting, to watch, keep or send back from here.
+  /// What a cut plays in a preview: its lighter proxy when there is one.
+  String cutPlay(Json version) {
+    final path = version['path'] as String;
+    return object(project['proxies'] ?? {})[path] as String? ?? path;
+  }
+
+  /// A new cut, right in the conversation: watch it there, download it, keep it or send it back. Before and after
+  /// side by side are in the Film tab.
   Widget proposalCard() {
-    final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final title = objects(
+    final version = objects(
       project['versions'],
-    ).where((v) => v['id'] == project['proposal']).firstOrNull?['title'];
-    return Container(
+    ).where((v) => v['id'] == project['proposal']).firstOrNull;
+    if (version == null || version['path'] == null) return const SizedBox();
+    return KeyedSubtree(
       key: const ValueKey('proposal-card'),
-      margin: const EdgeInsets.only(bottom: 18),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer.withValues(alpha: .45),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: scheme.primary.withValues(alpha: .25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.movie_filter_outlined, color: scheme.primary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('A new cut is ready', style: text.titleSmall),
-                    if (title != null)
-                      Text(
-                        '$title',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+      child: CutCard(
+        store: store,
+        dir: dir,
+        version: version,
+        play: cutPlay(version),
+        headline: 'A new cut is ready',
+        highlight: true,
+        actions: [
+          FilledButton.icon(
+            onPressed: keep,
+            icon: const Icon(Icons.check),
+            label: const Text('Keep'),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              // beside the conversation on a wide screen the film is already in sight
-              if (!wide)
-                OutlinedButton.icon(
-                  onPressed: () => setState(() {
-                    after = true;
-                    section = 1;
-                  }),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Watch'),
-                ),
-              FilledButton.icon(
-                onPressed: keep,
-                icon: const Icon(Icons.check),
-                label: const Text('Keep'),
-              ),
-              TextButton(onPressed: sendBack, child: const Text('Send back')),
-            ],
-          ),
+          TextButton(onPressed: sendBack, child: const Text('Send back')),
+          // beside the conversation on a wide screen the film is already in sight
+          if (!wide)
+            TextButton(
+              onPressed: () => setState(() {
+                after = true;
+                section = 1;
+              }),
+              child: const Text('Before / after'),
+            ),
         ],
       ),
+    );
+  }
+
+  /// The film as the agent last made it, at the end of the conversation: to watch or download without leaving it.
+  Widget? latestCutCard() {
+    final version = objects(
+      project['versions'],
+    ).where((v) => v['id'] == project['current']).firstOrNull;
+    if (version == null ||
+        version['by'] != 'agent' ||
+        version['path'] == null) {
+      return null;
+    }
+    return CutCard(
+      store: store,
+      dir: dir,
+      version: version,
+      play: cutPlay(version),
+      headline: 'Your film',
     );
   }
 
@@ -1109,6 +1123,13 @@ class _ProjectScreenState extends State<ProjectScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('Project files', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 4),
+        Text(
+          'Everything you brought in. Tap one to use it in your next note.',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: () => guard(context, importFiles),
@@ -1117,10 +1138,28 @@ class _ProjectScreenState extends State<ProjectScreen> {
         ),
         for (final entry in entries)
           Card(
+            key: ValueKey('file-${entry.key}'),
             child: ListTile(
-              title: Text(entry.key.split('/').last),
+              contentPadding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+              leading: FileThumb(
+                store: store,
+                dir: dir,
+                rel: entry.key,
+                kind: '${entry.value['kind']}',
+                duration:
+                    (object(project['media'] ?? {})[entry.key]?['duration']
+                            as num?)
+                        ?.toDouble(),
+              ),
+              title: Text(
+                entry.key.split('/').last,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(
                 '${entry.value['summary'] ?? entry.value['kind']}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               onTap: () => setState(() {
                 attachments.add(entry.key);
@@ -1706,4 +1745,94 @@ class _MixEditorState extends State<MixEditor> {
       ),
     ],
   );
+}
+
+/// A file's picture in a list: a frame of a video or the photo (from the computer), else its kind's icon; a video's
+/// length on it.
+class FileThumb extends StatefulWidget {
+  final BridgeStore store;
+  final String dir, rel, kind;
+  final double? duration;
+  const FileThumb({
+    super.key,
+    required this.store,
+    required this.dir,
+    required this.rel,
+    required this.kind,
+    this.duration,
+  });
+  @override
+  State<FileThumb> createState() => _FileThumbState();
+}
+
+class _FileThumbState extends State<FileThumb> {
+  late final Future<Uri>? picture =
+      widget.kind == 'video' || widget.kind == 'image'
+      ? widget.store.client.thumbnail(widget.dir, widget.rel)
+      : null;
+
+  IconData get icon => switch (widget.kind) {
+    'video' => Icons.movie_outlined,
+    'image' => Icons.image_outlined,
+    'audio' => Icons.music_note_outlined,
+    'subtitles' => Icons.closed_caption_outlined,
+    'font' => Icons.text_fields,
+    _ => Icons.insert_drive_file_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fallback = Center(child: Icon(icon, color: scheme.onSurfaceVariant));
+    final d = widget.duration;
+    return SizedBox(
+      width: 88,
+      height: 50,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: scheme.surfaceContainerHighest),
+            if (picture != null)
+              FutureBuilder<Uri>(
+                future: picture,
+                builder: (context, snapshot) => snapshot.hasData
+                    ? Image.network(
+                        '${snapshot.data}',
+                        key: ValueKey('thumb-${widget.rel}'),
+                        fit: BoxFit.cover,
+                        cacheWidth: 264,
+                        errorBuilder: (_, _, _) => fallback,
+                      )
+                    : fallback,
+              )
+            else
+              fallback,
+            if (d != null &&
+                d > 0 &&
+                (widget.kind == 'video' || widget.kind == 'audio'))
+              Positioned(
+                right: 3,
+                bottom: 3,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: .7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    timestamp(d),
+                    style: const TextStyle(color: Colors.white, fontSize: 10.5),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }

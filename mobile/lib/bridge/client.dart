@@ -12,6 +12,27 @@ Json object(dynamic value) => Map<String, dynamic>.from(value as Map);
 List<Json> objects(dynamic value) =>
     (value as List? ?? []).map(object).toList();
 
+/// Any error, as the person should read it: AgentShot's own messages as they are, the network's (a socket closed, a
+/// timeout, a certificate) as what to check, and never the raw exception. [where] names the computer.
+String plain(Object error, {String? where}) {
+  if (error is BridgeException) return error.message;
+  final place = where ?? 'your computer';
+  if (error is SocketException ||
+      error is HttpException ||
+      error is TimeoutException ||
+      error is HandshakeException ||
+      error is TlsException ||
+      error is OSError) {
+    return place == 'AgentShot Cloud'
+        ? 'Couldn’t reach AgentShot Cloud. Check this phone’s internet connection, then try again.'
+        : 'Couldn’t reach $place. Make sure AgentShot is open on it and both are online, then try again.';
+  }
+  if (error is FormatException) {
+    return '$place sent something this app couldn’t read. Update the app and AgentShot there, then try again.';
+  }
+  return 'Something went wrong. Try again in a moment.';
+}
+
 class BridgeException implements Exception {
   final String message;
   final int? status;
@@ -446,7 +467,7 @@ class BridgeClient {
     for (final candidate in target.urls) {
       _configure(Connection(candidate, target.fingerprint, target.token, target.urls, target.machine, target.name));
       try {
-        final req = await _http!.openUrl('GET', candidate.replace(path: '/hello'));
+        final req = await _open('GET', candidate.replace(path: '/hello'));
         req.followRedirects = false;
         req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.token}');
         req.headers.set('x-agentshot-device', deviceName);
@@ -465,13 +486,34 @@ class BridgeClient {
     throw lastError ?? BridgeException('Could not reach the worker on any address.');
   }
 
+  /// Opens a request on the client in use. Closing that client while a connection is still being made (moving to
+  /// another address, the app going away) cancels it, and dart:io then also raises the cancellation where nobody can
+  /// catch it: caught here. The request itself still fails, as it should.
+  Future<HttpClientRequest> _open(String method, Uri uri) {
+    final http = _http!;
+    final opened = Completer<HttpClientRequest>();
+    runZonedGuarded(
+      () async {
+        try {
+          opened.complete(await http.openUrl(method, uri));
+        } catch (e, s) {
+          if (!opened.isCompleted) opened.completeError(e, s);
+        }
+      },
+      (e, s) {
+        if (!opened.isCompleted) opened.completeError(e, s);
+      },
+    );
+    return opened.future;
+  }
+
   Future<void> _refreshAddresses() async {
     final current = connection;
     if (current == null || _http == null || current.token.isEmpty) return;
     for (final candidate in current.urls) {
       try {
         final uri = candidate.replace(path: '/hello');
-        final req = await _http!.openUrl('GET', uri);
+        final req = await _open('GET', uri);
         req.followRedirects = false;
         req.headers.set(
           HttpHeaders.authorizationHeader,
@@ -524,7 +566,7 @@ class BridgeClient {
       throw BridgeException('Connect to your desktop first.');
     }
     final uri = target.url.replace(path: path, queryParameters: query);
-    final request = await _http!.openUrl(method, uri);
+    final request = await _open(method, uri);
     request.followRedirects = false;
     if (target.token.isNotEmpty) {
       request.headers.set(
@@ -569,11 +611,13 @@ class BridgeClient {
   Future<dynamic> call(String method, [List<dynamic> args = const []]) async {
     try {
       return await _post('/rpc', {'method': method, 'args': args});
-    } catch (_) {
+    } catch (e) {
       // cut off because this client was put away (the app closing, another computer): whoever asked is gone too,
       // so it never answers rather than raise an error nobody is left to handle
       if (_disposed) return Completer<dynamic>().future;
-      rethrow;
+      if (e is BridgeException) rethrow;
+      // the network's own error (a socket closed, a timeout): said as what to check
+      throw BridgeException(plain(e, where: connection?.name));
     }
   }
 
@@ -742,6 +786,10 @@ class BridgeClient {
 
   Future<Uri> media(String project, String file) =>
       _localUrl('/media', {'project': project, 'file': file});
+
+  /// A small picture of a project file: a frame of a video, or the photo (for lists of footage).
+  Future<Uri> thumbnail(String project, String file) =>
+      _localUrl('/thumbnail', {'project': project, 'file': file});
   Future<Uri> gallery(String url) {
     final uri = Uri.parse(url);
     if (uri.scheme == 'https' && uri.userInfo.isEmpty) return Future.value(uri);
@@ -771,7 +819,11 @@ class BridgeClient {
     try {
       final route = local.uri.path;
       if (!['GET', 'HEAD'].contains(local.method) ||
-          !['/$_relaySecret/media', '/$_relaySecret/gallery'].contains(route)) {
+          ![
+            '/$_relaySecret/media',
+            '/$_relaySecret/gallery',
+            '/$_relaySecret/thumbnail',
+          ].contains(route)) {
         local.response.statusCode = 403;
         await local.response.close();
         return;

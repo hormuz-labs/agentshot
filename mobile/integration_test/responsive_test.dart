@@ -88,7 +88,7 @@ void main() {
         }
         for (final panel in [
           'Model providers',
-          'AI keys',
+          'AI models',
           'Skills & profiles',
           'Memory',
         ]) {

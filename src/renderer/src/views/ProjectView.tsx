@@ -1,7 +1,7 @@
 // A project on screen: the conversation first, the film beside it (the proposal to decide on, the picture, the timeline).
 // Point at the film (a box, a range, N for the moment) and say what should change, right there or in the chat.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Clapperboard, Globe, MessagesSquare, PanelRight, Loader2, Upload, Check, FolderOpen, MessageSquarePlus, Pause, Play, SquareDashed, X } from 'lucide-react'
+import { Clapperboard, Globe, Images, MessagesSquare, PanelRight, Loader2, Upload, Check, FolderOpen, MessageSquarePlus, Pause, Play, SquareDashed, X } from 'lucide-react'
 import { JobsTray } from '@/components/JobsTray'
 import { HistoryButton } from '@/components/HistoryButton'
 import { Conversations } from '@/components/Conversations'
@@ -16,6 +16,7 @@ import { addFiles, attachFiles, clearAttached, detachFiles, pickFiles, useAttach
 import { cn, mediaUrl, timecode } from '@/lib/utils'
 import { AgentPanel } from './AgentPanel'
 import { BrowserPanel } from './BrowserPanel'
+import { FootagePanel } from './FootagePanel'
 import { EditStatus } from './EditStatus'
 import { ClipEditor } from './ClipEditor'
 import { ExportDialog } from './ExportDialog'
@@ -61,6 +62,8 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const [editing, setEditing] = useState<{ itemId: string; clip: string; start: number } | null>(null)
   const started = useRef(false)
   const [browsing, setBrowsing] = useState(false)
+  // every file brought into the project, as pictures (beside the film, in its place)
+  const [footage, setFootage] = useState(false)
   // the film beside the chat: as wide as the row allows while the conversation keeps 320 px
   const chatRow = useRef<HTMLDivElement>(null)
   const previewW = useWidth('manul.width.preview', 640, 360, () => (chatRow.current?.clientWidth ?? window.innerWidth) - 320)
@@ -253,7 +256,8 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     >
       <Resizer pane={previewW} edge="left" label="Resize the film preview"
         snap={{ self: shut => setPreview(!shut), other: setChatShut, otherCollapsed: chatShut }} />
-      <BrowserPanel visible={browsing && active} onClose={() => setBrowsing(false)} />
+      <BrowserPanel visible={browsing && active && !footage} onClose={() => setBrowsing(false)} />
+      {footage && <FootagePanel project={p} onClose={() => setFootage(false)} onInsert={rel => { setFootage(false); insertFootage(rel, time) }} />}
       {proposal && (
         <div data-tour="proposal" className="flex flex-wrap items-center gap-2 rounded-lg border border-amber/30 bg-amber-soft px-3 py-1.5">
           <span className="font-medium text-amber">Proposed:</span>
@@ -395,8 +399,11 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         <JobsTray />
         <HistoryButton project={p} open={historyOpen} onOpenChange={setHistoryOpen} onRestored={np => { setP(np); setEditing(null) }} />
         <Tip label="Show in Finder" side="bottom"><Button className="no-drag" size="iconSm" variant="ghost" onClick={() => window.agentshot.project.reveal(p.dir)}><FolderOpen /></Button></Tip>
+        <Tip label="Footage: everything you brought in" side="bottom">
+          <Button className="no-drag" size="iconSm" variant={footage ? 'secondary' : 'ghost'} onClick={() => { setFootage(x => !x); setPreview(true) }} aria-label="Footage"><Images /></Button>
+        </Tip>
         <Tip label="AgentShot's browser (the agent uses it for the web)" side="bottom">
-          <Button className="no-drag" size="iconSm" variant={browsing ? 'secondary' : 'ghost'} onClick={() => setBrowsing(x => !x)} aria-label="Browser"><Globe /></Button>
+          <Button className="no-drag" size="iconSm" variant={browsing ? 'secondary' : 'ghost'} onClick={() => { setBrowsing(x => !x); setFootage(false) }} aria-label="Browser"><Globe /></Button>
         </Tip>
         <Tip label={chatShut ? 'Show the conversation' : 'Hide the conversation'} side="bottom">
           <Button className="no-drag" size="iconSm" variant={chatShut ? 'ghost' : 'secondary'} onClick={() => { setChatShut(x => !x); setPreview(true) }} aria-label="Conversation"><MessagesSquare /></Button>

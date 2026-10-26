@@ -18,7 +18,8 @@ export function useAttached(dir: string): string[] {
 /** Copy files, folders or .zips into the project, and attach what came in to the next message. */
 export async function addFiles(dir: string, paths: string[]) {
   for (const f of paths) {
-    try { attachFiles(dir, await window.agentshot.project.import(dir, f)) } catch (e) { alert((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')) }
+    // a file that doesn't come in is shown by ImportProblems (the main process says which and why)
+    try { attachFiles(dir, await window.agentshot.project.import(dir, f)) } catch { /* shown */ }
   }
 }
 export const pickFiles = async (dir: string) => addFiles(dir, await window.agentshot.project.pickFiles())
