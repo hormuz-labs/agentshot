@@ -1,6 +1,6 @@
 // A cloud worker, from the phone, with none of the person's computers on: signed in, the computers list offers one;
 // taking it opens it like a computer (empty: it keeps only what this person makes there); an idea becomes a project
-// there and the agent answers; switching computer gives it back. The runner runs a real AgentShot --worker with the
+// there, the worker (no AI of its own) takes this person's AgentShot credits, and the agent answers; switching computer gives it back. The runner runs a real AgentShot --worker with the
 // pool secret and checks, after, that the project is on the worker and not on the computer.
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -44,6 +44,19 @@ void main() {
     await answer(tester, 'Mobile e2e in the cloud');
     await waitFor(tester, find.text('Choose a format'));
     await tester.tap(find.text('16:9'));
+    // the worker has no AI of its own: this person's AgentShot credits, handed over from the phone
+    await waitFor(
+      tester,
+      find.text('Use AgentShot credits'),
+      timeout: const Duration(minutes: 2),
+    );
+    await settle(tester);
+    await tester.tap(find.text('Use AgentShot credits'));
+    await waitFor(
+      tester,
+      find.text('Your computer now uses your AgentShot credits.'),
+      timeout: const Duration(minutes: 1),
+    );
     await waitFor(
       tester,
       find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
