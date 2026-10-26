@@ -138,6 +138,12 @@ const clerk = createServer(async (req, res) => {
 }).listen(0, '127.0.0.1')
 const accounts = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://account'), auth = req.headers.authorization || ''
+  // signing in on the phone: Clerk comes back to the account service, which sends the browser on into the app
+  if (url.pathname === '/oauth/phone') {
+    const back = new URL('agentshot://auth/callback')
+    for (const k of ['code', 'state']) if (url.searchParams.get(k)) back.searchParams.set(k, url.searchParams.get(k))
+    res.writeHead(302, { location: back.toString(), 'content-type': 'text/html' }); return res.end(`<a href="${back}">Back to AgentShot</a>`)
+  }
   if (url.pathname === '/v1/key' && req.method === 'POST')
     return auth === 'Bearer e2e-access' ? respond(res, 200, { key: accountKey, key_id: 'vk_e2e', email }) : respond(res, 401, { error: 'Your sign-in has expired. Sign in again.' })
   // a cloud worker reports itself with the pool secret, and hears back who leases it
@@ -328,6 +334,7 @@ try {
       }
       // signing in: if the browser hasn't come back by itself, bring its answer back the way it would
       if (String(d).includes('SIGNING_IN')) setTimeout((before => () => {
+        if (seen.callback && seen.exchanged === before) console.log('e2e: the browser did not come back into the app by itself; bringing it back')
         if (seen.callback && seen.exchanged === before) spawnSync('adb', ['-s', device, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', `'${seen.callback}'`])
       })(seen.exchanged), 8000)
       // the connection test's cues: losing the computer

@@ -305,6 +305,15 @@ describe('the account service: headscale mesh and worker pool', () => {
     expect(!freed.leasedTo || freed.leasedUntil <= Date.now()).toBe(true)
   })
 
+  it('sends a phone signing in back into the app with the code, and nothing else', async () => {
+    const res = await call('/oauth/phone?code=abc&state=xyz&scope=openid&redirect=https://evil.test')
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('agentshot://auth/callback?code=abc&state=xyz')
+    expect(await res.text()).toContain('href="agentshot://auth/callback?code=abc&amp;state=xyz"')
+    const refused = await call('/oauth/phone?error=access_denied&state=xyz')
+    expect(refused.headers.get('location')).toBe('agentshot://auth/callback?state=xyz&error=access_denied')
+  })
+
   it('makes a cloud worker only with the pool secret, never because a signed-in machine says so', async () => {
     await ask('good')
     const hb = await (await call('/v1/workers/heartbeat', {
