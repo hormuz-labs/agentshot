@@ -89,7 +89,8 @@ export async function acquire(root: string, user: string, holder: string, ttl = 
     const file = await open(guard, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600)
     await file.close()
   } catch {
-    const age = now - ((await lstat(guard).catch(() => undefined))?.mtimeMs ?? now)
+    // by the clock the file system keeps (not [now], which a caller may set): a live guard never looks old
+    const age = Date.now() - ((await lstat(guard).catch(() => undefined))?.mtimeMs ?? Date.now())
     if (age > 10_000) await rm(guard, { force: true })
     return false
   }
