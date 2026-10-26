@@ -26,13 +26,18 @@ void main() {
     );
 
     // none of this person's computers is on; one cloud worker is free
-    final cloud = find.byKey(const ValueKey('use-cloud-worker'));
-    await waitFor(
-      tester,
-      find.descendant(of: cloud, matching: find.textContaining('2 free')),
-      timeout: const Duration(minutes: 1),
+    final cloud = find.byKey(const ValueKey('agentshot-cloud'));
+    // ready to take: on, not greyed out (a spot is free)
+    final ready = find.byWidgetPredicate(
+      (w) =>
+          w is ListTile &&
+          w.key == const ValueKey('agentshot-cloud') &&
+          w.enabled,
     );
+    await waitFor(tester, ready, timeout: const Duration(minutes: 1));
     await tester.tap(cloud);
+    // in plain steps: finding a spot, opening the space, then the app
+    await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
     await waitFor(
       tester,
       find.text('What are we making?'),
@@ -78,14 +83,10 @@ void main() {
     // Settings names the worker; switching computer gives it back (free again for the next person)
     Future<void> giveBack() async {
       await tester.tap(find.byKey(const ValueKey('nav-Settings')));
-      await waitFor(tester, find.textContaining('E2E Cloud'));
+      await waitFor(tester, find.text('AgentShot Cloud'));
       await press(tester, find.text('Switch computer'));
       await waitFor(tester, find.text('Your computers'));
-      await waitFor(
-        tester,
-        find.descendant(of: cloud, matching: find.textContaining('2 free')),
-        timeout: const Duration(minutes: 1),
-      );
+      await waitFor(tester, ready, timeout: const Duration(minutes: 1));
     }
 
     await giveBack();
@@ -93,6 +94,8 @@ void main() {
     // another worker this time (the stand-in account hands out the other one): the same space, so the project
     // made on the first is here, conversation and all
     await tester.tap(cloud);
+    // in plain steps: finding a spot, opening the space, then the app
+    await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
     await waitFor(
       tester,
       find.text('What are we making?'),

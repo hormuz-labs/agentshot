@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:agentshot_mobile/main.dart';
@@ -58,8 +59,18 @@ class FakeAccount extends Account {
     'plan': {'name': 'Pro'},
   };
 
+  /// How leasing AgentShot Cloud goes: never answering (the finding step stays up) or busy.
+  Future<Computer> Function() leasing = () => Completer<Computer>().future;
   @override
-  Future<List<Computer>> computers() async => [
+  Future<Computer> lease() => leasing();
+
+  @override
+  Future<List<Computer>> computers() async {
+    poolFree = 2;
+    return _computers();
+  }
+
+  List<Computer> _computers() => [
     for (final (id, name, platform) in [
       ('a', 'Studio iMac', 'darwin'),
       (
@@ -144,6 +155,44 @@ void main() {
         // tiny phones with large text scroll to the computers
         await tester.scrollUntilVisible(find.text('Studio iMac'), 120);
         expect(tester.takeException(), isNull);
+        // AgentShot Cloud: the card, then its steps (finding a spot; and when it's busy, why, and Try again)
+        final cloud = find.byKey(const ValueKey('agentshot-cloud'));
+        // on a tiny phone with huge text the card is taller than the screen: its title is what's tapped
+        final title = find.descendant(
+          of: cloud,
+          matching: find.text('AgentShot Cloud'),
+        );
+        await tester.scrollUntilVisible(title, 120);
+        await tester.ensureVisible(title);
+        await tester.pumpAndSettle();
+        await tester.tap(title);
+        // a progress bar runs while it looks: frames, not settling
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        expect(find.text('Finding a spot in AgentShot Cloud…'), findsOneWidget);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'AgentShot Cloud, finding',
+        );
+        // a fresh app for the next screen (the one above stays pushed otherwise)
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(
+          host(
+            CloudScreen(
+              account: FakeAccount()
+                ..leasing = () async => throw BridgeException(
+                  'AgentShot Cloud is busy right now. Try again in a minute.',
+                  404,
+                ),
+              client: client,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Try again'), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: 'AgentShot Cloud, busy');
         await tester.pumpWidget(
           host(
             HomeScreen(

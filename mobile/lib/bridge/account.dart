@@ -49,24 +49,29 @@ class Computer {
     this.pool = false,
   });
 
+  /// What people see for a cloud worker: the service, not the machine behind it.
+  static const cloudName = 'AgentShot Cloud';
+
   factory Computer.fromJson(Json json) {
     final urls = (json['urls'] as List? ?? const [])
         .whereType<String>()
         .toList();
+    final pool = json['pool'] == true;
+    final name = pool ? cloudName : json['name'] as String? ?? 'Computer';
     final c = Connection.fromJson({
       'url': urls.first,
       'urls': urls,
       'fingerprint': json['fingerprint'],
       'token': json['token'],
       'machine': json['id'],
-      'name': json['name'],
+      'name': name,
     });
     return Computer(
       json['id'] as String,
-      json['name'] as String? ?? 'Computer',
+      name,
       '${object(json['capabilities'] ?? {})['platform'] ?? ''}',
       c,
-      pool: json['pool'] == true,
+      pool: pool,
     );
   }
 }
@@ -207,7 +212,7 @@ class Account {
     } on BridgeException catch (e) {
       if (e.status == 404) {
         throw BridgeException(
-          'No cloud workers are free right now. Try again in a moment.',
+          'AgentShot Cloud is busy right now. Try again in a minute.',
           404,
         );
       }
@@ -246,6 +251,9 @@ class Account {
     BridgeClient client,
     Computer computer, {
     void Function()? away,
+
+    /// A cloud worker is opening this person's space (it restarts into it): a few seconds more.
+    void Function()? opening,
   }) async {
     final target = computer.connection;
     // at home: every address at once, the first to answer wins (about a second)
@@ -276,6 +284,7 @@ class Account {
     }
     // a cloud worker opens this person's space first (it restarts into it, a few seconds): keep trying a while
     if (first == null && computer.pool) {
+      opening?.call();
       final end = DateTime.now().add(const Duration(seconds: 60));
       while (first == null && DateTime.now().isBefore(end)) {
         await Future<void>.delayed(const Duration(seconds: 3));
@@ -288,7 +297,7 @@ class Account {
     if (first == null) {
       throw BridgeException(
         computer.pool
-            ? 'The cloud worker didn’t open your space in time. Try again in a moment.'
+            ? 'AgentShot Cloud didn’t open your space in time. Try again in a moment.'
             : 'Could not reach ${computer.name}. Make sure AgentShot is open on it, then try again.',
       );
     }
