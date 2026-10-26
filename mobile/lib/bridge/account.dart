@@ -27,10 +27,10 @@ const _service = String.fromEnvironment(
   defaultValue: 'https://account.agentshot.si',
 );
 
-/// The return address registered with Clerk for AgentShot (the desktop's too). A one-shot server on this phone
-/// answers it and hands the browser straight back to the app as agentshot://auth/callback, so Clerk needs no
-/// address of the app's own (loopback redirects for native apps, RFC 8252).
-const _redirect = 'http://127.0.0.1:47619/oauth/callback';
+/// Where Clerk sends the browser after signing in (registered with Clerk): a page of the account service that hands
+/// it straight on into the app as agentshot://auth/callback. Not a server in the app itself: Android freezes an app
+/// in the background while the person signs in, so it couldn't answer.
+const _redirect = '$_service/oauth/phone';
 
 /// A computer signed in to the person's account that the phone can open.
 class Computer {
@@ -126,13 +126,10 @@ class Account {
       },
     );
     final String back;
-    final relay = await _relayBack();
     try {
       back = await browser(authorize.toString());
     } catch (_) {
       throw BridgeException('Signing in was cancelled.');
-    } finally {
-      await relay?.close(force: true);
     }
     final answer = Uri.parse(back).queryParameters;
     final code = answer['code'];
@@ -182,36 +179,6 @@ class Account {
       'leased': ?leased,
     }),
   );
-
-  /// Listens on the registered return address while signing in, and sends the browser on to the app with the code.
-  static Future<HttpServer?> _relayBack() async {
-    final address = Uri.parse(_redirect);
-    try {
-      final server = await HttpServer.bind(
-        InternetAddress.loopbackIPv4,
-        address.port,
-      );
-      server.listen((req) {
-        final back = Uri.parse(
-          'agentshot://auth/callback',
-        ).replace(queryParameters: req.uri.queryParameters);
-        final ok = req.uri.path == address.path;
-        req.response
-          ..statusCode = ok ? HttpStatus.found : HttpStatus.notFound
-          ..headers.contentType = ContentType.html;
-        if (ok) {
-          req.response.headers.set(HttpHeaders.locationHeader, back.toString());
-        }
-        // the link, should the browser not follow the redirect into the app by itself
-        req.response
-          ..write(ok ? '<p><a href="$back">Back to AgentShot</a></p>' : '')
-          ..close();
-      });
-      return server;
-    } catch (_) {
-      return null; // the port is taken: the browser still lands, and the person can try again
-    }
-  }
 
   Future<void> signOut() async {
     await release();

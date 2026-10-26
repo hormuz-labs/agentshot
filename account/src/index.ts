@@ -258,6 +258,9 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
   if (url.pathname === '/v1/voice' && req.method === 'POST') return generate('voice')
   if (url.pathname === '/v1/music' && req.method === 'POST') return generate('music')
   if (url.pathname === '/paid') return page('Payment received. Your plan and credits show up in a moment: go back to AgentShot.')
+  // Signing in on the phone: Clerk comes back here, and this sends the browser on into the app with the code. (Not a
+  // server in the app itself: Android freezes an app in the background while the person signs in, so it can't answer.)
+  if (url.pathname === '/oauth/phone') return phoneCallback(url)
   if (url.pathname === '/v1/mesh/join' && req.method === 'POST') return joinMesh()
   if (url.pathname === '/v1/workers/heartbeat' && req.method === 'POST') return heartbeatWorker()
   if (url.pathname === '/v1/workers' && req.method === 'GET') return listWorkers()
@@ -592,6 +595,21 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     const ok = await wallet.releaseWorker(userId, body.workerId)
     return json({ released: ok })
   }
+}
+
+/** On to agentshot://auth/callback with what Clerk sent (the code and state, or its error); a button too, for a browser
+ *  that wants a tap before it opens an app. */
+function phoneCallback(url: URL): Response {
+  const back = new URL('agentshot://auth/callback')
+  for (const key of ['code', 'state', 'error', 'error_description']) {
+    const value = url.searchParams.get(key)
+    if (value) back.searchParams.set(key, value)
+  }
+  const href = back.toString().replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+  return new Response(brandPage(`Signed in. <a href="${href}">Back to AgentShot</a>`), {
+    status: 302,
+    headers: { location: back.toString(), 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+  })
 }
 
 /** Equal strings, compared in constant time. */
