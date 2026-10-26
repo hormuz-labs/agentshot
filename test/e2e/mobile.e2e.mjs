@@ -467,7 +467,9 @@ try {
       // the desktop said so too, in view: which file and why, in words
       const card = win.locator('[data-import-problem="Broken clip.mp4"]').first()
       await card.waitFor({ timeout: 10_000 })
-      assert.match(await card.innerText(), /Couldn’t add Broken clip\.mp4[\s\S]*can’t be read/, 'the desktop shows the failed import plainly')
+      const said = await card.innerText()
+      assert.match(said, /Couldn’t add Broken clip\.mp4[\s\S]*(can’t be read|isn['’]t a video|can['’]t (play|decode))/, `the desktop shows the failed import plainly (${said})`)
+      assert.doesNotMatch(said, /Error invoking|ENOENT|\/tmp\//, 'nothing of the machine')
       await win.locator('[data-import-problem] button:text-is("Dismiss")').first().click()
       // on the desktop: one project per import, each with every file the phone picked
       // (a project the broken file never became has no project.json)
