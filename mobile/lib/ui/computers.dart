@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../bridge/account.dart';
 import '../bridge/client.dart';
 import 'common.dart';
+import 'mascot.dart';
 import 'settings.dart' show Credits;
 
 /// After signing in: the person's computers that have AgentShot open and signed in to the same account. Tap one to
@@ -100,21 +101,22 @@ class _ComputersScreenState extends State<ComputersScreen> {
     return seconds < 5 ? 'Checked just now' : 'Checked ${seconds}s ago';
   }
 
-  /// A cloud worker, leased now, opened like a computer.
-  Future<void> useCloud() async {
-    setState(() {
-      opening = 'cloud';
-      error = null;
-    });
-    try {
-      final worker = await widget.account.lease();
-      if (!mounted) return;
-      setState(() => opening = null);
-      await open(worker);
-    } catch (e) {
-      if (mounted) setState(() => error = '$e');
-    } finally {
-      if (mounted && opening == 'cloud') setState(() => opening = null);
+  /// AgentShot Cloud: a screen that finds a spot, opens this person's space there, and then the app.
+  Future<void> useCloud(Computer? held) async {
+    final done = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => CloudScreen(
+          account: widget.account,
+          client: widget.client,
+          held: held,
+        ),
+      ),
+    );
+    if (done == true) {
+      widget.onConnected();
+    } else if (mounted) {
+      await load(quiet: true);
     }
   }
 
@@ -154,7 +156,10 @@ class _ComputersScreenState extends State<ComputersScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final list = computers;
+    final all = computers;
+    // the person's own computers; a cloud spot they hold shows on the AgentShot Cloud card instead
+    final list = all?.where((c) => !c.pool).toList();
+    final held = all?.where((c) => c.pool).firstOrNull;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Your computers'),
@@ -266,8 +271,6 @@ class _ComputersScreenState extends State<ComputersScreen> {
                       subtitle: Text(
                         opening == c.id
                             ? (away ? 'Connecting from away…' : 'Connecting…')
-                            : c.pool
-                            ? 'Cloud worker, yours for now'
                             : 'AgentShot is open',
                       ),
                       trailing: opening == c.id
@@ -279,33 +282,39 @@ class _ComputersScreenState extends State<ComputersScreen> {
                       onTap: opening == null ? () => open(c) : null,
                     ),
                   ),
-              // a computer AgentShot lends: when none of the person's is on (or they'd rather not use theirs)
-              if (list != null && !list.any((c) => c.pool)) ...[
-                const SizedBox(height: 16),
+              // no computer handy (or none on): AgentShot lends a spot in its cloud
+              if (list != null) ...[
+                const SizedBox(height: 24),
+                Text(
+                  'No computer handy?',
+                  style: text.titleSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Card(
                   child: ListTile(
-                    key: const ValueKey('use-cloud-worker'),
+                    key: const ValueKey('agentshot-cloud'),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 8,
                     ),
                     leading: const Icon(Icons.cloud_outlined),
-                    title: const Text('Use a cloud worker'),
-                    subtitle: Text(
-                      opening == 'cloud'
-                          ? 'Getting one…'
-                          : widget.account.poolFree > 0
-                          ? '${widget.account.poolFree} free. It keeps only what you make on it.'
-                          : 'None free right now.',
+                    title: Text(
+                      held != null
+                          ? 'Continue in AgentShot Cloud'
+                          : 'AgentShot Cloud',
                     ),
-                    trailing: opening == 'cloud'
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.chevron_right),
-                    enabled: opening == null && widget.account.poolFree > 0,
-                    onTap: useCloud,
+                    subtitle: Text(
+                      held != null || widget.account.poolFree > 0
+                          ? 'Work from anywhere, no computer needed. Your projects are kept for you.'
+                          : 'Busy right now. Try again in a minute.',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    enabled:
+                        opening == null &&
+                        (held != null || widget.account.poolFree > 0),
+                    onTap: () => useCloud(held),
                   ),
                 ),
               ],
@@ -317,6 +326,120 @@ class _ComputersScreenState extends State<ComputersScreen> {
                 ),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Getting into AgentShot Cloud, in plain steps: a spot found, this person's space opened (as they left it), and
+/// then the app. On a problem, says so, with Try again.
+class CloudScreen extends StatefulWidget {
+  final Account account;
+  final BridgeClient client;
+
+  /// A spot this person already holds: straight back to it.
+  final Computer? held;
+  const CloudScreen({
+    super.key,
+    required this.account,
+    required this.client,
+    this.held,
+  });
+  @override
+  State<CloudScreen> createState() => _CloudScreenState();
+}
+
+class _CloudScreenState extends State<CloudScreen> {
+  String step = 'finding';
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    go();
+  }
+
+  Future<void> go() async {
+    setState(() {
+      error = null;
+      step = widget.held == null ? 'finding' : 'opening';
+    });
+    try {
+      final spot = widget.held ?? await widget.account.lease();
+      if (!mounted) return;
+      setState(() => step = 'opening');
+      await widget.account.connect(
+        widget.client,
+        spot,
+        opening: () {
+          if (mounted) setState(() => step = 'opening');
+        },
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    final (title, hint) = switch (step) {
+      'finding' => (
+        'Finding a spot in AgentShot Cloud…',
+        'This takes a moment.',
+      ),
+      _ => (
+        'Opening your space…',
+        'Your projects and conversations, as you left them.',
+      ),
+    };
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Close',
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
+        title: const Text('AgentShot Cloud'),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                children: [
+                  Mascot(size: 120, busy: error == null),
+                  const SizedBox(height: 24),
+                  Text(
+                    error == null ? title : 'Couldn’t get into AgentShot Cloud',
+                    key: const ValueKey('cloud-step'),
+                    textAlign: TextAlign.center,
+                    style: text.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    error ?? hint,
+                    textAlign: TextAlign.center,
+                    style: text.bodyMedium?.copyWith(
+                      color: error == null
+                          ? scheme.onSurfaceVariant
+                          : scheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  if (error == null)
+                    const SizedBox(width: 160, child: LinearProgressIndicator())
+                  else
+                    FilledButton(onPressed: go, child: const Text('Try again')),
+                ],
+              ),
+            ),
           ),
         ),
       ),

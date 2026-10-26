@@ -9,12 +9,14 @@ import { _electron as electron } from 'playwright-core'
 import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
-import { createHmac } from 'node:crypto'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { bundledBinary } from './helpers.mjs'
+// the account service's own pool and lease rules (Node runs its TypeScript as is), so the cloud test checks those
+import { memoryWallet, LEASE_LIMITS, LeaseCapped } from '../../account/src/wallet.ts'
+import { cappedReply, leaseAfterBeat, signWorkerToken } from '../../account/src/index.ts'
 import { createRequire } from 'node:module'
 
 const root = join(import.meta.dirname, '..', '..'), mobile = join(root, 'mobile')
@@ -84,6 +86,7 @@ const model = createServer(async (req, res) => {
   if (req.url.endsWith('/responses')) {
     const asked = (JSON.parse(raw).input || []).filter(m => m.role === 'user').map(m => text(m.content)).pop() || ''
     notes.push(asked); turns.push(`${asked.slice(0, 40)} → reply (gateway)`)
+    if (slow.test(asked)) await new Promise(r => setTimeout(r, 20_000))
     const item = { type: 'message', id: 'msg_e2e', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: reply, annotations: [] }] }
     const send = event => res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
     res.setHeader('content-type', 'text/event-stream')
@@ -123,15 +126,13 @@ writeFileSync(join(ud, 'providers.json'), JSON.stringify([{ id: 'scripted', name
 const computer = 'E2E Studio', accountKey = 'sk-e2e-account', email = 'maya@example.com'
 const seen = { heartbeats: 0, exchanged: 0, callback: '' }
 const machines = new Map()
-// cloud workers (the pool): reported with the pool secret, lent to one person at a time
-const pool = new Map(), poolSecret = 'e2e-pool-secret-0123456789abcdef'
-seen.leases = 0; seen.releases = 0
+// cloud workers (the pool): reported with the pool secret, lent to one person at a time, by the account service's own
+// wallet and lease rules. The cloud test can shorten them (CLOUD … cues) to see a lease end without waiting for real.
+const pool = memoryWallet(), poolSecret = 'e2e-pool-secret-0123456789abcdef'
+const lease = { idle: 15 * 60_000, limits: { ...LEASE_LIMITS } }
+seen.leases = 0; seen.releases = 0; seen.lessees = []; seen.capped = 0; seen.told = new Map()
 let bridgeUrl = ''
-// as signWorkerToken in account/src/index.ts: a day-long token the computer checks with the secret it reported
-const workerToken = (secret, userId, expiresAt, pool = false) => {
-  const payload = `${expiresAt}.${Buffer.from(`${pool ? 'pool' : 'owner'}:${userId}`).toString('base64url')}`
-  return `lease.${payload}.${createHmac('sha256', secret).update(payload).digest('base64url')}`
-}
+const workerToken = (secret, userId, expiresAt, isPool = false) => signWorkerToken(secret, userId, isPool, expiresAt)
 const read = async req => { let raw = ''; for await (const c of req) raw += c; return raw }
 const respond = (res, status, value) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(value)) }
 const clerk = createServer(async (req, res) => {
@@ -162,30 +163,54 @@ const accounts = createServer(async (req, res) => {
     return auth === 'Bearer e2e-access' ? respond(res, 200, { key: accountKey, key_id: 'vk_e2e', email }) : respond(res, 401, { error: 'Your sign-in has expired. Sign in again.' })
   // a cloud worker reports itself with the pool secret, and hears back who leases it
   if (url.pathname === '/v1/workers/heartbeat' && req.method === 'POST' && req.headers['x-manul-pool-secret'] === poolSecret) {
-    const w = JSON.parse(await read(req)), was = pool.get(w.id)
-    pool.set(w.id, { ...w, at: Date.now(), leasedTo: was?.leasedTo, leasedUntil: was?.leasedUntil })
-    const now = pool.get(w.id)
-    return respond(res, 200, { id: w.id, pool: true, leasedTo: now.leasedUntil > Date.now() ? now.leasedTo : null, leasedUntil: now.leasedUntil > Date.now() ? now.leasedUntil : null })
+    const w = JSON.parse(await read(req))
+    const rec = await pool.upsertWorker({ id: w.id, pool: true, name: w.name, urls: w.urls, fingerprint: w.fingerprint, secret: w.secret, capabilities: w.capabilities || {} })
+    if (!rec) return respond(res, 409, { error: 'This worker id belongs to another computer.' })
+    const after = await leaseAfterBeat(pool, rec, w.activity, lease.idle, lease.limits)
+    // the worker last heard it was this person's, and now isn't, without them giving it back: the lease ended by
+    // itself (unused for the idle time, or at the end of the longest run)
+    const told = seen.told.get(rec.id)
+    seen.told.set(rec.id, after.leasedTo)
+    if (told === 'user_e2e' && !after.leasedTo) {
+      seen.lapsed = (seen.lapsed || 0) + 1
+      console.log(`e2e: the lease of ${rec.id} ended (${w.activity?.busy ? 'busy?!' : `idle ${Math.round((w.activity?.idleMs ?? 0) / 1000)} s`})`)
+      if (w.activity?.busy) seen.lapsedBusy = (seen.lapsedBusy || 0) + 1
+      lease.idle = 15 * 60_000 // once is enough: the next lease lasts as usual
+    }
+    return respond(res, 200, { id: rec.id, pool: true, ...after })
   }
   if (auth !== `Bearer ${accountKey}`) return respond(res, 401, { error: 'Sign in first.' })
   if (url.pathname === '/v1/workers/heartbeat' && req.method === 'POST') {
     const w = JSON.parse(await read(req)); seen.heartbeats++
     machines.set(w.id, { ...w, at: Date.now() }); return respond(res, 200, { ok: true, pool: false })
   }
-  // the cloud worker as this person sees it: the address the emulator reaches it at, a pool token
-  const lent = w => ({ id: w.id, name: w.name, pool: true, fingerprint: w.fingerprint, capabilities: w.capabilities, expiresAt: w.leasedUntil,
-    urls: [`https://10.0.2.2:${new URL(w.urls[0]).port}`, ...w.urls], token: workerToken(w.secret, 'user_e2e', w.leasedUntil, true) })
-  const free = () => [...pool.values()].filter(w => Date.now() - w.at < 2 * 60_000 && !(w.leasedUntil > Date.now()))
+  // the cloud worker as this person sees it: the address the emulator reaches it at, a day-long pool token (the
+  // lease, not the token, decides whom it serves), as listWorkers and leaseWorker in account/src/index.ts
+  const lent = w => {
+    const expiresAt = Date.now() + 24 * 60 * 60_000
+    return { id: w.id, name: w.name, pool: true, fingerprint: w.fingerprint, capabilities: w.capabilities, expiresAt,
+      urls: [`https://10.0.2.2:${new URL(w.urls[0]).port}`, ...w.urls], token: workerToken(w.secret, 'user_e2e', expiresAt, true) }
+  }
   if (url.pathname === '/v1/workers/lease' && req.method === 'POST') {
-    const w = free()[0]
+    // a different worker than this person had last, when one is free: the next one opens the same space (stateless)
+    const other = [...pool.workers.values()].find(w => w.pool && w.id !== seen.lessees.at(-1) && !(w.leasedUntil > Date.now()) && Date.now() - w.updatedAt < 2 * 60_000)
+    let w
+    try {
+      w = await pool.leaseWorker('user_e2e', { workerId: other?.id, ttlMs: lease.idle, limits: lease.limits })
+    } catch (e) {
+      if (!(e instanceof LeaseCapped)) throw e
+      seen.capped++
+      return respond(res, 429, cappedReply(e, lease.limits))
+    }
     if (!w) return respond(res, 404, { error: 'No cloud workers are free right now. Try again in a moment.' })
-    Object.assign(w, { leasedTo: 'user_e2e', leasedUntil: Date.now() + 60 * 60_000 }); seen.leases++
+    seen.leases++; seen.lessees.push(w.id)
     return respond(res, 200, { worker: lent(w) })
   }
   if (url.pathname === '/v1/workers/release' && req.method === 'POST') {
-    const { workerId } = JSON.parse(await read(req)), w = pool.get(workerId)
-    if (w?.leasedTo === 'user_e2e') { w.leasedTo = undefined; w.leasedUntil = undefined; seen.releases++ }
-    return respond(res, 200, { released: !!w })
+    const { workerId } = JSON.parse(await read(req))
+    const released = await pool.releaseWorker('user_e2e', workerId)
+    if (released) { seen.releases++; seen.told.delete(workerId) }
+    return respond(res, 200, { released })
   }
   if (url.pathname === '/v1/workers' && req.method === 'GET') {
     const expiresAt = Date.now() + 24 * 60 * 60_000
@@ -193,8 +218,8 @@ const accounts = createServer(async (req, res) => {
       id: w.id, name: w.name, pool: false, fingerprint: w.fingerprint, capabilities: w.capabilities, expiresAt,
       urls: [bridgeUrl, ...w.urls], token: workerToken(w.secret, 'user_e2e', expiresAt), // first: how the emulator reaches it
     }))
-    const leased = [...pool.values()].filter(w => w.leasedTo === 'user_e2e' && w.leasedUntil > Date.now()).map(lent)
-    return respond(res, 200, { workers: [...workers, ...leased], poolAvailable: free().length })
+    const { leased, poolAvailable } = await pool.workersFor('user_e2e')
+    return respond(res, 200, { workers: [...workers, ...leased.map(lent)], poolAvailable })
   }
   if (url.pathname === '/v1/balance' && req.method === 'GET') return respond(res, 200, { credits: 1000, plan: null, tiers: [], plans: [] })
   if (url.pathname === '/v1/mesh/join') return respond(res, 503, { error: 'Mesh is not configured yet.' })
@@ -231,21 +256,41 @@ const env = { ...process.env, MANUL_PROJECTS: projects, MANUL_GALLERY_URL: `${at
   MANUL_GATEWAY: `http://127.0.0.1:${model.address().port}`, MANUL_AUTH_ISSUER: at(clerk, '127.0.0.1'), MANUL_AUTH_CLIENT_ID: 'e2e-client', MANUL_ACCOUNT: at(accounts, '127.0.0.1'), MANUL_WORKER_NAME: computer }
 for (const k of ['GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ELEVENLABS_API_KEY', 'MANUL_KEY']) delete env[k]
 // Linux CI has no unlocked system keyring: keep the disposable profile's keys in plain text.
-// A cloud worker for the cloud test: AgentShot --worker with the pool secret, reporting itself to the stand-in account.
+// Cloud workers for the cloud test: two stateless AgentShot --worker processes sharing one disk (MANUL_SHARED_ROOT),
+// each with its own slot, port and name, reporting themselves to the stand-in account with the pool secret. Each is
+// started again whenever it exits, as systemd does (a worker restarts to open or close a person's space).
 let cloud
-async function startCloudWorker() {
-  const dir = join(tmp, 'cloud-worker'), ud = join(dir, 'profile'), projects = join(dir, 'projects')
-  mkdirSync(ud, { recursive: true })
-  writeFileSync(join(ud, 'providers.json'), readFileSync(join(tmp, 'ud', 'providers.json')))
-  const log = join(dir, 'worker.log')
-  const child = spawn(electronBinary, [root, '--worker', `--user-data-dir=${ud}`, ...(process.platform === 'linux' ? ['--password-store=basic'] : [])], {
-    // no model key of its own, like a real cloud worker: the phone hands over its AgentShot credits
-    env: { ...Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'MANUL_PROVIDER_SCRIPTED_KEY')), MANUL_WORKER: '1', MANUL_POOL_SECRET: poolSecret, MANUL_WORKER_ID: 'pool-e2e', MANUL_WORKER_NAME: 'E2E Cloud', MANUL_PROJECTS: projects },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  for (const s of [child.stdout, child.stderr]) s.on('data', d => appendFileSync(log, d))
-  await until('the cloud worker to report itself', () => pool.has('pool-e2e'), 120_000)
-  return { projects, stop: () => child.kill(), log }
+async function startCloudWorkers(count) {
+  const shared = join(tmp, 'shared'), workers = []
+  for (let n = 1; n <= count; n++) {
+    const slot = join(tmp, `cloud-worker-${n}`), log = join(slot, 'worker.log')
+    mkdirSync(slot, { recursive: true })
+    const worker = { id: `pool-e2e-${n}`, slot, log, child: undefined, stopped: false, starts: 0 }
+    const start = () => {
+      if (worker.stopped) return
+      worker.starts++
+      worker.child = spawn(electronBinary, [root, '--worker', `--user-data-dir=${join(slot, 'profile')}`, ...(process.platform === 'linux' ? ['--password-store=basic'] : [])], {
+        // no model key of its own, like a real cloud worker: the phone hands over its AgentShot credits
+        env: { ...Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'MANUL_PROVIDER_SCRIPTED_KEY')), MANUL_WORKER: '1', MANUL_POOL_SECRET: poolSecret,
+          MANUL_WORKER_ID: worker.id, MANUL_WORKER_NAME: `E2E Cloud ${n}`, MANUL_SHARED_ROOT: shared, MANUL_WORKER_SLOT: slot, MANUL_BRIDGE_PORT: String(47900 + n),
+          // a small quota, so the test can fill it (with a sparse file: counted, but no real disk used)
+          MANUL_USER_QUOTA_GB: '1', MANUL_DISK_RESERVE_GB: '0',
+          // beats every 3 s, so a lease the test shortens to 12 s (CLOUD idle) is renewed several times while in use
+          MANUL_HEARTBEAT_SECONDS: '3' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      for (const s of [worker.child.stdout, worker.child.stderr]) s.on('data', d => appendFileSync(log, d))
+      worker.child.on('exit', () => setTimeout(start, 500))
+    }
+    start()
+    workers.push(worker)
+  }
+  await until('the cloud workers to report themselves', () => workers.every(w => pool.workers.has(w.id)), 180_000)
+  return {
+    shared, workers,
+    projectsOf: user => join(shared, 'users', user, 'projects'),
+    stop: () => { for (const w of workers) { w.stopped = true; w.child?.kill() } },
+  }
 }
 const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${ud}`, ...(process.platform === 'linux' ? ['--password-store=basic'] : [])], env })
 const desktopLog = join(tmp, 'desktop.log') // the desktop's side of a failure
@@ -308,7 +353,7 @@ try {
       for (const d of (await win.evaluate(() => window.agentshot.mobile.status())).devices) await win.evaluate(id => window.agentshot.mobile.revoke(id), d.id)
     }
     // the cloud test: a second AgentShot, headless, as a cloud worker (its own profile and projects, the same model)
-    if (test === 'cloud' && !cloud) cloud = await startCloudWorker()
+    if (test === 'cloud' && !cloud) cloud = await startCloudWorkers(2)
     if (test === 'signin' || test === 'setup_ai' || test === 'cloud') {
       if (!device.startsWith('emulator-')) { console.log(`mobile e2e: ${test} skipped (the stand-ins are reached at 10.0.2.2, from the emulator)`); continue }
       // Chrome without its first-run screens, which would stand between the app and the sign-in page
@@ -353,6 +398,20 @@ try {
         if (seen.callback && seen.exchanged === before) spawnSync('adb', ['-s', device, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', `'${seen.callback}'`])
       })(seen.exchanged), 8000)
       // the connection test's cues: losing the computer
+      // the cloud test's: a lease that ends unused (idle: a few seconds of quiet), at the longest run (cap), back to
+      // normal (reset); this person's space full (full) and room again (roomy)
+      for (const [, what] of String(d).matchAll(/CLOUD (idle|cap|reset|full|roomy)/g)) {
+        const filler = join(tmp, 'shared', 'users', 'user_e2e', 'e2e-filler.bin')
+        if (what === 'idle') lease.idle = 12_000
+        if (what === 'cap') {
+          const held = [...pool.workers.values()].find(w => w.leasedTo === 'user_e2e' && w.leasedUntil > Date.now())
+          if (held) lease.limits = { maxMs: Date.now() - held.leasedSince + 2_000, cooldownMs: 10 * 60_000 }
+        }
+        if (what === 'reset') { lease.idle = 15 * 60_000; lease.limits = { ...LEASE_LIMITS } }
+        if (what === 'full') { writeFileSync(filler, ''); truncateSync(filler, 2 * 1024 ** 3) }
+        if (what === 'roomy') rmSync(filler, { force: true })
+        console.log(`e2e: cloud ${what}`)
+      }
       for (const [, what] of String(d).matchAll(/DESKTOP (stop|start|revoke|back|camera|signout|signin)/g)) {
         // a system screen (the share sheet) covers the app: Back, until the app is in front again
         // (it may take a while to come: a render first): Back once it shows, done when the app is in front again
@@ -397,11 +456,21 @@ try {
       if (!run.status) assert.equal(who.email, email, 'Use AgentShot credits signed the computer in')
     }
     if (test === 'cloud' && !run.status) {
-      // the phone made its project on the cloud worker (not this computer), and gave the worker back
-      const made = readdirSync(cloud.projects).map(d => JSON.parse(readFileSync(join(cloud.projects, d, 'project.json'), 'utf8')).title)
-      assert.ok(made.includes('Mobile e2e in the cloud'), `the project is on the cloud worker (${made.join(', ')})`)
+      // the project is in this person's space on the shared disk (not on this computer, not in a worker's slot), the
+      // phone used both workers, and each gave it back
+      const projectsDir = cloud.projectsOf('user_e2e')
+      const made = readdirSync(projectsDir).map(d => JSON.parse(readFileSync(join(projectsDir, d, 'project.json'), 'utf8')).title)
+      assert.ok(made.includes('Mobile e2e in the cloud'), `the project is in the person's space (${made.join(', ')})`)
       assert.ok(!readdirSync(projects).some(d => JSON.parse(readFileSync(join(projects, d, 'project.json'), 'utf8')).title === 'Mobile e2e in the cloud'), 'and not on this computer')
-      assert.ok(seen.leases >= 1 && seen.releases >= 1, `leased and released (${seen.leases}/${seen.releases})`)
+      for (const w of cloud.workers) assert.ok(!existsSync(join(w.slot, 'idle-projects')) || !readdirSync(join(w.slot, 'idle-projects')).length, `${w.id} keeps nothing of it`)
+      assert.ok(seen.leases >= 2 && seen.releases >= 2, `leased and released twice (${seen.leases}/${seen.releases})`)
+      assert.deepEqual(new Set(seen.lessees), new Set(cloud.workers.map(w => w.id)), 'on both workers')
+      // a lease ended unused and another at its longest run, never one with work running, and the person was told
+      // to wait after the longest run
+      assert.ok(seen.lapsed >= 2, `leases ended by themselves (${seen.lapsed})`)
+      assert.ok(!seen.lapsedBusy, 'no lease ended while work ran')
+      assert.ok(seen.capped >= 1, 'a new lease was refused after the longest run')
+      assert.ok(!existsSync(join(cloud.shared, 'users', 'user_e2e', 'e2e-filler.bin')), 'the space was made roomy again')
     }
     if (test === 'signin' && !run.status) {
       // the desktop saw the phone that signed in; then it signs out, so the agent goes back to the scripted model

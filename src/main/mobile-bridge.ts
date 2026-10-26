@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:https'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createHmac, randomBytes, randomInt, timingSafeEqual, X509Certificate } from 'node:crypto'
 import { createSocket, type Socket as UdpSocket } from 'node:dgram'
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path'
 import { tmpdir, networkInterfaces } from 'node:os'
@@ -13,6 +13,7 @@ import { generate } from 'selfsigned'
 import { artifactPath } from './artifacts'
 import { mobileArgs, mobileSchemas, projectArgument } from './mobile-contract'
 import { emptyAgentState, reduce, type AgentState } from '../shared/agui-state'
+import { SpaceError } from './user-space'
 type Options = {
   invoke(method: string, args: unknown[]): Promise<unknown>
   projects(): { dir: string }[]
@@ -27,6 +28,12 @@ type Options = {
   pool?: boolean
   /** Asks the account now who leases this cloud worker (a heartbeat), for a lease that began since the last one. */
   refreshLease?: () => Promise<void>
+  /** A stateless cloud worker: whose space it has open (a lessee is served only once it's theirs), and how much room
+   *  is left in it (user-space.ts). */
+  session?: () => string | undefined
+  quota?: { ensureRoom(bytes: number): void; add(bytes: number): void }
+  /** Work still running on this computer (the agent, a render or another job): a lease isn't idle while it runs. */
+  busy?: () => boolean
 }
 type PersistedBridgeState = {
   key: string
@@ -36,12 +43,17 @@ type PersistedBridgeState = {
   /** On a cloud worker: which lessee made each project (dir → account user). */
   owners?: [string, string][]
 }
-type UploadSession = { id: string; folder: string; file: string; dir?: string; name: string; size: number; offset: number; busy: boolean }
+type UploadSession = { id: string; folder: string; file: string; dir?: string; name: string; size: number; offset: number; busy: boolean; touched: number }
 export const DEFAULT_MOBILE_PORT = 47821
 /** On a cloud worker, the worker's own settings: a lessee neither reads nor changes them. */
 const WORKER_PRIVATE = /^(keys:set|memory:|skills:(enable|profile|newProfile)|tools:(install|remove)|browser:)/
 /** Calls that make a project, which then belongs to the lessee who made it. */
 const CREATES_PROJECT = new Set(['project:create', 'project:createMotion'])
+/** What starts new work that writes into the project (refused for a cloud lessee whose space is full). */
+const WRITES = new Set(['project:create', 'project:createMotion', 'agent:send', 'timeline:edit', 'mobile:export', 'export:run', 'clip:overlay', 'clip:save',
+  'clip:insert', 'clip:move', 'clip:render', 'demo:create', 'mix:speech'])
+/** An upload nobody has sent a chunk to for this long no longer counts as work running; after [UPLOAD_GONE], it's dropped. */
+const UPLOAD_IDLE = 10 * 60_000, UPLOAD_GONE = 60 * 60_000
 const secret = () => randomBytes(32).toString('base64url')
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message) } }
 export function isTailscale(ip: string) {
@@ -72,6 +84,8 @@ export class MobileBridge {
   private signedIn = new Map<string, { name: string; lastSeen: number }>()
   /** On a cloud worker: who holds the lease now (from the account's answer to the heartbeat), and what each made. */
   private lease?: { userId: string; until: number }
+  /** When the person leasing this worker last asked it something. */
+  private lastActive = Date.now()
   private owners = new Map<string, string>()
   private clients = new Map<ServerResponse, string>()
   private states = new Map<string, AgentState>()
@@ -130,6 +144,7 @@ export class MobileBridge {
     const before = this.lease?.userId
     this.lease = lease && lease.until > Date.now() ? lease : undefined
     if (this.lease?.userId !== before) {
+      this.lastActive = Date.now() // a new lease starts fresh
       for (const [res, token] of this.clients) if (!this.verifyAuth(token)) res.end()
     }
     return this.lease?.userId !== before
@@ -170,9 +185,35 @@ export class MobileBridge {
     await this.leaseCheck
     return this.verifyAuth(token)
   }
+  /** For the heartbeat: how long the leasing person has been away, and whether anything still runs for them (the
+   *  account frees a lease nobody has used for a while, never one with work running). Undefined when not leased. */
+  activity(): { user: string; idleMs: number; busy: boolean } | undefined {
+    if (!this.options.pool || !this.lease) return undefined
+    void this.dropStaleUploads()
+    // an upload the phone walked away from (half sent, never finished) doesn't keep the spot
+    const uploading = [...this.uploads.values()].some(u => u.busy || Date.now() - u.touched < UPLOAD_IDLE) || this.activeUploads > 0
+    const busy = uploading || [...this.states.values()].some(s => s.busy) || !!this.options.busy?.()
+    // work running counts as use: the idle time starts when it ends, so a render that took an hour isn't freed the
+    // moment it's done, before the person has seen it
+    if (busy) this.lastActive = Date.now()
+    return { user: this.lease.userId, idleMs: Math.max(0, Date.now() - this.lastActive), busy }
+  }
+  /** Forgets uploads nobody finished within the hour, and their half-sent files. */
+  private async dropStaleUploads() {
+    for (const u of [...this.uploads.values()]) {
+      if (u.busy || Date.now() - u.touched < UPLOAD_GONE) continue
+      this.uploads.delete(u.id)
+      await rm(u.folder, { recursive: true, force: true }).catch(() => {})
+    }
+  }
   /** A cloud lessee's: made by them here. Anyone else's token sees everything (it's their own computer). */
   private mine(dir: unknown, lessee?: string) {
-    return !lessee || (typeof dir === 'string' && this.owners.get(dir) === lessee)
+    if (!lessee) return true
+    if (typeof dir !== 'string') return false
+    // a stateless worker: everything in the open space is its person's, whichever worker made it
+    const root = this.options.projectsRoot?.()
+    if (this.options.session) return this.options.session() === lessee && !!root && resolve(dir).startsWith(resolve(root) + sep)
+    return this.owners.get(dir) === lessee
   }
   private claim(result: unknown, lessee?: string) {
     const dir = result && typeof result === 'object' ? (result as { dir?: unknown }).dir : undefined
@@ -195,7 +236,7 @@ export class MobileBridge {
     const server = createServer({ key: pem.private, cert: pem.cert, minVersion: 'TLSv1.2' }, (req, res) => {
       void this.handle(req, res).catch(error => {
         if (res.headersSent) { res.destroy(); return }
-        const expected = error instanceof HttpError
+        const expected = error instanceof HttpError || error instanceof SpaceError
         // no AI set up on this computer: the phone offers AgentShot credits or the person's own key
         if ((error as { code?: string })?.code === 'needs-key') {
           res.writeHead(409, { 'content-type': 'application/json', 'cache-control': 'no-store' })
@@ -213,7 +254,8 @@ export class MobileBridge {
         server.once('error', (err: NodeJS.ErrnoException) => (err.code === 'EADDRINUSE' && p !== 0 ? bind(0) : fail(err)))
         server.listen(p, '0.0.0.0', () => { server.removeAllListeners('error'); ok() })
       }
-      bind(DEFAULT_MOBILE_PORT)
+      // a worker that restarts (a stateless cloud worker switching spaces) keeps its port: MANUL_BRIDGE_PORT
+      bind(Number(process.env.MANUL_BRIDGE_PORT) || DEFAULT_MOBILE_PORT)
     })
     const addr = server.address()
     this.server = server; this.port = addr && typeof addr === 'object' ? addr.port : DEFAULT_MOBILE_PORT
@@ -266,6 +308,8 @@ export class MobileBridge {
   }
   publish(channel: string, ...args: unknown[]) {
     if (channel === 'agui') { const [dir, event] = args as [string, Parameters<typeof reduce>[1]]; this.states.set(dir, reduce(this.states.get(dir) || emptyAgentState(), event)) }
+    // the agent working, or a job moving (and ending), is use too, even between two heartbeats
+    if (channel === 'agui' || channel === 'jobs') this.lastActive = Date.now()
     if (!['agui', 'project', 'jobs', 'consent', 'preview:state', 'browser:state', 'notice', 'seek', 'agent:ready'].includes(channel)) return
     for (const [res, token] of this.clients) {
       const device = this.verifyAuth(token)
@@ -283,6 +327,13 @@ export class MobileBridge {
   }
   private authorizeProject(dir: unknown, lessee?: string) {
     if (typeof dir !== 'string' || !this.options.projects().some(p => p.dir === dir) || !this.mine(dir, lessee)) throw new HttpError(403, 'Open a known AgentShot project')
+    // a lessee's project is inside the projects root, links resolved: their space, never a way out of it
+    const root = this.options.projectsRoot?.()
+    if (lessee && root) {
+      let inside = false
+      try { const base = realpathSync(root), real = realpathSync(dir); inside = real.startsWith(base + sep) } catch {}
+      if (!inside) throw new HttpError(403, 'Open a known AgentShot project')
+    }
     return dir
   }
   private async handle(req: IncomingMessage, res: ServerResponse) {
@@ -313,6 +364,11 @@ export class MobileBridge {
     }
     const token = req.headers.authorization?.replace(/^Bearer /, '') || ''; const device = this.verifyAuth(token) ?? await this.leaseBegun(token)
     if (!device) throw new HttpError(401, 'Reconnect to your desktop')
+    if (device.lessee) this.lastActive = Date.now()
+    // leased, but the worker is still opening this person's space (it restarts into it): wait, don't reconnect
+    if (device.lessee && this.options.session && this.options.session() !== device.lessee) {
+      throw new HttpError(503, 'Opening your space on this worker. Try again in a moment.')
+    }
     // signed in to the same account (an account lease, not a pairing): remember it for Settings → Mobile
     if (device.id.startsWith('lease:')) {
       const name = String(req.headers['x-agentshot-device'] || 'Signed-in device').slice(0, 80)
@@ -325,6 +381,9 @@ export class MobileBridge {
     if (url.pathname === '/unpair' && req.method === 'POST') {
       this.devices.delete(token); this.saveState()
       for (const [stream, t] of this.clients) if (t === token) stream.end()
+      // a lessee done with this cloud worker (it gave the lease back): ask the account now, so the worker closes the
+      // space at once and another worker can open it, instead of at the next heartbeat
+      if (device.lessee) void this.options.refreshLease?.().catch(() => {})
       return reply(null)
     }
     if (url.pathname === '/rpc' && req.method === 'POST') {
@@ -333,6 +392,8 @@ export class MobileBridge {
       // the worker's own settings aren't a lessee's to read or change
       if (lessee && WORKER_PRIVATE.test(body.method)) throw new HttpError(403, 'Not available on a cloud worker')
       if (projectArgument(body.method) && args.length) this.authorizeProject(args[0], lessee)
+      // a full space takes nothing new: no new work that writes (an edit, a render, the agent), until there's room
+      if (lessee && WRITES.has(body.method)) this.options.quota?.ensureRoom(0)
       const result = await this.options.invoke(body.method, args)
       if (lessee) {
         if (CREATES_PROJECT.has(body.method)) this.claim(result, lessee)
@@ -349,17 +410,19 @@ export class MobileBridge {
       res.on('close', () => { clearInterval(heartbeat); this.clients.delete(res) }); return
     }
     if (url.pathname === '/upload/init' && req.method === 'POST') {
+      await this.dropStaleUploads()
       if (this.uploads.size >= 8) throw new HttpError(429, 'Too many active uploads')
       const dir = url.searchParams.has('project') ? this.authorizeProject(url.searchParams.get('project'), device.lessee) : undefined
       const name = url.searchParams.get('name') || 'upload.mp4'
       if (!/^[^/\\\x00-\x1f]{1,180}$/.test(name) || name.startsWith('.') || name.includes(':')) throw new HttpError(400, 'Invalid file name')
       const size = Number(url.searchParams.get('size') ?? req.headers['x-upload-length'])
       if (!Number.isSafeInteger(size) || size <= 0 || size > 4 * 1024 ** 3) throw new HttpError(413, 'Upload a file between 1 byte and 4 GB')
+      if (device.lessee) this.options.quota?.ensureRoom(size)
       const folder = await mkdtemp(join(tmpdir(), 'agentshot-upload-'))
       const file = join(folder, name)
       await writeFile(file, new Uint8Array(0), { mode: 0o600 })
       const id = secret()
-      this.uploads.set(id, { id, folder, file, dir, name, size, offset: 0, busy: false })
+      this.uploads.set(id, { id, folder, file, dir, name, size, offset: 0, busy: false, touched: Date.now() })
       return reply({ id, offset: 0, size })
     }
     if (url.pathname === '/upload' && req.method === 'GET' && url.searchParams.has('id')) {
@@ -374,17 +437,18 @@ export class MobileBridge {
       const offset = Number(url.searchParams.get('offset') ?? req.headers['upload-offset'] ?? 0)
       if (!Number.isSafeInteger(offset) || offset !== u.offset) throw new HttpError(409, `Expected offset ${u.offset}`)
       const rem = u.size - u.offset
-      u.busy = true
+      u.busy = true; u.touched = Date.now()
       try {
         let received = 0
         const limit = new Transform({ transform(chunk, _enc, cb) { received += chunk.length; cb(received > rem ? new Error('Upload too large') : null, chunk) } })
         await pipeline(req, limit, createWriteStream(u.file, { flags: 'a', mode: 0o600 }))
-        u.offset += received
+        u.offset += received; u.touched = Date.now()
         if (u.offset < u.size) return reply({ id: u.id, done: false, offset: u.offset, size: u.size })
         this.uploads.delete(u.id)
         try {
           const result = await this.options.importFile(u.file, u.dir)
           this.claim(result, device.lessee)
+          if (device.lessee) this.options.quota?.add(u.size)
           return reply({ id: u.id, done: true, offset: u.offset, size: u.size, result })
         } finally {
           await rm(u.folder, { recursive: true, force: true }).catch(() => {})
@@ -398,6 +462,7 @@ export class MobileBridge {
       if (!/^[^/\\\x00-\x1f]{1,180}$/.test(name) || name.startsWith('.') || name.includes(':')) throw new HttpError(400, 'Invalid file name')
       const size = Number(req.headers['content-length'])
       if (!Number.isSafeInteger(size) || size <= 0 || size > 4 * 1024 ** 3) throw new HttpError(413, 'Upload a file between 1 byte and 4 GB')
+      if (device.lessee) this.options.quota?.ensureRoom(size)
       this.activeUploads++; let folder: string | undefined
       try {
         folder = await mkdtemp(join(tmpdir(), 'agentshot-mobile-'))
@@ -407,6 +472,7 @@ export class MobileBridge {
         if (received !== size) throw new HttpError(400, 'Incomplete upload')
         const result = await this.options.importFile(file, dir)
         this.claim(result, device.lessee)
+        if (device.lessee) this.options.quota?.add(size)
         await rm(folder, { recursive: true, force: true }); folder = undefined
         return reply(result)
       } finally { this.activeUploads--; if (folder) await rm(folder, { recursive: true, force: true }) }
@@ -454,6 +520,11 @@ export class MobileBridge {
         this.claim({ dir }, device.lessee)
       }
       const rel = url.searchParams.get('file') || ''
+      if (device.lessee && this.options.quota) {
+        const length = Number(req.headers['content-length'])
+        if (!Number.isSafeInteger(length) || length < 0) throw new HttpError(411, 'Send the file\'s length')
+        this.options.quota.ensureRoom(length)
+      }
       const target = await syncFilePath(dir, rel, false)
       await mkdir(dirname(target), { recursive: true })
       const tmp = `${target}.${process.pid}.${Date.now()}.tmp`
@@ -464,6 +535,7 @@ export class MobileBridge {
         await writeFile(tmp, JSON.stringify(parsed, null, 1))
       }
       await rename(tmp, target)
+      if (device.lessee) this.options.quota?.add((await stat(target)).size)
       if (rel === 'project.json') await this.options.onProjectSynced?.(dir)
       return reply({ dir, file: rel })
     }

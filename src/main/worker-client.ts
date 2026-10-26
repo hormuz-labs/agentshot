@@ -556,6 +556,8 @@ export function startWorkerHeartbeat(opts: {
   sendHeartbeat: (body: Record<string, unknown>, poolSecret?: string) => Promise<{ leasedTo?: string | null; leasedUntil?: number | null } | void>
   /** A cloud worker hears who leases it with every heartbeat. */
   onLease?: (lease?: { userId: string; until: number }) => void
+  /** A cloud worker tells the account how its lessee is using it, so an unused lease is freed. */
+  activity?: () => { user: string; idleMs: number; busy: boolean } | undefined
 }): (() => void) & { beat: () => Promise<void> } {
   let stopped = false
   const tick = async () => {
@@ -571,6 +573,7 @@ export function startWorkerHeartbeat(opts: {
             fingerprint: creds.fingerprint,
             secret: creds.secret,
             pool: !!opts.poolSecret,
+            ...(opts.poolSecret && opts.activity?.() ? { activity: opts.activity() } : {}),
             capabilities: {
               platform: process.platform,
               arch: process.arch,
@@ -589,7 +592,9 @@ export function startWorkerHeartbeat(opts: {
     }
   }
   void tick()
-  const timer = setInterval(() => void tick(), 30_000)
+  // every 30 s (MANUL_HEARTBEAT_SECONDS for tests: the cloud end to end test shortens leases, and beats with them)
+  const every = Math.max(1, Number(process.env.MANUL_HEARTBEAT_SECONDS) || 30) * 1000
+  const timer = setInterval(() => void tick(), every)
   // beat(): report now, e.g. to hear about a lease that just started
   return Object.assign(
     () => {

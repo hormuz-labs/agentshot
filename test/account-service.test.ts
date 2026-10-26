@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { join } from 'node:path'
 import { handle, NEW_KEY, sync, syncAll, type Env } from '../account/src/index'
 import { costForCredits, creditsForCost, STARTER_CREDITS } from '../account/src/plans'
 import { memoryWallet } from '../account/src/wallet'
@@ -241,6 +243,16 @@ describe('the account service: credits and plans', () => {
   })
 })
 
+describe('the account service as production runs it', () => {
+  it('loads with Node stripping its types (no TypeScript-only syntax such as parameter properties or enums)', () => {
+    const run = spawnSync(process.execPath, ['--input-type=module', '-e', "await import('./account/src/index.ts'); await import('./account/src/wallet.ts')"], {
+      cwd: join(import.meta.dirname, '..'), encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' },
+    })
+    expect(run.stderr.replace(/.*ExperimentalWarning.*\n?|.*--trace-warnings.*\n?/g, '')).not.toMatch(/Error/)
+    expect(run.status).toBe(0)
+  })
+})
+
 describe('the account service: headscale mesh and worker pool', () => {
   const fp = 'a'.repeat(64)
   const secret = 's'.repeat(48)
@@ -407,5 +419,94 @@ describe('the account service: headscale mesh and worker pool', () => {
     const u2AfterStale = await (await call('/v1/workers', { headers: asUser2 })).json()
     expect(u2AfterStale.workers).toEqual([])
     expect(u2AfterStale.poolAvailable).toBe(0)
+  })
+
+  it('keeps a worker id to the machine that registered it: a signed-in computer can\'t take over a cloud worker\'s entry', async () => {
+    await ask('good')
+    const pool = { id: 'pool-guarded', name: 'Cloud', urls: ['https://100.64.0.70:47821'], fingerprint: fp, secret }
+    expect((await call('/v1/workers/heartbeat', { method: 'POST', headers: { 'x-manul-pool-secret': 'pool_secret_123' }, body: JSON.stringify(pool) })).status).toBe(200)
+    const hijack = await call('/v1/workers/heartbeat', {
+      method: 'POST', headers: asKey(),
+      body: JSON.stringify({ ...pool, name: 'Mine now', urls: ['https://203.0.113.9:47821'], secret: 'x'.repeat(48) }),
+    })
+    expect(hijack.status).toBe(409)
+    expect(wallet.workers.get('pool-guarded')).toMatchObject({ pool: true, urls: pool.urls, secret })
+    // and nobody's lease of it is touched
+    const leased = await (await call('/v1/workers/lease', { method: 'POST', headers: asKey(), body: JSON.stringify({ workerId: 'pool-guarded' }) })).json()
+    expect(leased.worker.urls).toEqual(pool.urls)
+  })
+
+  it('ends a run of cloud leases at 8 hours, however busy, and says when the person can take a spot again', async () => {
+    await ask('good')
+    const beat = async (activity?: unknown) => (await call('/v1/workers/heartbeat', {
+      method: 'POST', headers: { 'x-manul-pool-secret': 'pool_secret_123' },
+      body: JSON.stringify({ id: 'pool-capped', name: 'Cloud', urls: ['https://100.64.0.71:47821'], fingerprint: fp, secret, activity }),
+    })).json()
+    await beat()
+    await call('/v1/workers/lease', { method: 'POST', headers: asKey(), body: '{}' })
+    const user = (await beat()).leasedTo as string
+    // the run began almost 8 hours ago: busy or not, the lease ends at the 8-hour mark
+    const rec = wallet.workers.get('pool-capped')!
+    rec.leasedSince = Date.now() - 8 * 60 * 60_000 + 60_000
+    const busy = await beat({ user, idleMs: 0, busy: true })
+    expect(busy.leasedUntil).toBe(rec.leasedSince + 8 * 60 * 60_000)
+    // it has: taking a spot again is refused, saying for how long (each heartbeat stores a fresh record)
+    const now = wallet.workers.get('pool-capped')!
+    now.leasedSince = rec.leasedSince - 2 * 60_000; now.leasedUntil = now.leasedSince + 8 * 60 * 60_000
+    const again = await call('/v1/workers/lease', { method: 'POST', headers: asKey(), body: '{}' })
+    expect(again.status).toBe(429)
+    const body = await again.json()
+    expect(body.error).toMatch(/8 hours in a row.*take it again in 2[89] minutes/)
+    expect(body.retryAt).toBe(now.leasedUntil + 30 * 60_000)
+    // and the worker hears it's free
+    expect((await beat()).leasedTo).toBeUndefined()
+  })
+
+  it('frees a cloud lease nobody uses for 15 minutes, keeps it while used or while anything runs, and never revives it', async () => {
+    await ask('good')
+    await ask('good_2')
+    const asUser1 = asKey('sk-bf-vk_1', 'vk_1')
+    const beat = async (activity?: unknown) => (await call('/v1/workers/heartbeat', {
+      method: 'POST',
+      headers: { 'x-manul-pool-secret': 'pool_secret_123' },
+      body: JSON.stringify({ id: 'pool-idle', name: 'Cloud', urls: ['https://100.64.0.60:47821'], fingerprint: fp, secret, activity }),
+    })).json()
+    await beat()
+    const leased = await (await call('/v1/workers/lease', { method: 'POST', headers: asUser1, body: '{}' })).json()
+    const IDLE = 15 * 60_000
+    // the lease starts at 15 minutes; the token outlives it (the lease, kept alive by use, is what counts)
+    const held = await beat()
+    const user = held.leasedTo as string
+    expect(held.leasedUntil - Date.now()).toBeGreaterThan(IDLE - 5_000)
+    expect(held.leasedUntil - Date.now()).toBeLessThanOrEqual(IDLE)
+    expect(leased.worker.expiresAt - Date.now()).toBeGreaterThan(23 * 60 * 60_000)
+
+    // used a minute ago: 14 minutes left
+    const used = await beat({ user, idleMs: 60_000, busy: false })
+    expect(used.leasedTo).toBe(user)
+    expect(Math.abs(used.leasedUntil - (Date.now() + IDLE - 60_000))).toBeLessThan(5_000)
+
+    // something still runs (a render, the agent) after an hour away: kept for another 15 minutes from now
+    wallet.workers.get('pool-idle')!.leasedUntil = Date.now() + 30_000
+    const busy = await beat({ user, idleMs: 60 * 60_000, busy: true })
+    expect(busy.leasedTo).toBe(user)
+    expect(Math.abs(busy.leasedUntil - (Date.now() + IDLE))).toBeLessThan(5_000)
+
+    // someone else's activity (a stale report after a handover) changes nothing
+    const before = wallet.workers.get('pool-idle')!.leasedUntil
+    await beat({ user: 'user_someone_else', idleMs: 0, busy: true })
+    expect(wallet.workers.get('pool-idle')!.leasedUntil).toBe(before)
+
+    // nothing running and unused for 15 minutes: the lease ends with this heartbeat and the spot is free
+    const idle = await beat({ user, idleMs: IDLE, busy: false })
+    expect(idle.leasedTo).toBeUndefined()
+    const list2 = await (await call('/v1/workers', { headers: asKey('sk-bf-vk_2', 'vk_2') })).json()
+    expect(list2.poolAvailable).toBe(1)
+
+    // a lapsed lease isn't brought back by a late report of work
+    const late = await beat({ user, idleMs: 0, busy: true })
+    expect(late.leasedTo).toBeUndefined()
+    const u2 = await (await call('/v1/workers/lease', { method: 'POST', headers: asKey('sk-bf-vk_2', 'vk_2'), body: '{}' })).json()
+    expect(u2.worker.id).toBe('pool-idle')
   })
 })

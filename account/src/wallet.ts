@@ -29,8 +29,29 @@ export type WorkerRecord = {
   capabilities: WorkerCapabilities
   leasedTo?: string
   leasedUntil?: number
+  /** When this person's current run of leases on it began (kept while they re-lease it before it lapses). */
+  leasedSince?: number
   updatedAt: number
 }
+
+/** How long one person may keep a cloud spot in a row, however busy (so nobody holds one forever), and how long they
+ *  wait after that before taking one again. */
+export type LeaseLimits = { maxMs: number; cooldownMs: number }
+export const LEASE_LIMITS: LeaseLimits = { maxMs: 8 * 60 * 60_000, cooldownMs: 30 * 60_000 }
+
+/** Refused: this person used a cloud spot for the longest run allowed, and may take one again at [until]. */
+export class LeaseCapped extends Error {
+  // spelled out: the service runs this file as Node strips it, which has no parameter properties
+  readonly until: number
+  constructor(until: number) { super('lease capped'); this.until = until }
+}
+
+/** A lease that ran its longest allowed run ended exactly at [leasedSince] + max (going idle ends it sooner). */
+const cappedUntil = (w: WorkerRecord, userId: string, limits: LeaseLimits, now: number) =>
+  w.leasedTo === userId && w.leasedSince !== undefined && w.leasedUntil !== undefined && w.leasedUntil <= now &&
+  w.leasedUntil >= w.leasedSince + limits.maxMs && w.leasedUntil + limits.cooldownMs > now
+    ? w.leasedUntil + limits.cooldownMs
+    : undefined
 
 export interface Wallet {
   /** The person with this email (the oldest profile, Pitch's if they have one), made if there is none. */
@@ -46,10 +67,16 @@ export interface Wallet {
   /** One at a time per person, across replicas. */
   lock<T>(userId: string, run: () => Promise<T>): Promise<T>
   close?(): Promise<void>
-  upsertWorker(w: Omit<WorkerRecord, 'updatedAt' | 'leasedTo' | 'leasedUntil'>): Promise<WorkerRecord>
+  /** Registers or refreshes a worker. Undefined when [w.id] is another's: a different owner (or pool) may take an id
+   *  over only by showing the same worker secret, i.e. being that same machine. */
+  upsertWorker(w: Omit<WorkerRecord, 'updatedAt' | 'leasedTo' | 'leasedUntil' | 'leasedSince'>): Promise<WorkerRecord | undefined>
   workersFor(userId: string, now?: number): Promise<{ owned: WorkerRecord[]; leased: WorkerRecord[]; poolAvailable: number }>
-  leaseWorker(userId: string, opts?: { projectId?: string; workerId?: string; ttlMs?: number; now?: number }): Promise<WorkerRecord | undefined>
+  /** Throws LeaseCapped while this person waits after their longest allowed run. */
+  leaseWorker(userId: string, opts?: { projectId?: string; workerId?: string; ttlMs?: number; now?: number; limits?: LeaseLimits }): Promise<WorkerRecord | undefined>
   releaseWorker(userId: string, workerId: string): Promise<boolean>
+  /** Moves a lease's end to [until] while it is still [userId]'s and hasn't lapsed (a lapsed lease is never brought
+   *  back). It may move earlier: a lease nobody uses runs out. The record after, or undefined when nothing changed. */
+  extendLease(workerId: string, userId: string, until: number, now?: number, limits?: LeaseLimits): Promise<WorkerRecord | undefined>
 }
 
 /** The Pitch database. */
@@ -79,7 +106,8 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
     leased_until timestamptz,
     updated_at timestamptz NOT NULL DEFAULT now()
   )`)
-  type WorkerRow = { id: string; owner_id: string | null; pool: boolean; name: string; urls: unknown; fingerprint: string; secret: string; capabilities: unknown; leased_to: string | null; leased_until: string | Date | null; updated_at: string | Date }
+  await own.query(`ALTER TABLE manul_workers ADD COLUMN IF NOT EXISTS leased_since timestamptz`)
+  type WorkerRow = { id: string; owner_id: string | null; pool: boolean; name: string; urls: unknown; fingerprint: string; secret: string; capabilities: unknown; leased_to: string | null; leased_until: string | Date | null; leased_since?: string | Date | null; updated_at: string | Date }
   const rowToWorker = (r: WorkerRow): WorkerRecord => ({
     id: r.id,
     ownerId: r.owner_id ?? undefined,
@@ -91,6 +119,7 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
     capabilities: r.capabilities && typeof r.capabilities === 'object' ? (r.capabilities as WorkerCapabilities) : {},
     leasedTo: r.leased_to ?? undefined,
     leasedUntil: r.leased_until ? new Date(r.leased_until).getTime() : undefined,
+    leasedSince: r.leased_since ? new Date(r.leased_since).getTime() : undefined,
     updatedAt: new Date(r.updated_at).getTime(),
   })
   const wallet: Wallet = {
@@ -157,10 +186,12 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
            secret = excluded.secret,
            capabilities = excluded.capabilities,
            updated_at = now()
+         WHERE manul_workers.secret = excluded.secret
+            OR (manul_workers.pool = excluded.pool AND manul_workers.owner_id IS NOT DISTINCT FROM excluded.owner_id)
          RETURNING *`,
         [w.id, w.ownerId ?? null, w.pool, w.name, JSON.stringify(w.urls), w.fingerprint, w.secret, JSON.stringify(w.capabilities || {})],
       )
-      return rowToWorker(r.rows[0])
+      return r.rows[0] ? rowToWorker(r.rows[0]) : undefined
     },
     async workersFor(userId, now = Date.now()) {
       const cutoff = new Date(now - 2 * 60_000).toISOString()
@@ -178,19 +209,35 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
         const now = opts.now ?? Date.now()
         const ttl = opts.ttlMs ?? 60 * 60_000
         const cutoff = new Date(now - 2 * 60_000).toISOString()
-        const until = new Date(now + ttl).toISOString()
+        const limits = opts.limits ?? LEASE_LIMITS
+        const mine = (await own.query(`SELECT * FROM manul_workers WHERE pool = true AND leased_to = $1`, [userId])).rows.map(rowToWorker)
+        const wait = Math.max(0, ...mine.map(w => cappedUntil(w, userId, limits, now) ?? 0))
+        if (wait) throw new LeaseCapped(wait)
         const r = await own.query(`SELECT * FROM manul_workers WHERE pool = true AND updated_at > $1`, [cutoff])
         const candidates = r.rows.map(rowToWorker).filter(w => !w.leasedTo || (w.leasedUntil ?? 0) <= now || w.leasedTo === userId)
         if (!candidates.length) return undefined
         candidates.sort((a, b) => scoreWorker(b, userId, opts.projectId, opts.workerId) - scoreWorker(a, userId, opts.projectId, opts.workerId))
         const picked = candidates[0]
-        const up = await own.query(`UPDATE manul_workers SET leased_to = $2, leased_until = $3 WHERE id = $1 RETURNING *`, [picked.id, userId, until])
+        // still theirs (taken again before it lapsed): the same run goes on, and the same longest run applies
+        const since = picked.leasedTo === userId && (picked.leasedUntil ?? 0) > now && picked.leasedSince ? picked.leasedSince : now
+        const end = Math.min(now + ttl, since + limits.maxMs)
+        const up = await own.query(`UPDATE manul_workers SET leased_to = $2, leased_until = $3, leased_since = $4 WHERE id = $1 RETURNING *`,
+          [picked.id, userId, new Date(end).toISOString(), new Date(since).toISOString()])
         return up.rows[0] ? rowToWorker(up.rows[0]) : undefined
       })
     },
     async releaseWorker(userId, workerId) {
-      const r = await own.query(`UPDATE manul_workers SET leased_to = NULL, leased_until = NULL WHERE id = $1 AND leased_to = $2`, [workerId, userId])
+      const r = await own.query(`UPDATE manul_workers SET leased_to = NULL, leased_until = NULL, leased_since = NULL WHERE id = $1 AND leased_to = $2`, [workerId, userId])
       return r.rowCount === 1
+    },
+    async extendLease(workerId, userId, until, now = Date.now(), limits = LEASE_LIMITS) {
+      // never past the longest run allowed since this person's run began
+      const r = await own.query(
+        `UPDATE manul_workers SET leased_until = LEAST($3::timestamptz, COALESCE(leased_since, $4::timestamptz) + make_interval(secs => $5::double precision))
+         WHERE id = $1 AND leased_to = $2 AND leased_until > $4 RETURNING *`,
+        [workerId, userId, new Date(until).toISOString(), new Date(now).toISOString(), limits.maxMs / 1000],
+      )
+      return r.rows[0] ? rowToWorker(r.rows[0]) : undefined
     },
     async close() { await pool.end(); if (own !== pool) await own.end() },
   }
@@ -244,7 +291,8 @@ export function memoryWallet() {
     },
     async upsertWorker(w) {
       const prev = workers.get(w.id)
-      const rec: WorkerRecord = { ...w, leasedTo: prev?.leasedTo, leasedUntil: prev?.leasedUntil, updatedAt: Date.now() }
+      if (prev && prev.secret !== w.secret && (prev.pool !== w.pool || prev.ownerId !== w.ownerId)) return undefined
+      const rec: WorkerRecord = { ...w, leasedTo: prev?.leasedTo, leasedUntil: prev?.leasedUntil, leasedSince: prev?.leasedSince, updatedAt: Date.now() }
       workers.set(w.id, rec)
       return rec
     },
@@ -259,12 +307,17 @@ export function memoryWallet() {
       return this.lock('worker-pool', async () => {
         const now = opts.now ?? Date.now()
         const ttl = opts.ttlMs ?? 60 * 60_000
+        const limits = opts.limits ?? LEASE_LIMITS
+        const wait = Math.max(0, ...[...workers.values()].filter(w => w.pool).map(w => cappedUntil(w, userId, limits, now) ?? 0))
+        if (wait) throw new LeaseCapped(wait)
         const candidates = [...workers.values()].filter(w => w.pool && w.updatedAt > now - 2 * 60_000 && (!w.leasedTo || (w.leasedUntil ?? 0) <= now || w.leasedTo === userId))
         if (!candidates.length) return undefined
         candidates.sort((a, b) => scoreWorker(b, userId, opts.projectId, opts.workerId) - scoreWorker(a, userId, opts.projectId, opts.workerId))
         const picked = candidates[0]
+        const since = picked.leasedTo === userId && (picked.leasedUntil ?? 0) > now && picked.leasedSince ? picked.leasedSince : now
         picked.leasedTo = userId
-        picked.leasedUntil = now + ttl
+        picked.leasedSince = since
+        picked.leasedUntil = Math.min(now + ttl, since + limits.maxMs)
         return { ...picked }
       })
     },
@@ -273,7 +326,14 @@ export function memoryWallet() {
       if (!w || w.leasedTo !== userId) return false
       w.leasedTo = undefined
       w.leasedUntil = undefined
+      w.leasedSince = undefined
       return true
+    },
+    async extendLease(workerId, userId, until, now = Date.now(), limits = LEASE_LIMITS) {
+      const w = workers.get(workerId)
+      if (!w || w.leasedTo !== userId || (w.leasedUntil ?? 0) <= now) return undefined
+      w.leasedUntil = Math.min(until, (w.leasedSince ?? now) + limits.maxMs)
+      return { ...w }
     },
   }
   return wallet

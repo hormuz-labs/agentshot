@@ -49,24 +49,29 @@ class Computer {
     this.pool = false,
   });
 
+  /// What people see for a cloud worker: the service, not the machine behind it.
+  static const cloudName = 'AgentShot Cloud';
+
   factory Computer.fromJson(Json json) {
     final urls = (json['urls'] as List? ?? const [])
         .whereType<String>()
         .toList();
+    final pool = json['pool'] == true;
+    final name = pool ? cloudName : json['name'] as String? ?? 'Computer';
     final c = Connection.fromJson({
       'url': urls.first,
       'urls': urls,
       'fingerprint': json['fingerprint'],
       'token': json['token'],
       'machine': json['id'],
-      'name': json['name'],
+      'name': name,
     });
     return Computer(
       json['id'] as String,
-      json['name'] as String? ?? 'Computer',
+      name,
       '${object(json['capabilities'] ?? {})['platform'] ?? ''}',
       c,
-      pool: json['pool'] == true,
+      pool: pool,
     );
   }
 }
@@ -84,6 +89,10 @@ class Account {
 
   /// Cloud workers free to lease, as of the last look at the person's computers.
   int poolFree = 0;
+
+  /// The person chose to use their AgentShot credits on AgentShot Cloud. A worker holds them in memory only, so each
+  /// worker the phone gets (another after a lease ended, or the same one restarted) is handed them again.
+  bool cloudCredits = false;
   Account({
     this.storage = const FlutterSecureStorage(),
     Future<String> Function(String url)? browser,
@@ -103,6 +112,7 @@ class Account {
       keyId = data['keyId'] as String?;
       email = data['email'] as String?;
       leased = data['leased'] as String?;
+      cloudCredits = data['cloudCredits'] == true;
     } catch (_) {
       await storage.delete(key: _storageKey);
     }
@@ -177,11 +187,18 @@ class Account {
       'keyId': keyId,
       'email': email,
       'leased': ?leased,
+      if (cloudCredits) 'cloudCredits': true,
     }),
   );
 
+  Future<void> useCloudCredits() async {
+    cloudCredits = true;
+    await _save();
+  }
+
   Future<void> signOut() async {
     await release();
+    cloudCredits = false;
     key = keyId = email = null;
     await storage.delete(key: _storageKey);
   }
@@ -207,7 +224,7 @@ class Account {
     } on BridgeException catch (e) {
       if (e.status == 404) {
         throw BridgeException(
-          'No cloud workers are free right now. Try again in a moment.',
+          'AgentShot Cloud is busy right now. Try again in a minute.',
           404,
         );
       }
@@ -232,13 +249,16 @@ class Account {
     }
   }
 
-  /// A fresh connection for [expired]'s computer, if it is still on.
+  /// A fresh connection for [expired]'s computer, if it is still on. For AgentShot Cloud, whose lease ended (unused
+  /// for a while), a new lease: the same worker if it's free, else another, which opens the same space. Throws, with
+  /// what to tell the person, when no spot can be had.
   Future<Connection?> renew(Connection expired) async {
     if (!signedIn) return null;
     for (final c in await computers()) {
       if (c.id == expired.machine) return c.connection;
     }
-    return null;
+    if (expired.machine == null || expired.machine != leased) return null;
+    return (await lease()).connection;
   }
 
   /// Opens [computer]: through the private network when it isn't on this Wi-Fi.
@@ -246,6 +266,9 @@ class Account {
     BridgeClient client,
     Computer computer, {
     void Function()? away,
+
+    /// A cloud worker is opening this person's space (it restarts into it): a few seconds more.
+    void Function()? opening,
   }) async {
     final target = computer.connection;
     // at home: every address at once, the first to answer wins (about a second)
@@ -274,9 +297,23 @@ class Account {
         // no private network here (iOS for now, or the account service has none)
       }
     }
+    // a cloud worker opens this person's space first (it restarts into it, a few seconds): keep trying a while
+    if (first == null && computer.pool) {
+      opening?.call();
+      final end = DateTime.now().add(const Duration(seconds: 60));
+      while (first == null && DateTime.now().isBefore(end)) {
+        await Future<void>.delayed(const Duration(seconds: 3));
+        first = await client.firstToAnswer(
+          target,
+          timeout: const Duration(seconds: 5),
+        );
+      }
+    }
     if (first == null) {
       throw BridgeException(
-        'Could not reach ${computer.name}. Make sure AgentShot is open on it, then try again.',
+        computer.pool
+            ? 'AgentShot Cloud didn’t open your space in time. Try again in a moment.'
+            : 'Could not reach ${computer.name}. Make sure AgentShot is open on it, then try again.',
       );
     }
     // the address that answered first, the others after it for reconnecting later
