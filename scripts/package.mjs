@@ -1,3 +1,6 @@
+import { execFile } from 'node:child_process'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
 export function windowsSigning(env = process.env) {
@@ -26,6 +29,38 @@ export function macSigning(env = process.env) {
   return { forceCodeSigning: publicRelease, notarize: cert && (apiKey || appleId) }
 }
 
+// Notarizes the signed app ourselves (afterSign) rather than through electron-builder, which gives up at the first
+// failure: notarizing ends in stapling the ticket to the app, which asks Apple (CloudKit), and that connection drops
+// now and then on CI ("The network connection was lost", error 68) though the app is notarized. So stapling gets a
+// few tries, as validating it does in scripts/check-mac-signature.sh.
+export async function notarizeMac(appPath, env = process.env, {
+  notarize = async opts => (await import('@electron/notarize')).notarize(opts),
+  staple = async app => { await promisify(execFile)('xcrun', ['stapler', 'staple', app]) },
+  wait = ms => new Promise(done => setTimeout(done, ms)),
+  tries = 5,
+} = {}) {
+  const credentials = env.APPLE_API_KEY
+    ? { appleApiKey: env.APPLE_API_KEY, appleApiKeyId: env.APPLE_API_KEY_ID, appleApiIssuer: env.APPLE_API_ISSUER }
+    : { appleId: env.APPLE_ID, appleIdPassword: env.APPLE_APP_SPECIFIC_PASSWORD, teamId: env.APPLE_TEAM_ID }
+  try {
+    await notarize({ tool: 'notarytool', appPath, ...credentials })
+    return
+  } catch (e) {
+    if (!/staple/i.test(String(e?.message))) throw e // notarizing itself failed: nothing to staple
+    console.log(`notarized, but stapling failed (${String(e.message).split('\n')[0]}); trying again`)
+  }
+  for (let n = 1; ; n++) {
+    await wait(15_000)
+    try {
+      await staple(appPath)
+      return
+    } catch (e) {
+      if (n >= tries) throw e
+      console.log(`stapling failed; trying again in 15 s (${n}/${tries})`)
+    }
+  }
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { build, Platform } = await import('electron-builder')
   // Empty CI secrets must not be interpreted as certificate file paths.
@@ -34,6 +69,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const dir = process.argv.includes('--dir')
   const platform = process.platform === 'darwin' ? Platform.MAC : process.platform === 'linux' ? Platform.LINUX : process.platform === 'win32' ? Platform.WINDOWS : null
   if (!platform) throw new Error(`Unsupported packaging host ${process.platform}`)
-  const config = process.platform === 'win32' ? { win: windowsSigning() } : process.platform === 'darwin' ? { mac: macSigning() } : {}
+  const mac = process.platform === 'darwin' ? macSigning() : undefined
+  const config = process.platform === 'win32' ? { win: windowsSigning() } : mac ? {
+    // signed by electron-builder, notarized by notarizeMac (above), which tries stapling again when Apple's end drops
+    mac: { ...mac, notarize: false },
+    ...(mac.notarize ? { afterSign: ctx => notarizeMac(join(ctx.appOutDir, `${ctx.packager.appInfo.productFilename}.app`)) } : {}),
+  } : {}
   await build({ targets: platform.createTarget(dir ? ['dir'] : undefined), config, publish: 'never' })
 }
