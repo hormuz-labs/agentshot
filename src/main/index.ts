@@ -148,6 +148,8 @@ const mobile = new MobileBridge(
     stateFile: join(identityDir(), 'mobile-bridge.json'),
     projectsRoot: () => Projects.projectsRoot(),
     pool: !!process.env.MANUL_POOL_SECRET,
+    // the agent, a render or any job still running keeps a cloud lease alive
+    busy: () => listJobs().some(j => j.status === 'running'),
     // stateless: served only once its space is open, and within its quota
     ...(SHARED_ROOT && SLOT ? { session: () => session?.user, quota } : {}),
     refreshLease: async () => { await stopHeartbeat?.beat() },
@@ -358,6 +360,7 @@ async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
     sendHeartbeat: workerHeartbeat,
     // a cloud worker serves one person at a time: when the lease moves on, the last one's AgentShot sign-in (adopted
     // so their notes use their credits) goes with them
+    activity: () => mobile.activity(),
     onLease: lease => {
       const moved = mobile.setLease(lease)
       if (SHARED_ROOT && SLOT) void followLease(lease?.userId)

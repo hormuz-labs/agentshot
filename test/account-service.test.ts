@@ -408,4 +408,52 @@ describe('the account service: headscale mesh and worker pool', () => {
     expect(u2AfterStale.workers).toEqual([])
     expect(u2AfterStale.poolAvailable).toBe(0)
   })
+
+  it('frees a cloud lease nobody uses for 15 minutes, keeps it while used or while anything runs, and never revives it', async () => {
+    await ask('good')
+    await ask('good_2')
+    const asUser1 = asKey('sk-bf-vk_1', 'vk_1')
+    const beat = async (activity?: unknown) => (await call('/v1/workers/heartbeat', {
+      method: 'POST',
+      headers: { 'x-manul-pool-secret': 'pool_secret_123' },
+      body: JSON.stringify({ id: 'pool-idle', name: 'Cloud', urls: ['https://100.64.0.60:47821'], fingerprint: fp, secret, activity }),
+    })).json()
+    await beat()
+    const leased = await (await call('/v1/workers/lease', { method: 'POST', headers: asUser1, body: '{}' })).json()
+    const IDLE = 15 * 60_000
+    // the lease starts at 15 minutes; the token outlives it (the lease, kept alive by use, is what counts)
+    const held = await beat()
+    const user = held.leasedTo as string
+    expect(held.leasedUntil - Date.now()).toBeGreaterThan(IDLE - 5_000)
+    expect(held.leasedUntil - Date.now()).toBeLessThanOrEqual(IDLE)
+    expect(leased.worker.expiresAt - Date.now()).toBeGreaterThan(23 * 60 * 60_000)
+
+    // used a minute ago: 14 minutes left
+    const used = await beat({ user, idleMs: 60_000, busy: false })
+    expect(used.leasedTo).toBe(user)
+    expect(Math.abs(used.leasedUntil - (Date.now() + IDLE - 60_000))).toBeLessThan(5_000)
+
+    // something still runs (a render, the agent) after an hour away: kept for another 15 minutes from now
+    wallet.workers.get('pool-idle')!.leasedUntil = Date.now() + 30_000
+    const busy = await beat({ user, idleMs: 60 * 60_000, busy: true })
+    expect(busy.leasedTo).toBe(user)
+    expect(Math.abs(busy.leasedUntil - (Date.now() + IDLE))).toBeLessThan(5_000)
+
+    // someone else's activity (a stale report after a handover) changes nothing
+    const before = wallet.workers.get('pool-idle')!.leasedUntil
+    await beat({ user: 'user_someone_else', idleMs: 0, busy: true })
+    expect(wallet.workers.get('pool-idle')!.leasedUntil).toBe(before)
+
+    // nothing running and unused for 15 minutes: the lease ends with this heartbeat and the spot is free
+    const idle = await beat({ user, idleMs: IDLE, busy: false })
+    expect(idle.leasedTo).toBeUndefined()
+    const list2 = await (await call('/v1/workers', { headers: asKey('sk-bf-vk_2', 'vk_2') })).json()
+    expect(list2.poolAvailable).toBe(1)
+
+    // a lapsed lease isn't brought back by a late report of work
+    const late = await beat({ user, idleMs: 0, busy: true })
+    expect(late.leasedTo).toBeUndefined()
+    const u2 = await (await call('/v1/workers/lease', { method: 'POST', headers: asKey('sk-bf-vk_2', 'vk_2'), body: '{}' })).json()
+    expect(u2.worker.id).toBe('pool-idle')
+  })
 })

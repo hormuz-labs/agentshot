@@ -32,6 +32,8 @@ type Options = {
    *  is left in it (user-space.ts). */
   session?: () => string | undefined
   quota?: { ensureRoom(bytes: number): void; add(bytes: number): void }
+  /** Work still running on this computer (the agent, a render or another job): a lease isn't idle while it runs. */
+  busy?: () => boolean
 }
 type PersistedBridgeState = {
   key: string
@@ -77,6 +79,8 @@ export class MobileBridge {
   private signedIn = new Map<string, { name: string; lastSeen: number }>()
   /** On a cloud worker: who holds the lease now (from the account's answer to the heartbeat), and what each made. */
   private lease?: { userId: string; until: number }
+  /** When the person leasing this worker last asked it something. */
+  private lastActive = Date.now()
   private owners = new Map<string, string>()
   private clients = new Map<ServerResponse, string>()
   private states = new Map<string, AgentState>()
@@ -135,6 +139,7 @@ export class MobileBridge {
     const before = this.lease?.userId
     this.lease = lease && lease.until > Date.now() ? lease : undefined
     if (this.lease?.userId !== before) {
+      this.lastActive = Date.now() // a new lease starts fresh
       for (const [res, token] of this.clients) if (!this.verifyAuth(token)) res.end()
     }
     return this.lease?.userId !== before
@@ -174,6 +179,13 @@ export class MobileBridge {
     }
     await this.leaseCheck
     return this.verifyAuth(token)
+  }
+  /** For the heartbeat: how long the leasing person has been away, and whether anything still runs for them (the
+   *  account frees a lease nobody has used for a while, never one with work running). Undefined when not leased. */
+  activity(): { user: string; idleMs: number; busy: boolean } | undefined {
+    if (!this.options.pool || !this.lease) return undefined
+    const busy = this.uploads.size > 0 || [...this.states.values()].some(s => s.busy) || !!this.options.busy?.()
+    return { user: this.lease.userId, idleMs: Math.max(0, Date.now() - this.lastActive), busy }
   }
   /** A cloud lessee's: made by them here. Anyone else's token sees everything (it's their own computer). */
   private mine(dir: unknown, lessee?: string) {
@@ -331,6 +343,7 @@ export class MobileBridge {
     }
     const token = req.headers.authorization?.replace(/^Bearer /, '') || ''; const device = this.verifyAuth(token) ?? await this.leaseBegun(token)
     if (!device) throw new HttpError(401, 'Reconnect to your desktop')
+    if (device.lessee) this.lastActive = Date.now()
     // leased, but the worker is still opening this person's space (it restarts into it): wait, don't reconnect
     if (device.lessee && this.options.session && this.options.session() !== device.lessee) {
       throw new HttpError(503, 'Opening your space on this worker. Try again in a moment.')

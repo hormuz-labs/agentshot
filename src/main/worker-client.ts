@@ -556,6 +556,8 @@ export function startWorkerHeartbeat(opts: {
   sendHeartbeat: (body: Record<string, unknown>, poolSecret?: string) => Promise<{ leasedTo?: string | null; leasedUntil?: number | null } | void>
   /** A cloud worker hears who leases it with every heartbeat. */
   onLease?: (lease?: { userId: string; until: number }) => void
+  /** A cloud worker tells the account how its lessee is using it, so an unused lease is freed. */
+  activity?: () => { user: string; idleMs: number; busy: boolean } | undefined
 }): (() => void) & { beat: () => Promise<void> } {
   let stopped = false
   const tick = async () => {
@@ -571,6 +573,7 @@ export function startWorkerHeartbeat(opts: {
             fingerprint: creds.fingerprint,
             secret: creds.secret,
             pool: !!opts.poolSecret,
+            ...(opts.poolSecret && opts.activity?.() ? { activity: opts.activity() } : {}),
             capabilities: {
               platform: process.platform,
               arch: process.arch,

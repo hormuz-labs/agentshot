@@ -74,6 +74,8 @@ export interface Env {
   HEADSCALE_API_KEY?: string
   /** Shared secret for registering pooled workers (cloud or home pool) */
   WORKER_POOL_SECRET?: string
+  /** How long a cloud lease lasts unused before its spot is freed for someone else (seconds; default 15 minutes). */
+  LEASE_IDLE_SECONDS?: string
 }
 
 /** What a person pays (USD) per model: per 1,000 characters said, per minute of music, and/or per request. */
@@ -200,6 +202,7 @@ export function track(env: Env, event: string, distinctId: string, properties: R
 
 export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<Response> {
   const url = new URL(req.url)
+  const leaseIdle = (Number(env.LEASE_IDLE_SECONDS) > 0 ? Number(env.LEASE_IDLE_SECONDS) : 15 * 60) * 1000
   const clerk = (path: string, init: RequestInit = {}) =>
     fetch(`${CLERK_API}${path}`, { signal: AbortSignal.timeout(10_000), ...init, headers: { authorization: `Bearer ${env.CLERK_SECRET_KEY}`, 'content-type': 'application/json', ...init.headers } })
   const { bifrost, getKey, providers } = gateway(env)
@@ -516,6 +519,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       fingerprint?: string
       secret?: string
       capabilities?: WorkerCapabilities
+      activity?: { user?: unknown; idleMs?: unknown; busy?: unknown }
     }
     const id = typeof body.id === 'string' && /^[a-zA-Z0-9._-]{3,80}$/.test(body.id) ? body.id : ''
     const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : 'Worker'
@@ -534,7 +538,20 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       secret,
       capabilities: body.capabilities && typeof body.capabilities === 'object' ? body.capabilities : {},
     })
-    return json({ id: rec.id, pool: rec.pool, leasedTo: rec.leasedTo, leasedUntil: rec.leasedUntil })
+    // a cloud lease lasts while it's used: each heartbeat moves its end to [idle] after the lessee's last request, or
+    // from now while anything still runs for them (the agent, a render). Nobody around and nothing running: it lapses
+    // and the spot is free for someone else. Only for the person the lease is actually theirs, and never brought back.
+    let lease = { leasedTo: rec.leasedTo, leasedUntil: rec.leasedUntil }
+    const a = body.activity
+    if (isPool && a && typeof a.user === 'string' && a.user === rec.leasedTo && (rec.leasedUntil ?? 0) > Date.now()) {
+      const now = Date.now()
+      const idleMs = typeof a.idleMs === 'number' && a.idleMs >= 0 ? a.idleMs : 0
+      const until = (a.busy === true ? now : now - Math.min(idleMs, leaseIdle)) + leaseIdle
+      const moved = await wallet.extendLease(rec.id, a.user, until, now)
+      if (moved) lease = { leasedTo: moved.leasedTo, leasedUntil: moved.leasedUntil }
+    }
+    if ((lease.leasedUntil ?? 0) <= Date.now()) lease = { leasedTo: undefined, leasedUntil: undefined }
+    return json({ id: rec.id, pool: rec.pool, ...lease })
   }
 
   async function listWorkers() {
@@ -544,7 +561,7 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     if (!wallet || !userId) return fail(503, 'Accounts are unavailable. Try again later.')
     const { owned, leased, poolAvailable } = await wallet.workersFor(userId)
     const toClient = (w: WorkerRecord) => {
-      const expiresAt = w.pool && w.leasedUntil ? w.leasedUntil : Date.now() + 24 * 60 * 60_000
+      const expiresAt = Date.now() + 24 * 60 * 60_000 // a cloud worker serves only its current lessee anyway
       return {
         id: w.id,
         name: w.name,
@@ -568,9 +585,11 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     const leased = await wallet.leaseWorker(userId, {
       projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
       workerId: typeof body.workerId === 'string' ? body.workerId : undefined,
+      ttlMs: leaseIdle,
     })
     if (!leased) return fail(404, 'No cloud workers are free right now. Try again in a moment.')
-    const expiresAt = leased.leasedUntil ?? Date.now() + 60 * 60_000
+    // the token outlives the lease: while the lease is kept alive by use, the worker keeps accepting it
+    const expiresAt = Date.now() + 24 * 60 * 60_000
     return json({
       worker: {
         id: leased.id,

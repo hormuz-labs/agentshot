@@ -50,6 +50,9 @@ export interface Wallet {
   workersFor(userId: string, now?: number): Promise<{ owned: WorkerRecord[]; leased: WorkerRecord[]; poolAvailable: number }>
   leaseWorker(userId: string, opts?: { projectId?: string; workerId?: string; ttlMs?: number; now?: number }): Promise<WorkerRecord | undefined>
   releaseWorker(userId: string, workerId: string): Promise<boolean>
+  /** Moves a lease's end to [until] while it is still [userId]'s and hasn't lapsed (a lapsed lease is never brought
+   *  back). It may move earlier: a lease nobody uses runs out. The record after, or undefined when nothing changed. */
+  extendLease(workerId: string, userId: string, until: number, now?: number): Promise<WorkerRecord | undefined>
 }
 
 /** The Pitch database. */
@@ -192,6 +195,13 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
       const r = await own.query(`UPDATE manul_workers SET leased_to = NULL, leased_until = NULL WHERE id = $1 AND leased_to = $2`, [workerId, userId])
       return r.rowCount === 1
     },
+    async extendLease(workerId, userId, until, now = Date.now()) {
+      const r = await own.query(
+        `UPDATE manul_workers SET leased_until = $3 WHERE id = $1 AND leased_to = $2 AND leased_until > $4 RETURNING *`,
+        [workerId, userId, new Date(until).toISOString(), new Date(now).toISOString()],
+      )
+      return r.rows[0] ? rowToWorker(r.rows[0]) : undefined
+    },
     async close() { await pool.end(); if (own !== pool) await own.end() },
   }
   return wallet
@@ -274,6 +284,12 @@ export function memoryWallet() {
       w.leasedTo = undefined
       w.leasedUntil = undefined
       return true
+    },
+    async extendLease(workerId, userId, until, now = Date.now()) {
+      const w = workers.get(workerId)
+      if (!w || w.leasedTo !== userId || (w.leasedUntil ?? 0) <= now) return undefined
+      w.leasedUntil = until
+      return { ...w }
     },
   }
   return wallet

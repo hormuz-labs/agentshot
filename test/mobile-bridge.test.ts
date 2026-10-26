@@ -415,6 +415,51 @@ describe('cloud & home worker extensions', () => {
     expect(JSON.parse(await readFile(join(root, 'bridge.json'), 'utf8')).owners).toEqual([[mine.dir, 'user_maya']])
   })
 
+  it('on a cloud worker: reports how long its lessee has been away and whether anything still runs for them', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'agentshot-idle-')); folders.push(root)
+    let jobRunning = false
+    const bridge = new MobileBridge({
+      invoke: async () => [], projects: () => [], importFile: async () => null, galleryFile: () => new Response(''),
+      stateFile: join(root, 'bridge.json'), pool: true, busy: () => jobRunning,
+    }); bridges.push(bridge)
+    const port = new URL((await bridge.start()).addresses[0]).port
+    const until = Date.now() + 60 * 60_000
+    const maya = signWorkerToken((bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, until)
+    const ask = () => new Promise<number>((ok, fail) => {
+      const data = JSON.stringify({ method: 'project:recent', args: [] })
+      const req = request(`https://127.0.0.1:${port}/rpc`, { rejectUnauthorized: false, method: 'POST', headers: { authorization: `Bearer ${maya}`, 'content-length': String(Buffer.byteLength(data)) } }, res => { res.resume(); res.on('end', () => ok(res.statusCode!)) })
+      req.on('error', fail); req.end(data)
+    })
+    const away = (ms: number) => { (bridge as unknown as { lastActive: number }).lastActive = Date.now() - ms }
+
+    expect(bridge.activity()).toBeUndefined() // not leased: nothing to report
+    bridge.setLease({ userId: 'user_maya', until })
+    expect(bridge.activity()).toMatchObject({ user: 'user_maya', busy: false })
+    expect(bridge.activity()!.idleMs).toBeLessThan(1_000) // a new lease starts fresh
+
+    away(20 * 60_000)
+    expect(bridge.activity()!.idleMs).toBeGreaterThanOrEqual(20 * 60_000)
+    expect(await ask()).toBe(200) // asking anything counts as using it
+    expect(bridge.activity()!.idleMs).toBeLessThan(1_000)
+
+    // the agent working on a project keeps it busy until its run ends
+    away(20 * 60_000)
+    bridge.publish('agui', '/p', { type: 'RUN_STARTED', threadId: 't', runId: 'r' })
+    expect(bridge.activity()!.busy).toBe(true)
+    bridge.publish('agui', '/p', { type: 'RUN_FINISHED', threadId: 't', runId: 'r' })
+    expect(bridge.activity()!.busy).toBe(false)
+    // and so does any job (a render, a transcription)
+    jobRunning = true
+    expect(bridge.activity()!.busy).toBe(true)
+
+    // the lease moves on: a fresh start for the next person, nothing for nobody
+    bridge.setLease({ userId: 'user_sam', until })
+    expect(bridge.activity()).toMatchObject({ user: 'user_sam' })
+    expect(bridge.activity()!.idleMs).toBeLessThan(1_000)
+    bridge.setLease(undefined)
+    expect(bridge.activity()).toBeUndefined()
+  })
+
   it('refuses cloud tokens on a computer that is not a cloud worker', async () => {
     const f = await fixture()
     const token = signWorkerToken((f.bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, Date.now() + 60_000)
