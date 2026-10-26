@@ -436,4 +436,56 @@ describe('cloud & home worker extensions', () => {
     leasedTo = 'user_maya' // leased just now: the worker's last heartbeat didn't know
     expect(await hello()).toBe(200)
   })
+
+  it('on a stateless worker: serves a lessee only once their space is open, within their quota, inside their space', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'agentshot-stateless-')); folders.push(root)
+    const projectsRoot = join(root, 'users', 'user_maya', 'projects'), elsewhere = join(root, 'elsewhere')
+    await mkdir(join(projectsRoot, 'film'), { recursive: true }); await mkdir(elsewhere, { recursive: true })
+    await symlink(elsewhere, join(projectsRoot, 'sneaky'))
+    const projects = [{ dir: join(projectsRoot, 'film') }, { dir: join(projectsRoot, 'sneaky') }, { dir: elsewhere }]
+    let open: string | undefined
+    const used = { bytes: 0 }
+    const { SpaceError } = await import('../src/main/user-space')
+    const quota = {
+      ensureRoom: (n: number) => { if (used.bytes + n > 1000) throw new SpaceError(507, 'Your AgentShot space is full') },
+      add: (n: number) => { used.bytes += n },
+    }
+    const bridge = new MobileBridge({
+      invoke: async () => ({ ok: true }), projects: () => projects, projectsRoot: () => projectsRoot,
+      importFile: async () => ({ dir: join(projectsRoot, 'film') }), galleryFile: () => new Response(''), pool: true,
+      session: () => open, quota,
+    }); bridges.push(bridge)
+    const port = new URL((await bridge.start()).addresses[0]).port
+    const until = Date.now() + 60_000
+    bridge.setLease({ userId: 'user_maya', until })
+    const token = signWorkerToken((bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, until)
+    const ask = (path: string, body?: unknown, method?: string) => new Promise<{ status: number; body: string }>((ok, fail) => {
+      const data = body === undefined ? undefined : JSON.stringify(body)
+      const req = request(`https://127.0.0.1:${port}${path}`, { rejectUnauthorized: false, method: method || (data ? 'POST' : 'GET'), headers: { authorization: `Bearer ${token}`, ...(data ? { 'content-length': String(Buffer.byteLength(data)) } : {}) } }, res => {
+        const chunks: Buffer[] = []; res.on('data', c => chunks.push(c)); res.on('end', () => ok({ status: res.statusCode!, body: Buffer.concat(chunks).toString() })); res.on('error', fail)
+      }); req.on('error', fail); req.end(data)
+    })
+
+    // leased, but the worker hasn't opened Maya's space yet: wait (503), not "reconnect" (401)
+    const opening = await ask('/hello')
+    expect(opening.status).toBe(503)
+    expect(opening.body).toContain('Opening your space')
+    open = 'user_maya'
+    expect((await ask('/hello')).status).toBe(200)
+
+    // the claim of a project made here, then inside the space only: not a link out of it, not another folder
+    bridge['owners'].set(join(projectsRoot, 'film'), 'user_maya')
+    bridge['owners'].set(join(projectsRoot, 'sneaky'), 'user_maya')
+    bridge['owners'].set(elsewhere, 'user_maya')
+    expect((await ask('/rpc', { method: 'project:open', args: [join(projectsRoot, 'film')] })).status).toBe(200)
+    expect((await ask('/rpc', { method: 'project:open', args: [join(projectsRoot, 'sneaky')] })).status).toBe(403)
+    expect((await ask('/rpc', { method: 'project:open', args: [elsewhere] })).status).toBe(403)
+
+    // the quota: an upload that fits starts; one that doesn't is refused with why
+    expect((await ask(`/upload/init?name=a.mp4&size=600`, {}, 'POST')).status).toBe(200)
+    used.bytes = 900
+    const full = await ask(`/upload/init?name=b.mp4&size=200`, {}, 'POST')
+    expect(full.status).toBe(507)
+    expect(full.body).toContain('space is full')
+  })
 })

@@ -125,7 +125,7 @@ const seen = { heartbeats: 0, exchanged: 0, callback: '' }
 const machines = new Map()
 // cloud workers (the pool): reported with the pool secret, lent to one person at a time
 const pool = new Map(), poolSecret = 'e2e-pool-secret-0123456789abcdef'
-seen.leases = 0; seen.releases = 0
+seen.leases = 0; seen.releases = 0; seen.lessees = []
 let bridgeUrl = ''
 // as signWorkerToken in account/src/index.ts: a day-long token the computer checks with the secret it reported
 const workerToken = (secret, userId, expiresAt, pool = false) => {
@@ -177,9 +177,10 @@ const accounts = createServer(async (req, res) => {
     urls: [`https://10.0.2.2:${new URL(w.urls[0]).port}`, ...w.urls], token: workerToken(w.secret, 'user_e2e', w.leasedUntil, true) })
   const free = () => [...pool.values()].filter(w => Date.now() - w.at < 2 * 60_000 && !(w.leasedUntil > Date.now()))
   if (url.pathname === '/v1/workers/lease' && req.method === 'POST') {
-    const w = free()[0]
+    // a different worker than this person had last: the next one opens the same space (stateless workers)
+    const w = free().find(x => x.id !== seen.lessees.at(-1)) || free()[0]
     if (!w) return respond(res, 404, { error: 'No cloud workers are free right now. Try again in a moment.' })
-    Object.assign(w, { leasedTo: 'user_e2e', leasedUntil: Date.now() + 60 * 60_000 }); seen.leases++
+    Object.assign(w, { leasedTo: 'user_e2e', leasedUntil: Date.now() + 60 * 60_000 }); seen.leases++; seen.lessees.push(w.id)
     return respond(res, 200, { worker: lent(w) })
   }
   if (url.pathname === '/v1/workers/release' && req.method === 'POST') {
@@ -231,21 +232,37 @@ const env = { ...process.env, MANUL_PROJECTS: projects, MANUL_GALLERY_URL: `${at
   MANUL_GATEWAY: `http://127.0.0.1:${model.address().port}`, MANUL_AUTH_ISSUER: at(clerk, '127.0.0.1'), MANUL_AUTH_CLIENT_ID: 'e2e-client', MANUL_ACCOUNT: at(accounts, '127.0.0.1'), MANUL_WORKER_NAME: computer }
 for (const k of ['GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ELEVENLABS_API_KEY', 'MANUL_KEY']) delete env[k]
 // Linux CI has no unlocked system keyring: keep the disposable profile's keys in plain text.
-// A cloud worker for the cloud test: AgentShot --worker with the pool secret, reporting itself to the stand-in account.
+// Cloud workers for the cloud test: two stateless AgentShot --worker processes sharing one disk (MANUL_SHARED_ROOT),
+// each with its own slot, port and name, reporting themselves to the stand-in account with the pool secret. Each is
+// started again whenever it exits, as systemd does (a worker restarts to open or close a person's space).
 let cloud
-async function startCloudWorker() {
-  const dir = join(tmp, 'cloud-worker'), ud = join(dir, 'profile'), projects = join(dir, 'projects')
-  mkdirSync(ud, { recursive: true })
-  writeFileSync(join(ud, 'providers.json'), readFileSync(join(tmp, 'ud', 'providers.json')))
-  const log = join(dir, 'worker.log')
-  const child = spawn(electronBinary, [root, '--worker', `--user-data-dir=${ud}`, ...(process.platform === 'linux' ? ['--password-store=basic'] : [])], {
-    // no model key of its own, like a real cloud worker: the phone hands over its AgentShot credits
-    env: { ...Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'MANUL_PROVIDER_SCRIPTED_KEY')), MANUL_WORKER: '1', MANUL_POOL_SECRET: poolSecret, MANUL_WORKER_ID: 'pool-e2e', MANUL_WORKER_NAME: 'E2E Cloud', MANUL_PROJECTS: projects },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  for (const s of [child.stdout, child.stderr]) s.on('data', d => appendFileSync(log, d))
-  await until('the cloud worker to report itself', () => pool.has('pool-e2e'), 120_000)
-  return { projects, stop: () => child.kill(), log }
+async function startCloudWorkers(count) {
+  const shared = join(tmp, 'shared'), workers = []
+  for (let n = 1; n <= count; n++) {
+    const slot = join(tmp, `cloud-worker-${n}`), log = join(slot, 'worker.log')
+    mkdirSync(slot, { recursive: true })
+    const worker = { id: `pool-e2e-${n}`, slot, log, child: undefined, stopped: false, starts: 0 }
+    const start = () => {
+      if (worker.stopped) return
+      worker.starts++
+      worker.child = spawn(electronBinary, [root, '--worker', `--user-data-dir=${join(slot, 'profile')}`, ...(process.platform === 'linux' ? ['--password-store=basic'] : [])], {
+        // no model key of its own, like a real cloud worker: the phone hands over its AgentShot credits
+        env: { ...Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'MANUL_PROVIDER_SCRIPTED_KEY')), MANUL_WORKER: '1', MANUL_POOL_SECRET: poolSecret,
+          MANUL_WORKER_ID: worker.id, MANUL_WORKER_NAME: `E2E Cloud ${n}`, MANUL_SHARED_ROOT: shared, MANUL_WORKER_SLOT: slot, MANUL_BRIDGE_PORT: String(47900 + n) },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      for (const s of [worker.child.stdout, worker.child.stderr]) s.on('data', d => appendFileSync(log, d))
+      worker.child.on('exit', () => setTimeout(start, 500))
+    }
+    start()
+    workers.push(worker)
+  }
+  await until('the cloud workers to report themselves', () => workers.every(w => pool.has(w.id)), 180_000)
+  return {
+    shared, workers,
+    projectsOf: user => join(shared, 'users', user, 'projects'),
+    stop: () => { for (const w of workers) { w.stopped = true; w.child?.kill() } },
+  }
 }
 const app = await electron.launch({ cwd: root, args: ['.', `--user-data-dir=${ud}`, ...(process.platform === 'linux' ? ['--password-store=basic'] : [])], env })
 const desktopLog = join(tmp, 'desktop.log') // the desktop's side of a failure
@@ -308,7 +325,7 @@ try {
       for (const d of (await win.evaluate(() => window.agentshot.mobile.status())).devices) await win.evaluate(id => window.agentshot.mobile.revoke(id), d.id)
     }
     // the cloud test: a second AgentShot, headless, as a cloud worker (its own profile and projects, the same model)
-    if (test === 'cloud' && !cloud) cloud = await startCloudWorker()
+    if (test === 'cloud' && !cloud) cloud = await startCloudWorkers(2)
     if (test === 'signin' || test === 'setup_ai' || test === 'cloud') {
       if (!device.startsWith('emulator-')) { console.log(`mobile e2e: ${test} skipped (the stand-ins are reached at 10.0.2.2, from the emulator)`); continue }
       // Chrome without its first-run screens, which would stand between the app and the sign-in page
@@ -397,11 +414,15 @@ try {
       if (!run.status) assert.equal(who.email, email, 'Use AgentShot credits signed the computer in')
     }
     if (test === 'cloud' && !run.status) {
-      // the phone made its project on the cloud worker (not this computer), and gave the worker back
-      const made = readdirSync(cloud.projects).map(d => JSON.parse(readFileSync(join(cloud.projects, d, 'project.json'), 'utf8')).title)
-      assert.ok(made.includes('Mobile e2e in the cloud'), `the project is on the cloud worker (${made.join(', ')})`)
+      // the project is in this person's space on the shared disk (not on this computer, not in a worker's slot), the
+      // phone used both workers, and each gave it back
+      const projectsDir = cloud.projectsOf('user_e2e')
+      const made = readdirSync(projectsDir).map(d => JSON.parse(readFileSync(join(projectsDir, d, 'project.json'), 'utf8')).title)
+      assert.ok(made.includes('Mobile e2e in the cloud'), `the project is in the person's space (${made.join(', ')})`)
       assert.ok(!readdirSync(projects).some(d => JSON.parse(readFileSync(join(projects, d, 'project.json'), 'utf8')).title === 'Mobile e2e in the cloud'), 'and not on this computer')
-      assert.ok(seen.leases >= 1 && seen.releases >= 1, `leased and released (${seen.leases}/${seen.releases})`)
+      for (const w of cloud.workers) assert.ok(!existsSync(join(w.slot, 'idle-projects')) || !readdirSync(join(w.slot, 'idle-projects')).length, `${w.id} keeps nothing of it`)
+      assert.ok(seen.leases >= 2 && seen.releases >= 2, `leased and released twice (${seen.leases}/${seen.releases})`)
+      assert.deepEqual(new Set(seen.lessees), new Set(cloud.workers.map(w => w.id)), 'on both workers')
     }
     if (test === 'signin' && !run.status) {
       // the desktop saw the phone that signed in; then it signs out, so the agent goes back to the scripted model

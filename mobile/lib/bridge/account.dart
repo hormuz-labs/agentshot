@@ -274,9 +274,22 @@ class Account {
         // no private network here (iOS for now, or the account service has none)
       }
     }
+    // a cloud worker opens this person's space first (it restarts into it, a few seconds): keep trying a while
+    if (first == null && computer.pool) {
+      final end = DateTime.now().add(const Duration(seconds: 60));
+      while (first == null && DateTime.now().isBefore(end)) {
+        await Future<void>.delayed(const Duration(seconds: 3));
+        first = await client.firstToAnswer(
+          target,
+          timeout: const Duration(seconds: 5),
+        );
+      }
+    }
     if (first == null) {
       throw BridgeException(
-        'Could not reach ${computer.name}. Make sure AgentShot is open on it, then try again.',
+        computer.pool
+            ? 'The cloud worker didn’t open your space in time. Try again in a moment.'
+            : 'Could not reach ${computer.name}. Make sure AgentShot is open on it, then try again.',
       );
     }
     // the address that answered first, the others after it for reconnecting later

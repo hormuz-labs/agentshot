@@ -1,7 +1,9 @@
-// A cloud worker, from the phone, with none of the person's computers on: signed in, the computers list offers one;
-// taking it opens it like a computer (empty: it keeps only what this person makes there); an idea becomes a project
-// there, the worker (no AI of its own) takes this person's AgentShot credits, and the agent answers; switching computer gives it back. The runner runs a real AgentShot --worker with the
-// pool secret and checks, after, that the project is on the worker and not on the computer.
+// Cloud workers from the phone, with none of the person's computers on. Signed in, the computers list offers one;
+// taking it opens the person's space on it (empty at first). An idea becomes a project there, the worker (no AI of its
+// own) takes this person's AgentShot credits, and the agent answers; switching computer gives the worker back. Taking
+// a worker again gets the other one (the runner's stand-in account sees to that), which opens the same space: the
+// project and its conversation are there. The runner runs two real stateless workers on one shared disk and checks
+// after that the project is in the person's space, not on the computer or in either worker.
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,7 +29,7 @@ void main() {
     final cloud = find.byKey(const ValueKey('use-cloud-worker'));
     await waitFor(
       tester,
-      find.descendant(of: cloud, matching: find.textContaining('1 free')),
+      find.descendant(of: cloud, matching: find.textContaining('2 free')),
       timeout: const Duration(minutes: 1),
     );
     await tester.tap(cloud);
@@ -74,14 +76,41 @@ void main() {
     );
 
     // Settings names the worker; switching computer gives it back (free again for the next person)
-    await tester.tap(find.byKey(const ValueKey('nav-Settings')));
-    await waitFor(tester, find.text('E2E Cloud'));
-    await press(tester, find.text('Switch computer'));
-    await waitFor(tester, find.text('Your computers'));
+    Future<void> giveBack() async {
+      await tester.tap(find.byKey(const ValueKey('nav-Settings')));
+      await waitFor(tester, find.textContaining('E2E Cloud'));
+      await press(tester, find.text('Switch computer'));
+      await waitFor(tester, find.text('Your computers'));
+      await waitFor(
+        tester,
+        find.descendant(of: cloud, matching: find.textContaining('2 free')),
+        timeout: const Duration(minutes: 1),
+      );
+    }
+
+    await giveBack();
+
+    // another worker this time (the stand-in account hands out the other one): the same space, so the project
+    // made on the first is here, conversation and all
+    await tester.tap(cloud);
     await waitFor(
       tester,
-      find.descendant(of: cloud, matching: find.textContaining('1 free')),
+      find.text('What are we making?'),
+      timeout: const Duration(minutes: 2),
+    );
+    await reveal(tester, find.text('Mobile e2e in the cloud'));
+    await tester.tap(find.text('Mobile e2e in the cloud'));
+    await waitFor(tester, find.byKey(const ValueKey('composer')));
+    await waitFor(
+      tester,
+      find.text(reply),
       timeout: const Duration(minutes: 1),
     );
+    await tester.pageBack();
+    await waitGone(
+      tester,
+      find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
+    );
+    await giveBack();
   });
 }

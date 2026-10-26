@@ -19,6 +19,7 @@ import { renderClip, setClipProtocol } from './clips'
 import { buildMenu } from './menu'
 import { startUpdates } from './updates'
 import { CLOUD_WORKER_SECRET, KEYS, keyStatus, loadKeys, setKey } from './keys'
+import * as UserSpace from './user-space'
 import { isProviderKeyEnv } from '../shared/providers'
 import { accountStatus, accountWorkers, adoptKey, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, workerHeartbeat } from './account'
 import { importOmp, ompAvailable, providerInfo, removeProvider, saveProvider } from './providers'
@@ -77,6 +78,19 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'manul', privileges: { standard:
 
 let win: BrowserWindow | null = null
 const WORKER_MODE = process.argv.includes('--worker') || process.env.MANUL_WORKER === '1'
+// A stateless cloud worker (MANUL_SHARED_ROOT and MANUL_WORKER_SLOT set): its own slot keeps only who it is (TLS
+// certificate, worker secret, mesh node); the person leasing it works in their space on the shared disk, profile and
+// projects both, opened here at the very start before anything reads the profile (user-space.ts).
+const SHARED_ROOT = WORKER_MODE ? process.env.MANUL_SHARED_ROOT : undefined
+const SLOT = SHARED_ROOT ? process.env.MANUL_WORKER_SLOT : undefined
+const session = SHARED_ROOT && SLOT ? UserSpace.startingSession(SHARED_ROOT, SLOT) : undefined
+if (SHARED_ROOT && SLOT) {
+  app.setPath('userData', session ? session.space.profile : join(SLOT, 'idle'))
+  process.env.MANUL_PROJECTS = session ? session.space.projects : join(SLOT, 'idle-projects')
+}
+const identityDir = () => SLOT || app.getPath('userData')
+// how much each person may keep (GB; default 20)
+const quota = session ? new UserSpace.Quota(session.space.dir, Number(process.env.MANUL_USER_QUOTA_GB || 20) * 1024 ** 3) : undefined
 let stopHeartbeat: ReturnType<typeof startWorkerHeartbeat> | null = null
 let meshNode: MeshNode | null = null
 let meshIp: string | undefined
@@ -131,9 +145,11 @@ const ipcMain = {
 }
 const mobile = new MobileBridge(
   {
-    stateFile: join(app.getPath('userData'), 'mobile-bridge.json'),
+    stateFile: join(identityDir(), 'mobile-bridge.json'),
     projectsRoot: () => Projects.projectsRoot(),
     pool: !!process.env.MANUL_POOL_SECRET,
+    // stateless: served only once its space is open, and within its quota
+    ...(SHARED_ROOT && SLOT ? { session: () => session?.user, quota } : {}),
     refreshLease: async () => { await stopHeartbeat?.beat() },
     onProjectSynced: async dir => {
       const p = await Projects.load(dir)
@@ -169,7 +185,7 @@ function joinMesh() {
     const port = mobile.listenPort()
     if (!joined || !port) return
     const node = await startMeshNode({
-      stateDir: join(app.getPath('userData'), 'mesh-worker'),
+      stateDir: join(identityDir(), 'mesh-worker'),
       // its own name per worker (several can run on one computer: pool-shanur-pc-2), else the computer's
       hostname: `manul-${(process.env.MANUL_WORKER_ID || hostname() || 'worker').replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`,
       controlUrl: joined.controlUrl,
@@ -296,6 +312,33 @@ function syncCloudWorker() {
   })
 }
 
+// A stateless worker follows its lease: the person's lock renewed with each heartbeat; on a new lease, their lock taken
+// and a restart into their space (nothing of the last person stays in memory); the lease over, the lock released and
+// a restart into the empty idle space. The service manager (systemd, Restart=always) starts it again.
+let switching = false
+async function followLease(user: string | undefined) {
+  if (!SHARED_ROOT || !SLOT || switching) return
+  const me = ownWorkerId()
+  // idle and not leased: nothing to do
+  if (!user && !session) return
+  try {
+    if (user && user === session?.user) {
+      if (!(await UserSpace.acquire(SHARED_ROOT, user, me))) console.warn('cloud worker: lost the lock on the open space')
+      return
+    }
+    if (user && !(await UserSpace.acquire(SHARED_ROOT, user, me))) return // still open on another worker: next heartbeat
+    switching = true
+    if (session) await UserSpace.release(SHARED_ROOT, session.user, me)
+    await UserSpace.writeSession(SLOT, user)
+    console.log(`cloud worker: ${user ? 'opening a space' : 'lease over'}, restarting`)
+    await shutdown().catch(() => {})
+    app.exit(0)
+  } catch (e) {
+    switching = false
+    console.warn('cloud worker: could not follow the lease', e)
+  }
+}
+
 async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
   await mobile.start()
   const joining = joinMesh()
@@ -316,7 +359,9 @@ async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
     // a cloud worker serves one person at a time: when the lease moves on, the last one's AgentShot sign-in (adopted
     // so their notes use their credits) goes with them
     onLease: lease => {
-      if (mobile.setLease(lease) && getConfig().account?.keyId) { signOut(); agent?.keysChanged() }
+      const moved = mobile.setLease(lease)
+      if (SHARED_ROOT && SLOT) void followLease(lease?.userId)
+      else if (moved && getConfig().account?.keyId) { signOut(); agent?.keysChanged() }
     },
   })
   return mobile.status()
@@ -1263,6 +1308,11 @@ const startup = app.whenReady().then(async () => {
     updates = startUpdates(st => send('update', st), shutdown)
   }
   onJobs(jobs => send('jobs', jobs))
+  if (quota) {
+    // counted when the space opens, then again now and then (renders and the agent write too)
+    void quota.recount().catch(() => {})
+    setInterval(() => void quota.recount().catch(() => {}), 10 * 60_000).unref()
+  }
   if (!WORKER_MODE) { createWindow(); syncAccountPhones(); syncCloudWorker() }
   else {
     void startBridgeAndMesh({ waitForMesh: true }).then(st => {
