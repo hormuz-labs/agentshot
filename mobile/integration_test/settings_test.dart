@@ -18,7 +18,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     await waitFor(tester, find.text('Connected'));
-    await tester.tap(find.text('Model providers'));
+    await press(tester, find.text('Model providers'));
     await waitFor(tester, find.text('Scripted'));
     await tester.tap(find.byTooltip('Close'));
     await settle(tester);

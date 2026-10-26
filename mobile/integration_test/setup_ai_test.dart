@@ -26,22 +26,46 @@ void main() {
     await note('Mobile e2e: no AI yet');
     expect(find.text('Use AgentShot credits'), findsOneWidget);
     await tester.tap(find.text('Use my own AI key'));
-    await waitFor(tester, find.text('Bring your own keys'));
+    await waitFor(tester, find.text('Your own keys'));
     await tester.tap(find.byTooltip('Close').last);
-    // no key added: the note couldn't go, and the phone says what would make it
+    // no key added: the note couldn't go, and a card above the composer says so and what would make it
+    final problem = find.byKey(const ValueKey('problem'));
     await waitFor(
       tester,
-      find.text('Add an AI key or use AgentShot credits to send notes.'),
+      find.descendant(
+        of: problem,
+        matching: find.text(
+          'Add an AI key or use AgentShot credits to send notes.',
+        ),
+      ),
     );
-    ScaffoldMessenger.of(
-      tester.element(find.byType(Scaffold).first),
-    ).clearSnackBars();
+    expect(
+      find.descendant(
+        of: problem,
+        matching: find.text('Your note didn’t send'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.descendant(of: problem, matching: find.byTooltip('Dismiss')),
+    );
     await settle(tester);
+    expect(problem, findsNothing);
 
-    // closing the question without a choice: the note can't go, and the phone says what would make it
+    // closing the question without a choice: the note can't go, and the card says what would make it
     await note('Mobile e2e: undecided');
     await closeSheet(tester);
-    await snack(tester, 'Choose AgentShot credits or an AI key');
+    await waitFor(
+      tester,
+      find.descendant(
+        of: problem,
+        matching: find.textContaining('Choose AgentShot credits or an AI key'),
+      ),
+    );
+    await tester.tap(
+      find.descendant(of: problem, matching: find.byTooltip('Dismiss')),
+    );
+    await settle(tester);
 
     // an own key, added from the question: the note goes
     Finder keyTile() => find.byWidgetPredicate(
@@ -57,10 +81,7 @@ void main() {
     await answer(tester, 'sk-e2e-not-a-real-key');
     await waitFor(
       tester,
-      find.descendant(
-        of: keyTile(),
-        matching: find.textContaining('Key is set'),
-      ),
+      find.descendant(of: keyTile(), matching: find.text('Added')),
     );
     await closeSheet(tester);
     // with a key on the computer the note goes (what that model answers isn't the point here)
@@ -71,20 +92,24 @@ void main() {
       timeout: const Duration(minutes: 1),
     );
 
-    // and removed again, in Settings → AI keys
+    // and removed again, in Settings → AI models, which says what the computer uses now
     await tester.pageBack();
     await waitFor(tester, find.byKey(const ValueKey('nav-Settings')));
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
-    await press(tester, find.text('AI keys'));
-    await waitFor(tester, keyTile());
-    await tester.tap(keyTile());
-    await answer(tester, '');
+    final ai = find.byKey(const ValueKey('settings-ai'));
+    await reveal(tester, ai);
     await waitFor(
       tester,
-      find.descendant(
-        of: keyTile(),
-        matching: find.textContaining('No key configured'),
-      ),
+      find.descendant(of: ai, matching: find.text('Your OpenAI key')),
+    );
+    await press(tester, find.text('AI models'));
+    await waitFor(tester, keyTile());
+    await tester.tap(keyTile());
+    await waitFor(tester, find.text('Remove the OpenAI key?'));
+    await tester.tap(find.text('Remove'));
+    await waitFor(
+      tester,
+      find.descendant(of: keyTile(), matching: find.text('Add')),
     );
     await closeSheet(tester);
     await tester.tap(find.byKey(const ValueKey('nav-Projects')));

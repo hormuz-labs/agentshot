@@ -150,14 +150,14 @@ class BridgeStore extends ChangeNotifier {
           }
           unawaited(
             refresh().catchError((Object e) {
-              connectionError = '$e';
+              connectionError = plain(e, where: client.connection?.name);
               _notify();
             }),
           );
           if (dir != null) {
             unawaited(
               open(dir!).catchError((Object e) {
-                connectionError = '$e';
+                connectionError = plain(e, where: client.connection?.name);
                 _notify();
               }),
             );

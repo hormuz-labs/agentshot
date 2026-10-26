@@ -56,6 +56,23 @@ void main() {
         timeout: const Duration(minutes: 2),
       );
       await filesShow(tester, ['Surf session.mp4', 'Harbour drone.mp4']);
+      // each shows a frame of itself (from the computer), and its length
+      for (final name in ['Surf session.mp4', 'Harbour drone.mp4']) {
+        final picture = find.descendant(
+          of: find.byKey(ValueKey('file-media/$name')),
+          matching: find.byWidgetPredicate(
+            (w) => w is RawImage && w.image != null,
+          ),
+        );
+        await waitFor(tester, picture, timeout: const Duration(seconds: 60));
+        expect(
+          find.descendant(
+            of: find.byKey(ValueKey('file-media/$name')),
+            matching: find.text('0:02'),
+          ),
+          findsOneWidget,
+        );
+      }
       await tester.pageBack();
       await waitFor(tester, find.byTooltip('Refresh'));
 
@@ -108,6 +125,54 @@ void main() {
         timeout: const Duration(seconds: 60),
       );
       await waitFor(tester, find.widgetWithText(InputChip, 'Dunes 3.jpg'));
+    },
+  );
+
+  testWidgets(
+    'a file that can\'t come in says which and why, and can be tried again',
+    (tester) async {
+      addTearDown(() => Picker.override = null);
+      await launchPaired(tester);
+      // a "video" that isn't one: the computer can't read it
+      await importing(tester, 'Videos', Pick.videos, ['Broken clip.mp4']);
+      final problem = find.byKey(const ValueKey('problem'));
+      await waitFor(tester, problem, timeout: const Duration(minutes: 1));
+      expect(
+        find.descendant(
+          of: problem,
+          matching: find.text('Couldn’t add Broken clip.mp4'),
+        ),
+        findsOneWidget,
+      );
+      // in words, and nothing of the machine (no path, no error code, no "Request failed")
+      final why = tester
+          .widgetList<Text>(
+            find.descendant(of: problem, matching: find.byType(Text)),
+          )
+          .map((t) => t.data ?? '')
+          .join(' ');
+      expect(why, contains('can’t be read'));
+      expect(
+        why,
+        isNot(matches(RegExp(r'/tmp|/home|ENO|Exception|Request failed'))),
+      );
+      // Try again brings it in again (and it says so again); Dismiss puts it away
+      await tester.tap(
+        find.descendant(of: problem, matching: find.text('Try again')),
+      );
+      await waitFor(
+        tester,
+        find.descendant(
+          of: problem,
+          matching: find.text('Couldn’t add Broken clip.mp4'),
+        ),
+        timeout: const Duration(minutes: 1),
+      );
+      await tester.tap(
+        find.descendant(of: problem, matching: find.byTooltip('Dismiss')),
+      );
+      await settle(tester);
+      expect(problem, findsNothing);
     },
   );
 

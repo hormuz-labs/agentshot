@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../bridge/client.dart';
 
 Future<T?> sheet<T>(BuildContext context, String title, Widget child) =>
     showModalBottomSheet<T>(
@@ -49,7 +50,10 @@ Future<void> guard(BuildContext context, Future<void> Function() work) async {
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$error'), duration: const Duration(seconds: 7)),
+        SnackBar(
+          content: Text(plain(error)),
+          duration: const Duration(seconds: 7),
+        ),
       );
     }
   }
@@ -219,4 +223,78 @@ class NoticeBanner extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// What the computer puts before the reason when the phone asked for something (explain.ts, `doing`): said by the
+/// card's title already. A reason that starts the same way ("Couldn’t reach your computer.") stays.
+final _whatFailed = RegExp(
+  r'^Couldn’t (send your note|add the file|start the project|open the project|save your choice|export the film|change the timeline|render the clip|switch to your AgentShot credits|save the key)\. (?=\S)',
+);
+
+/// Something that didn't work, where it happened: what (a title), why in plain words, and what to do (Try again), until
+/// dismissed. In place of a snack bar for what matters: a note that didn't send, a file that didn't come in.
+class ProblemCard extends StatelessWidget {
+  final String title;
+  final Object error;
+  final VoidCallback? onRetry;
+  final VoidCallback onDismiss;
+  const ProblemCard({
+    super.key,
+    required this.title,
+    required this.error,
+    this.onRetry,
+    required this.onDismiss,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      key: const ValueKey('problem'),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 10),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer.withValues(alpha: .55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.error.withValues(alpha: .35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(Icons.error_outline, color: scheme.error),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 2),
+                // (the title already says what didn't happen: the computer's "Couldn't …." would say it twice)
+                Text(
+                  plain(error).replaceFirst(_whatFailed, ''),
+                  style: TextStyle(color: scheme.onErrorContainer),
+                ),
+                if (onRetry != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: TextButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Try again'),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Dismiss',
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
 }

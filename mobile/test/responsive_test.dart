@@ -12,6 +12,13 @@ import 'package:agentshot_mobile/ui/project.dart';
 import 'package:agentshot_mobile/ui/settings.dart';
 
 class FakeClient extends BridgeClient {
+  // no film to stream here: the players say so (and offer to retry)
+  @override
+  Future<Uri> media(String project, String file) async =>
+      throw BridgeException('No film in this test');
+  @override
+  Future<Uri> thumbnail(String project, String file) async =>
+      throw BridgeException('No pictures in this test');
   @override
   Future<dynamic> call(String method, [List<dynamic> args = const []]) async {
     return switch (method) {
@@ -227,11 +234,18 @@ void main() {
           'media': {},
           // a new cut waiting: the conversation shows it, the Film tab has a dot
           'versions': [
-            {'id': 'v1', 'title': 'Original'},
+            {
+              'id': 'v1',
+              'title': 'Original',
+              'path': 'media/opening.mp4',
+              'by': 'import',
+            },
             {
               'id': 'v2',
               'title':
                   'Cut the ums, tightened the opening and moved the title card',
+              'path': 'renders/v2.mp4',
+              'by': 'agent',
             },
           ],
           'current': 'v1',
@@ -258,6 +272,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.byKey(const ValueKey('proposal-card')), findsOneWidget);
+        // to watch and download right there
+        expect(find.byKey(const ValueKey('cut-play')), findsOneWidget);
+        expect(find.byKey(const ValueKey('cut-download')), findsOneWidget);
         final dot = find.byKey(const ValueKey('tab-Film-dot'));
         if (dot.evaluate().isNotEmpty) {
           expect(tester.widget<Badge>(dot).isLabelVisible, isTrue);
@@ -302,7 +319,10 @@ void main() {
           if (chip.evaluate().isEmpty) continue;
           await tester.ensureVisible(chip);
           await tester.tap(chip);
-          await tester.pumpAndSettle();
+          // the film loads (its spinner never settles here): frames instead
+          for (var i = 0; i < 5; i++) {
+            await tester.pump(const Duration(milliseconds: 100));
+          }
           expect(tester.takeException(), isNull, reason: label);
         }
         await tester.pumpWidget(

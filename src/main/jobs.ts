@@ -1,5 +1,6 @@
 // Background jobs (downloads, installs, transcriptions, renders): one list, one progress style, shown in the tray.
 import type { Job } from '../shared/types'
+import { explain } from './explain'
 
 type Listener = (jobs: Job[]) => void
 const jobs = new Map<string, Job>()
@@ -40,7 +41,8 @@ export function startJob(title: string, kind: Job['kind'], opts: JobOptions = {}
       set({ progress: p, ...(detail !== undefined ? { detail } : {}) })
     },
     done: detail => settle({ status: 'done', progress: 1, detail }),
-    fail: err => settle({ status: 'failed', detail: err instanceof Error ? err.message : String(err) }),
+    // why, in words a person can act on (the raw error is in the log)
+    fail: err => { console.warn(`${title} failed:`, err instanceof Error ? err.message : err); settle({ status: 'failed', detail: explain(err) }) },
   }
 }
 

@@ -1,6 +1,7 @@
 // Editing from the phone: a note asks for an edit, the desktop agent cuts the film and proposes it, and the
 // conversation says so with a card. The first cut goes back with feedback, right from the card; the second the phone
 // watches (the card takes it to the Film tab, whose dot said a cut was waiting), compares before/after and keeps.
+import 'package:agentshot_mobile/ui/player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -48,11 +49,38 @@ void main() {
       timeout: const Duration(minutes: 1),
     );
 
-    // this one: Watch opens the Film tab on the new cut, then before/after, and Keep
+    // this one: it plays right there in the conversation, and downloads from there (to the share sheet, which the
+    // runner closes); Before / after opens the Film tab on it, then Keep
     await askForTheEdit();
     await press(
       tester,
-      find.descendant(of: card, matching: find.text('Watch')),
+      find.descendant(
+        of: card,
+        matching: find.byKey(const ValueKey('cut-play')),
+      ),
+    );
+    // loaded: its controls are there
+    await waitFor(
+      tester,
+      find.descendant(
+        of: find.descendant(of: card, matching: find.byType(RemotePlayer)),
+        matching: find.byTooltip('Mute'),
+      ),
+      timeout: const Duration(minutes: 1),
+    );
+    await press(
+      tester,
+      find.descendant(of: card, matching: find.text('Download')),
+    );
+    cue('back');
+    await waitFor(
+      tester,
+      find.descendant(of: card, matching: find.text('Download')),
+      timeout: const Duration(minutes: 2),
+    );
+    await press(
+      tester,
+      find.descendant(of: card, matching: find.text('Before / after')),
     );
     await waitFor(tester, find.text('A new cut is ready'));
     expect(tester.widget<Badge>(dot).isLabelVisible, isFalse);

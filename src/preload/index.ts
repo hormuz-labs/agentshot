@@ -233,6 +233,8 @@ const api = {
   onSeek: on<[string, number]>('seek'),
   onMenu: on<[string]>('menu'),
   onNotice: on<[string]>('notice'),
+  /** An import that failed (here, or sent from the phone): which file, and why in plain words. */
+  onImportFailed: on<[{ file: string; why: string }]>('import:failed'),
 }
 
 export type AgentShotApi = typeof api

@@ -16,7 +16,10 @@ describe('jobs', () => {
 
   it('asJob marks failures and rethrows', async () => {
     await expect(asJob('Boom', 'render', async () => { throw new Error('nope') })).rejects.toThrow('nope')
-    expect(listJobs().find(j => j.title === 'Boom')).toMatchObject({ status: 'failed', detail: 'nope' })
+    // the tray says why in plain words (the raw error goes to the log)
+    expect(listJobs().find(j => j.title === 'Boom')).toMatchObject({ status: 'failed', detail: expect.stringMatching(/^Something went wrong on the computer/) })
+    await expect(asJob('Full', 'render', async () => { throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' }) })).rejects.toThrow()
+    expect(listJobs().find(j => j.title === 'Full')?.detail).toMatch(/disk is full/)
   })
 
   it('finished jobs leave the list after a while', async () => {

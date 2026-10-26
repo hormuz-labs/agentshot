@@ -50,7 +50,9 @@ class _RemotePlayerState extends State<RemotePlayer> {
       setState(() {});
     } catch (e) {
       await next?.dispose();
-      if (mounted) setState(() => error = '$e');
+      if (mounted) {
+        setState(() => error = 'Couldn’t play this here. ${plain(e)}');
+      }
     }
   }
 

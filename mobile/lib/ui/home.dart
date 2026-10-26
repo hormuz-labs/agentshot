@@ -39,6 +39,12 @@ class _HomeScreenState extends State<HomeScreen> {
   bool working = false;
   double? progress;
   String? status;
+
+  /// A file that didn't come in (which, and why), until dismissed or tried again.
+  (String, Object)? importError;
+
+  /// What was being brought in, for Try again.
+  (List<Picked>, String?)? _lastImport;
   BridgeStore get store => widget.store;
   Future<void> open(Json project) async {
     await store.open(project['dir'] as String);
@@ -84,8 +90,19 @@ class _HomeScreenState extends State<HomeScreen> {
       aspect = await chooseFormat(context);
       if (aspect == null || !mounted) return;
     }
-    setState(() => working = true);
-    await guard(context, () async {
+    await _bringIn(ordered, aspect);
+  }
+
+  /// Uploads [ordered] (into a new project, made from scratch first when [aspect] is given) and opens it. A file that
+  /// doesn't come in is said where the person is (which, and why), with Try again.
+  Future<void> _bringIn(List<Picked> ordered, String? aspect) async {
+    _lastImport = (ordered, aspect);
+    setState(() {
+      working = true;
+      importError = null;
+    });
+    var current = ordered.first.name;
+    try {
       Json? project;
       if (aspect != null) {
         final photos = ordered.where((f) => f.isPhoto).length;
@@ -100,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
         await store.open(project['dir'] as String);
       }
       for (final (index, file) in ordered.indexed) {
+        current = file.name;
         if (mounted) {
           setState(
             () => status = 'Uploading ${index + 1} of ${ordered.length}…',
@@ -118,8 +136,11 @@ class _HomeScreenState extends State<HomeScreen> {
           await store.open(project['dir'] as String);
         }
       }
+      _lastImport = null;
       if (project != null) await open(project);
-    });
+    } catch (e) {
+      if (mounted) setState(() => importError = (current, e));
+    }
     if (mounted) {
       setState(() {
         working = false;
@@ -273,6 +294,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
                   child: Text(status!, key: const ValueKey('upload-status')),
+                ),
+              if (importError case (final name, final error))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: ProblemCard(
+                    title: 'Couldn’t add $name',
+                    error: error,
+                    onRetry: _lastImport == null
+                        ? null
+                        : () => _bringIn(_lastImport!.$1, _lastImport!.$2),
+                    onDismiss: () => setState(() => importError = null),
+                  ),
                 ),
               Expanded(
                 child: LayoutBuilder(
