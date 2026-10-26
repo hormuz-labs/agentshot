@@ -13,7 +13,8 @@ describe('a person\'s space on the shared disk', () => {
     const r = await root()
     const space = await ensureSpace(r, 'user_maya')
     expect(space.dir).toBe(join(r, 'users', 'user_maya'))
-    for (const d of [space.dir, space.projects, space.profile]) expect((await stat(d)).mode & 0o777).toBe(0o700)
+    // (Windows has no such modes: there the folders are as private as the account's own)
+    if (process.platform !== 'win32') for (const d of [space.dir, space.projects, space.profile]) expect((await stat(d)).mode & 0o777).toBe(0o700)
   })
 
   it('refuses ids that could step out of the space', () => {

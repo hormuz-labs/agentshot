@@ -6,7 +6,7 @@
 // shared by workers on several.
 import { randomBytes } from 'node:crypto'
 import { constants, mkdirSync, readFileSync } from 'node:fs'
-import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, statfs, writeFile } from 'node:fs/promises'
+import { link, lstat, mkdir, open, readdir, readFile, realpath, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 
 /** An account user id, as the account service hands it out (user_2abc…): nothing that could step out of a folder. */
@@ -59,15 +59,20 @@ async function writeLock(file: string, lock: Lock) {
 export async function acquire(root: string, user: string, holder: string, ttl = LOCK_TTL, now = Date.now()): Promise<boolean> {
   const { lock } = await ensureSpace(root, user)
   const mine: Lock = { holder, until: now + ttl }
+  // the lock appears whole or not at all: written to a file of its own, then linked into place (which fails if a lock
+  // is there already). Created empty and then written, another worker could read it in between, take it for damaged
+  // and take it over too.
   const create = async () => {
+    const tmp = `${lock}.${randomBytes(6).toString('hex')}`
     try {
-      const file = await open(lock, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600)
-      await file.writeFile(JSON.stringify(mine))
-      await file.close()
+      await writeFile(tmp, JSON.stringify(mine), { mode: 0o600 })
+      await link(tmp, lock)
       return true
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === 'EEXIST') return false
       throw e
+    } finally {
+      await rm(tmp, { force: true })
     }
   }
   if (await create()) return true
