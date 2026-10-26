@@ -113,13 +113,8 @@ const _unlocks = {
   'music': 'Music',
 };
 
-/// A provider set up on the computer that can be used now: its key is there, or it runs on the computer itself (a
-/// local model, which usually needs none).
-bool usable(Json provider) {
-  if (provider['keySet'] == true) return true;
-  final host = Uri.tryParse('${provider['baseUrl'] ?? ''}')?.host ?? '';
-  return host == 'localhost' || host == '127.0.0.1' || host == '::1' || host.endsWith('.local');
-}
+/// A provider set up on the computer that can be used now: as the computer decides (providers.ts), only with its key.
+bool usable(Json provider) => provider['keySet'] == true;
 
 /// How AgentShot on the computer thinks, in a line: AgentShot credits, the person's own keys, providers they set up
 /// there (a local model, say), or nothing yet. [keys] is keys:list, [providers] providers:list's. Null when nothing

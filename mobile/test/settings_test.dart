@@ -135,19 +135,33 @@ void main() {
         aiSummary(
           [key('MANUL_KEY', 'AgentShot', false)],
           [
-            // on the computer itself: no key needed
-            {'id': 'ollama', 'name': 'Ollama', 'baseUrl': 'http://localhost:11434/v1', 'keySet': false},
-            // somewhere else, its key not set: can't be used, so not counted
-            {'id': 'groq', 'name': 'Groq', 'baseUrl': 'https://api.groq.com/openai/v1', 'keySet': false},
+            // its key not set: the computer can't use it, so it isn't counted
+            {
+              'id': 'groq',
+              'name': 'Groq',
+              'baseUrl': 'https://api.groq.com/openai/v1',
+              'keySet': false,
+            },
+            {
+              'id': 'ollama',
+              'name': 'Ollama',
+              'baseUrl': 'http://localhost:11434/v1',
+              'keySet': false,
+            },
           ],
         ),
-        'Your Ollama',
+        isNull,
       );
       expect(
         aiSummary(
           [key('MANUL_KEY', 'AgentShot', false)],
           [
-            {'id': 'groq', 'name': 'Groq', 'baseUrl': 'https://api.groq.com/openai/v1', 'keySet': true},
+            {
+              'id': 'groq',
+              'name': 'Groq',
+              'baseUrl': 'https://api.groq.com/openai/v1',
+              'keySet': true,
+            },
           ],
         ),
         'Your Groq',
