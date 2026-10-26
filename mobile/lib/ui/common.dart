@@ -97,8 +97,9 @@ Future<String?> askText(
 Future<bool> confirm(
   BuildContext context,
   String title,
-  String message,
-) async =>
+  String message, {
+  String action = 'Confirm',
+}) async =>
     await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -112,7 +113,7 @@ Future<bool> confirm(
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
+            child: Text(action),
           ),
         ],
       ),

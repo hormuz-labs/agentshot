@@ -90,7 +90,10 @@ if (SHARED_ROOT && SLOT) {
 }
 const identityDir = () => SLOT || app.getPath('userData')
 // how much each person may keep (GB; default 20)
-const quota = session ? new UserSpace.Quota(session.space.dir, Number(process.env.MANUL_USER_QUOTA_GB || 20) * 1024 ** 3) : undefined
+// each person's cap, and room kept free on the shared disk for everyone else's spaces
+const quota = session
+  ? new UserSpace.Quota(session.space.dir, Number(process.env.MANUL_USER_QUOTA_GB || 20) * 1024 ** 3, Number(process.env.MANUL_DISK_RESERVE_GB || 10) * 1024 ** 3)
+  : undefined
 let stopHeartbeat: ReturnType<typeof startWorkerHeartbeat> | null = null
 let meshNode: MeshNode | null = null
 let meshIp: string | undefined
@@ -1312,9 +1315,15 @@ const startup = app.whenReady().then(async () => {
   }
   onJobs(jobs => send('jobs', jobs))
   if (quota) {
-    // counted when the space opens, then again now and then (renders and the agent write too)
+    // counted when the space opens, every minute (the agent writes too), and as soon as a job ends (a render's file)
     void quota.recount().catch(() => {})
-    setInterval(() => void quota.recount().catch(() => {}), 10 * 60_000).unref()
+    setInterval(() => void quota.recount().catch(() => {}), 60_000).unref()
+    let running = 0
+    onJobs(jobs => {
+      const now = jobs.filter(j => j.status === 'running').length
+      if (now < running) void quota.recount().catch(() => {})
+      running = now
+    })
   }
   if (!WORKER_MODE) { createWindow(); syncAccountPhones(); syncCloudWorker() }
   else {

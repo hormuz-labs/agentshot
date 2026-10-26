@@ -173,13 +173,13 @@ class SettingsScreen extends StatelessWidget {
             child: Text('Signed in as ${account!.email}'),
           ),
         OutlinedButton.icon(
-          onPressed: () => guard(context, onDisconnect),
+          onPressed: () => leaving(context, onDisconnect),
           icon: const Icon(Icons.swap_horiz),
           label: const Text('Switch computer'),
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: () => guard(context, onSignOut),
+          onPressed: () => leaving(context, onSignOut),
           icon: const Icon(Icons.logout),
           label: const Text('Sign out'),
         ),
@@ -198,6 +198,24 @@ class SettingsScreen extends StatelessWidget {
   );
 
   void keys(BuildContext context) => showKeys(context, store);
+
+  /// Leaving AgentShot Cloud gives the spot back, which stops whatever still runs there: asks first when something does.
+  Future<void> leaving(
+    BuildContext context,
+    Future<void> Function() leave,
+  ) async {
+    final running = store.onCloud ? store.running : const <String>[];
+    if (running.isNotEmpty &&
+        !await confirm(
+          context,
+          'Leave AgentShot Cloud?',
+          'Still running there: ${running.join(', ')}. Leaving now stops it. Your projects stay in your space.',
+          action: 'Leave anyway',
+        )) {
+      return;
+    }
+    if (context.mounted) await guard(context, leave);
+  }
 
   void skills(BuildContext context) => panel(
     context,

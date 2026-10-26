@@ -631,14 +631,49 @@ class BridgeClient {
           // signed in: the computer's day-long token ran out; the account has a new one
           final expired = connection;
           if (renew != null && expired?.machine != null) {
+            String? why;
             try {
               final fresh = await renew!(expired!);
               if (fresh != null && !_disposed) {
-                await connectDirect(fresh);
+                // a cloud worker taken anew may first restart into this person's space: give it a minute
+                final end = DateTime.now().add(const Duration(seconds: 60));
+                for (;;) {
+                  try {
+                    // every address at once (some may never answer from here), then the one that did
+                    final first = await firstToAnswer(fresh, timeout: const Duration(seconds: 5));
+                    if (first == null) throw BridgeException('Not answering yet');
+                    await connectDirect(Connection(first, fresh.fingerprint, fresh.token, [first, ...fresh.urls.where((u) => u != first)], fresh.machine, fresh.name));
+                    break;
+                  } catch (e) {
+                    if (_disposed || generation != _generation) return;
+                    // one of the person's own computers answers at once or not at all
+                    if (fresh.name != 'AgentShot Cloud') rethrow;
+                    if (DateTime.now().isAfter(end)) {
+                      throw BridgeException('AgentShot Cloud didn’t open your space in time. Try again in a moment.');
+                    }
+                    _events.add({
+                      'channel': 'connection',
+                      'args': [false, 'Opening your space…'],
+                    });
+                    await Future<void>.delayed(const Duration(seconds: 3));
+                  }
+                }
                 listen();
                 return;
               }
+            } on BridgeException catch (e) {
+              // AgentShot Cloud had no spot to give back (all busy, or this person's turn is over for now)
+              if (expired?.name == 'AgentShot Cloud') why = e.message;
             } catch (_) {}
+            if (_disposed || generation != _generation) return;
+            if (why != null) {
+              await storage.delete(key: _storageKey);
+              _events.add({
+                'channel': 'connection',
+                'args': [false, why, 'revoked'],
+              });
+              return;
+            }
           }
           // the computer doesn't let this phone in any more (removed there, or the pairing ended): connect again
           await storage.delete(key: _storageKey);
@@ -652,6 +687,16 @@ class BridgeClient {
           });
           return;
         }
+        // a cloud worker opening this person's space (it restarts into it): a few seconds, say so
+        if (error is BridgeException && error.status == 503) {
+          _events.add({
+            'channel': 'connection',
+            'args': [false, error.message],
+          });
+          if (_disposed || generation != _generation) return;
+          await Future<void>.delayed(const Duration(seconds: 2));
+          continue;
+        }
         // another of its addresses may answer (home Wi-Fi again, or the private network away)
         if (await _preferReachable(generation)) return;
         // off, asleep or out of reach: keep trying
@@ -659,7 +704,9 @@ class BridgeClient {
           'channel': 'connection',
           'args': [
             false,
-            'Can’t reach ${connection?.name ?? 'your computer'}. Make sure AgentShot is open on it and both are online.',
+            connection?.name == 'AgentShot Cloud'
+                ? 'Reconnecting to AgentShot Cloud…'
+                : 'Can’t reach ${connection?.name ?? 'your computer'}. Make sure AgentShot is open on it and both are online.',
           ],
         });
       }

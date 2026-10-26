@@ -124,10 +124,22 @@ Future<void> projectMenu(WidgetTester tester, String item) async {
 /// Types [text] in the composer and sends it.
 Future<void> sendNote(WidgetTester tester, String text) async {
   final composer = find.byKey(const ValueKey('composer'));
+  // a snack bar over the composer would take the tap instead of Send
+  await waitGone(tester, find.byType(SnackBar));
   await tester.enterText(composer, text);
   await tester.pump(); // Send turns on once there is text
   await tester.tap(find.byTooltip('Send'));
   await settle(tester, const Duration(milliseconds: 300));
+  // sent: the composer is empty again (a tap that missed Send would leave the note there, and the test go on)
+  await waitFor(
+    tester,
+    find.byWidgetPredicate(
+      (w) =>
+          w is TextField &&
+          w.key == const ValueKey('composer') &&
+          (w.controller?.text.isEmpty ?? true),
+    ),
+  );
 }
 
 /// Pumps real frames until [finder] matches, or fails after [timeout]. The app talks to a real desktop over the

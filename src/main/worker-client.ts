@@ -592,7 +592,9 @@ export function startWorkerHeartbeat(opts: {
     }
   }
   void tick()
-  const timer = setInterval(() => void tick(), 30_000)
+  // every 30 s (MANUL_HEARTBEAT_SECONDS for tests: the cloud end to end test shortens leases, and beats with them)
+  const every = Math.max(1, Number(process.env.MANUL_HEARTBEAT_SECONDS) || 30) * 1000
+  const timer = setInterval(() => void tick(), every)
   // beat(): report now, e.g. to hear about a lease that just started
   return Object.assign(
     () => {

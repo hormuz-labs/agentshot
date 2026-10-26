@@ -78,6 +78,17 @@ class BridgeStore extends ChangeNotifier {
     _subscription = client.events.listen(_event);
   }
   String? get dir => project?['dir'] as String?;
+
+  /// What is still working on the computer: jobs (a render, a transcription) by name, and the agent.
+  List<String> get running => [
+    for (final j in jobs)
+      if (j['status'] == 'running') '${j['title'] ?? 'A job'}',
+    if (agents.values.any((a) => a.busy)) 'The agent',
+  ];
+
+  /// On AgentShot Cloud (a leased worker), not one of the person's own computers.
+  bool get onCloud =>
+      account?.leased != null && client.connection?.machine == account?.leased;
   AgentState agent(String dir) => agents.putIfAbsent(dir, AgentState.new);
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -126,6 +137,17 @@ class BridgeStore extends ChangeNotifier {
             ? null
             : (args.length > 1 ? '${args[1]}' : 'Disconnected');
         if (connected) {
+          // AgentShot Cloud: a worker taken anew doesn't have the person's credits yet; hand them over again
+          final a = account;
+          if (onCloud && a != null && a.cloudCredits && a.key != null) {
+            unawaited(
+              client
+                  .call('account:adopt', [
+                    {'key': a.key, 'keyId': ?a.keyId, 'email': ?a.email},
+                  ])
+                  .then<void>((_) {}, onError: (Object _) {}),
+            );
+          }
           unawaited(
             refresh().catchError((Object e) {
               connectionError = '$e';

@@ -7,6 +7,7 @@ import { isTailscale, MobileBridge, reachableIps } from '../src/main/mobile-brid
 import { mobileArgs } from '../src/main/mobile-contract'
 import { WorkerClient } from '../src/main/worker-client'
 import { signWorkerToken } from '../account/src/index'
+import { SpaceError } from '../src/main/user-space'
 const bridges: MobileBridge[] = []
 const folders: string[] = []
 afterEach(async () => { await Promise.all(bridges.splice(0).map(b => b.stop())); await Promise.all(folders.splice(0).map(d => rm(d, { recursive: true, force: true }))) })
@@ -442,12 +443,20 @@ describe('cloud & home worker extensions', () => {
     expect(await ask()).toBe(200) // asking anything counts as using it
     expect(bridge.activity()!.idleMs).toBeLessThan(1_000)
 
+    // a turn that starts and ends between two heartbeats still counts as use
+    away(20 * 60_000)
+    bridge.publish('agui', '/p', { type: 'RUN_STARTED', threadId: 't', runId: 'r0' })
+    bridge.publish('agui', '/p', { type: 'RUN_FINISHED', threadId: 't', runId: 'r0' })
+    expect(bridge.activity()!.idleMs).toBeLessThan(1_000)
+
     // the agent working on a project keeps it busy until its run ends
     away(20 * 60_000)
     bridge.publish('agui', '/p', { type: 'RUN_STARTED', threadId: 't', runId: 'r' })
     expect(bridge.activity()!.busy).toBe(true)
     bridge.publish('agui', '/p', { type: 'RUN_FINISHED', threadId: 't', runId: 'r' })
-    expect(bridge.activity()!.busy).toBe(false)
+    // done: idle from when it ended, not from the last request before it
+    expect(bridge.activity()).toMatchObject({ busy: false })
+    expect(bridge.activity()!.idleMs).toBeLessThan(1_000)
     // and so does any job (a render, a transcription)
     jobRunning = true
     expect(bridge.activity()!.busy).toBe(true)
@@ -458,6 +467,58 @@ describe('cloud & home worker extensions', () => {
     expect(bridge.activity()!.idleMs).toBeLessThan(1_000)
     bridge.setLease(undefined)
     expect(bridge.activity()).toBeUndefined()
+  })
+
+  it('on a cloud worker: an upload the phone walked away from stops counting as work, and is dropped after an hour', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'agentshot-stale-')); folders.push(root)
+    const bridge = new MobileBridge({
+      invoke: async () => [], projects: () => [], importFile: async () => null, galleryFile: () => new Response(''),
+      stateFile: join(root, 'bridge.json'), pool: true,
+    }); bridges.push(bridge)
+    const port = new URL((await bridge.start()).addresses[0]).port
+    const until = Date.now() + 60 * 60_000
+    const maya = signWorkerToken((bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, until)
+    bridge.setLease({ userId: 'user_maya', until })
+    // half of a file, then the phone goes away
+    const init = await new Promise<{ id: string }>((ok, fail) => {
+      const req = request(`https://127.0.0.1:${port}/upload/init?name=clip.mp4&size=100`, { rejectUnauthorized: false, method: 'POST', headers: { authorization: `Bearer ${maya}`, 'content-length': '0' } }, res => {
+        const chunks: Buffer[] = []; res.on('data', c => chunks.push(c)); res.on('end', () => ok(JSON.parse(Buffer.concat(chunks).toString()))); res.on('error', fail)
+      }); req.on('error', fail); req.end()
+    })
+    const uploads = (bridge as unknown as { uploads: Map<string, { touched: number; folder: string }> }).uploads
+    expect(bridge.activity()!.busy).toBe(true) // just started: work running
+    uploads.get(init.id)!.touched = Date.now() - 11 * 60_000
+    expect(bridge.activity()!.busy).toBe(false) // nothing sent for 10 minutes: not work any more
+    const folder = uploads.get(init.id)!.folder
+    uploads.get(init.id)!.touched = Date.now() - 61 * 60_000
+    bridge.activity()
+    await vi.waitFor(() => expect(uploads.has(init.id)).toBe(false))
+    await vi.waitFor(async () => expect(await readFile(join(folder, 'clip.mp4')).catch(() => 'gone')).toBe('gone'))
+  })
+
+  it('on a cloud worker: a full space takes no new work that writes, but still opens and reads', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'agentshot-full-')); folders.push(root)
+    const invoke = vi.fn(async (method: string) => (method === 'project:recent' ? [] : { method }))
+    let full = false
+    const quota = { ensureRoom: () => { if (full) throw new SpaceError(507, 'Your AgentShot space is full (20.0 of 20.0 GB). Delete a project or some files to make room.') }, add: () => {} }
+    const bridge = new MobileBridge({ invoke, projects: () => [], importFile: async () => null, galleryFile: () => new Response(''), stateFile: join(root, 'bridge.json'), pool: true, quota }); bridges.push(bridge)
+    const port = new URL((await bridge.start()).addresses[0]).port
+    const until = Date.now() + 60 * 60_000
+    const maya = signWorkerToken((bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, until)
+    bridge.setLease({ userId: 'user_maya', until })
+    const rpc = (method: string, args: unknown[] = []) => new Promise<{ status: number; body: { error?: string } }>((ok, fail) => {
+      const data = JSON.stringify({ method, args })
+      const req = request(`https://127.0.0.1:${port}/rpc`, { rejectUnauthorized: false, method: 'POST', headers: { authorization: `Bearer ${maya}`, 'content-length': String(Buffer.byteLength(data)) } }, res => {
+        const chunks: Buffer[] = []; res.on('data', c => chunks.push(c)); res.on('end', () => ok({ status: res.statusCode!, body: JSON.parse(Buffer.concat(chunks).toString() || 'null') })); res.on('error', fail)
+      }); req.on('error', fail); req.end(data)
+    })
+    expect((await rpc('project:createMotion', [{ title: 'A', aspect: '16:9' }])).status).toBe(200)
+    full = true
+    const refused = await rpc('project:createMotion', [{ title: 'B', aspect: '16:9' }])
+    expect(refused.status).toBe(507)
+    expect(refused.body.error).toMatch(/space is full/)
+    expect(invoke.mock.calls.filter(c => c[0] === 'project:createMotion')).toHaveLength(1) // the second never ran
+    expect((await rpc('project:recent')).status).toBe(200) // reading is fine
   })
 
   it('refuses cloud tokens on a computer that is not a cloud worker', async () => {

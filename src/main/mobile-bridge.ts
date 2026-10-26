@@ -43,12 +43,17 @@ type PersistedBridgeState = {
   /** On a cloud worker: which lessee made each project (dir → account user). */
   owners?: [string, string][]
 }
-type UploadSession = { id: string; folder: string; file: string; dir?: string; name: string; size: number; offset: number; busy: boolean }
+type UploadSession = { id: string; folder: string; file: string; dir?: string; name: string; size: number; offset: number; busy: boolean; touched: number }
 export const DEFAULT_MOBILE_PORT = 47821
 /** On a cloud worker, the worker's own settings: a lessee neither reads nor changes them. */
 const WORKER_PRIVATE = /^(keys:set|memory:|skills:(enable|profile|newProfile)|tools:(install|remove)|browser:)/
 /** Calls that make a project, which then belongs to the lessee who made it. */
 const CREATES_PROJECT = new Set(['project:create', 'project:createMotion'])
+/** What starts new work that writes into the project (refused for a cloud lessee whose space is full). */
+const WRITES = new Set(['project:create', 'project:createMotion', 'agent:send', 'timeline:edit', 'mobile:export', 'export:run', 'clip:overlay', 'clip:save',
+  'clip:insert', 'clip:move', 'clip:render', 'demo:create', 'mix:speech'])
+/** An upload nobody has sent a chunk to for this long no longer counts as work running; after [UPLOAD_GONE], it's dropped. */
+const UPLOAD_IDLE = 10 * 60_000, UPLOAD_GONE = 60 * 60_000
 const secret = () => randomBytes(32).toString('base64url')
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message) } }
 export function isTailscale(ip: string) {
@@ -184,8 +189,22 @@ export class MobileBridge {
    *  account frees a lease nobody has used for a while, never one with work running). Undefined when not leased. */
   activity(): { user: string; idleMs: number; busy: boolean } | undefined {
     if (!this.options.pool || !this.lease) return undefined
-    const busy = this.uploads.size > 0 || [...this.states.values()].some(s => s.busy) || !!this.options.busy?.()
+    void this.dropStaleUploads()
+    // an upload the phone walked away from (half sent, never finished) doesn't keep the spot
+    const uploading = [...this.uploads.values()].some(u => u.busy || Date.now() - u.touched < UPLOAD_IDLE) || this.activeUploads > 0
+    const busy = uploading || [...this.states.values()].some(s => s.busy) || !!this.options.busy?.()
+    // work running counts as use: the idle time starts when it ends, so a render that took an hour isn't freed the
+    // moment it's done, before the person has seen it
+    if (busy) this.lastActive = Date.now()
     return { user: this.lease.userId, idleMs: Math.max(0, Date.now() - this.lastActive), busy }
+  }
+  /** Forgets uploads nobody finished within the hour, and their half-sent files. */
+  private async dropStaleUploads() {
+    for (const u of [...this.uploads.values()]) {
+      if (u.busy || Date.now() - u.touched < UPLOAD_GONE) continue
+      this.uploads.delete(u.id)
+      await rm(u.folder, { recursive: true, force: true }).catch(() => {})
+    }
   }
   /** A cloud lessee's: made by them here. Anyone else's token sees everything (it's their own computer). */
   private mine(dir: unknown, lessee?: string) {
@@ -289,6 +308,8 @@ export class MobileBridge {
   }
   publish(channel: string, ...args: unknown[]) {
     if (channel === 'agui') { const [dir, event] = args as [string, Parameters<typeof reduce>[1]]; this.states.set(dir, reduce(this.states.get(dir) || emptyAgentState(), event)) }
+    // the agent working, or a job moving (and ending), is use too, even between two heartbeats
+    if (channel === 'agui' || channel === 'jobs') this.lastActive = Date.now()
     if (!['agui', 'project', 'jobs', 'consent', 'preview:state', 'browser:state', 'notice', 'seek', 'agent:ready'].includes(channel)) return
     for (const [res, token] of this.clients) {
       const device = this.verifyAuth(token)
@@ -371,6 +392,8 @@ export class MobileBridge {
       // the worker's own settings aren't a lessee's to read or change
       if (lessee && WORKER_PRIVATE.test(body.method)) throw new HttpError(403, 'Not available on a cloud worker')
       if (projectArgument(body.method) && args.length) this.authorizeProject(args[0], lessee)
+      // a full space takes nothing new: no new work that writes (an edit, a render, the agent), until there's room
+      if (lessee && WRITES.has(body.method)) this.options.quota?.ensureRoom(0)
       const result = await this.options.invoke(body.method, args)
       if (lessee) {
         if (CREATES_PROJECT.has(body.method)) this.claim(result, lessee)
@@ -387,6 +410,7 @@ export class MobileBridge {
       res.on('close', () => { clearInterval(heartbeat); this.clients.delete(res) }); return
     }
     if (url.pathname === '/upload/init' && req.method === 'POST') {
+      await this.dropStaleUploads()
       if (this.uploads.size >= 8) throw new HttpError(429, 'Too many active uploads')
       const dir = url.searchParams.has('project') ? this.authorizeProject(url.searchParams.get('project'), device.lessee) : undefined
       const name = url.searchParams.get('name') || 'upload.mp4'
@@ -398,7 +422,7 @@ export class MobileBridge {
       const file = join(folder, name)
       await writeFile(file, new Uint8Array(0), { mode: 0o600 })
       const id = secret()
-      this.uploads.set(id, { id, folder, file, dir, name, size, offset: 0, busy: false })
+      this.uploads.set(id, { id, folder, file, dir, name, size, offset: 0, busy: false, touched: Date.now() })
       return reply({ id, offset: 0, size })
     }
     if (url.pathname === '/upload' && req.method === 'GET' && url.searchParams.has('id')) {
@@ -413,12 +437,12 @@ export class MobileBridge {
       const offset = Number(url.searchParams.get('offset') ?? req.headers['upload-offset'] ?? 0)
       if (!Number.isSafeInteger(offset) || offset !== u.offset) throw new HttpError(409, `Expected offset ${u.offset}`)
       const rem = u.size - u.offset
-      u.busy = true
+      u.busy = true; u.touched = Date.now()
       try {
         let received = 0
         const limit = new Transform({ transform(chunk, _enc, cb) { received += chunk.length; cb(received > rem ? new Error('Upload too large') : null, chunk) } })
         await pipeline(req, limit, createWriteStream(u.file, { flags: 'a', mode: 0o600 }))
-        u.offset += received
+        u.offset += received; u.touched = Date.now()
         if (u.offset < u.size) return reply({ id: u.id, done: false, offset: u.offset, size: u.size })
         this.uploads.delete(u.id)
         try {

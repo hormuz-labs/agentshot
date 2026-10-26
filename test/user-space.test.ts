@@ -100,6 +100,26 @@ describe('the quota', () => {
     q.add(300)
     expect(() => q.ensureRoom(101)).toThrow(expect.objectContaining({ status: 507 }))
   })
+
+  it('keeps room free on the shared disk for everyone, whatever one person\'s quota says', async () => {
+    const r = await root()
+    const { dir } = await ensureSpace(r, 'user_maya')
+    const q = new Quota(dir, 1024 ** 4, 0)
+    await q.recount()
+    expect(q.free).toBeGreaterThan(0)
+    expect(q.free).toBeLessThan(Infinity)
+    // a disk with less free than the reserve: nothing more, even with quota to spare
+    const tight = new Quota(dir, 1024 ** 4, q.free + 1)
+    await tight.recount()
+    expect(() => tight.ensureRoom(0)).toThrow(/out of room/)
+    const roomy = new Quota(dir, 1024 ** 4, 1000)
+    await roomy.recount()
+    roomy.free = 1500
+    expect(() => roomy.ensureRoom(500)).not.toThrow()
+    roomy.add(400)
+    expect(roomy.free).toBe(1100)
+    expect(() => roomy.ensureRoom(101)).toThrow(expect.objectContaining({ status: 507 }))
+  })
 })
 
 describe('paths stay inside the space', () => {

@@ -32,16 +32,6 @@ void main() {
       );
     }
 
-    String clock() => tester
-        .widgetList<Text>(
-          find.descendant(
-            of: find.byType(RemotePlayer),
-            matching: find.byType(Text),
-          ),
-        )
-        .map((t) => t.data ?? '')
-        .firstWhere((t) => t.contains(' / '));
-
     await film();
 
     // play and pause, mute and unmute
@@ -59,11 +49,12 @@ void main() {
       of: find.byType(RemotePlayer),
       matching: find.byType(Slider),
     );
-    final before = clock();
+    // (the playhead itself, not the clock: on a film a second long, both ends read 0:00)
+    final before = tester.widget<Slider>(slider).value;
     final bar = tester.getRect(slider);
     await tester.tapAt(Offset(bar.left + bar.width * .6, bar.center.dy));
     await settle(tester, const Duration(seconds: 1));
-    expect(clock(), isNot(before));
+    expect(tester.widget<Slider>(slider).value, isNot(before));
 
     // Note here: the next note points at the playhead; its chip takes that off again
     await press(tester, find.text('Note here'));

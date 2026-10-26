@@ -89,6 +89,10 @@ class Account {
 
   /// Cloud workers free to lease, as of the last look at the person's computers.
   int poolFree = 0;
+
+  /// The person chose to use their AgentShot credits on AgentShot Cloud. A worker holds them in memory only, so each
+  /// worker the phone gets (another after a lease ended, or the same one restarted) is handed them again.
+  bool cloudCredits = false;
   Account({
     this.storage = const FlutterSecureStorage(),
     Future<String> Function(String url)? browser,
@@ -108,6 +112,7 @@ class Account {
       keyId = data['keyId'] as String?;
       email = data['email'] as String?;
       leased = data['leased'] as String?;
+      cloudCredits = data['cloudCredits'] == true;
     } catch (_) {
       await storage.delete(key: _storageKey);
     }
@@ -182,11 +187,18 @@ class Account {
       'keyId': keyId,
       'email': email,
       'leased': ?leased,
+      if (cloudCredits) 'cloudCredits': true,
     }),
   );
 
+  Future<void> useCloudCredits() async {
+    cloudCredits = true;
+    await _save();
+  }
+
   Future<void> signOut() async {
     await release();
+    cloudCredits = false;
     key = keyId = email = null;
     await storage.delete(key: _storageKey);
   }
@@ -237,13 +249,16 @@ class Account {
     }
   }
 
-  /// A fresh connection for [expired]'s computer, if it is still on.
+  /// A fresh connection for [expired]'s computer, if it is still on. For AgentShot Cloud, whose lease ended (unused
+  /// for a while), a new lease: the same worker if it's free, else another, which opens the same space. Throws, with
+  /// what to tell the person, when no spot can be had.
   Future<Connection?> renew(Connection expired) async {
     if (!signedIn) return null;
     for (final c in await computers()) {
       if (c.id == expired.machine) return c.connection;
     }
-    return null;
+    if (expired.machine == null || expired.machine != leased) return null;
+    return (await lease()).connection;
   }
 
   /// Opens [computer]: through the private network when it isn't on this Wi-Fi.

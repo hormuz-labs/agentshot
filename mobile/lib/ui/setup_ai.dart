@@ -93,6 +93,7 @@ Future<bool> setUpAi(BuildContext context, BridgeStore store) async {
   await store.client.call('account:adopt', [
     {'key': account.key, 'keyId': ?account.keyId, 'email': ?account.email},
   ]);
+  if (store.onCloud) await account.useCloudCredits();
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

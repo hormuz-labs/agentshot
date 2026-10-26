@@ -6,7 +6,7 @@
 // shared by workers on several.
 import { randomBytes } from 'node:crypto'
 import { constants, mkdirSync, readFileSync } from 'node:fs'
-import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, statfs, writeFile } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 
 /** An account user id, as the account service hands it out (user_2abc…): nothing that could step out of a folder. */
@@ -127,19 +127,30 @@ export async function usage(dir: string): Promise<number> {
 }
 
 /** A person's space and how much is in it: counted once when the session starts, then kept up as files arrive, and
- *  counted again now and then (renders and the agent write too). No disk walk per request. */
+ *  counted again now and then (renders and the agent write too). No disk walk per request. The shared disk itself
+ *  keeps [reserve] free too: everyone's spaces are on it, so one full disk would stop them all. */
 export class Quota {
   used = 0
-  constructor(readonly dir: string, readonly limit: number) {}
-  async recount() { this.used = await usage(this.dir); return this.used }
-  /** Throws (507) unless [bytes] more still fit. */
+  /** Free bytes on the shared disk, as of the last count. */
+  free = Infinity
+  constructor(readonly dir: string, readonly limit: number, readonly reserve = 0) {}
+  async recount() {
+    this.used = await usage(this.dir)
+    try { const fs = await statfs(this.dir); this.free = fs.bavail * fs.bsize } catch { this.free = Infinity }
+    return this.used
+  }
+  /** Throws (507) unless [bytes] more still fit, in this person's quota and on the disk. */
   ensureRoom(bytes: number) {
-    if (this.used + Math.max(0, bytes) > this.limit) {
-      const gb = (n: number) => (n / 1024 ** 3).toFixed(1)
+    const more = Math.max(0, bytes)
+    const gb = (n: number) => (n / 1024 ** 3).toFixed(1)
+    if (this.used + more > this.limit) {
       throw new SpaceError(507, `Your AgentShot space is full (${gb(this.used)} of ${gb(this.limit)} GB). Delete a project or some files to make room.`)
     }
+    if (this.free - more < this.reserve) {
+      throw new SpaceError(507, 'AgentShot Cloud is out of room right now. Your projects are safe; try again later.')
+    }
   }
-  add(bytes: number) { this.used += Math.max(0, bytes) }
+  add(bytes: number) { const more = Math.max(0, bytes); this.used += more; this.free -= more }
 }
 
 /** True when [path] is inside [dir] after resolving links: a project of this person's, not a way out of the space. */

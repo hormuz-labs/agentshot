@@ -27,7 +27,7 @@ import { readFile } from 'node:fs/promises'
 import { createHmac, randomUUID } from 'node:crypto'
 import { brandPage } from '../../src/shared/brand-page.ts'
 import { costForCredits, creditsForCost, creditsForPrice, DISCOUNT, isPaid, PLANS, productEnv, providerConfigs, STARTER_CREDITS, TIERS, tiersFor, TOPUPS, type PlanKey, type TopupKey } from './plans.ts'
-import { planOf, type Wallet, type WorkerCapabilities, type WorkerRecord } from './wallet.ts'
+import { LEASE_LIMITS, LeaseCapped, planOf, type LeaseLimits, type Wallet, type WorkerCapabilities, type WorkerRecord } from './wallet.ts'
 import { checkMusic, checkVoice, compose, KEY_ENV, MediaError, speak, VENDOR_NAME, VOICES, type Choice, type MusicRequest, type Voice, type VoiceRequest } from './media.ts'
 
 export interface Env {
@@ -76,6 +76,10 @@ export interface Env {
   WORKER_POOL_SECRET?: string
   /** How long a cloud lease lasts unused before its spot is freed for someone else (seconds; default 15 minutes). */
   LEASE_IDLE_SECONDS?: string
+  /** The longest one person keeps a cloud spot in a row, however busy (hours; default 8), and the wait after that
+   *  before they take one again (minutes; default 30). */
+  LEASE_MAX_HOURS?: string
+  LEASE_COOLDOWN_MINUTES?: string
 }
 
 /** What a person pays (USD) per model: per 1,000 characters said, per minute of music, and/or per request. */
@@ -202,7 +206,13 @@ export function track(env: Env, event: string, distinctId: string, properties: R
 
 export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<Response> {
   const url = new URL(req.url)
-  const leaseIdle = (Number(env.LEASE_IDLE_SECONDS) > 0 ? Number(env.LEASE_IDLE_SECONDS) : 15 * 60) * 1000
+  // at least a minute: a lease is renewed by heartbeats (every 30 s), so a shorter one could run out between two of
+  // them while its person is right there
+  const leaseIdle = Math.max(60, Number(env.LEASE_IDLE_SECONDS) > 0 ? Number(env.LEASE_IDLE_SECONDS) : 15 * 60) * 1000
+  const leaseLimits: LeaseLimits = {
+    maxMs: Number(env.LEASE_MAX_HOURS) > 0 ? Number(env.LEASE_MAX_HOURS) * 60 * 60_000 : LEASE_LIMITS.maxMs,
+    cooldownMs: Number(env.LEASE_COOLDOWN_MINUTES) >= 0 && env.LEASE_COOLDOWN_MINUTES ? Number(env.LEASE_COOLDOWN_MINUTES) * 60_000 : LEASE_LIMITS.cooldownMs,
+  }
   const clerk = (path: string, init: RequestInit = {}) =>
     fetch(`${CLERK_API}${path}`, { signal: AbortSignal.timeout(10_000), ...init, headers: { authorization: `Bearer ${env.CLERK_SECRET_KEY}`, 'content-type': 'application/json', ...init.headers } })
   const { bifrost, getKey, providers } = gateway(env)
@@ -538,20 +548,9 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       secret,
       capabilities: body.capabilities && typeof body.capabilities === 'object' ? body.capabilities : {},
     })
-    // a cloud lease lasts while it's used: each heartbeat moves its end to [idle] after the lessee's last request, or
-    // from now while anything still runs for them (the agent, a render). Nobody around and nothing running: it lapses
-    // and the spot is free for someone else. Only for the person the lease is actually theirs, and never brought back.
-    let lease = { leasedTo: rec.leasedTo, leasedUntil: rec.leasedUntil }
-    const a = body.activity
-    if (isPool && a && typeof a.user === 'string' && a.user === rec.leasedTo && (rec.leasedUntil ?? 0) > Date.now()) {
-      const now = Date.now()
-      const idleMs = typeof a.idleMs === 'number' && a.idleMs >= 0 ? a.idleMs : 0
-      const until = (a.busy === true ? now : now - Math.min(idleMs, leaseIdle)) + leaseIdle
-      const moved = await wallet.extendLease(rec.id, a.user, until, now)
-      if (moved) lease = { leasedTo: moved.leasedTo, leasedUntil: moved.leasedUntil }
-    }
-    if ((lease.leasedUntil ?? 0) <= Date.now()) lease = { leasedTo: undefined, leasedUntil: undefined }
-    return json({ id: rec.id, pool: rec.pool, ...lease })
+    // that id is another computer's (or a cloud worker's): only that same machine may report under it
+    if (!rec) return fail(409, 'This worker id belongs to another computer.')
+    return json({ id: rec.id, pool: rec.pool, ...(await leaseAfterBeat(wallet, rec, isPool ? body.activity : undefined, leaseIdle, leaseLimits)) })
   }
 
   async function listWorkers() {
@@ -582,11 +581,18 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     const userId = await owner(vk)
     if (!wallet || !userId) return fail(503, 'Accounts are unavailable. Try again later.')
     const body = (await req.json().catch(() => ({}))) as { projectId?: string; workerId?: string }
-    const leased = await wallet.leaseWorker(userId, {
-      projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
-      workerId: typeof body.workerId === 'string' ? body.workerId : undefined,
-      ttlMs: leaseIdle,
-    })
+    let leased: WorkerRecord | undefined
+    try {
+      leased = await wallet.leaseWorker(userId, {
+        projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
+        workerId: typeof body.workerId === 'string' ? body.workerId : undefined,
+        ttlMs: leaseIdle,
+        limits: leaseLimits,
+      })
+    } catch (e) {
+      if (!(e instanceof LeaseCapped)) throw e
+      return json(cappedReply(e, leaseLimits), 429)
+    }
     if (!leased) return fail(404, 'No cloud workers are free right now. Try again in a moment.')
     // the token outlives the lease: while the lease is kept alive by use, the worker keeps accepting it
     const expiresAt = Date.now() + 24 * 60 * 60_000
@@ -640,6 +646,37 @@ function same(a: string, b: string) {
 }
 
 /** Stateless HMAC token verified locally by MobileBridge on the worker without an account round-trip. */
+/** A cloud lease lasts while it's used: with each heartbeat the worker says how long its lessee has been away and
+ *  whether anything still runs for them (the agent, a render), and the lease's end moves to [idle] after their last
+ *  request, or from now while work runs, never past the longest run. Nobody around and nothing running: it lapses and
+ *  the spot is free for someone else. Only for the person the lease is actually theirs, and never brought back. What
+ *  the worker hears back: who leases it now, and until when. */
+export async function leaseAfterBeat(
+  wallet: Pick<Wallet, 'extendLease'>,
+  rec: WorkerRecord,
+  activity: { user?: unknown; idleMs?: unknown; busy?: unknown } | undefined,
+  idle: number,
+  limits: LeaseLimits,
+  now = Date.now(),
+): Promise<{ leasedTo?: string; leasedUntil?: number }> {
+  let lease = { leasedTo: rec.leasedTo, leasedUntil: rec.leasedUntil }
+  const a = activity
+  if (rec.pool && a && typeof a.user === 'string' && a.user === rec.leasedTo && (rec.leasedUntil ?? 0) > now) {
+    const idleMs = typeof a.idleMs === 'number' && a.idleMs >= 0 ? a.idleMs : 0
+    const until = (a.busy === true ? now : now - Math.min(idleMs, idle)) + idle
+    const moved = await wallet.extendLease(rec.id, a.user, until, now, limits)
+    if (moved) lease = { leasedTo: moved.leasedTo, leasedUntil: moved.leasedUntil }
+  }
+  return (lease.leasedUntil ?? 0) > now ? lease : { leasedTo: undefined, leasedUntil: undefined }
+}
+
+/** What a person who used their longest run hears: why, and when they can take a spot again. */
+export function cappedReply(e: LeaseCapped, limits: LeaseLimits, now = Date.now()) {
+  const minutes = Math.max(1, Math.ceil((e.until - now) / 60_000))
+  const hours = Math.max(1, Math.round(limits.maxMs / (60 * 60_000)))
+  return { error: `You’ve used AgentShot Cloud for ${hours} hour${hours === 1 ? '' : 's'} in a row, so it’s someone else’s turn. You can take it again in ${minutes} minute${minutes === 1 ? '' : 's'}.`, retryAt: e.until }
+}
+
 export function signWorkerToken(workerSecret: string, userId: string, pool: boolean, expiresAt: number): string {
   const scope = pool ? `pool:${userId}` : `owner:${userId}`
   const payload = `${expiresAt}.${Buffer.from(scope, 'utf8').toString('base64url')}`
