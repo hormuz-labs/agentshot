@@ -542,7 +542,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
                   controller: chatScroll,
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   children: [
-                    ConsentCards(store: store),
                     if (!state.loaded &&
                         messages.isEmpty &&
                         state.streaming.isEmpty)
@@ -629,6 +628,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
                           style: TextStyle(color: scheme.error),
                         ),
                       ),
+                    // what the computer asks before going on (a download, say): where the agent waits, as on the desktop
+                    ConsentCards(store: store, dir: dir),
                     if (project['proposal'] != null && !state.busy)
                       proposalCard()
                     else if (!state.busy && messages.isNotEmpty)

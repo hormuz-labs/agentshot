@@ -270,4 +270,77 @@ void main() {
     await tester.tap(find.byTooltip('Dismiss'));
     expect((retried, dismissed), (1, 1));
   });
+
+  testWidgets(
+    'what the computer asks shows at the end of the conversation, only this project\'s',
+    (tester) async {
+      final store = BridgeStore(Failing(null))..connected = true;
+      store.project = {
+        'dir': '/p',
+        'title': 'Harbour walk',
+        'notes': [],
+        'media': {},
+        'files': {},
+        'versions': [],
+        'current': '',
+      };
+      store.agent('/p').snapshot({
+        'messages': [
+          for (var i = 0; i < 12; i++) ...[
+            {'id': 'u$i', 'role': 'user', 'content': 'Note number $i'},
+            {
+              'id': 'a$i',
+              'role': 'assistant',
+              'content':
+                  'Reply number $i, a little longer so the conversation runs past the screen.',
+            },
+          ],
+        ],
+      });
+      store.consents = [
+        {
+          'id': 'c1',
+          'project': '/p',
+          'title': 'Download Speech recognition (Whisper base model)?',
+          'body': 'Lets AgentShot transcribe speech.',
+          'sizeMB': 148,
+          'confirm': 'Download 148 MB',
+        },
+        {
+          'id': 'c2',
+          'project': '/other',
+          'title': 'Install a thing for another project?',
+          'body': 'x',
+          'confirm': 'Install',
+        },
+      ];
+      await tester.pumpWidget(app(ProjectScreen(store: store)));
+      await tester.pumpAndSettle();
+      final ask = find.byKey(const ValueKey('consent-c1'));
+      // after every message, and in view: the conversation follows to its end
+      expect(ask.hitTestable(), findsOneWidget);
+      expect(
+        tester.getTopLeft(ask).dy,
+        greaterThan(
+          tester
+              .getTopLeft(
+                find.text(
+                  'Reply number 11, a little longer so the conversation runs past the screen.',
+                ),
+              )
+              .dy,
+        ),
+      );
+      expect(
+        find.descendant(of: ask, matching: find.text('Download 148 MB')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: ask, matching: find.text('Not now')),
+        findsOneWidget,
+      );
+      // another project's question isn't this conversation's
+      expect(find.byKey(const ValueKey('consent-c2')), findsNothing);
+    },
+  );
 }
