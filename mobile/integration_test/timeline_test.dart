@@ -283,9 +283,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('tab-Conversation')));
     await transcribe();
-    await waitFor(tester, find.text('Decline'));
-    await tester.tap(find.text('Decline'));
-    await waitGone(tester, find.text('Decline'));
+    // as on the desktop: at the end of the conversation, where the agent waits, in view without scrolling
+    await waitFor(tester, find.text('Not now').hitTestable());
+    await tester.tap(find.text('Not now'));
+    await waitGone(tester, find.text('Not now'));
 
     // yes, from Activity: the card goes and the download starts (and here fails at once)
     await transcribe();
@@ -309,6 +310,6 @@ void main() {
             ((w.child as Text).data ?? '').startsWith('Download '),
       ),
     );
-    await waitGone(tester, find.text('Decline'));
+    await waitGone(tester, find.text('Not now'));
   });
 }

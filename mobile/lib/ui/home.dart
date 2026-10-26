@@ -609,28 +609,69 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 }
 
+/// What AgentShot on the computer asks before doing it (a download, an install): the same question the desktop shows,
+/// answered from here. In a project's conversation only that project's (and ones for no project in particular), at
+/// the end where the agent waits; in Activity all of them.
 class ConsentCards extends StatelessWidget {
   final BridgeStore store;
-  const ConsentCards({super.key, required this.store});
+
+  /// Only this project's questions (and general ones), for its conversation.
+  final String? dir;
+  const ConsentCards({super.key, required this.store, this.dir});
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final asked = [
       for (final item in store.consents)
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+        if (dir == null || item['project'] == null || item['project'] == dir)
+          item,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final item in asked)
+          Container(
+            key: ValueKey('consent-${item['id']}'),
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: scheme.primary.withValues(alpha: .45)),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${item['title']}',
-                  style: Theme.of(context).textTheme.titleMedium,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Icon(
+                        item['sizeMB'] != null
+                            ? Icons.download_rounded
+                            : Icons.help_outline,
+                        color: scheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '${item['title']}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                Text('${item['body']}'),
-                const SizedBox(height: 12),
+                Text(
+                  '${item['body']}',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 10),
                 Wrap(
-                  spacing: 12,
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
                   runSpacing: 8,
                   children: [
                     TextButton(
@@ -640,7 +681,7 @@ class ConsentCards extends StatelessWidget {
                           false,
                         ]);
                       }),
-                      child: const Text('Decline'),
+                      child: const Text('Not now'),
                     ),
                     FilledButton(
                       onPressed: () => guard(context, () async {
@@ -656,9 +697,9 @@ class ConsentCards extends StatelessWidget {
               ],
             ),
           ),
-        ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class GalleryList extends StatefulWidget {
