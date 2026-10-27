@@ -9,6 +9,8 @@ import 'home.dart' show ConsentCards;
 import 'markdown.dart';
 import 'mascot.dart';
 import 'player.dart';
+import 'range_notes.dart';
+import 'manual_timeline.dart';
 import 'cut_card.dart';
 import 'ask_card.dart';
 import 'steps.dart';
@@ -28,7 +30,7 @@ class ProjectScreen extends StatefulWidget {
 }
 
 class _ProjectScreenState extends State<ProjectScreen> {
-  final message = TextEditingController();
+  final message = RangeTextController();
   final chatScroll = ScrollController();
   final attachments = <String>{};
   String chatShown = '';
@@ -95,6 +97,14 @@ class _ProjectScreenState extends State<ProjectScreen> {
   final composerKey = GlobalKey<ComposerState>();
   double position = 0;
   Json? anchor;
+  void addRange(double start, double end) {
+    setState(() {
+      message.text = appendRange(message.text, start, end);
+      message.selection = TextSelection.collapsed(offset: message.text.length);
+      section = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => composerKey.currentState?.focusInput());
+  }
   String? exportStatus;
   BridgeStore get store => widget.store;
   Json get project => store.project!;
@@ -563,7 +573,9 @@ class _ProjectScreenState extends State<ProjectScreen> {
         ? 'Thinking'
         : null;
     final canSend =
-        message.text.trim().isNotEmpty && store.connected && !sending;
+        message.text.trim().isNotEmpty &&
+        store.connected &&
+        !sending;
     final chat = fold(messages);
     // a queued note that has reached the conversation is just a note now
     queuedNotes.removeWhere(
@@ -1170,6 +1182,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
             key: ValueKey('$dir:$proxy'),
             uri: () => store.client.media(dir, proxy),
             initialPosition: position,
+            ranges: draftRanges(message.text),
+            onRange: sending ? null : addRange,
             onPosition: (value) => position = value,
             boxMode: boxMode,
             onBox: (box) => setState(() {
@@ -1183,6 +1197,13 @@ class _ProjectScreenState extends State<ProjectScreen> {
             'Your film starts here',
             'Ask AgentShot to create the first scene.',
           ),
+        if (project['proposal'] == null && objects(object(project['timeline'] ?? {})['items']).isNotEmpty)
+          Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: ManualTimeline(
+            items: objects(object(project['timeline'] ?? {})['items']),
+            media: object(project['media'] ?? {}), clips: object(project['clips'] ?? {}),
+            position: () => position, fps: (object(project['timeline'] ?? {})['fps'] as num? ?? 30).toDouble(),
+            onEdit: (edit) => store.update('timeline:edit', [dir, [edit]]),
+          )),
         if (version != null)
           Text(
             '${version['title']}',
@@ -1207,7 +1228,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
               label: Text(boxMode ? 'Cancel box' : 'Draw a box'),
             ),
             OutlinedButton(
-              onPressed: rangeNote,
+              onPressed: sending ? null : rangeNote,
               child: const Text('Note a range'),
             ),
             OutlinedButton(
@@ -1297,10 +1318,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
       ),
     );
     if (mounted && value != null) {
-      setState(() {
-        anchor = value;
-        section = 0;
-      });
+      addRange((value['t0'] as num).toDouble(), (value['t1'] as num).toDouble());
     }
     await Future<void>.delayed(const Duration(milliseconds: 300));
     start.dispose();

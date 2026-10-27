@@ -2,6 +2,7 @@
 // (rendered by tool), question cards, and the input, anchored to whatever is selected on the film.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Message } from '@ag-ui/core'
+import { RangeDraftInput } from '@/components/RangeDraftInput'
 import { ArrowUp, AudioLines, Plus, Check, Sparkles, Clapperboard, Crosshair, Eye, FileSearch, Images, Loader2, MessageSquareText, MousePointerClick, ScanFace, ScanSearch, Users, Square, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
@@ -9,6 +10,7 @@ import { resultsOf, type AgentState } from '../../../shared/agui-state'
 import { ConsentCard, useConsents } from '@/components/ConsentStack'
 import { ModelPicker } from '@/components/ModelPicker'
 import { VoiceNote } from '@/components/VoiceNote'
+import { NoteBadge } from '@/components/NoteBadge'
 import { ManulCompanion } from '@/components/mascot/ManulCompanion'
 import { ChatMarkdown } from '@/components/ChatMarkdown'
 import { toolErrorHint } from '../../../shared/tool-errors'
@@ -316,13 +318,15 @@ function MentionList({ items, query, pick, onPick, onHover }: { items: Mention[]
   )
 }
 
-export function AgentPanel({ project, projectInfo, model, agent, anchor, onClearAnchor, attached = [], onAttach, onDetach, onAdd, onSend, onStop, ready, onKeys, inputRef, active = true, demoTools, demoToolsMessage }: {
+export function AgentPanel({ project, projectInfo, model, agent, anchor, text, onText: setText, onClearAnchor, attached = [], onAttach, onDetach, onAdd, onSend, onStop, ready, onKeys, inputRef, active = true, demoTools, demoToolsMessage }: {
   project: string
   projectInfo: Project
   model?: { provider: string; modelId: string }
   agent: AgentState
   active?: boolean
   anchor?: Anchor
+  text: string
+  onText: React.Dispatch<React.SetStateAction<string>>
   onClearAnchor(): void
   /** What's attached to the next message: files (paths in media/), versions (their renders), motion clips (clips/<id>). */
   attached?: string[]
@@ -330,7 +334,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
   onDetach?(rels: string[]): void
   /** the + in the message box: add files to the project and attach them */
   onAdd?(): void
-  onSend(text: string): void
+  onSend(text: string): void | Promise<boolean>
   onStop(): void
   ready: boolean
   onKeys(): void
@@ -338,7 +342,6 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
   demoTools?: ReactNode
   demoToolsMessage?: string
 }) {
-  const [text, setText] = useState('')
   const consents = useConsents().filter(c => c.project === project)
   const scroller = useRef<HTMLDivElement>(null)
   const results = resultsOf(agent.messages)
@@ -348,7 +351,14 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
 
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }) }, [agent.messages.length, agent.streaming?.text.length, Object.keys(agent.pending).length, consents.length])
 
-  const submit = () => { const t = text.trim(); if (!t && !attached.length) return; onSend(t); setText('') }
+  const [sending, setSending] = useState(false)
+  const hasDraft = !!text.trim() || !!attached.length
+  const submit = async () => {
+    if (!hasDraft || sending) return
+    setSending(true)
+    const submitted = text
+    try { if (await onSend(text.trim()) !== false) setText(current => current === submitted ? '' : current) } finally { setSending(false) }
+  }
   // @ in the message box: a list of the project's files, versions and clips; picking one attaches it
   const [caret, setCaret] = useState(0)
   const [dismissed, setDismissed] = useState<number | null>(null)
@@ -392,13 +402,15 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
       )}
       {anchor && (
         <div className="flex items-center gap-1.5 px-3 pt-2.5">
-          <span className="inline-flex items-center gap-1 rounded bg-amber-soft px-1.5 py-0.5 text-[11px] text-amber"><MessageSquareText className="size-3" />Note at {anchorLabel}</span>
+          {anchor.t1 != null && !anchor.box && !anchor.clip
+            ? <span data-range-preview className="rounded bg-amber-soft px-1.5 py-0.5 text-[11px] text-amber">From {anchor.t0.toFixed(3)}s to {anchor.t1.toFixed(3)}s</span>
+            : <NoteBadge>{anchorLabel}</NoteBadge>}
           <button className="text-faint hover:text-fg" onClick={onClearAnchor}><X className="size-3" /></button>
         </div>
       )}
       <div className="relative px-1.5 pt-1.5">
         {mentioning && <MentionList items={found} query={mentioning.query} pick={pick} onPick={choose} onHover={setPick} />}
-        <textarea
+        <RangeDraftInput
           ref={inputRef}
           rows={1}
           value={text}
@@ -429,11 +441,11 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
               <span className="flex-1" />
               {agent.cost > 0 && <span className="px-1 text-[11px] text-faint tabular" title="Spent on AI in this project">${agent.cost.toFixed(agent.cost < 1 ? 3 : 2)}</span>}
               <ModelPicker dir={project} picked={model} />
-              {agent.busy && !text && !attached.length ? (<>
+              {agent.busy && !hasDraft ? (<>
                 {mic}
                 <Button size="iconSm" variant="secondary" className="rounded-lg" onClick={onStop} title="Stop"><Square className="size-3 fill-current" /></Button>
-              </>) : !text.trim() && !attached.length ? mic : (
-                <Button size="iconSm" variant="primary" className="rounded-lg" onClick={submit} aria-label="Send"><ArrowUp /></Button>
+              </>) : !hasDraft ? mic : (
+                <Button size="iconSm" variant="primary" className="rounded-lg" disabled={sending} onClick={submit} aria-label="Send"><ArrowUp /></Button>
               )}
             </>)}
           </div>

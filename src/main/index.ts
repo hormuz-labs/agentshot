@@ -3,6 +3,8 @@ import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start b
 import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
 import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
 import { projectArgument } from './mobile-contract'
+import { rangeNotesContent } from './range-notes'
+import { parseRangeNotes } from '../shared/range-notes'
 import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
 import { startMeshNode, stopAllMesh, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
@@ -918,6 +920,8 @@ type AgentMessage = { text: string; anchor?: Anchor; still?: string; files?: str
 // What the user attached (files in media/, versions of the film, motion clips) follows the text, each with what it is.
 async function sendToAgent(dir: string, msg: AgentMessage) {
   const p = projectOf(dir)
+  const selections = parseRangeNotes(msg.text).filter(n => n.text && n.anchor.t1 > n.anchor.t0)
+  const ranges = selections.length ? await rangeNotesContent(selections, note => Projects.addNote(p, note)) : ''
   const videos = Object.fromEntries(Object.keys(p.files || {}).filter(f => p.files![f].kind === 'video' && p.media[f]).map(f => [f, p.media[f]]))
   const body = joinAttached(msg.text, Files.refLines(msg.files || [], p)) + demoHint(msg.files || [], videos, skills.enabled().some(s => s.id === 'demo-editor'))
   let content: string | Record<string, unknown>[] = body
@@ -927,6 +931,11 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
     await checkpoint(p, `Note: ${msg.text.slice(0, 60)}`)
     content = [{ type: 'text', text: `[note ${n.id} ${describe(msg.anchor)}] ${body}` }]
     if (jpeg) content.push({ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' })
+  }
+  if (ranges) {
+    await checkpoint(p, `Range notes: ${selections.length}`)
+    if (typeof content === 'string') content = [content, ranges].filter(Boolean).join('\n\n')
+    else content.push({ type: 'text', text: ranges })
   }
   // a new conversation is named after its first message
   const rec = p.conversations?.find(c => c.id === p.conversation)

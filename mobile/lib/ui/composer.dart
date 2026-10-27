@@ -110,6 +110,8 @@ class Composer extends StatefulWidget {
 enum VoiceStage { idle, recording, hearing }
 
 class ComposerState extends State<Composer> {
+  final inputFocus = FocusNode();
+  void focusInput() => inputFocus.requestFocus();
   bool trayOpen = false;
 
   /// After one of the tray's actions: the composer goes back to its size.
@@ -137,6 +139,7 @@ class ComposerState extends State<Composer> {
 
   @override
   void dispose() {
+    inputFocus.dispose();
     _levels?.cancel();
     _tick?.cancel();
     _limit?.cancel();
@@ -445,6 +448,7 @@ class ComposerState extends State<Composer> {
                     child: TextField(
                       key: const ValueKey('composer'),
                       controller: widget.controller,
+                      focusNode: inputFocus,
                       minLines: 1,
                       maxLines: 6,
                       textCapitalization: TextCapitalization.sentences,

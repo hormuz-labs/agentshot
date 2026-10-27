@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../bridge/client.dart';
 import 'common.dart';
+import 'range_notes.dart';
 
 class RemotePlayer extends StatefulWidget {
   final Future<Uri> Function() uri;
@@ -10,6 +11,8 @@ class RemotePlayer extends StatefulWidget {
   final ValueChanged<Json>? onBox;
   final bool boxMode;
   final double initialPosition;
+  final List<RangeDraft> ranges;
+  final void Function(double start, double end)? onRange;
   const RemotePlayer({
     super.key,
     required this.uri,
@@ -17,6 +20,8 @@ class RemotePlayer extends StatefulWidget {
     this.onBox,
     this.boxMode = false,
     this.initialPosition = 0,
+    this.ranges = const [],
+    this.onRange,
   });
   @override
   State<RemotePlayer> createState() => _RemotePlayerState();
@@ -192,6 +197,17 @@ class _RemotePlayerState extends State<RemotePlayer> {
               : (v) => c.seekTo(Duration(milliseconds: v.round())),
           semanticFormatterCallback: (v) => timestamp(v / 1000),
         ),
+        if (widget.onRange != null)
+          RangeTimeline(
+            duration: duration / 1000,
+            position: position / 1000,
+            notes: widget.ranges,
+            onSeek: (v) => c.seekTo(Duration(milliseconds: (v * 1000).round())),
+            onRange: (start, end) {
+              c.pause();
+              widget.onRange!(start, end);
+            },
+          ),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: 8,
