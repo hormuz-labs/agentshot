@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:agentshot_mobile/ui/composer.dart';
+import 'package:agentshot_mobile/ui/dictation.dart';
 
 /// A microphone that "records" a file and reports a steady level.
 class FakeMic implements VoiceRecorder {
@@ -36,6 +37,46 @@ class FakeMic implements VoiceRecorder {
   Future<void> cancel() async => cancelled = true;
   @override
   void dispose() => levels.close();
+}
+
+/// The phone's own recognizer, saying [words] a piece at a time while it listens.
+class FakeDictation implements Dictation {
+  FakeDictation(this.words);
+  final List<String> words;
+  bool cancelled = false;
+  final levels = StreamController<double>.broadcast();
+  Timer? _beat;
+  var _i = 0;
+  @override
+  Future<bool> available() async => true;
+  @override
+  Future<bool> start(void Function(String words) said) async {
+    _beat = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      levels.add(.5);
+      if (_i < words.length) said(words.take(++_i).join(' '));
+    });
+    return true;
+  }
+
+  @override
+  Stream<double> get level => levels.stream;
+  @override
+  Future<String> stop() async {
+    _beat?.cancel();
+    return words.take(_i).join(' ');
+  }
+
+  @override
+  Future<void> cancel() async {
+    _beat?.cancel();
+    cancelled = true;
+  }
+
+  @override
+  void dispose() {
+    _beat?.cancel();
+    levels.close();
+  }
 }
 
 void main() {
@@ -84,13 +125,62 @@ void main() {
   setUp(() {
     mic = FakeMic();
     VoiceRecorder.override = () => mic;
+    // these are about notes heard on the computer: a phone without its own recognition
+    Dictation.override = NoDictation.new;
     text = TextEditingController();
     heard = [];
     failure = null;
     errors.clear();
     sent = stopped = 0;
   });
-  tearDown(() => VoiceRecorder.override = null);
+  tearDown(() {
+    VoiceRecorder.override = null;
+    Dictation.override = null;
+  });
+
+  testWidgets(
+    'the phone hears it itself: the words show as they are said, and land in the field; nothing goes to the computer',
+    (tester) async {
+      final phone = FakeDictation(['Tighten', 'the', 'opening']);
+      Dictation.override = () => phone;
+      await tester.pumpWidget(composer());
+      final hold = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('mic'))),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byKey(const ValueKey('recording')), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-words')), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        find.text('Tighten the opening'),
+        findsOneWidget,
+        reason: 'live, as said',
+      );
+      await hold.up();
+      await tester.pumpAndSettle();
+      expect(text.text, 'Tighten the opening');
+      expect(heard, isEmpty, reason: 'the computer was not asked');
+      expect(mic.stopped, isFalse, reason: 'nothing recorded to send');
+    },
+  );
+
+  testWidgets('slid away, the phone forgets what it heard', (tester) async {
+    final phone = FakeDictation(['never', 'mind']);
+    Dictation.override = () => phone;
+    await tester.pumpWidget(composer());
+    final hold = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('mic'))),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    await hold.moveBy(const Offset(-160, 0));
+    await tester.pump();
+    await hold.up();
+    await tester.pumpAndSettle();
+    expect(phone.cancelled, isTrue);
+    expect(text.text, isEmpty);
+  });
 
   testWidgets(
     'hold the mic, talk, let go: the words land in the field, to check before sending',

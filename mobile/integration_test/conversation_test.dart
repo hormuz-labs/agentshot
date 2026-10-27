@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:agentshot_mobile/ui/composer.dart';
+import 'package:agentshot_mobile/ui/dictation.dart';
 import 'support.dart';
 
 void main() {
@@ -140,7 +141,12 @@ void main() {
     // composer says plainly that the note didn't come through, ready to try again
     final clip = (await media(['Theme music.m4a'])).single.file;
     VoiceRecorder.override = () => StandInMic(clip);
-    addTearDown(() => VoiceRecorder.override = null);
+    // a phone without its own speech recognition: the note goes to the computer
+    Dictation.override = NoDictation.new;
+    addTearDown(() {
+      VoiceRecorder.override = null;
+      Dictation.override = null;
+    });
     final hold = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('mic'))),
     );

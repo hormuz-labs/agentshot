@@ -8,6 +8,7 @@ vi.mock('../src/main/media', () => ({
   WHISPER_CLI: process.execPath,
   FFMPEG: process.execPath,
   probe: vi.fn(async () => ({ hasAudio: false })),
+  MODELS_DIR: '/nonexistent-models', // no Whisper model shipped here: the downloaded one
 }))
 
 process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'agentshot-export-tools-'))

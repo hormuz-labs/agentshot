@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'dictation.dart';
 import 'glass.dart';
 
 /// The microphone, for voice notes: records to a file, says how loud it is meanwhile. Behind an interface so the
@@ -118,6 +119,10 @@ class ComposerState extends State<Composer> {
 
   VoiceStage voice = VoiceStage.idle;
   VoiceRecorder? _recorder;
+
+  /// The phone's own recognizer, when it has one: the words as they're said ([live]); else [_recorder] for the computer.
+  Dictation? _dictation;
+  String live = '';
   StreamSubscription<double>? _levels;
   final levels = <double>[];
   DateTime _since = DateTime.now();
@@ -137,35 +142,59 @@ class ComposerState extends State<Composer> {
     _limit?.cancel();
     _recorder?.cancel();
     _recorder?.dispose();
+    _dictation?.cancel();
+    _dictation?.dispose();
     cancelling.dispose();
     super.dispose();
   }
 
   Future<void> _startVoice() async {
     if (voice != VoiceStage.idle) return;
-    final rec = VoiceRecorder.create();
     HapticFeedback.mediumImpact();
     setState(() {
       voice = VoiceStage.recording;
       levels.clear();
+      live = '';
       _since = DateTime.now();
       cancelling.value = 0;
     });
-    if (!await rec.start()) {
-      rec.dispose();
-      if (!mounted) return;
-      setState(() => voice = VoiceStage.idle);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Allow the microphone for AgentShot to talk your notes.',
-          ),
-        ),
-      );
+    // the phone's own speech recognition first: the words as they're said, no computer needed
+    final dictation = Dictation.create();
+    if (await dictation.available()) {
+      if (!await dictation.start((words) {
+        if (mounted) setState(() => live = words);
+      })) {
+        dictation.dispose();
+        return _noMic();
+      }
+      _dictation = dictation;
+      _listenTo(dictation.level);
       return;
     }
+    dictation.dispose();
+    // none on this phone: record, and the computer hears it
+    final rec = VoiceRecorder.create();
+    if (!await rec.start()) {
+      rec.dispose();
+      return _noMic();
+    }
     _recorder = rec;
-    _levels = rec.level.listen((v) {
+    _listenTo(rec.level);
+  }
+
+  void _noMic() {
+    if (!mounted) return;
+    setState(() => voice = VoiceStage.idle);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Allow the microphone for AgentShot to talk your notes.'),
+      ),
+    );
+  }
+
+  /// The waveform, the clock, and the longest a note may run.
+  void _listenTo(Stream<double> level) {
+    _levels = level.listen((v) {
       if (!mounted) return;
       setState(() {
         levels.add(v);
@@ -179,6 +208,10 @@ class ComposerState extends State<Composer> {
   }
 
   Future<void> _endVoice({required bool cancel}) async {
+    final dictation = _dictation;
+    if (voice == VoiceStage.recording && dictation != null) {
+      return _endDictation(dictation, cancel: cancel);
+    }
     final rec = _recorder;
     if (voice != VoiceStage.recording || rec == null) return;
     _recorder = null;
@@ -210,6 +243,45 @@ class ComposerState extends State<Composer> {
     await hear(note);
   }
 
+  /// The phone heard it: what was said goes in the field.
+  Future<void> _endDictation(Dictation d, {required bool cancel}) async {
+    _dictation = null;
+    unawaited(_levels?.cancel());
+    _tick?.cancel();
+    _limit?.cancel();
+    if (cancel) {
+      await d.cancel();
+      d.dispose();
+      HapticFeedback.lightImpact();
+      if (mounted) setState(() => voice = VoiceStage.idle);
+      return;
+    }
+    if (mounted) setState(() => voice = VoiceStage.hearing);
+    final said = (await d.stop()).trim();
+    d.dispose();
+    if (!mounted) return;
+    setState(() => voice = VoiceStage.idle);
+    if (said.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Didn’t catch that. Try again, a little closer.'),
+        ),
+      );
+      return;
+    }
+    _insert(said);
+  }
+
+  /// [said] after what's in the field.
+  void _insert(String said) {
+    final before = widget.controller.text.trimRight();
+    widget.controller.text = before.isEmpty ? said : '$before $said';
+    widget.controller.selection = TextSelection.collapsed(
+      offset: widget.controller.text.length,
+    );
+    widget.onChanged(widget.controller.text);
+  }
+
   /// Turns [note] into text in the field (after what's there), or says why it couldn't.
   Future<void> hear(File note) async {
     if (!mounted) return;
@@ -226,12 +298,7 @@ class ComposerState extends State<Composer> {
           ),
         );
       } else {
-        final before = widget.controller.text.trimRight();
-        widget.controller.text = before.isEmpty ? said : '$before $said';
-        widget.controller.selection = TextSelection.collapsed(
-          offset: widget.controller.text.length,
-        );
-        widget.onChanged(widget.controller.text);
+        _insert(said);
       }
       unawaited(note.delete().catchError((_) => note));
     } catch (e) {
@@ -321,14 +388,25 @@ class ComposerState extends State<Composer> {
                           Text(_elapsed, style: text.labelLarge),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Waveform(
-                              levels: levels,
-                              color: Color.lerp(
-                                scheme.primary,
-                                scheme.error,
-                                c,
-                              )!,
-                            ),
+                            // the words as they're heard (the phone's own recognition), else how loud it is
+                            child: live.isNotEmpty && c < .5
+                                ? Text(
+                                    live.length > 80
+                                        ? '…${live.substring(live.length - 80)}'
+                                        : live,
+                                    key: const ValueKey('live-words'),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.fade,
+                                    style: text.bodyMedium,
+                                  )
+                                : Waveform(
+                                    levels: levels,
+                                    color: Color.lerp(
+                                      scheme.primary,
+                                      scheme.error,
+                                      c,
+                                    )!,
+                                  ),
                           ),
                           const SizedBox(width: 10),
                           Text(
@@ -514,12 +592,19 @@ class ComposerChip extends StatelessWidget {
         icon: icon,
         iconColor: scheme.onSurfaceVariant,
         label: DefaultTextStyle.merge(
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Flexible(child: label),
-              if (onTap != null) Icon(Icons.expand_more_rounded, size: 16, color: scheme.onSurfaceVariant),
+              if (onTap != null)
+                Icon(
+                  Icons.expand_more_rounded,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
+                ),
             ],
           ),
         ),

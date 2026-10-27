@@ -16,7 +16,9 @@
         </dict>
     </array>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Include audio when recording project footage.</string>
+    <string>Include audio when recording project footage, and hear your voice notes.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Turn your voice notes into text as you speak.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Choose footage and images for your AgentShot project.</string>
     <key>NSLocalNetworkUsageDescription</key>

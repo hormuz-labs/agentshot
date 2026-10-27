@@ -10,6 +10,7 @@ import { lstat, mkdir, open, readdir, rename, rm } from 'node:fs/promises'
 import { basename, join, win32 } from 'node:path'
 import { promisify } from 'node:util'
 import { asJob, type JobHandle } from './jobs'
+import { MODELS_DIR } from './media'
 import type { OnDemandTool } from '../shared/types'
 
 const run = promisify(execFile)
@@ -107,7 +108,12 @@ export function windowsPowerShell(): string {
   return win32.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
 }
 
+/** Where the Whisper base model is downloaded to (a build without it inside). */
 export const whisperModelPath = () => join(dir('whisper-model'), 'ggml-base.bin')
+/** The Whisper base model shipped inside the app (scripts/fetch-models.mjs), when it is. */
+export const shippedWhisperModel = () => join(MODELS_DIR, 'ggml-base.bin')
+/** The Whisper base model to use: the one shipped with the app, else the downloaded one. */
+export const activeWhisperModel = () => (existsSync(shippedWhisperModel()) ? shippedWhisperModel() : whisperModelPath())
 export const whisperLargeModelPath = () => join(dir('whisper-large-v3'), 'ggml-large-v3.bin')
 export const uvBin = () => join(dir('uv'), process.platform === 'win32' ? 'uv.exe' : 'uv')
 export const venvPython = (id: string) => process.platform === 'win32' ? join(dir(id), 'venv', 'Scripts', 'python.exe') : join(dir(id), 'venv', 'bin', 'python')
@@ -125,6 +131,7 @@ const pyEnv = () => ({
 
 // ---------------------------------------------------------------- status, install, remove
 export function isInstalled(id: string) {
+  if (id === 'whisper-model' && existsSync(shippedWhisperModel())) return true // comes with the app
   return existsSync(stamp(id)) && (id !== 'whisper-large-v3' || existsSync(whisperLargeModelPath()))
 }
 
@@ -132,7 +139,8 @@ export async function listTools(): Promise<OnDemandTool[]> {
   return Promise.all(DEFS.map(async ({ install: _i, ...d }) => {
     const installed = isInstalled(d.id)
     let version: string | undefined, diskBytes: number | undefined
-    if (installed) {
+    if (installed && d.id === 'whisper-model' && existsSync(shippedWhisperModel())) version = 'ggml-base (built in)'
+    else if (installed) {
       try { version = JSON.parse(readFileSync(stamp(d.id), 'utf8')).version } catch { /* old stamp */ }
       diskBytes = await du(dir(d.id))
     }
