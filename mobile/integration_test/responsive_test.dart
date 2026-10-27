@@ -93,6 +93,9 @@ void main() {
           'Memory',
         ]) {
           await reveal(tester, find.text(panel));
+          // up from under the + and the bar
+          await Scrollable.ensureVisible(find.text(panel).evaluate().first, alignment: .3);
+          await settle(tester, const Duration(milliseconds: 300));
           await tester.tap(find.text(panel));
           await visit(tester, '$where, Settings → $panel');
           if (find.byTooltip('Close').evaluate().isNotEmpty) {

@@ -79,6 +79,29 @@ try {
   await second.getByRole('button', { name: 'Attach', exact: true }).click()
   await second.getByRole('button', { name: 'Attached' }).waitFor()
   await chip.first().waitFor()
+  // a file's picture opens it large: a photo as it is, a video playing; arrows to the next; choose from there
+  const box = win.locator('[data-lightbox]')
+  await panel.locator('[data-footage="media/still.jpg"] [data-footage-open]').click()
+  await box.locator('img').waitFor()
+  await win.waitForFunction(() => document.querySelector('[data-lightbox] img')?.naturalWidth > 0)
+  if (shots) await win.screenshot({ path: join(shots, 'lightbox-photo.png') })
+  // (it came in attached) off and on again from here, its card following
+  await box.getByRole('button', { name: 'Attached' }).click()
+  await panel.locator('[data-footage="media/still.jpg"]').getByRole('button', { name: 'Attach', exact: true }).waitFor()
+  await box.getByRole('button', { name: 'Attach to message' }).click()
+  await panel.locator('[data-footage="media/still.jpg"]').getByRole('button', { name: 'Attached' }).waitFor()
+  await win.keyboard.press('Escape')
+  await box.waitFor({ state: 'detached' })
+  await panel.locator('[data-footage="media/film.mp4"]').getByRole('button', { name: 'film.mp4', exact: true }).click()
+  await win.waitForFunction(() => { const v = document.querySelector('[data-lightbox-video]'); return v && v.readyState >= 2 && v.videoWidth > 0 })
+  assert.equal(await box.getByRole('button', { name: 'Put in the film' }).count(), 1, 'footage can go into the film from here')
+  if (shots) await win.screenshot({ path: join(shots, 'lightbox-video.png') })
+  const first = await box.locator('[data-lightbox-name]').innerText()
+  await win.keyboard.press('ArrowLeft') // (the first one in, so the last in the list)
+  await win.waitForFunction(f => document.querySelector('[data-lightbox-name]')?.textContent !== f, first)
+  await box.click({ position: { x: 10, y: 10 } }) // outside the picture: closed
+  await box.waitFor({ state: 'detached' })
+
   // photos and sound can be attached too, but only footage goes into the film from here
   assert.equal(await panel.locator('[data-footage="media/still.jpg"]').getByRole('button', { name: 'Film' }).count(), 0)
 

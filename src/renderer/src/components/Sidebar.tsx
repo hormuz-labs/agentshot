@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, CircleHelp, Loader2, PanelLeft, Plus, Search, Settings, Sparkles, Brain, Trash2, X } from 'lucide-react'
 import { Tip } from '@/components/ui/tooltip'
 import { useAgent } from '@/lib/agui'
-import { cn } from '@/lib/utils'
+import { MAC, cn } from '@/lib/utils'
 import { runCommand } from '@/lib/commands'
 import type { Section } from '@/views/SettingsDialog'
 import { FilesTree } from '@/views/FilesPanel'
@@ -124,15 +124,21 @@ export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onDele
 
   return (
     <aside className="flex h-full w-full flex-col border-r border-line bg-bg" aria-label="Sidebar">
-      <div className="drag flex h-[52px] shrink-0 items-center gap-1 pl-[82px] pr-2.5">
-        <SidebarToggle onClick={onCollapse} />
-      </div>
+      {/* macOS: the toggle sits after the window's own buttons; elsewhere it leads the search row, level with the top bar */}
+      {MAC && (
+        <div className="drag flex h-[52px] shrink-0 items-center gap-1 pl-[82px] pr-2.5">
+          <SidebarToggle onClick={onCollapse} />
+        </div>
+      )}
 
       <div className="space-y-0.5 px-2.5 pb-3">
-        <div className="mb-2 flex h-8 items-center gap-2 rounded-lg border border-line bg-panel px-2.5">
-          <Search className="size-3.5 text-faint" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search projects" aria-label="Search projects"
-            className="h-full flex-1 bg-transparent text-[13px] outline-none placeholder:text-faint" />
+        <div className={cn('flex items-center gap-1.5', MAC ? 'mb-2' : 'drag mb-2 h-[52px]')}>
+          {!MAC && <SidebarToggle onClick={onCollapse} />}
+          <div className="no-drag flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-panel px-2.5">
+            <Search className="size-3.5 text-faint" />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search projects" aria-label="Search projects"
+              className="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-faint" />
+          </div>
         </div>
         <Nav icon={Plus} label="New project" onClick={onNew} active={active === null} />
         <Nav icon={Sparkles} label="Skills" onClick={() => onSettings('skills')} />

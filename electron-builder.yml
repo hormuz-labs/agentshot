@@ -54,6 +54,8 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   icon: build/icon.icns
   minimumSystemVersion: "12.0"
+  extendInfo:
+    NSMicrophoneUsageDescription: AgentShot listens when you hold the mic to say a note.
 dmg:
   title: AgentShot
   artifactName: AgentShot-${version}-${arch}.dmg

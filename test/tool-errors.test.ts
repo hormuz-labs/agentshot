@@ -3,10 +3,13 @@ import { toolErrorHint } from '../src/shared/tool-errors'
 import { editorExtension, type Bridge } from '../src/main/agent'
 
 describe('actionable tool failures', () => {
-  it('distinguishes shell sandbox refusals, preview state and invalid options', () => {
-    expect(toolErrorHint('bash', 'ls: ..: Operation not permitted')).toContain('Bash is working')
-    expect(toolErrorHint('edit_timeline', 'Accept or reject the proposed version first, then edit.')).toContain('preview is awaiting')
-    expect(toolErrorHint('bash', "Unrecognized option 'vsync'.")).toContain('does not support')
+  it('says what went wrong in words anyone can follow', () => {
+    expect(toolErrorHint('bash', 'ls: ..: Operation not permitted')).toBe('That was outside the project’s folder, so it was blocked.')
+    expect(toolErrorHint('edit_timeline', 'Accept or reject the proposed version first, then edit.')).toContain('Keep it or send it back')
+    expect(toolErrorHint('bash', "Unrecognized option 'vsync'.")).toContain('try another way')
+    expect(toolErrorHint('read', "ENOENT: no such file or directory, open 'notes/brief.txt'")).toBe('That file isn’t in the project.')
+    expect(toolErrorHint('probe', 'moov atom not found')).toContain('damaged or unfinished')
+    expect(toolErrorHint('look', 'something odd')).toBe('This step didn’t work; the agent carries on without it.')
   })
   it('gives the agent a tool to resolve a preview without file or shell probing', async () => {
     const decisions: boolean[] = []

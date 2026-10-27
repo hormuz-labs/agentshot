@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// The agent's replies, as Markdown: headings, paragraphs, bullet and numbered lists, code blocks, and inline bold,
 /// italics, `code` and links. Just what the agent writes; anything else shows as plain text.
@@ -35,25 +36,16 @@ class Markdown extends StatelessWidget {
       final trimmed = line.trimLeft();
       if (trimmed.startsWith('```')) {
         flush();
+        final language = trimmed.substring(3).trim();
         final fenced = <String>[];
         while (++i < lines.length && !lines[i].trimLeft().startsWith('```')) {
           fenced.add(lines[i]);
         }
         blocks.add(
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Text(
-                fenced.join('\n'),
-                style: code.copyWith(backgroundColor: Colors.transparent),
-              ),
-            ),
+          CodeBlock(
+            fenced.join('\n'),
+            language: language,
+            style: code.copyWith(backgroundColor: Colors.transparent),
           ),
         );
         continue;
@@ -165,5 +157,109 @@ class Markdown extends StatelessWidget {
     }
     if (at < text.length) spans.add(TextSpan(text: text.substring(at)));
     return spans;
+  }
+}
+
+/// A block of code in a reply: what it is (its language), Copy, scrolled sideways rather than wrapped; a long one shows
+/// its start, and all of it full screen.
+class CodeBlock extends StatelessWidget {
+  final String code, language;
+  final TextStyle style;
+  const CodeBlock(
+    this.code, {
+    super.key,
+    this.language = '',
+    required this.style,
+  });
+
+  static const _shown = 14;
+
+  void _copy(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: code));
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(const SnackBar(content: Text('Copied')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final lines = code.split('\n');
+    final long = lines.length > _shown;
+    return Container(
+      key: const ValueKey('code-block'),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 2, 2, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    language.isEmpty ? 'code' : language,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Copy',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: () => _copy(context),
+                ),
+              ],
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Text(
+              long ? lines.take(_shown).join('\n') : code,
+              style: style,
+            ),
+          ),
+          if (long)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.open_in_full, size: 16),
+                label: Text('Show all ${lines.length} lines'),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    fullscreenDialog: true,
+                    builder: (context) => Scaffold(
+                      appBar: AppBar(
+                        title: Text(language.isEmpty ? 'Code' : language),
+                        actions: [
+                          IconButton(
+                            tooltip: 'Copy',
+                            icon: const Icon(Icons.copy),
+                            onPressed: () => _copy(context),
+                          ),
+                        ],
+                      ),
+                      body: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SelectableText(code, style: style),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

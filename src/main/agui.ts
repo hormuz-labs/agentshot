@@ -7,6 +7,8 @@
 //   busy edges              → RUN_STARTED / RUN_FINISHED, model errors → RUN_ERROR
 // pi-durable stays the store; these events are only the wire format to the renderer.
 import { EventType, type BaseEvent, type Message } from '@ag-ui/core'
+import { stepDetail, stepTitle } from '../shared/steps'
+import { toolErrorHint } from '../shared/tool-errors'
 
 type Any = Record<string, any> // pi-durable's view is plain JSON; only the fields below are read
 
@@ -24,24 +26,32 @@ export function friendly(error: string) {
 /** Committed conversation → AG-UI messages, plus usage cost and any model error. */
 function messagesOf(view: Any): { messages: Message[]; cost: number; error?: string } {
   const messages: Message[] = []
+  // which tool each call was, for the plain-words hint on a failed one
+  const names = new Map<string, string>()
   let error: string | undefined
   for (const e of view.entries || []) {
     for (const [i, m] of ((e.model || []) as Any[]).entries()) {
       const id = `${e.id}:${i}`
       if (m.role === 'user') {
-        messages.push({ id, role: 'user', content: textOf(m.content) })
+        // when it was said, for the phone's swipe-to-see-times
+        messages.push({ id, role: 'user', content: textOf(m.content), ...(m.timestamp ? { at: m.timestamp } : {}) } as Message)
       } else if (m.role === 'assistant') {
         if (m.stopReason === 'error') error = friendly(m.errorMessage || 'The model returned an error.')
         const calls = ((m.content || []) as Any[]).filter(c => c.type === 'toolCall')
         messages.push({
-          id, role: 'assistant',
+          id, role: 'assistant', ...(m.timestamp ? { at: m.timestamp } : {}),
           content: ((m.content || []) as Any[]).filter(c => c.type === 'text').map(c => c.text).join('').trim() || undefined,
+          // each step with its title in words, as the desktop shows it (the phone shows the same, no copy of its own)
           toolCalls: calls.length
-            ? calls.map(c => ({ id: c.id, type: 'function' as const, function: { name: c.name, arguments: JSON.stringify(c.arguments || {}) } }))
+            ? calls.map(c => {
+              names.set(c.id, c.name)
+              return { id: c.id, type: 'function' as const, function: { name: c.name, arguments: JSON.stringify(c.arguments || {}) }, title: stepTitle(c.name, c.arguments || {}), detail: stepDetail(c.name, c.arguments || {}) }
+            })
             : undefined,
         })
       } else if (m.role === 'toolResult') {
-        messages.push({ id, role: 'tool', toolCallId: m.toolCallId, content: textOf(m.content).slice(0, 8000), ...(m.isError ? { error: 'tool error' } : {}) } as Message)
+        const content = textOf(m.content).slice(0, 8000)
+        messages.push({ id, role: 'tool', toolCallId: m.toolCallId, content, ...(m.isError ? { error: 'tool error', hint: toolErrorHint(names.get(m.toolCallId) || '', content) } : {}) } as Message)
       }
     }
   }

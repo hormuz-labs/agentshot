@@ -63,6 +63,7 @@ describe('mentioning things in the project', () => {
 
   it('tells the agent what each one is, and comes back as chips in the sent message', () => {
     expect(refLine('media/song.mp3', p)).toBe('media/song.mp3 — audio 3:10')
+    expect(refLine('media/song.mp3#t=4.2,65', p)).toBe('media/song.mp3, only the part from 0:04.2 to 1:05.0 — audio 3:10')
     expect(refLine('renders/timeline-2.mp4', p)).toBe('renders/timeline-2.mp4 — version v2 of the film, “Cut the ums”, 1:38 (the one on screen)')
     expect(refLine('clips/title', p)).toBe('clips/title — motion clip title, “Opening title”, 4 s (clip.html in that folder)')
     const m = joinAttached('Use @song.mp3 under @v2 · Cut the ums', refLines(['media/song.mp3', 'renders/timeline-2.mp4', 'clips/title'], p))

@@ -152,7 +152,12 @@ void main() {
           .map((t) => t.data ?? '')
           .join(' ');
       // why, from the computer: it can't read or play it
-    expect(why, matches(RegExp(r"can’t be read|isn['’]t a video|can['’]t (play|decode)")));
+      expect(
+        why,
+        matches(
+          RegExp(r"can’t be read|isn['’]t a video|can['’]t (play|decode)"),
+        ),
+      );
       expect(
         why,
         isNot(matches(RegExp(r'/tmp|/home|ENO|Exception|Request failed'))),

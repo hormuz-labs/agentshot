@@ -54,6 +54,8 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute<void>(builder: (_) => ProjectScreen(store: store)),
       );
     }
+    // back from it: what was there has been seen
+    store.markSeen(project['dir'] as String);
     await store.refresh();
   }
 
@@ -512,19 +514,12 @@ class _HomeScreenState extends State<HomeScreen> {
               art: search.isEmpty ? const Mascot(size: 88) : null,
             ),
           for (final p in results)
-            ListTile(
-              contentPadding: const EdgeInsets.only(left: 4),
-              leading: const Icon(Icons.movie_outlined),
-              title: Text(
-                '${p['title']}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: const Text('On your computer'),
-              onTap: () => guard(context, () => open(p)),
-              trailing: PopupMenuButton<String>(
-                tooltip: 'Project actions',
-                onSelected: (_) => guard(context, () async {
+            Builder(
+              builder: (context) {
+                final scheme = Theme.of(context).colorScheme;
+                final status = store.statusOf('${p['dir']}');
+                final urgent = status == 'Needs your OK';
+                Future<void> trash() => guard(context, () async {
                   if (await confirm(
                     context,
                     'Delete project?',
@@ -533,14 +528,84 @@ class _HomeScreenState extends State<HomeScreen> {
                     await store.client.call('project:delete', [p['dir']]);
                     await store.refresh();
                   }
-                }),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Move to Trash'),
+                });
+                return ListTile(
+                  key: ValueKey('project-${p['dir']}'),
+                  contentPadding: const EdgeInsets.only(left: 4),
+                  leading: Badge(
+                    isLabelVisible: status != null,
+                    smallSize: 9,
+                    backgroundColor: urgent ? scheme.error : scheme.primary,
+                    child: const Icon(Icons.movie_outlined),
                   ),
-                ],
-              ),
+                  title: Text(
+                    '${p['title']}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // what it's up to, when it's up to something
+                  subtitle: Text(
+                    status ?? 'On your computer',
+                    style: status == null
+                        ? null
+                        : TextStyle(
+                            color: urgent ? scheme.error : scheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                  ),
+                  onTap: () => guard(context, () => open(p)),
+                  // held: what can be done with it
+                  onLongPress: () => showModalBottomSheet<void>(
+                    context: context,
+                    useSafeArea: true,
+                    builder: (sheet) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            title: Text(
+                              '${p['title']}',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.open_in_new),
+                            title: const Text('Open'),
+                            onTap: () {
+                              Navigator.pop(sheet);
+                              guard(context, () => open(p));
+                            },
+                          ),
+                          ListTile(
+                            leading: Icon(
+                              Icons.delete_outline,
+                              color: scheme.error,
+                            ),
+                            title: Text(
+                              'Move to Trash',
+                              style: TextStyle(color: scheme.error),
+                            ),
+                            onTap: () {
+                              Navigator.pop(sheet);
+                              trash();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  trailing: PopupMenuButton<String>(
+                    tooltip: 'Project actions',
+                    onSelected: (_) => trash(),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Move to Trash'),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
         ],
       ),

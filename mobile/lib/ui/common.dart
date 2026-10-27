@@ -228,7 +228,7 @@ class NoticeBanner extends StatelessWidget {
 /// What the computer puts before the reason when the phone asked for something (explain.ts, `doing`): said by the
 /// card's title already. A reason that starts the same way ("Couldn’t reach your computer.") stays.
 final _whatFailed = RegExp(
-  r'^Couldn’t (send your note|add the file|start the project|open the project|save your choice|export the film|change the timeline|render the clip|switch to your AgentShot credits|save the key)\. (?=\S)',
+  r'^Couldn’t (send your note|add the file|start the project|open the project|save your choice|export the film|change the timeline|render the clip|switch to your AgentShot credits|save the key|hear your voice note)\. (?=\S)',
 );
 
 /// Something that didn't work, where it happened: what (a title), why in plain words, and what to do (Try again), until

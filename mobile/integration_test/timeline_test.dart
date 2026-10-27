@@ -17,7 +17,9 @@ const title = 'Pier jump';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  final pieces = find.byType(ExpansionTile);
+  final pieces = find.byWidgetPredicate(
+    (w) => w.key is ValueKey && '${(w.key as ValueKey).value}'.startsWith('piece-'),
+  );
   Future<void> files(WidgetTester tester) async {
     await tester.tap(find.byKey(const ValueKey('tab-Files')));
     await waitFor(tester, find.text('Project files'));
@@ -90,9 +92,31 @@ void main() {
       await settle(tester, const Duration(milliseconds: 300));
     }
 
-    // a file's row attaches it to the next note
+    // a file opens to watch; from there into the next note, whole or as parts marked on it
     await files(tester);
     await press(tester, find.text('Gull flyby.mp4'));
+    await waitFor(tester, find.text('Point at parts'));
+    await waitFor(tester, find.byIcon(Icons.play_arrow), timeout: const Duration(seconds: 30));
+    await tester.tap(find.byKey(const ValueKey('mark'))); // Start here, at the start
+    await settle(tester);
+    await tester.tap(find.byIcon(Icons.play_arrow));
+    await settle(tester, const Duration(milliseconds: 1500));
+    await tester.tap(find.byKey(const ValueKey('mark'))); // End here
+    await settle(tester);
+    expect(find.byKey(const ValueKey('part-0')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('add-to-chat')));
+    await settle(tester);
+    final part = find.ancestor(
+      of: find.textContaining(RegExp(r'^Gull flyby\.mp4 · 0:00\.\d–0:0\d\.\d$')),
+      matching: find.byType(InputChip),
+    );
+    await waitFor(tester, part);
+    await tester.tap(find.descendant(of: part, matching: find.byTooltip('Delete')));
+    await settle(tester);
+    await files(tester);
+    await press(tester, find.text('Gull flyby.mp4'));
+    await waitFor(tester, find.byKey(const ValueKey('add-to-chat')));
+    await tester.tap(find.byKey(const ValueKey('add-to-chat')));
     await waitFor(tester, find.widgetWithText(InputChip, 'Gull flyby.mp4'));
     await tester.tap(find.byTooltip('Delete'));
     await settle(tester);
@@ -159,45 +183,65 @@ void main() {
       expect(find.byType(SnackBar), findsNothing, reason: label);
     }
 
-    await button('Split at playhead');
+    await press(tester, find.textContaining('Split at').first);
+    await settle(tester, const Duration(seconds: 1));
     await count(tester, n + 1);
-    await button('Undo');
+    await press(tester, find.byTooltip('Undo').first);
+    await settle(tester, const Duration(seconds: 1));
     await count(tester, n);
-    await button('Redo');
+    await press(tester, find.byTooltip('Redo').first);
+    await settle(tester, const Duration(seconds: 1));
     await count(tester, n + 1);
 
-    // a piece's own buttons
-    String name(int i) => tester
-        .widget<Text>(
-          find.descendant(of: pieces.at(i), matching: find.byType(Text)).first,
-        )
-        .data!
-        .replaceFirst(RegExp(r'^\d+\. '), '');
+    // a piece's own actions, in its menu
+    String name(int i) => (tester
+                .widget<ListTile>(
+                  find.descendant(of: pieces.at(i), matching: find.byType(ListTile)),
+                )
+                .title!
+            as Text)
+        .data!;
     Future<void> open(int i) async {
       await reveal(tester, pieces.at(i));
       await tester.tap(
-        find.descendant(of: pieces.at(i), matching: find.byType(ListTile)),
+        find.descendant(of: pieces.at(i), matching: find.byTooltip('Piece actions')),
       );
       await settle(tester);
     }
 
-    final second = name(1);
+    Future<void> first(String piece) async {
+      final end = DateTime.now().add(const Duration(seconds: 30));
+      while (name(0) != piece) {
+        if (DateTime.now().isAfter(end)) fail('expected $piece first, found ${name(0)}');
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+    }
+
+    final second = name(1), firstName = name(0);
     await open(1);
     await button('Move earlier');
-    await waitFor(tester, find.textContaining('1. $second'));
+    await first(second);
     await open(0);
     await button('Move later');
-    await waitFor(tester, find.textContaining('2. $second'));
+    await first(firstName);
     await open(0);
     await button('Mute');
-    await waitFor(tester, find.text('Unmute'));
+    await waitFor(
+      tester,
+      find.descendant(of: pieces.at(0), matching: find.byIcon(Icons.volume_off_rounded)),
+    );
+    await open(0);
     await button('Unmute');
-    await waitFor(tester, find.text('Mute'));
-    await press(tester, find.text('Trim').first);
+    await waitGone(
+      tester,
+      find.descendant(of: pieces.at(0), matching: find.byIcon(Icons.volume_off_rounded)),
+    );
+    await open(0);
+    await press(tester, find.text('Trim…').first);
     await answer(tester, 'from the start');
     await snack(tester, 'Enter two valid seconds: start, end.');
     await open(0);
-    await press(tester, find.text('Trim').first);
+    await press(tester, find.text('Trim…').first);
     await answer(tester, '0, 1');
     await waitFor(tester, find.text('0:00 – 0:01'));
     await open(n);
@@ -205,7 +249,7 @@ void main() {
     await count(tester, n);
 
     // the mix: the film's level, then music under it, ducked under speech
-    await reveal(tester, find.text('Film 0 dB'));
+    await reveal(tester, find.text('Audio mix'));
     final sliders = find.descendant(
       of: find.byType(MixEditor),
       matching: find.byType(Slider),
@@ -214,11 +258,14 @@ void main() {
     final music = find.text('No music');
     await tester.tap(film);
     await settle(tester);
-    expect(find.text('Film 0 dB'), findsNothing);
+    expect(
+      find.descendant(of: find.byType(MixEditor), matching: find.text('0 dB')),
+      findsNothing,
+    );
     await press(tester, music);
     await tester.tap(find.text('Theme music.m4a').last);
     await settle(tester);
-    await reveal(tester, find.textContaining('Duck under speech'));
+    await reveal(tester, find.textContaining('Lower music under speech'));
     for (final i in [1, 2]) {
       await tester.tap(sliders.at(i));
       await settle(tester, const Duration(milliseconds: 300));
@@ -291,7 +338,8 @@ void main() {
     // yes, from Activity: the card goes and the download starts (and here fails at once)
     await transcribe();
     await tester.pageBack();
-    await waitFor(tester, find.text('What are we making?'));
+    // home (scrolled as it was left, so its heading may be out of view)
+    await waitFor(tester, find.text('Search projects'));
     // the question waits in Activity: its tab says so
     await waitFor(
       tester,

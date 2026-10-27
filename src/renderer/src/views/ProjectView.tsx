@@ -13,7 +13,7 @@ import { paneStyle, Resizer, useWidth } from '@/components/ui/resizer'
 import { Kbd } from '@/components/ui/kbd'
 import { useAgent } from '@/lib/agui'
 import { addFiles, attachFiles, clearAttached, detachFiles, pickFiles, useAttached } from '@/lib/attach'
-import { cn, mediaUrl, timecode } from '@/lib/utils'
+import { MAC, cn, mediaUrl, timecode } from '@/lib/utils'
 import { AgentPanel } from './AgentPanel'
 import { BrowserPanel } from './BrowserPanel'
 import { FootagePanel } from './FootagePanel'
@@ -243,7 +243,8 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     </DemoFollowup> : null
 
   const anchorLabel = anchor && `${timecode(anchor.t0)}${anchor.t1 != null ? `–${timecode(anchor.t1)}` : ''}${anchor.box ? ' · box' : ''}`
-  const inlineAsk = inline && anchor ? (
+  // only while the film it points at is in view: Footage or the browser over it hide it (the note waits)
+  const inlineAsk = inline && anchor && !footage && !(browsing && active) ? (
     <InlineAsk label={anchorLabel!} onSend={text => { setInline(false); send(text) }}
       onCancel={() => { setInline(false); setAnchor(undefined); setDrawing(false) }} />
   ) : null
@@ -378,8 +379,8 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     >
       <ExportDialog dir={p.dir} open={exporting} onOpenChange={setExporting} />
       {/* as in Claude's app: the conversation's title (its menu switches threads), then the project and the version as chips */}
-      <div className={cn('drag flex h-[52px] shrink-0 items-center gap-1.5 pr-3', lead ? 'pl-[88px]' : 'pl-3')}>
-        {lead}
+      <div className={cn('drag flex h-[52px] shrink-0 items-center gap-1.5 border-b border-line pr-3', lead && MAC ? 'pl-[88px]' : 'pl-3')}>
+        {lead && <>{lead}<span className="mx-1 h-5 w-px bg-line" aria-hidden /></>}
         <Clapperboard className="ml-1 size-4 shrink-0 text-dim" strokeWidth={1.75} />
         <Conversations project={p} />
         <span className="max-w-[200px] shrink-0 truncate rounded-md bg-hover/80 px-1.5 py-0.5 text-xs text-dim" data-project-title={p.title} title={p.dir}>{p.title}</span>

@@ -10,6 +10,10 @@ import 'package:agentshot_mobile/ui/setup_ai.dart';
 
 /// A computer whose keys and providers the test sets; it remembers what the phone asked of it.
 class Computer extends BridgeClient {
+  // no pictures from a pretend computer
+  @override
+  Future<Uri> thumbnail(String project, String file) async => throw BridgeException('no picture');
+
   Computer({
     this.credits = false,
     this.own = const {},
@@ -373,7 +377,20 @@ void main() {
       store.agent('/p').snapshot({
         'messages': [
           {'id': '1', 'role': 'user', 'content': 'Tighten the opening'},
-          {'id': '2', 'role': 'assistant', 'content': 'Done.'},
+          // the turn rendered the cut: it shows after the reply
+          {
+            'id': '2',
+            'role': 'assistant',
+            'toolCalls': [
+              {
+                'id': 'c1',
+                'function': {'name': 'rerender_timeline'},
+                'title': 'Rendered the film',
+              },
+            ],
+          },
+          {'id': '3', 'role': 'tool', 'toolCallId': 'c1', 'content': 'ok'},
+          {'id': '4', 'role': 'assistant', 'content': 'Done.'},
         ],
       });
       await tester.pumpWidget(MaterialApp(home: ProjectScreen(store: store)));
@@ -389,9 +406,24 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(of: card, matching: find.text('Download')),
+        find.descendant(of: card, matching: find.byTooltip('Download')),
         findsOneWidget,
       );
+      // a later answer that made no cut: the old cut doesn't sit under it
+      store.agent('/p').snapshot({
+        'messages': [
+          ...store.agent('/p').messages,
+          {'id': '5', 'role': 'user', 'content': 'What did you change?'},
+          {'id': '6', 'role': 'assistant', 'content': 'I cut four fillers.'},
+        ],
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProjectScreen(store: store, key: UniqueKey()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(CutCard), findsNothing);
       // the imported original isn't announced as the agent's
       store.project = {...store.project!, 'current': 'v1'};
       store.agent('/p').snapshot({

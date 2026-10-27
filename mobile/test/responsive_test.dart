@@ -279,17 +279,14 @@ void main() {
         if (dot.evaluate().isNotEmpty) {
           expect(tester.widget<Badge>(dot).isLabelVisible, isTrue);
         }
-        // the model sits beside Send, its long name cut short
+        // the model and credits sit in the top row, above the field, the model's long name cut short; with
+        // nothing typed the button on the right is the mic (hold to talk)
         final model = tester.getRect(find.byKey(const ValueKey('model')));
-        final send = tester.getRect(find.byTooltip('Send'));
+        final field = tester.getRect(find.byKey(const ValueKey('composer')));
         expect(model.width, lessThanOrEqualTo(200));
-        expect(send.left - model.right, lessThan(24));
-        expect(
-          model.left,
-          greaterThanOrEqualTo(
-            tester.getRect(find.byKey(const ValueKey('credits'))).right,
-          ),
-        );
+        expect(model.bottom, lessThanOrEqualTo(field.top + 1));
+        expect(find.byKey(const ValueKey('mic')), findsOneWidget);
+        expect(find.byTooltip('Send'), findsNothing);
         // picking a model works: the picker closes cleanly with no error
         // (with very large text on a short screen the composer scrolls)
         await tester.ensureVisible(find.byKey(const ValueKey('model')));

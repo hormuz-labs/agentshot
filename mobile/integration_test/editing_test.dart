@@ -29,6 +29,21 @@ void main() {
         findsOneWidget,
       );
       expect(tester.widget<Badge>(dot).isLabelVisible, isTrue);
+      // the agent's steps, one card in words (from the computer, as on the desktop), the commands only under details
+      final steps = find.byKey(const ValueKey('steps'));
+      // up from the card to this turn's steps (the list builds what's near the screen), the latest of them
+      await reveal(tester, steps);
+      await Scrollable.ensureVisible(steps.evaluate().last, alignment: .5);
+      await settle(tester);
+      expect(
+        find.descendant(of: steps.last, matching: find.textContaining('Edited the cut')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: steps.last, matching: find.text('Rendered the film')),
+        findsOneWidget,
+      );
+      expect(find.text('edit_timeline'), findsNothing);
     }
 
     // not this one: back it goes, with a word for the agent, and the card goes
@@ -43,11 +58,7 @@ void main() {
       tester,
       find.text('Mobile e2e: keep the pause before the title'),
     );
-    await waitFor(
-      tester,
-      find.byTooltip('Send'),
-      timeout: const Duration(minutes: 1),
-    );
+    await agentDone(tester, timeout: const Duration(minutes: 1));
 
     // this one: it plays right there in the conversation, and downloads from there (to the share sheet, which the
     // runner closes); Before / after opens the Film tab on it, then Keep
@@ -70,12 +81,12 @@ void main() {
     );
     await press(
       tester,
-      find.descendant(of: card, matching: find.text('Download')),
+      find.descendant(of: card, matching: find.byTooltip('Download')),
     );
     cue('back');
     await waitFor(
       tester,
-      find.descendant(of: card, matching: find.text('Download')),
+      find.descendant(of: card, matching: find.byTooltip('Download')),
       timeout: const Duration(minutes: 2),
     );
     await press(

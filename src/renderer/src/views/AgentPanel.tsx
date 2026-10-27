@@ -2,15 +2,18 @@
 // (rendered by tool), question cards, and the input, anchored to whatever is selected on the film.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Message } from '@ag-ui/core'
-import { ArrowUp, AudioLines, Plus, Check, ChevronRight, Sparkles, Clapperboard, Crosshair, Eye, FileSearch, Images, Loader2, MessageSquareText, MousePointerClick, ScanFace, ScanSearch, Users, Square, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
+import { ArrowUp, AudioLines, Plus, Check, Sparkles, Clapperboard, Crosshair, Eye, FileSearch, Images, Loader2, MessageSquareText, MousePointerClick, ScanFace, ScanSearch, Users, Square, Terminal, TriangleAlert, Wrench, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { resultsOf, type AgentState } from '../../../shared/agui-state'
 import { ConsentCard, useConsents } from '@/components/ConsentStack'
 import { ModelPicker } from '@/components/ModelPicker'
+import { VoiceNote } from '@/components/VoiceNote'
 import { ManulCompanion } from '@/components/mascot/ManulCompanion'
 import { ChatMarkdown } from '@/components/ChatMarkdown'
 import { toolErrorHint } from '../../../shared/tool-errors'
+import { runProblem } from '../../../shared/run-problem'
+import { mascotActivity } from '@/lib/mascot'
 import type { Project } from '../../../shared/types'
 import { cn, timecode } from '@/lib/utils'
 import type { Anchor } from '../../../shared/types'
@@ -22,83 +25,53 @@ type Call = { id: string; name: string; args: Record<string, any> }
 
 const parse = (s: string) => { try { return JSON.parse(s) } catch { return {} } }
 
-/** A shell command as a sentence: a script's first comment, the tool and its output, or the command's first line. */
-export function shellTitle(command: string) {
-  const c = command.trim()
-  const lines = c.split('\n')
-  const word = (lines[0].split(/\s+/)[0] || '').split('/').pop() || ''
-  const script = /^(python3?|node|ruby|perl|bash|sh|zsh)$/.test(word) && lines.length > 1
-  if (script) {
-    const comment = lines.slice(1).map(l => /^\s*(?:#|\/\/)\s*(.{4,})$/.exec(l)?.[1]).find(Boolean)
-    return comment ? comment.replace(/^let'?s\s+/i, '').replace(/^./, x => x.toUpperCase()) : `Ran a ${word.replace(/\d+$/, '')} script`
-  }
-  if (word === 'ffmpeg') { const out = lines[0].trim().split(/\s+/).at(-1) || ''; return /\.\w{2,4}$/.test(out) ? `Rendering ${out.split('/').pop()}` : 'Ran ffmpeg' }
-  if (word === 'ffprobe') return 'Read file details'
-  if (word === 'curl') { const host = /https?:\/\/([^/\s"']+)/.exec(c)?.[1]; return host ? `Called ${host}` : 'Made a web request' }
-  if (word === 'bsk') return 'Used the browser'
-  return lines[0].length > 64 ? `${lines[0].slice(0, 63)}…` : lines[0]
-}
-
-/** What a walkthrough_record call did, as a sentence. */
-export function walkthroughTitle(a: Record<string, any>) {
-  switch (a.action) {
-    case 'start': return 'Started filming the walkthrough'
-    case 'step': return a.title ? `Step: ${a.title}` : 'Next step'
-    case 'type': return `Typed “${String(a.text || '').slice(0, 40)}${String(a.text || '').length > 40 ? '…' : ''}”`
-    case 'scroll': return 'Scrolled'
-    case 'move': return 'Moved the pointer'
-    case 'pause': return 'Paused filming'
-    case 'resume': return 'Filming again'
-    case 'stop': return 'Stopped filming'
-    default: return 'Filming the walkthrough'
-  }
-}
+export { shellTitle, walkthroughTitle } from '../../../shared/steps'
+import { stepTitle } from '../../../shared/steps'
 
 // ---------------------------------------------------------------- tool cards: one renderer per tool, a generic fallback
 const code = (s: string) => <code className="block max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-[10.5px] text-faint" data-selectable>{s}</code>
-const TOOL: Record<string, { icon: ReactNode; title: (a: Record<string, any>) => string; body?: (a: Record<string, any>) => ReactNode; detail?: (a: Record<string, any>) => ReactNode }> = {
-  sync_media: { icon: <AudioLines />, title: () => 'Matching your screen and camera recordings' },
-  analyze_screen_activity: { icon: <ScanSearch />, title: () => 'Finding screen actions and idle stretches' },
-  compose_demo: { icon: <Clapperboard />, title: () => 'Syncing, cleaning and composing your demo' },
-  walkthrough_record: { icon: <MousePointerClick />, title: a => walkthroughTitle(a) },
-  compose_walkthrough: { icon: <Clapperboard />, title: a => `Made the walkthrough${a.narration?.some((l: string) => l?.trim()) ? ', with its voice' : ''}` },
-  set_camera_layout: { icon: <ScanFace />, title: () => 'Adjusted your face-camera layout' },
-  set_video_framing: { icon: <Clapperboard />, title: () => 'Adjusted video placement and framing' },
-  project_state: { icon: <Eye />, title: () => 'Looked at the project' },
-  decide_version: { icon: <Check />, title: a => a.accept ? 'Used the preview as the editable version' : 'Rejected the preview' },
-  probe: { icon: <FileSearch />, title: a => `Read ${String(a.path || '').split('/').pop() || 'a file'}` },
+const TOOL: Record<string, { icon: ReactNode; body?: (a: Record<string, any>) => ReactNode; detail?: (a: Record<string, any>) => ReactNode }> = {
+  sync_media: { icon: <AudioLines /> },
+  analyze_screen_activity: { icon: <ScanSearch /> },
+  compose_demo: { icon: <Clapperboard /> },
+  walkthrough_record: { icon: <MousePointerClick /> },
+  compose_walkthrough: { icon: <Clapperboard /> },
+  set_camera_layout: { icon: <ScanFace /> },
+  set_video_framing: { icon: <Clapperboard /> },
+  project_state: { icon: <Eye /> },
+  decide_version: { icon: <Check /> },
+  probe: { icon: <FileSearch /> },
   ffmpeg: {
     icon: <Clapperboard />,
-    title: a => { const out = (a.args || []).at(-1); return out ? `Rendering ${String(out).split('/').pop()}` : 'Running ffmpeg' },
     body: a => <code className="block max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-[10.5px] text-faint" data-selectable>ffmpeg {(a.args || []).join(' ')}</code>,
   },
-  propose_version: { icon: <Check />, title: a => `Proposed “${a.title || 'a new cut'}”` },
-  resolve_note: { icon: <MessageSquareText />, title: a => a.reply ? `Note: ${a.reply}` : 'Resolved a note' },
-  create_clip: { icon: <Sparkles />, title: a => `Made clip “${a.title || a.id}”` },
-  render_clip: { icon: <Sparkles />, title: a => `Re-rendered clip ${a.id}` },
-  insert_clip: { icon: <Sparkles />, title: a => `Inserted ${a.id} at ${timecode(a.at || 0)}` },
-  rerender_timeline: { icon: <Clapperboard />, title: () => 'Rendered the film' },
-  transcript: { icon: <AudioLines />, title: a => a.search ? `Searched the transcript for “${a.search}”` : 'Read the transcript' },
-  seek: { icon: <Crosshair />, title: a => `Showed you ${timecode(a.t || 0)}` },
-  bash: { icon: <Terminal />, title: a => shellTitle(String(a.command || '')), detail: a => code(`$ ${a.command || ''}`) },
-  analyze_video: { icon: <ScanSearch />, title: a => `Measured ${String(a.media || 'the video').split('/').pop()}: shots, shake, exposure, colour, sound` },
-  speakers: { icon: <Users />, title: a => `Found who speaks when in ${String(a.media || 'the video').split('/').pop()}` },
-  find_subjects: { icon: <ScanFace />, title: a => `Found the faces and subjects${a.aspect ? ` for ${a.aspect}` : ''}` },
-  analyze_music: { icon: <AudioLines />, title: a => `Found the beat of ${String(a.media || 'the music').split('/').pop()}` },
-  look: { icon: <Images />, title: a => a.image ? `Looked at ${String(a.image).split('/').pop()}` : `Looked at ${a.times?.length || a.count || 6} frames${a.box ? ' (zoomed in)' : ''}` },
-  read: { icon: <FileSearch />, title: a => `Read ${String(a.path || '').split('/').pop()}` },
-  write: { icon: <Wrench />, title: a => `Wrote ${String(a.path || '').split('/').pop()}` },
-  edit: { icon: <Wrench />, title: a => `Edited ${String(a.path || '').split('/').pop()}` },
+  propose_version: { icon: <Check /> },
+  resolve_note: { icon: <MessageSquareText /> },
+  create_clip: { icon: <Sparkles /> },
+  render_clip: { icon: <Sparkles /> },
+  insert_clip: { icon: <Sparkles /> },
+  rerender_timeline: { icon: <Clapperboard /> },
+  transcript: { icon: <AudioLines /> },
+  seek: { icon: <Crosshair /> },
+  bash: { icon: <Terminal />, detail: a => code(`$ ${a.command || ''}`) },
+  analyze_video: { icon: <ScanSearch /> },
+  speakers: { icon: <Users /> },
+  find_subjects: { icon: <ScanFace /> },
+  analyze_music: { icon: <AudioLines /> },
+  look: { icon: <Images /> },
+  read: { icon: <FileSearch /> },
+  write: { icon: <Wrench /> },
+  edit: { icon: <Wrench /> },
 }
 
 function ToolCard({ call, state, result }: { call: Call; state: 'streaming' | 'running' | 'done' | 'error'; result?: string }) {
-  const t = TOOL[call.name] || { icon: <Wrench />, title: () => call.name.replace(/_/g, ' ') }
+  const t = TOOL[call.name] || { icon: <Wrench /> }
   const [open, setOpen] = useState(false)
   return (
     <div className={cn('rounded-lg bg-raised/70 text-xs', state === 'running' || state === 'streaming' ? 'beam' : state === 'error' && 'ring-1 ring-bad/40')}>
       <button className="flex w-full items-center gap-2 px-2.5 py-2 text-left" onClick={() => setOpen(!open)}>
         <span className={cn('[&_svg]:size-3.5', state === 'error' ? 'text-bad' : 'text-dim')}>{state === 'running' || state === 'streaming' ? <Loader2 className="size-3.5 animate-spin text-amber" /> : t.icon}</span>
-        <span className="flex-1 truncate text-fg/90">{t.title(call.args)}</span>
+        <span className="flex-1 truncate text-fg/90">{stepTitle(call.name, call.args)}</span>
         {state === 'error' && <TriangleAlert className="size-3.5 text-bad" />}
       </button>
       {state === 'error' && result && <p className="px-2.5 pb-2 text-xs text-bad">{toolErrorHint(call.name, result)}</p>}
@@ -187,41 +160,79 @@ function AskCard({ call, answered, onAnswer }: { call: Call; answered: boolean; 
   )
 }
 
-// ---------------------------------------------------------------- runs of small steps, folded
-/** Steps that only matter as progress: three or more in a row show as one row with the current step on it. */
-const STEP = new Set(['bash', 'read', 'write', 'edit', 'probe'])
-const isStep = (m: Message) => m.role === 'assistant' && !String(m.content ?? '').trim() && !!m.toolCalls?.length && m.toolCalls.every(c => STEP.has(c.function.name))
+// ---------------------------------------------------------------- the work between things said, as one card
+type Results = ReturnType<typeof resultsOf>
+type Block = { kind: 'msg'; m: Message; i: number; specials: Call[] } | { kind: 'work'; calls: Call[]; i: number }
 
-export function foldSteps(shown: Message[]) {
-  const out: ({ kind: 'one'; m: Message; i: number } | { kind: 'steps'; ms: Message[]; i: number })[] = []
-  for (let i = 0; i < shown.length; i++) {
-    let j = i
-    while (j < shown.length && isStep(shown[j])) j++
-    const calls = shown.slice(i, j).reduce((n, m) => n + (m.role === 'assistant' ? m.toolCalls?.length || 0 : 0), 0)
-    if (calls >= 3) { out.push({ kind: 'steps', ms: shown.slice(i, j), i }); i = j - 1 }
-    else out.push({ kind: 'one', m: shown[i], i })
-  }
+/** Calls that are their own card in the chat (a question, a demo's questions or summary), not a step of the work. */
+function special(c: Call, results: Results) {
+  if (c.name === 'ask_user') return true
+  if (c.name !== 'demo_layout' && c.name !== 'compose_demo') return false
+  const r = parse(results[c.id]?.content || '{}')
+  return !!(r.questions?.length || r.summary)
+}
+
+/** The conversation as things said and, between them, the work done: each run of steps one card. */
+export function foldWork(shown: Message[], results: Results) {
+  const out: Block[] = []
+  let run: Call[] | null = null
+  const flush = () => { if (run?.length) out.push({ kind: 'work', calls: run, i: out.length }); run = null }
+  shown.forEach((m, i) => {
+    const calls = m.role === 'assistant' ? (m.toolCalls || []).map(c => ({ id: c.id, name: c.function.name, args: parse(c.function.arguments) })) : []
+    const specials = calls.filter(c => special(c, results))
+    if (m.role === 'user' || String(m.content ?? '').trim() || specials.length) { flush(); out.push({ kind: 'msg', m, i, specials }) }
+    for (const c of calls) if (!specials.includes(c)) (run ??= []).push(c)
+  })
+  flush()
   return out
 }
 
-function StepGroup({ ms, results, busy }: { ms: Message[]; results: ReturnType<typeof resultsOf>; busy: boolean }) {
-  const [open, setOpen] = useState(false)
-  const calls = ms.flatMap(m => (m.role === 'assistant' && m.toolCalls) || []).map(c => ({ id: c.id, name: c.function.name, args: parse(c.function.arguments) }))
-  const state = (c: Call): 'running' | 'done' | 'error' => { const r = results[c.id]; return r ? (r.error ? 'error' : 'done') : busy ? 'running' : 'error' }
-  const last = calls[calls.length - 1]
-  const running = state(last) === 'running'
-  const errors = calls.filter(c => state(c) === 'error').length
-  const title = (c: Call) => (TOOL[c.name] || { title: () => c.name }).title(c.args)
+const SHOWN = 5
+
+/** A run of steps, as the work it was: what it's doing now (while it works), then each step in words, ticked or
+ *  crossed with what went wrong; the commands and raw output only under Show details. */
+function WorkCard({ calls, results, now }: { calls: Call[]; results: Results; now?: string }) {
+  const [details, setDetails] = useState(false)
+  const [all, setAll] = useState(false)
+  const state = (c: Call): 'running' | 'done' | 'error' => { const r = results[c.id]; return r ? (r.error ? 'error' : 'done') : now ? 'running' : 'error' }
+  // while it works: the newest first under the now line, the one under way left to it; once done, in order
+  const list = now ? calls.filter(c => state(c) !== 'running').reverse() : calls
+  const hidden = all ? 0 : Math.max(0, list.length - SHOWN)
+  const technical = calls.some(c => TOOL[c.name]?.detail || results[c.id]?.content)
   return (
-    <div className={cn('rounded-lg bg-raised/70 text-xs', running && 'beam')}>
-      <button className="flex w-full items-center gap-2 px-2.5 py-2 text-left" onClick={() => setOpen(!open)}>
-        <span className="text-dim [&_svg]:size-3.5">{running ? <Loader2 className="animate-spin text-amber" /> : <Terminal />}</span>
-        <span className="flex-1 truncate text-fg/90">{running ? title(last) : `${calls.length} steps · last: ${title(last)}`}</span>
-        {errors > 0 && <span className="text-[10.5px] text-bad">{errors} failed</span>}
-        <span className="text-[10.5px] text-faint tabular">{running ? `step ${calls.length}` : ''}</span>
-        <ChevronRight className={cn('size-3.5 text-faint transition-transform', open && 'rotate-90')} />
-      </button>
-      {open && <div className="space-y-1 px-1.5 pb-1.5">{calls.map(c => <ToolCard key={c.id} call={c} result={results[c.id]?.content} state={state(c)} />)}</div>}
+    <div className="rounded-xl border border-line bg-surface px-3.5 py-2.5 text-[13px]" data-work-card>
+      {now && <div className="flex items-center gap-2 py-1 font-medium text-fg" data-work-now><Loader2 className="size-3.5 animate-spin text-amber" />{now}…</div>}
+      {list.slice(0, list.length - hidden).map(c => {
+        const s = state(c), r = results[c.id]
+        return (
+          <div key={c.id} className="flex items-start gap-2 py-1" data-work-step={s}>
+            {s === 'error' ? <X className="mt-0.5 size-3.5 shrink-0 text-bad" /> : <Check className="mt-0.5 size-3.5 shrink-0 text-ok" />}
+            <div className="min-w-0">
+              <div className={s === 'error' ? 'text-fg' : 'text-dim'}>{stepTitle(c.name, c.args)}</div>
+              {s === 'error' && <div className="text-[12px] text-bad">{toolErrorHint(c.name, r?.content || '')}</div>}
+            </div>
+          </div>
+        )
+      })}
+      {(hidden > 0 || technical) && (
+        <div className="flex gap-3 pt-1 text-[11.5px]">
+          {hidden > 0 && <button className="text-amber hover:underline" onClick={() => setAll(true)}>Show {hidden} more</button>}
+          {technical && <button className="text-amber hover:underline" onClick={() => setDetails(!details)} data-work-details>{details ? 'Hide details' : 'Show details'}</button>}
+        </div>
+      )}
+      {details && <div className="mt-2 space-y-1">{calls.map(c => <ToolCard key={c.id} call={c} result={results[c.id]?.content} state={state(c)} />)}</div>}
+    </div>
+  )
+}
+
+/** The AI's own failure, in words: what it means and what to do; what it said under details. */
+function RunProblem({ message }: { message: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-xl border border-bad/30 bg-surface px-3.5 py-2.5 text-[13px]" data-run-problem>
+      <div className="flex gap-2"><TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-bad" /><span>{runProblem(message)}</span></div>
+      <button className="mt-1 text-[11.5px] text-amber hover:underline" onClick={() => setOpen(!open)}>{open ? 'Hide details' : 'Show details'}</button>
+      {open && <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-[10.5px] text-faint" data-selectable>{message}</pre>}
     </div>
   )
 }
@@ -230,7 +241,7 @@ function StepGroup({ ms, results, busy }: { ms: Message[]; results: ReturnType<t
 const NOTE = /^\[note \S+ ([^\]]*)\] /
 const EDITOR = /^\[editor\] /
 
-function Item({ m, project, results, busy, onAnswer, laterUser }: { m: Message; project: Project; results: ReturnType<typeof resultsOf>; busy: boolean; onAnswer: (s: string) => void; laterUser: boolean }) {
+function Item({ m, project, results, specials, onAnswer, laterUser }: { m: Message; project: Project; results: Results; specials: Call[]; onAnswer: (s: string) => void; laterUser: boolean }) {
   if (m.role === 'user') {
     const text = String(m.content ?? '')
     if (EDITOR.test(text)) return <div className="text-center text-[11px] text-faint">{text.replace(EDITOR, '')}</div>
@@ -252,19 +263,14 @@ function Item({ m, project, results, busy, onAnswer, laterUser }: { m: Message; 
   if (m.role === 'assistant') {
     return (
       <div className="space-y-1.5">
-        {m.toolCalls?.map(c => {
-          const call = { id: c.id, name: c.function.name, args: parse(c.function.arguments) }
-          if (call.name === 'ask_user') return <AskCard key={c.id} call={call} answered={laterUser} onAnswer={onAnswer} />
-          const r = results[c.id]
-          if (call.name === 'demo_layout' || call.name === 'compose_demo') {
-            const result = parse(r?.content || '{}')
-            if (result.questions?.length) return <AskCard key={c.id} call={{ ...call, args: { questions: result.questions } }} answered={laterUser} onAnswer={onAnswer} />
-            if (result.summary) return <div key={c.id} className="space-y-2 rounded-lg border border-ok/30 bg-ok/10 p-3" data-demo-summary>
-              <div className="flex items-center gap-2 font-medium"><Check className="size-4 text-ok" />Your synced demo is ready</div>
-              <ChatMarkdown text={`**Cleanup:** ${result.summary.message}\n\n**Duration:** ${timecode(result.summary.original)} → ${timecode(result.summary.final)}${result.layout ? `\n\n**Layout:** ${result.layout.shape} · ${result.layout.width} × ${result.layout.height} px. You can adjust it here in chat.` : ''}`} />
-            </div>
-          }
-          return <ToolCard key={c.id} call={call} result={r?.content} state={r ? (r.error ? 'error' : 'done') : busy ? 'running' : 'error'} />
+        {specials.map(call => {
+          if (call.name === 'ask_user') return <AskCard key={call.id} call={call} answered={laterUser} onAnswer={onAnswer} />
+          const result = parse(results[call.id]?.content || '{}')
+          if (result.questions?.length) return <AskCard key={call.id} call={{ ...call, args: { questions: result.questions } }} answered={laterUser} onAnswer={onAnswer} />
+          return <div key={call.id} className="space-y-2 rounded-lg border border-ok/30 bg-ok/10 p-3" data-demo-summary>
+            <div className="flex items-center gap-2 font-medium"><Check className="size-4 text-ok" />Your synced demo is ready</div>
+            <ChatMarkdown text={`**Cleanup:** ${result.summary.message}\n\n**Duration:** ${timecode(result.summary.original)} → ${timecode(result.summary.final)}${result.layout ? `\n\n**Layout:** ${result.layout.shape} · ${result.layout.width} × ${result.layout.height} px. You can adjust it here in chat.` : ''}`} />
+          </div>
         })}
         {m.content && <ChatMarkdown text={String(m.content)} dir={project.dir} files={Object.keys(project.files || {})} />}
       </div>
@@ -337,6 +343,8 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
   const scroller = useRef<HTMLDivElement>(null)
   const results = resultsOf(agent.messages)
   const shown = agent.messages.filter(m => m.role === 'user' || m.role === 'assistant')
+  const blocks = foldWork(shown, results)
+  const activity = mascotActivity(agent, consents.length > 0)
 
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }) }, [agent.messages.length, agent.streaming?.text.length, Object.keys(agent.pending).length, consents.length])
 
@@ -413,17 +421,25 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
           className="max-h-60 min-h-12 w-full resize-none bg-transparent px-1.5 py-1.5 text-[15px] outline-none placeholder:text-faint [field-sizing:content]"
         />
       </div>
-      <div className="flex items-center gap-1 px-1.5 pb-1.5">
-        {onAdd && <button onClick={onAdd} title="Add files" aria-label="Add files" className="flex size-7 items-center justify-center rounded-lg text-dim hover:bg-hover hover:text-fg"><Plus className="size-4" /></button>}
-        <span className="flex-1" />
-        {agent.cost > 0 && <span className="px-1 text-[11px] text-faint tabular" title="Spent on AI in this project">${agent.cost.toFixed(agent.cost < 1 ? 3 : 2)}</span>}
-        <ModelPicker dir={project} picked={model} />
-        {agent.busy && !text && !attached.length ? (
-          <Button size="iconSm" variant="secondary" className="rounded-lg" onClick={onStop} title="Stop"><Square className="size-3 fill-current" /></Button>
-        ) : (
-          <Button size="iconSm" variant="primary" className="rounded-lg" disabled={!text.trim() && !attached.length} onClick={submit} aria-label="Send"><ArrowUp /></Button>
-        )}
-      </div>
+      <VoiceNote dir={project} onText={said => { setText(t => (t.trim() ? `${t.trimEnd()} ${said}` : said)); inputRef.current?.focus() }}>
+        {(mic, strip, problem) => (<>
+          <div className="flex items-center gap-1 px-1.5 pb-1.5">
+            {strip ?? (<>
+              {onAdd && <button onClick={onAdd} title="Add files" aria-label="Add files" className="flex size-7 items-center justify-center rounded-lg text-dim hover:bg-hover hover:text-fg"><Plus className="size-4" /></button>}
+              <span className="flex-1" />
+              {agent.cost > 0 && <span className="px-1 text-[11px] text-faint tabular" title="Spent on AI in this project">${agent.cost.toFixed(agent.cost < 1 ? 3 : 2)}</span>}
+              <ModelPicker dir={project} picked={model} />
+              {agent.busy && !text && !attached.length ? (<>
+                {mic}
+                <Button size="iconSm" variant="secondary" className="rounded-lg" onClick={onStop} title="Stop"><Square className="size-3 fill-current" /></Button>
+              </>) : !text.trim() && !attached.length ? mic : (
+                <Button size="iconSm" variant="primary" className="rounded-lg" onClick={submit} aria-label="Send"><ArrowUp /></Button>
+              )}
+            </>)}
+          </div>
+          {problem}
+        </>)}
+      </VoiceNote>
     </div>
   )
 
@@ -438,18 +454,17 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, onClear
             <p className="mx-auto mt-2 max-w-[460px] text-dim">Say it in your own words. To point at a moment, press <Kbd>N</Kbd> on the film, drag across the timeline, or <Kbd>B</Kbd> to box part of the picture.</p>
           </div>
         )}
-        {foldSteps(shown).map(b => b.kind === 'steps'
-          ? <StepGroup key={b.ms[0].id} ms={b.ms} results={results} busy={agent.busy} />
+        {blocks.map((b, k) => b.kind === 'work'
+          ? <WorkCard key={`work-${b.calls[0].id}`} calls={b.calls} results={results} now={agent.busy && k === blocks.length - 1 ? activity.label : undefined} />
           : <div key={b.m.id} data-chat-message={b.m.id} className="space-y-3">
-              <Item m={b.m} project={projectInfo} results={results} busy={agent.busy} onAnswer={onSend} laterUser={shown.slice(b.i + 1).some(x => x.role === 'user')} />
+              <Item m={b.m} project={projectInfo} results={results} specials={b.specials} onAnswer={onSend} laterUser={shown.slice(b.i + 1).some(x => x.role === 'user')} />
               {b.m.id === demoToolsMessage && demoTools && <div data-output-followup={b.m.id}>{demoTools}</div>}
             </div>)}
-        {Object.entries(agent.pending).map(([id, p]) => <ToolCard key={id} call={{ id, name: p.name, args: parse(p.args) }} state="streaming" />)}
+        {/* working, before its first step shows: the now line on its own */}
+        {agent.busy && blocks.at(-1)?.kind !== 'work' && !agent.streaming?.text && Object.keys(agent.pending).length > 0 && <WorkCard calls={[]} results={results} now={activity.label} />}
         {agent.streaming?.text && <ChatMarkdown text={agent.streaming.text} />}
         {consents.map(c => <ConsentCard key={c.id} c={c} />)}
-        {agent.error && (
-          <div className="flex gap-2 rounded-lg border border-bad/30 bg-bad/10 p-2.5 text-xs text-bad"><TriangleAlert className="mt-px size-3.5 shrink-0" /><span data-selectable>{agent.error}</span></div>
-        )}
+        {agent.error && <RunProblem message={agent.error} />}
         </div>
       </div>
 

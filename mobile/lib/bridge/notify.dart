@@ -7,7 +7,36 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'store.dart';
+
+/// Which notifications the person wants (Settings → Notifications), kept on this phone. All on by default.
+class NotifyPrefs {
+  static const kinds = {
+    'done': (
+      'When the agent is done or asks something',
+      'Its reply, or a new cut to look at',
+    ),
+    'okay': (
+      'When AgentShot needs your OK',
+      'A download or install it asks about',
+    ),
+    'jobs': ('When a render or export finishes', 'Or doesn’t'),
+  };
+  static final on = <String, bool>{for (final k in kinds.keys) k: true};
+  static Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final k in kinds.keys) {
+      on[k] = prefs.getBool('notify.$k') ?? true;
+    }
+  }
+
+  static Future<void> set(String kind, bool value) async {
+    on[kind] = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notify.$kind', value);
+  }
+}
 
 class Notifier with WidgetsBindingObserver {
   final BridgeStore store;
@@ -67,6 +96,7 @@ class Notifier with WidgetsBindingObserver {
       return;
     }
     _ready = true;
+    await NotifyPrefs.load().catchError((_) {});
     _remember();
     WidgetsBinding.instance.addObserver(this);
     store.addListener(_changed);
@@ -131,7 +161,7 @@ class Notifier with WidgetsBindingObserver {
       _jobs[id] = status;
       if (was != 'running' || status == 'running') continue;
       final dir = j['project'] as String?;
-      if (!_unseen(dir)) continue;
+      if (!_unseen(dir) || NotifyPrefs.on['jobs'] == false) continue;
       if (status == 'done') {
         _show(
           '${j['doneTitle'] ?? j['title'] ?? 'Done'}',
@@ -148,11 +178,13 @@ class Notifier with WidgetsBindingObserver {
     }
     for (final c in store.consents) {
       final id = '${c['id']}';
-      if (!_consents.add(id) || !_away) continue;
+      if (!_consents.add(id) || !_away || NotifyPrefs.on['okay'] == false) {
+        continue;
+      }
       _show(
         'AgentShot needs your OK',
         '${c['title'] ?? c['body'] ?? 'Open AgentShot to answer.'}',
-        c['dir'] as String?,
+        c['project'] as String?,
       );
     }
     _follow();
@@ -160,7 +192,7 @@ class Notifier with WidgetsBindingObserver {
 
   /// The agent's turn ended: what it said, a new cut to look at, or a question for the person.
   void _finished(String dir, AgentState state) {
-    if (!_unseen(dir)) return;
+    if (!_unseen(dir) || NotifyPrefs.on['done'] == false) return;
     final title = _title(dir);
     if (state.error != null) {
       _show('$title: something went wrong', state.error!, dir);

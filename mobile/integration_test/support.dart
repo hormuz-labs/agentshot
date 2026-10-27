@@ -142,6 +142,13 @@ Future<void> sendNote(WidgetTester tester, String text) async {
   );
 }
 
+/// Waits until the agent is done and the composer is empty again: its button is back to the mic (Stop while the
+/// agent works, Send while there's text).
+Future<void> agentDone(
+  WidgetTester tester, {
+  Duration timeout = const Duration(minutes: 1),
+}) => waitFor(tester, find.byKey(const ValueKey('mic')), timeout: timeout);
+
 /// Pumps real frames until [finder] matches, or fails after [timeout]. The app talks to a real desktop over the
 /// network, so pumpAndSettle can't be used: progress indicators never settle.
 Future<void> waitFor(
@@ -317,7 +324,7 @@ Future<void> enterCode(WidgetTester tester, String link) async {
   final before = error();
   bool started() =>
       find.text('Connecting…').evaluate().isNotEmpty ||
-      find.text('What are we making?').evaluate().isNotEmpty ||
+      find.byTooltip('Refresh').evaluate().isNotEmpty ||
       (error() != null && error() != before);
   Future<bool> waitStarted(Duration timeout) async {
     final end = DateTime.now().add(timeout);
@@ -369,10 +376,12 @@ Future<void> showCodes(WidgetTester tester) async {
 /// Starts the app paired with the desktop: pairs with [pairLink] unless an earlier test file already did.
 Future<void> launchPaired(WidgetTester tester) async {
   await launch(tester);
-  if (find.text('What are we making?').evaluate().isEmpty) {
+  // paired already: home, with its Refresh (its heading may be scrolled out of view)
+  final home = find.byTooltip('Refresh');
+  if (home.evaluate().isEmpty) {
     await enterCode(tester, pairLink);
   }
-  await waitFor(tester, find.text('What are we making?'));
+  await waitFor(tester, home);
   // the desktop's projects have loaded (below the fold on a small phone)
   await reveal(tester, find.text('On your computer'));
 }
