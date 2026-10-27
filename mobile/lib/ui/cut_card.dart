@@ -80,43 +80,28 @@ class _CutCardState extends State<CutCard> {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final title = widget.version['title'];
-    return Container(
-      key: ValueKey('cut-${widget.version['id']}'),
-      margin: const EdgeInsets.only(bottom: 18),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: widget.highlight
-            ? scheme.primaryContainer.withValues(alpha: .45)
-            : scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: widget.highlight
-              ? scheme.primary.withValues(alpha: .25)
-              : scheme.outlineVariant,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // the film itself: a cover to tap, then the player in its place
-          if (playing)
-            ColoredBox(
-              color: Colors.black,
-              child: RemotePlayer(
-                key: ValueKey('cut-player-${widget.play}'),
-                uri: () => widget.store.client.media(widget.dir, widget.play),
-              ),
-            )
-          else
-            Semantics(
-              button: true,
-              label: 'Play the cut here',
-              child: InkWell(
-                key: const ValueKey('cut-play'),
-                onTap: () => setState(() => playing = true),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: DecoratedBox(
+    final cover = Semantics(
+      button: true,
+      label: 'Play the cut here',
+      child: InkWell(
+        key: const ValueKey('cut-play'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() => playing = true),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 120,
+            height: 68,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // the cut's own first frame, when the computer has it
+                FutureBuilder<Uri>(
+                  future: widget.store.client.thumbnail(
+                    widget.dir,
+                    widget.version['path'] as String,
+                  ),
+                  builder: (context, uri) => DecoratedBox(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
@@ -124,69 +109,130 @@ class _CutCardState extends State<CutCard> {
                         colors: [Color(0xff1d1a17), Color(0xff3a2c16)],
                       ),
                     ),
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .92),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.play_arrow_rounded,
-                          size: 34,
-                          color: Color(0xff1d1a17),
-                        ),
-                      ),
-                    ),
+                    child: uri.data == null
+                        ? null
+                        : Image.network(
+                            '${uri.data}',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const SizedBox(),
+                          ),
                   ),
                 ),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.headline, style: text.titleSmall),
-                if (title != null)
-                  Text(
-                    '$title',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      size: 20,
+                      color: Color(0xff1d1a17),
                     ),
                   ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    ...widget.actions,
-                    OutlinedButton.icon(
-                      key: const ValueKey('cut-download'),
-                      onPressed: progress == null ? download : null,
-                      icon: progress == null
-                          ? const Icon(Icons.download_rounded)
-                          : SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                value: progress! > 0 ? progress : null,
-                              ),
-                            ),
-                      label: Text(
-                        progress == null
-                            ? 'Download'
-                            : 'Downloading ${(progress! * 100).round()}%',
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+    final compact = ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size(0, 36)),
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 14),
+      ),
+      visualDensity: VisualDensity.compact,
+      textStyle: WidgetStatePropertyAll(text.labelLarge),
+      iconSize: const WidgetStatePropertyAll(18),
+    );
+    return Container(
+      key: ValueKey('cut-${widget.version['id']}'),
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(10),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: widget.highlight
+            ? scheme.primaryContainer.withValues(alpha: .3)
+            : scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: widget.highlight
+              ? scheme.primary.withValues(alpha: .3)
+              : scheme.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // the cut, small; tapped, it plays here full width
+          if (playing)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: ColoredBox(
+                color: Colors.black,
+                child: RemotePlayer(
+                  key: ValueKey('cut-player-${widget.play}'),
+                  uri: () => widget.store.client.media(widget.dir, widget.play),
+                ),
+              ),
+            ),
+          if (playing) const SizedBox(height: 8),
+          Row(
+            children: [
+              if (!playing) ...[cover, const SizedBox(width: 12)],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.headline, style: text.titleSmall),
+                    if (title != null)
+                      Text(
+                        '$title',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                key: const ValueKey('cut-download'),
+                tooltip: progress == null
+                    ? 'Download'
+                    : 'Downloading ${(progress! * 100).round()}%',
+                onPressed: progress == null ? download : null,
+                icon: progress == null
+                    ? const Icon(Icons.download_rounded)
+                    : SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          value: progress! > 0 ? progress : null,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+          if (widget.actions.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Theme(
+              data: Theme.of(context).copyWith(
+                filledButtonTheme: FilledButtonThemeData(style: compact),
+                textButtonTheme: TextButtonThemeData(style: compact),
+                outlinedButtonTheme: OutlinedButtonThemeData(style: compact),
+              ),
+              child: Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: widget.actions,
+              ),
+            ),
+          ],
         ],
       ),
     );

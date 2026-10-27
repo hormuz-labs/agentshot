@@ -6,7 +6,7 @@
 //   fonts/         fonts the user added (copies, with AgentShot's Inter), the folder subtitles take fonts from
 import { app } from 'electron'
 import { execFile } from 'node:child_process'
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, extname, join, posix } from 'node:path'
 import { promisify } from 'node:util'
@@ -241,6 +241,14 @@ export async function syncFiles(p: Project): Promise<boolean> {
   if (p.files?.['thumb.jpg']) { delete p.files['thumb.jpg']; changed = true } // internal project thumbnail, not a deliverable
   for (const rel of Object.keys(p.files || {})) if (!onDisk.has(rel) && !existsSync(join(p.dir, rel))) { delete p.files![rel]; changed = true } // (or added while listing)
   for (const rel of onDisk) if (!p.files?.[rel]) { await register(p, rel).catch(e => console.warn('file', rel, e)); changed = true }
+  // a file listed while it was still being written (a render the agent was making) is looked at again once it's whole
+  for (const [rel, info] of Object.entries(p.files || {})) {
+    const size = await stat(join(p.dir, rel)).then(s => s.size, () => null)
+    if (size === null || typeof info.size !== 'number' || size === info.size) continue
+    await register(p, rel).catch(e => console.warn('file', rel, e))
+    if (p.files?.[rel]) p.files[rel].addedAt = info.addedAt // still where it was in the list
+    changed = true
+  }
   return changed
 }
 

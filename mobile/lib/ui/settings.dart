@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'splash.dart' show appVersion;
 import '../bridge/account.dart';
 import '../bridge/client.dart';
+import '../bridge/notify.dart' show NotifyPrefs;
 import '../bridge/store.dart';
 import 'common.dart';
 import 'project.dart' show dropdown;
@@ -210,31 +212,66 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           ListTile(
+            leading: const Icon(Icons.notifications_none),
+            title: const Text('Notifications'),
+            subtitle: const Text('When work is done, or needs you'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => notifications(context),
+          ),
+          ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('About AgentShot'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => showAboutDialog(
-              context: context,
-              applicationName: 'AgentShot',
-              applicationIcon: Image.asset(
-                'assets/manul.png',
-                width: 48,
-                height: 48,
-              ),
-              applicationVersion: '0.1.0',
-              applicationLegalese:
-                  '© 2026 agenthormuz@proton.me · GPL-3.0-or-later',
-              children: [
-                const Text(
-                  'A video editor you direct by talking. Mobile companion for Android and iOS.\nagentshot.si',
+            onTap: () async {
+              final version = await appVersion;
+              if (!context.mounted) return;
+              showAboutDialog(
+                context: context,
+                applicationName: 'AgentShot',
+                applicationIcon: Image.asset(
+                  'assets/manul.png',
+                  width: 48,
+                  height: 48,
                 ),
-              ],
-            ),
+                applicationVersion: version,
+                applicationLegalese:
+                    '© 2026 agenthormuz@proton.me · GPL-3.0-or-later',
+                children: [
+                  const Text(
+                    'A video editor you direct by talking. Mobile companion for Android and iOS.\nagentshot.si',
+                  ),
+                ],
+              );
+            },
           ),
         ]),
       ],
     );
   }
+
+  /// Which notifications to get, each on or off (kept on this phone).
+  void notifications(BuildContext context) => sheet(
+    context,
+    'Notifications',
+    StatefulBuilder(
+      builder: (context, set) => Column(
+        children: [
+          for (final MapEntry(key: kind, value: (title, about))
+              in NotifyPrefs.kinds.entries)
+            SwitchListTile(
+              key: ValueKey('notify-$kind'),
+              title: Text(title),
+              subtitle: Text(about),
+              value: NotifyPrefs.on[kind] ?? true,
+              onChanged: (v) async {
+                await NotifyPrefs.set(kind, v);
+                set(() {});
+              },
+            ),
+        ],
+      ),
+    ),
+  );
 
   /// The account in full: who, credits, plan and what it unlocks. This phone's account when it signed in, else the
   /// computer's.

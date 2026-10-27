@@ -56,6 +56,12 @@ try {
   await ask.waitFor()
   const above = await ask.boundingBox()
   assert.ok(above.y + above.height <= bar.y, 'it opens above the timeline')
+  // Footage over the film: the box waits out of sight, and is back with the film
+  await win.getByRole('button', { name: 'Footage', exact: true }).click()
+  await win.waitForFunction(() => !document.querySelector('[data-inline-ask]'))
+  await win.getByRole('button', { name: 'Footage', exact: true }).click()
+  await ask.waitFor()
+  await ask.locator('textarea').focus()
   await win.keyboard.type('cut this')
   await win.keyboard.press('Enter')
   await win.waitForFunction(() => !document.querySelector('[data-inline-ask]'))

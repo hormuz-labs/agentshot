@@ -52,6 +52,7 @@ export const doing: Record<string, string> = {
   'account:adopt': 'Couldn’t switch to your AgentShot credits',
   'keys:set': 'Couldn’t save the key',
   upload: 'Couldn’t add the file',
+  voice: 'Couldn’t hear your voice note',
 }
 
 /** The phone's line for a request that failed: what didn't happen, and why. */

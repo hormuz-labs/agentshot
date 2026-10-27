@@ -189,6 +189,19 @@ describe('adding files to a project', () => {
     expect(await Projects.syncFiles(p)).toBe(false)
   })
 
+  it('looks again at a render listed while it was still being written', async () => {
+    const p = await Projects.createFromFile(join(src, 'clip.mp4'))
+    mkdirSync(join(p.dir, 'renders'), { recursive: true })
+    const out = join(p.dir, 'renders', 'cut.mp4')
+    writeFileSync(out, readFileSync(join(src, 'clip.mp4')).subarray(0, 64)) // the encoder's first bytes
+    expect(await Projects.syncFiles(p)).toBe(true)
+    expect(p.files!['renders/cut.mp4'].summary).toContain("can't decode")
+    copyFileSync(join(src, 'clip.mp4'), out) // finished
+    expect(await Projects.syncFiles(p)).toBe(true)
+    expect(p.files!['renders/cut.mp4'].summary).toMatch(/^video /)
+    expect(await Projects.syncFiles(p)).toBe(false)
+  })
+
   it('removes files into the Trash with what was made from them, but never what the film uses', async () => {
     const p = await Projects.createFromFile(join(src, 'clip.mp4'))
     const [srt] = await Projects.addFiles(p, join(src, 'clip.fr.srt'))

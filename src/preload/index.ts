@@ -215,6 +215,8 @@ const api = {
     attach: (dir: string) => ipcRenderer.invoke('agent:attach', dir),
     send: (dir: string, msg: { text: string; anchor?: Anchor; still?: string; files?: string[] }) => ipcRenderer.invoke('agent:send', dir, msg),
     stop: (dir: string) => ipcRenderer.invoke('agent:stop', dir),
+    /** a voice note recorded here, as the words said (speech recognition on this computer) */
+    hear: (dir: string, audio: Uint8Array) => ipcRenderer.invoke('voice:note', dir, audio) as Promise<string>,
     newConversation: (dir: string) => ipcRenderer.invoke('agent:newConversation', dir) as Promise<Project>,
     switchConversation: (dir: string, id: string) => ipcRenderer.invoke('agent:switch', dir, id) as Promise<Project>,
     renameConversation: (dir: string, id: string, title: string) => ipcRenderer.invoke('agent:rename', dir, id, title) as Promise<Project>,

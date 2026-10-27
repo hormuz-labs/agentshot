@@ -90,6 +90,42 @@ class BridgeStore extends ChangeNotifier {
   bool get onCloud =>
       account?.leased != null && client.connection?.machine == account?.leased;
   AgentState agent(String dir) => agents.putIfAbsent(dir, AgentState.new);
+
+  /// How many of each project's messages the person has seen (counted as they leave its conversation).
+  final seen = <String, int>{};
+
+  /// A project's state in a word, for the list: working, waiting for an OK, a reply not seen yet, or null.
+  String? statusOf(String dir) {
+    final a = agents[dir];
+    if (consents.any((c) => c['project'] == dir)) return 'Needs your OK';
+    if (a?.busy == true) return 'Working…';
+    final said =
+        a?.messages
+            .where(
+              (m) =>
+                  m['role'] == 'assistant' &&
+                  '${m['content'] ?? ''}'.trim().isNotEmpty,
+            )
+            .length ??
+        0;
+    final before = seen[dir];
+    if (before != null && said > before) return 'New reply';
+    return null;
+  }
+
+  /// The person has read this project's conversation as it is now.
+  void markSeen(String dir) {
+    seen[dir] =
+        agents[dir]?.messages
+            .where(
+              (m) =>
+                  m['role'] == 'assistant' &&
+                  '${m['content'] ?? ''}'.trim().isNotEmpty,
+            )
+            .length ??
+        0;
+  }
+
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -171,6 +207,8 @@ class BridgeStore extends ChangeNotifier {
         consents = objects(args.first);
       case 'agent:state':
         agent(args[0] as String).snapshot(object(args[1]));
+        // what's there when the phone first hears of it counts as seen: only what comes after is new
+        if (!seen.containsKey(args[0])) markSeen(args[0] as String);
       case 'agui':
         agent(args[0] as String).reduce(object(args[1]));
     }

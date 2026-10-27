@@ -86,11 +86,7 @@ void main() {
     await closeSheet(tester);
     // with a key on the computer the note goes (what that model answers isn't the point here)
     await waitFor(tester, find.text('Mobile e2e: with my own key'));
-    await waitFor(
-      tester,
-      find.byTooltip('Send'),
-      timeout: const Duration(minutes: 1),
-    );
+    await agentDone(tester, timeout: const Duration(minutes: 1));
 
     // and removed again, in Settings → AI models, which says what the computer uses now
     await tester.pageBack();

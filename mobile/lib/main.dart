@@ -10,6 +10,7 @@ import 'bridge/notify.dart';
 import 'bridge/store.dart';
 import 'ui/computers.dart';
 import 'ui/home.dart';
+import 'ui/splash.dart';
 import 'ui/pair.dart';
 import 'ui/project.dart';
 
@@ -69,11 +70,42 @@ ThemeData agentShotTheme(Brightness brightness) {
         borderRadius: BorderRadius.all(Radius.circular(12)),
       ),
     ),
+    // buttons and chips are round pills throughout
     filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+      ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(shape: const StadiumBorder()),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(shape: const StadiumBorder()),
+    ),
+    segmentedButtonTheme: const SegmentedButtonThemeData(
+      style: ButtonStyle(shape: WidgetStatePropertyAll(StadiumBorder())),
+    ),
+    chipTheme: ChipThemeData(
+      shape: StadiumBorder(side: BorderSide(color: scheme.outlineVariant)),
+      side: BorderSide(color: scheme.outlineVariant),
+      backgroundColor: scheme.surfaceContainerLow,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    ),
+    snackBarTheme: const SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(18)),
+      ),
     ),
     cardTheme: CardThemeData(
       elevation: 0,
@@ -118,6 +150,7 @@ class _AgentShotAppState extends State<AgentShotApp> {
     _restore();
   }
 
+  final started = DateTime.now();
   Future<void> _restore() async {
     try {
       final preferences = await SharedPreferences.getInstance();
@@ -146,6 +179,10 @@ class _AgentShotAppState extends State<AgentShotApp> {
     } catch (_) {
       // no link to pair with
     } finally {
+      // long enough to read, never a flash
+      final shown = DateTime.now().difference(started);
+      const least = Duration(milliseconds: 1400);
+      if (shown < least) await Future<void>.delayed(least - shown);
       if (mounted) setState(() => ready = true);
     }
   }
@@ -235,7 +272,7 @@ class _AgentShotAppState extends State<AgentShotApp> {
     darkTheme: agentShotTheme(Brightness.dark),
     themeMode: theme,
     home: !ready
-        ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+        ? const Splash()
         : paired
         ? HomeScreen(
             store: store,

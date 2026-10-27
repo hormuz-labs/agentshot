@@ -784,6 +784,16 @@ class BridgeClient {
     return _decode(await request.close());
   }
 
+  /// A voice note recorded here, as the words said (the computer's speech recognition), for the composer.
+  Future<String> voiceNote(File file, String project) async {
+    final request = await _request('POST', '/voice', {'project': project});
+    request.contentLength = await file.length();
+    request.headers.contentType = ContentType('audio', 'mp4');
+    await request.addStream(file.openRead());
+    final reply = object(await _decode(await request.close()));
+    return '${reply['text'] ?? ''}';
+  }
+
   Future<Uri> media(String project, String file) =>
       _localUrl('/media', {'project': project, 'file': file});
 

@@ -119,11 +119,7 @@ void main() {
     await reveal(tester, find.text('Mobile e2e in the cloud'));
     await tester.tap(find.text('Mobile e2e in the cloud'));
     await waitFor(tester, find.byKey(const ValueKey('composer')));
-    await waitFor(
-      tester,
-      find.byTooltip('Send'),
-      timeout: const Duration(minutes: 1),
-    );
+    await agentDone(tester, timeout: const Duration(minutes: 1));
     expect(await leasedNow(), first, reason: 'the turn kept the same spot');
 
     // then quiet: the lease ends by itself, and the phone takes a spot again on its own (the other worker, here),
@@ -162,11 +158,7 @@ void main() {
     );
     await sendNote(tester, 'Mobile e2e after the break');
     await waitFor(tester, find.text('Mobile e2e after the break'));
-    await waitFor(
-      tester,
-      find.byTooltip('Send'),
-      timeout: const Duration(minutes: 2),
-    );
+    await agentDone(tester, timeout: const Duration(minutes: 2));
     expect(find.text('Use AgentShot credits'), findsNothing);
     await tester.pageBack();
     await waitGone(

@@ -1,9 +1,12 @@
+import 'dart:async';
+import 'dart:io';
 // Talking to the desktop's agent from the phone: a note goes to the desktop, its reply streams back, and a new
 // conversation starts empty. Then the rest of the composer: renaming a conversation, picking the model, mentioning a
 // file or version (by typing @ or from the + menu) and taking it off again, and stopping a turn that takes long.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:agentshot_mobile/ui/composer.dart';
 import 'support.dart';
 
 void main() {
@@ -126,11 +129,48 @@ void main() {
     await sendNote(tester, 'Mobile e2e slow: take your time');
     await waitFor(tester, find.byTooltip('Stop'));
     await tester.tap(find.byTooltip('Stop'));
-    await waitFor(tester, find.byTooltip('Send'));
+    await agentDone(tester);
     expect(
       DateTime.now().difference(started),
       lessThan(const Duration(seconds: 18)),
     );
+
+    // a voice note: held on the mic, the recording goes to the computer to be heard. This one has no speech
+    // recognition yet, so it asks (in the conversation, as the desktop does) to download it; not now, and the
+    // composer says plainly that the note didn't come through, ready to try again
+    final clip = (await media(['Theme music.m4a'])).single.file;
+    VoiceRecorder.override = () => StandInMic(clip);
+    addTearDown(() => VoiceRecorder.override = null);
+    final hold = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('mic'))),
+    );
+    await settle(tester, const Duration(milliseconds: 700));
+    await waitFor(tester, find.byKey(const ValueKey('recording')));
+    await settle(tester, const Duration(seconds: 2));
+    await hold.up();
+    await waitFor(
+      tester,
+      find.text('Not now').hitTestable(),
+      timeout: const Duration(minutes: 1),
+    );
+    await tester.tap(find.text('Not now'));
+    final problem = find.byKey(const ValueKey('problem'));
+    await waitFor(
+      tester,
+      find.descendant(
+        of: problem,
+        matching: find.text('Your voice note didn’t come through'),
+      ),
+      timeout: const Duration(minutes: 1),
+    );
+    expect(
+      find.descendant(of: problem, matching: find.text('Try again')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.descendant(of: problem, matching: find.byTooltip('Dismiss')),
+    );
+    await settle(tester);
 
     // the app in the background while the agent works: an ongoing notification says it's following the work (and
     // keeps it connected), and when the turn ends a notification says so, with the reply. The runner reads both.
@@ -145,6 +185,40 @@ void main() {
     await Future<void>.delayed(const Duration(seconds: 24));
     cue('notifications');
     cue('front');
-    await waitFor(tester, find.byTooltip('Send'), timeout: const Duration(minutes: 1));
+    await agentDone(tester, timeout: const Duration(minutes: 1));
   });
+}
+
+/// A microphone that hands over a real recording (the runner's), as if it had been said just now.
+class StandInMic implements VoiceRecorder {
+  StandInMic(this.clip);
+  final File clip;
+  final _levels = StreamController<double>.broadcast();
+  Timer? _beat;
+  @override
+  Future<bool> start() async {
+    _beat = Timer.periodic(
+      const Duration(milliseconds: 90),
+      (_) => _levels.add(.5),
+    );
+    return true;
+  }
+
+  @override
+  Stream<double> get level => _levels.stream;
+  @override
+  Future<File?> stop() async {
+    _beat?.cancel();
+    return clip.copy(
+      '${clip.parent.path}/note-${DateTime.now().millisecondsSinceEpoch}.m4a',
+    );
+  }
+
+  @override
+  Future<void> cancel() async => _beat?.cancel();
+  @override
+  void dispose() {
+    _beat?.cancel();
+    _levels.close();
+  }
 }

@@ -17,3 +17,6 @@ export const mediaUrl = encodeMediaPath
 
 /** Typing in a field: keys and menu commands are its own (undo is the field's). */
 export const typing = () => !!(document.activeElement as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]')
+
+/** On a Mac (the window's own buttons sit at the top left). */
+export const MAC = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')

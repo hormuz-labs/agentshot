@@ -35,6 +35,8 @@ type Options = {
   quota?: { ensureRoom(bytes: number): void; add(bytes: number): void }
   /** A small picture of a project file (a frame of a video, or the photo itself), for the phone's lists. */
   thumbnail?: (dir: string, rel: string) => Promise<string | undefined>
+  /** A voice note recorded on the phone, as text (the computer's own speech recognition). */
+  voiceNote?: (file: string, dir: string) => Promise<string>
   /** Work still running on this computer (the agent, a render or another job): a lease isn't idle while it runs. */
   busy?: () => boolean
 }
@@ -484,6 +486,22 @@ export class MobileBridge {
         await rm(folder, { recursive: true, force: true }); folder = undefined
         return reply(result)
       } finally { this.activeUploads--; if (folder) await rm(folder, { recursive: true, force: true }) }
+    }
+    if (url.pathname === '/voice' && req.method === 'POST') {
+      doingOf.set(req, 'voice')
+      const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee)
+      const size = Number(req.headers['content-length'])
+      // a note, not a recording session: up to about fifteen minutes of speech
+      if (!Number.isSafeInteger(size) || size <= 0 || size > 50 * 1024 ** 2) throw new HttpError(413, 'Keep a voice note under fifteen minutes.')
+      if (!this.options.voiceNote) throw new HttpError(501, 'This computer can’t turn voice notes into text yet. Update AgentShot there.')
+      const folder = await mkdtemp(join(tmpdir(), 'agentshot-voice-'))
+      try {
+        const file = join(folder, 'note.m4a'); let received = 0
+        const limit = new Transform({ transform(chunk, _enc, cb) { received += chunk.length; cb(received > size ? new Error('Upload too large') : null, chunk) } })
+        await pipeline(req, limit, createWriteStream(file, { flags: 'wx', mode: 0o600 }))
+        if (received !== size) throw new HttpError(400, 'The voice note didn’t arrive whole. Try again.')
+        return reply({ text: await this.options.voiceNote(file, dir) })
+      } finally { await rm(folder, { recursive: true, force: true }).catch(() => {}) }
     }
     if (url.pathname === '/thumbnail' && req.method === 'GET') {
       const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee)

@@ -61,7 +61,22 @@ describe('AguiAdapter (pi-durable view → AG-UI events)', () => {
     const snap = events.find(e => e.type === EventType.MESSAGES_SNAPSHOT)!
     expect(snap.messages.map((m: { role: string }) => m.role)).toEqual(['user', 'assistant', 'tool'])
     expect(snap.messages[1].toolCalls[0]).toMatchObject({ id: 'c1', function: { name: 'probe', arguments: '{"path":"a.mp4"}' } })
+    // each step in words, as the desktop shows it, for the phone to show the same
+    expect(snap.messages[1].toolCalls[0]).toMatchObject({ title: 'Read a.mp4' })
     expect(events.find(e => e.type === EventType.CUSTOM)).toMatchObject({ name: 'manul.usage', value: { cost: 0.02 } })
+  })
+
+  it('sends a shell step\'s command, and a failed step\'s meaning in words', () => {
+    const { a, events } = harness()
+    a.update(view({
+      entries: [user(1, 'count'), { id: 2, model: [
+        { role: 'assistant', content: [{ type: 'toolCall', id: 'c1', name: 'bash', arguments: { command: 'grep -c batch log.txt' } }] },
+        { role: 'toolResult', toolCallId: 'c1', isError: true, content: [{ type: 'text', text: 'grep: log.txt: No such file or directory' }] },
+      ] }],
+    }))
+    const snap = events.find(e => e.type === EventType.MESSAGES_SNAPSHOT)!
+    expect(snap.messages[1].toolCalls[0]).toMatchObject({ title: 'Searched log.txt', detail: '$ grep -c batch log.txt' })
+    expect(snap.messages[2]).toMatchObject({ role: 'tool', error: 'tool error', hint: expect.any(String) })
   })
 
   it('does not repeat an unchanged snapshot', () => {

@@ -7,10 +7,11 @@ import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-c
 import { startMeshNode, stopAllMesh, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
 import { closeSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } from 'node:fs'
-import { copyFile, readFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import { artifactPath } from './artifacts'
-import { explain } from './explain'
+import { explain, forPhone } from './explain'
+import { voiceText } from './voice'
 import { startAgent, type AgentHandle } from './agent'
 import { renderCuts } from './cuts'
 import { renderOutput, TimelineRenders } from './timeline-renders'
@@ -44,7 +45,7 @@ import { composeWalkthrough, takeDir, Takes, type ComposeRequest } from './walkt
 import { generate } from './generate'
 import { randomUUID } from 'node:crypto'
 import { agentEnv, browserPrompt, BskDaemon, BSK_BIN, bskScript, chromeBsk, extensionStorage, HALTED, findUserBsk, privateHome, userBskEnv, userBskHome } from './bsk'
-import { homedir, hostname } from 'node:os'
+import { homedir, hostname, tmpdir } from 'node:os'
 import * as Projects from './projects'
 import * as Gallery from './gallery'
 import * as Files from './files'
@@ -171,13 +172,17 @@ const mobile = new MobileBridge(
     importFile: async (file, dir) => dir
       ? handlers.get('project:import')!(undefined as unknown as Electron.IpcMainInvokeEvent, dir, file)
       : handlers.get('project:create')!(undefined as unknown as Electron.IpcMainInvokeEvent, [file]),
-    // a frame from the middle of a video (cached), or a photo as it is
+    // a voice note from the phone, as the words said: this computer's speech recognition (asked for once, as for
+    // transcripts), without the ums
+    voiceNote: hearVoiceNote,
+    // a video's first frame (cached), or a photo as it is
     thumbnail: async (dir, rel) => {
       const p = projectOf(dir)
       const kind = p.files?.[rel]?.kind, info = p.media[rel]
       if (kind === 'image') return join(p.dir, rel)
       if (!info?.width || !(info.duration > 0)) return undefined
-      return (await thumbnails(p.dir, rel, info.duration, 1, 0, info.duration, info.fps))[0]
+      // its first frame: the picture it opens on, so it's known at a glance
+      return (await thumbnails(p.dir, rel, info.duration, 1, 0, Math.min(info.duration, 1 / (info.fps || 30)), info.fps))[0]
     },
     galleryFile: (url, range) => mediaResponse(new Request(url, { headers: range ? { range } : {} }), LIB, [Projects.projectsRoot(), ...open.keys()], Gallery.GALLERY),
     meshIp: () => meshIp,
@@ -928,6 +933,14 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
   await agent!.send(dir, content)
 }
 
+/** A voice note (from the phone or this window's mic) as the words said: speech recognition, asked for first if it
+ *  isn't here yet, then the ums taken out. */
+async function hearVoiceNote(file: string, dir: string): Promise<string> {
+  if (!(await Whisper.resolveEngine())) await Tools.ensure(Whisper.toolToInstall(), askTool(dir))
+  const t = await Whisper.transcribe(file, `${file}.json`, 'Listening to a voice note', dir)
+  return voiceText(t.segments.map(s => s.text).join(' '))
+}
+
 /** An import that failed: said once, in plain words, where the person is looking (a card in the window), and thrown
  *  on in the same words (to the phone, or whoever asked). The raw error goes to the log. */
 function importFailed(file: string, e: unknown): never {
@@ -1209,6 +1222,19 @@ function wire() {
   })
 
   ipcMain.handle('agent:send', (_e, dir: string, msg: AgentMessage) => sendToAgent(dir, msg))
+  // a voice note recorded in this window: kept only while it's heard
+  ipcMain.handle('voice:note', async (_e, dir: string, audio: Uint8Array) => {
+    const folder = await mkdtemp(join(tmpdir(), 'agentshot-voice-'))
+    try {
+      const file = join(folder, 'note.webm')
+      await writeFile(file, audio)
+      return await hearVoiceNote(file, dir)
+    } catch (e) {
+      throw new Error(forPhone('voice', e)) // what didn't happen, and why, as the phone says it
+    } finally {
+      await rm(folder, { recursive: true, force: true })
+    }
+  })
   ipcMain.handle('clip:save', (_e, dir: string, id: string, title: string, html: string, dur: number, overlay?: boolean) => saveClip(projectOf(dir), id, title, html, dur, !!overlay))
   ipcMain.handle('clip:overlay', (_e, dir: string, id: string, at: number, title: string) => {
     const p = projectOf(dir)

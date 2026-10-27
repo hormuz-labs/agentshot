@@ -77,7 +77,9 @@ void main() {
     await tester.tap(find.text('Settings').last);
     final appearance = find.byKey(const ValueKey('appearance'));
     await reveal(tester, appearance);
-    await tester.tap(find.descendant(of: appearance, matching: find.text('Dark')));
+    await tester.tap(
+      find.descendant(of: appearance, matching: find.text('Dark')),
+    );
     await settle(tester);
     await tester.tap(find.text('Projects').last);
     await reveal(tester, find.text('On your computer'));

@@ -10,7 +10,7 @@ import { ManulMascot } from '@/components/mascot/ManulMascot'
 import { Gallery, inputsOf, useGallery } from '@/components/Gallery'
 import { ASPECTS, aspectOf, type Aspect } from '../../../shared/motion-formats'
 import { wantsWalkthrough } from '../../../shared/walkthrough'
-import { cn } from '@/lib/utils'
+import { MAC, cn } from '@/lib/utils'
 import type { GalleryExample, Project } from '../../../shared/types'
 
 const IDEAS = ['Cut the ums and long pauses', 'Make a 60-second vertical for Shorts', 'Add a fade in and fade out', 'Trim to the best 30 seconds', 'Make a product walkthrough of my web app']
@@ -105,7 +105,7 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
       onDragLeave={e => { if (e.currentTarget === e.target) setOver(false) }}
       onDrop={e => { e.preventDefault(); setOver(false); choose(Array.from(e.dataTransfer.files).map(f => window.agentshot.pathForFile(f)).filter(Boolean)) }}
     >
-      <div className={cn('drag flex h-[52px] shrink-0 items-center gap-1 pr-3', lead ? 'pl-[88px]' : 'pl-3')}>
+      <div className={cn('drag flex h-[52px] shrink-0 items-center gap-1 pr-3', lead && MAC ? 'pl-[88px]' : 'pl-3')}>
         {lead}
         <span className="flex-1" />
         <JobsTray />

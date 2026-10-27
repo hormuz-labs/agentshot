@@ -270,7 +270,15 @@ export function fileLine(rel: string, files: Record<string, FileInfo>, links: Re
  * Anything in the project the user can point the agent at, as the agent sees it: a file (media/…), a version of the
  * film (its render's path, numbered v1, v2… as the version list numbers them) or a motion clip (clips/<id>).
  */
-export function refLine(rel: string, p: Pick<Project, 'files' | 'subtitles' | 'versions' | 'proposal' | 'current' | 'media' | 'clips'>) {
+export function refLine(rel: string, p: Pick<Project, 'files' | 'subtitles' | 'versions' | 'proposal' | 'current' | 'media' | 'clips'>): string {
+  // a part of a video or sound (marked on the phone): file.mp4#t=4.2,9 is the part from 0:04.2 to 0:09.0
+  const part = /^(.+)#t=(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/.exec(rel)
+  if (part) {
+    const [, base, from, to] = part
+    const line = refLine(base, p)
+    const at = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`
+    return `${base}, only the part from ${at(+from)} to ${at(+to)}${line.slice(base.length)}`
+  }
   if (p.files?.[rel]) return fileLine(rel, p.files, p.subtitles)
   const versions = p.versions.filter(v => v.id !== p.proposal)
   const k = versions.findIndex(v => v.path === rel)
