@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'mascot.dart';
 
-/// The app's own version, as the store knows it: "0.1.0 (1)".
+/// The app's own version, as the release on GitHub names it: "0.4.29" (built by `npm run phone:build`).
 final Future<String> appVersion = PackageInfo.fromPlatform()
-    .then(
-      (p) =>
-          p.buildNumber.isEmpty ? p.version : '${p.version} (${p.buildNumber})',
-    )
+    .then((p) => p.version)
     .catchError((_) => '');
 
 /// What the app opens on while it gets ready: Manul where the system's splash had him, the name under him, and at the
