@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { getConfig, setConfig } from '../src/main/config'
 import { findBinaries, findModels, groupWords, resolveEngine, setWhisper } from '../src/main/whisper'
+// as a build without the Whisper model inside (CI's builds have it)
+process.env.MANUL_SHIPPED_MODELS = mkdtempSync(join(tmpdir(), 'agentshot-no-models-'))
 
 const w = (word: string, s: number, e: number) => ({ w: word, s, e })
 

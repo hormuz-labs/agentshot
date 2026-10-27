@@ -10,7 +10,6 @@ import { lstat, mkdir, open, readdir, rename, rm } from 'node:fs/promises'
 import { basename, join, win32 } from 'node:path'
 import { promisify } from 'node:util'
 import { asJob, type JobHandle } from './jobs'
-import { MODELS_DIR } from './media'
 import type { OnDemandTool } from '../shared/types'
 
 const run = promisify(execFile)
@@ -111,7 +110,11 @@ export function windowsPowerShell(): string {
 /** Where the Whisper base model is downloaded to (a build without it inside). */
 export const whisperModelPath = () => join(dir('whisper-model'), 'ggml-base.bin')
 /** The Whisper base model shipped inside the app (scripts/fetch-models.mjs), when it is. */
-export const shippedWhisperModel = () => join(MODELS_DIR, 'ggml-base.bin')
+export const shippedWhisperModel = () => join(
+  // (worked out when asked, like media.ts's MODELS_DIR; MANUL_SHIPPED_MODELS stands in for it in tests)
+  process.env.MANUL_SHIPPED_MODELS || (app.isPackaged ? join(process.resourcesPath, 'models') : join(import.meta.dirname, '../../resources/models')),
+  'ggml-base.bin',
+)
 /** The Whisper base model to use: the one shipped with the app, else the downloaded one. */
 export const activeWhisperModel = () => (existsSync(shippedWhisperModel()) ? shippedWhisperModel() : whisperModelPath())
 export const whisperLargeModelPath = () => join(dir('whisper-large-v3'), 'ggml-large-v3.bin')

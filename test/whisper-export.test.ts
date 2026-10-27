@@ -8,10 +8,11 @@ vi.mock('../src/main/media', () => ({
   WHISPER_CLI: process.execPath,
   FFMPEG: process.execPath,
   probe: vi.fn(async () => ({ hasAudio: false })),
-  MODELS_DIR: '/nonexistent-models', // no Whisper model shipped here: the downloaded one
 }))
 
 process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'agentshot-export-tools-'))
+// as a build without the Whisper model inside (CI's builds have it)
+process.env.MANUL_SHIPPED_MODELS = mkdtempSync(join(tmpdir(), 'agentshot-no-models-'))
 const Tools = await import('../src/main/tools')
 const { exportTranscript, LARGE_EXPORT_LABEL, resolveEngine } = await import('../src/main/whisper')
 const { probe } = await import('../src/main/media')

@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'agentshot-tools-'))
+// as a build without the model inside (CI's builds have it): these are about the download
+process.env.MANUL_SHIPPED_MODELS = mkdtempSync(join(tmpdir(), 'agentshot-no-models-'))
 const { setConfig } = await import('../src/main/config')
 const { FFMPEG, WHISPER_CLI } = await import('../src/main/media')
 const Tools = await import('../src/main/tools')
