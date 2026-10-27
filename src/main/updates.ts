@@ -71,8 +71,11 @@ export function startUpdates(onState: (s: UpdateState) => void, beforeInstall: (
   if (process.platform === 'win32' && 'verifyUpdateCodeSignature' in autoUpdater) {
     ;(autoUpdater as unknown as { verifyUpdateCodeSignature: typeof verifyWindowsUpdate }).verifyUpdateCodeSignature = verifyWindowsUpdate
   }
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
+  // MANUL_UPDATE_CHECK_ONLY (the packaged-app test): look for updates, never download or install one, so a test
+  // build never replaces itself with the published release when it closes
+  const checkOnly = !!process.env.MANUL_UPDATE_CHECK_ONLY
+  autoUpdater.autoDownload = !checkOnly
+  autoUpdater.autoInstallOnAppQuit = !checkOnly
   autoUpdater.on('checking-for-update', () => set({ status: 'checking' }))
   autoUpdater.on('update-available', i => set({ status: 'downloading', version: i.version, progress: 0 }))
   autoUpdater.on('update-not-available', () => set({ status: 'none' }))
