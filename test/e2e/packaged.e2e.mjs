@@ -26,7 +26,7 @@ const tmp = mkdtempSync(join(tmpdir(), 'agentshot-pkg-'))
 execFileSync(join(BIN, 'ffmpeg' + suffix), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=3', '-f', 'lavfi', '-i', 'sine=duration=3',
   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(tmp, 'src.mp4')])
 
-const app = await electron.launch({ executablePath: exe, args: [`--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'projects') } })
+const app = await electron.launch({ executablePath: exe, args: [`--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'projects'), MANUL_UPDATE_CHECK_ONLY: '1' } })
 try {
   assert.equal(await app.evaluate(({ app }) => app.isPackaged), true)
   const win = await app.firstWindow()

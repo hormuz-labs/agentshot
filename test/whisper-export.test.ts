@@ -11,6 +11,8 @@ vi.mock('../src/main/media', () => ({
 }))
 
 process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'agentshot-export-tools-'))
+// as a build without the Whisper model inside (CI's builds have it)
+process.env.MANUL_SHIPPED_MODELS = mkdtempSync(join(tmpdir(), 'agentshot-no-models-'))
 const Tools = await import('../src/main/tools')
 const { exportTranscript, LARGE_EXPORT_LABEL, resolveEngine } = await import('../src/main/whisper')
 const { probe } = await import('../src/main/media')

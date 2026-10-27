@@ -9,7 +9,7 @@ import { promisify } from 'node:util'
 import { getConfig, setConfig } from './config'
 import { asJob, type JobHandle } from './jobs'
 import { FFMPEG, probe, WHISPER_CLI } from './media'
-import { isInstalled, scriptPath, venvPython, WHISPER_MODEL, whisperEnv, whisperModelPath, whisperLargeModelPath } from './tools'
+import { activeWhisperModel, isInstalled, scriptPath, venvPython, WHISPER_MODEL, whisperEnv, whisperLargeModelPath } from './tools'
 import type { Segment, Transcript, WhisperConfig, WhisperStatus, Word } from '../shared/types'
 import { dtwFlags, dtwLag, envelope, readWav, snapSegments, whisperCppWords } from './wordtimes'
 import { envPath } from './paths'
@@ -81,8 +81,8 @@ export async function resolveEngine(find: Finders = FIND): Promise<WhisperStatus
   return fallback()
 }
 export const bundledBinary = () => existsSync(WHISPER_CLI)
-export const bundledReady = () => bundledBinary() && isInstalled('whisper-model') && existsSync(whisperModelPath())
-const bundled = () => ({ engine: 'bundled' as const, binary: WHISPER_CLI, model: whisperModelPath(), label: 'whisper.cpp · base (bundled)' })
+export const bundledReady = () => bundledBinary() && isInstalled('whisper-model') && existsSync(activeWhisperModel())
+const bundled = () => ({ engine: 'bundled' as const, binary: WHISPER_CLI, model: activeWhisperModel(), label: 'whisper.cpp · base (bundled)' })
 /** The tool to offer when no engine is ready: the model for the bundled whisper.cpp, else the Python engine. */
 export const toolToInstall = () => (bundledBinary() ? 'whisper-model' : 'whisper')
 const system = (binary: string, model: string) => ({ engine: 'system' as const, binary, model, label: `whisper.cpp · ${basename(model).replace(/^ggml-|\.bin$/g, '')}` })

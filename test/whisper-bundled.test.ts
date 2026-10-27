@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 process.env.MANUL_TOOLS = mkdtempSync(join(tmpdir(), 'agentshot-tools-'))
+// as a build without the model inside (CI's builds have it): these are about the download
+process.env.MANUL_SHIPPED_MODELS = mkdtempSync(join(tmpdir(), 'agentshot-no-models-'))
 const { setConfig } = await import('../src/main/config')
 const { FFMPEG, WHISPER_CLI } = await import('../src/main/media')
 const Tools = await import('../src/main/tools')
@@ -54,8 +56,8 @@ describe('engine choice with the bundled engine', () => {
     expect((await resolveEngine(sys))?.engine).toBe('system')
   })
 
-  it('the model download is pinned and small', () => {
-    const d = Tools.plan('whisper-model')[0]
+  it('the model download is pinned and small', async () => {
+    const d = (await Tools.listTools()).find(t => t.id === 'whisper-model')!
     expect(d.sizeMB).toBeLessThan(200)
     expect(Tools.WHISPER_MODEL_SHA256).toMatch(/^[0-9a-f]{64}$/)
   })
@@ -77,4 +79,12 @@ describe.skipIf(!built || !localModel)('transcription with the bundled whisper-c
     expect(t.model).toMatch(/bundled/)
     expect(t.segments.map(s => s.text).join(' ').toLowerCase()).toMatch(/welcome back/)
   }, 60_000)
+})
+
+describe('the Whisper model shipped with the app', () => {
+  it('is used, and counts as installed, when it is there', () => {
+    const shipped = existsSync(Tools.shippedWhisperModel())
+    expect(Tools.activeWhisperModel()).toBe(shipped ? Tools.shippedWhisperModel() : Tools.whisperModelPath())
+    if (shipped) expect(Tools.isInstalled('whisper-model')).toBe(true)
+  })
 })

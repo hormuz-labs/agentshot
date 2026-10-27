@@ -4,6 +4,8 @@
 //   speaker-embedding.onnx     3D-Speaker CAM++ zh/en (Apache-2.0, github.com/modelscope/3D-Speaker)
 //   faces-yunet.onnx           YuNet 2023mar (MIT, github.com/opencv/opencv_zoo)
 //   objects-yolox-tiny.onnx    YOLOX-Tiny, 80 COCO classes (Apache-2.0, github.com/Megvii-BaseDetection/YOLOX)
+//   ggml-base.bin              Whisper base for whisper.cpp (MIT, github.com/openai/whisper): speech recognition ready
+//                              out of the box (voice notes, transcripts), on every platform, Windows too
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -27,6 +29,11 @@ export const MODELS = {
     url: 'https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/face_detection_yunet_2023mar.onnx',
     sha256: '8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4',
   },
+  'ggml-base.bin': {
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',
+    sha256: '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe',
+    everywhere: true,
+  },
   'objects-yolox-tiny.onnx': {
     url: 'https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_tiny.onnx',
     sha256: '427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7',
@@ -40,7 +47,7 @@ async function fetchOne(name, m) {
   const target = join(dir, name)
   const want = m.fileSha256 || m.sha256
   if (existsSync(target) && sha(readFileSync(target)) === want) return
-  const res = await fetch(m.url, { signal: AbortSignal.timeout(120_000) })
+  const res = await fetch(m.url, { signal: AbortSignal.timeout(600_000) })
   if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`)
   const buf = Buffer.from(await res.arrayBuffer())
   const got = sha(buf)
@@ -61,6 +68,8 @@ async function fetchOne(name, m) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   mkdirSync(dir, { recursive: true })
-  if (process.env.MANUL_SKIP_MODELS || (process.platform === 'win32' && !process.argv.includes('--all'))) process.exit(0)
-  for (const [name, m] of Object.entries(MODELS)) await fetchOne(name, m)
+  if (process.env.MANUL_SKIP_MODELS) process.exit(0)
+  // Windows has whisper.cpp but not the model runners: only what every platform needs, unless --all
+  const all = process.platform !== 'win32' || process.argv.includes('--all')
+  for (const [name, m] of Object.entries(MODELS)) if (all || m.everywhere) await fetchOne(name, m)
 }
