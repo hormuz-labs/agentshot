@@ -184,8 +184,10 @@ CI runs it on an Android emulator (`.github/workflows/mobile.yml`).
 ## Distribution
 
 Android: copy `android/key.properties.example` to `android/key.properties` and
-configure your upload keystore (ignored by git). `flutter build appbundle` creates
-the Play bundle. Release builds do not fall back to debug signing.
+configure your upload keystore (ignored by git). `npm run phone:build` (from the
+repository root) builds the APK with the newest release's version, as the release
+shows it on GitHub and Google Play (v0.4.29 → version 0.4.29, code 4029);
+`npm run phone:build -- appbundle` builds the Play bundle the same way. Release builds do not fall back to debug signing.
 
 iOS: open `ios/Runner.xcworkspace` after `flutter pub get` / CocoaPods setup on a
 Mac. Set the Apple development team and register the bundle identifier, then use

@@ -15,7 +15,7 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: Splash()));
     await tester.pump();
     expect(find.text('AgentShot'), findsOneWidget);
-    expect(find.text('Version 0.1.0 (7)'), findsOneWidget);
+    expect(find.text('Version 0.1.0'), findsOneWidget);
     expect(find.text('A Hormuz Labs product'), findsOneWidget);
   });
 }
