@@ -699,7 +699,7 @@ class BridgeClient {
                       'channel': 'connection',
                       'args': [false, 'Opening your space…'],
                     });
-                    await Future<void>.delayed(const Duration(seconds: 3));
+                    await Future<void>.delayed(const Duration(seconds: 1));
                   }
                 }
                 listen();
@@ -738,7 +738,7 @@ class BridgeClient {
             'args': [false, error.message],
           });
           if (_disposed || generation != _generation) return;
-          await Future<void>.delayed(const Duration(seconds: 2));
+          await Future<void>.delayed(const Duration(seconds: 1));
           continue;
         }
         // another of its addresses may answer (home Wi-Fi again, or the private network away)
