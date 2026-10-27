@@ -297,12 +297,13 @@ class Account {
         // no private network here (iOS for now, or the account service has none)
       }
     }
-    // a cloud worker opens this person's space first (it restarts into it, a few seconds): keep trying a while
+    // a cloud worker opens this person's space first (it restarts into it, a few seconds): keep trying a while, often
+    // enough to be in the moment it's ready
     if (first == null && computer.pool) {
       opening?.call();
       final end = DateTime.now().add(const Duration(seconds: 60));
       while (first == null && DateTime.now().isBefore(end)) {
-        await Future<void>.delayed(const Duration(seconds: 3));
+        await Future<void>.delayed(const Duration(seconds: 1));
         first = await client.firstToAnswer(
           target,
           timeout: const Duration(seconds: 5),

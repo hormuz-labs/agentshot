@@ -364,8 +364,10 @@ async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
   await mobile.start()
   const joining = joinMesh()
   // a worker waits a while for the mesh (its address from anywhere), but never stays unlisted for it: after 45 s it
-  // reports itself with what it has, and the mesh address joins the next heartbeat once it's up
-  if (opts.waitForMesh) await Promise.race([joining, new Promise(done => setTimeout(done, 45_000))])
+  // reports itself with what it has. One that just restarted into a person's space doesn't wait at all: they're
+  // waiting for it, and only a heartbeat confirms their lease. Either way it reports again the moment the mesh is up.
+  if (opts.waitForMesh && !session) await Promise.race([joining, new Promise(done => setTimeout(done, 45_000))])
+  void joining?.then(() => stopHeartbeat?.beat())
   // a worker that couldn't join yet (started before the network was up) keeps trying, every minute, until it's in
   if (WORKER_MODE) meshRetry ??= setInterval(() => { if (!meshNode && mobile.listenPort()) void joinMesh() }, 60_000)
   // "New code" calls this again; keep the one heartbeat

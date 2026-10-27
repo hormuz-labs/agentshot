@@ -52,6 +52,7 @@ void main() {
           w.enabled,
     );
     await waitFor(tester, ready, timeout: const Duration(minutes: 1));
+    final tapped = DateTime.now();
     await tester.tap(cloud);
     // in plain steps: finding a spot, opening the space, then the app
     await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
@@ -60,6 +61,8 @@ void main() {
       find.text('What are we making?'),
       timeout: const Duration(minutes: 2),
     );
+    // ignore: avoid_print
+    print('CLOUD_OPENED_IN ${DateTime.now().difference(tapped).inMilliseconds} ms');
     // it keeps only what this person makes there: nothing yet
     await reveal(tester, find.text('A home for your films'));
 
@@ -226,6 +229,7 @@ void main() {
 
     // another worker this time (the stand-in account hands out the other one): the same space, so the project
     // made on the first is here, conversation and all
+    final again = DateTime.now();
     await tester.tap(cloud);
     // in plain steps: finding a spot, opening the space, then the app
     await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
@@ -234,6 +238,8 @@ void main() {
       find.text('What are we making?'),
       timeout: const Duration(minutes: 2),
     );
+    // ignore: avoid_print
+    print('CLOUD_REOPENED_IN ${DateTime.now().difference(again).inMilliseconds} ms');
     await reveal(tester, find.text('Mobile e2e in the cloud'));
     await tester.tap(find.text('Mobile e2e in the cloud'));
     await waitFor(tester, find.byKey(const ValueKey('composer')));
