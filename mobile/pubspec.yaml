@@ -21,6 +21,7 @@ dependencies:
   record: ^6.2.1
   package_info_plus: ^10.2.2
   speech_to_text: ^7.4.0
+  url_launcher: ^6.3.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

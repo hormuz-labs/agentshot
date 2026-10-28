@@ -1,0 +1,47 @@
+---
+import LegalPage from '../components/LegalPage.astro'
+const subject = 'Delete my AgentShot account'
+const body = 'Please delete my AgentShot account and the data that goes with it.\n\nThe email I sign in with:\n'
+const request = `mailto:hello@hormuz-labs.dev?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+---
+<LegalPage
+  title="Delete your AgentShot account"
+  eyebrow="Your account, your call"
+  description="How to delete your AgentShot account, from the app or from this page, and what is deleted."
+  effective="October 28, 2026"
+>
+  <p class="intro">You can ask us to delete your AgentShot account at any time, from the AgentShot phone app or from this page. We delete it within 30 days and write back when it's done.</p>
+
+  <section>
+    <h2 class="slate">Ask for deletion</h2>
+    <p><strong>In the phone app:</strong> Settings → Account → <strong>Delete my account</strong>.</p>
+    <p><strong>From here:</strong> send us the request from the email address you sign in with, so we know the account is yours.</p>
+    <p><a class="btn light" href={request}>Email the deletion request</a></p>
+    <p>Or write to <a href={request}>hello@hormuz-labs.dev</a> with the subject “Delete my AgentShot account”. If you have a plan, cancel it first in AgentShot under Settings → Keys → AgentShot key, so you aren't charged again.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">What we delete</h2>
+    <ul>
+      <li>Your account: email address, name and profile picture from your sign-in, and your account ID.</li>
+      <li>Your AgentShot key, plan and credit balance. Credits left are lost.</li>
+      <li>Your space in AgentShot Cloud: the projects, files and conversations you made on cloud workers.</li>
+      <li>Your phones' and computers' registration with AgentShot, including the private network that connects them.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 class="slate">What we keep</h2>
+    <ul>
+      <li>Payment and invoice records, for as long as tax and accounting law require (usually several years). They hold what you bought and when, not your projects.</li>
+      <li>Records of how many credits were used and on which model, only where they are part of those billing records.</li>
+    </ul>
+    <p>AgentShot accounts are shared with Pitch: one email, one account. If you also use Pitch and want to keep it, say so in your email and we delete only what AgentShot holds.</p>
+  </section>
+
+  <section>
+    <h2 class="slate">What stays on your own devices</h2>
+    <p>Projects on your own computer are never sent to us, so deleting your account doesn't touch them. Delete them in AgentShot on that computer, or uninstall the app. On your phone, sign out (Settings → Account → Sign out) or uninstall the AgentShot app.</p>
+    <p>More about what AgentShot collects is in the <a href="/privacy/">privacy policy</a>.</p>
+  </section>
+</LegalPage>

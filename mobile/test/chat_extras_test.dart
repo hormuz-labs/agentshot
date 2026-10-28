@@ -39,20 +39,36 @@ Widget app(Widget home) => MaterialApp(
   home: home,
 );
 
+// said today (a day ago would show its weekday), at nine
+final _today = DateTime.now();
+
 List<Json> talk(int turns) => [
   for (var i = 0; i < turns; i++) ...[
     {
       'id': 'u$i',
       'role': 'user',
       'content': 'Note number $i',
-      'at': DateTime(2026, 10, 27, 9, i).millisecondsSinceEpoch,
+      'at': DateTime(
+        _today.year,
+        _today.month,
+        _today.day,
+        9,
+        i,
+      ).millisecondsSinceEpoch,
     },
     {
       'id': 'a$i',
       'role': 'assistant',
       'content':
           'Reply number $i.\n\nA second paragraph so the reply takes some room on the screen.\n\nAnd a third.',
-      'at': DateTime(2026, 10, 27, 9, i, 30).millisecondsSinceEpoch,
+      'at': DateTime(
+        _today.year,
+        _today.month,
+        _today.day,
+        9,
+        i,
+        30,
+      ).millisecondsSinceEpoch,
     },
   ],
 ];
