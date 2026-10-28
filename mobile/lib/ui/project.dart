@@ -103,8 +103,11 @@ class _ProjectScreenState extends State<ProjectScreen> {
       message.selection = TextSelection.collapsed(offset: message.text.length);
       section = 0;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => composerKey.currentState?.focusInput());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => composerKey.currentState?.focusInput(),
+    );
   }
+
   String? exportStatus;
   BridgeStore get store => widget.store;
   Json get project => store.project!;
@@ -573,9 +576,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
         ? 'Thinking'
         : null;
     final canSend =
-        message.text.trim().isNotEmpty &&
-        store.connected &&
-        !sending;
+        message.text.trim().isNotEmpty && store.connected && !sending;
     final chat = fold(messages);
     // a queued note that has reached the conversation is just a note now
     queuedNotes.removeWhere(
@@ -611,201 +612,215 @@ class _ProjectScreenState extends State<ProjectScreen> {
                     swipeFrom = null;
                     reveal.value = 0;
                   },
-                  child: NotificationListener<ScrollUpdateNotification>(
+                  // the note scrolled off the top, looked at again whenever what's shown changes: a scroll, a
+                  // scroll coming to rest, or the list itself (the keyboard closing, new replies)
+                  child: NotificationListener<ScrollMetricsNotification>(
                     onNotification: (_) {
-                      pinNote(chat);
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) pinNote(chat);
+                      });
                       return false;
                     },
-                    child: NotificationListener<ScrollEndNotification>(
+                    child: NotificationListener<ScrollUpdateNotification>(
                       onNotification: (_) {
-                        final atEnd = chatScroll.position.extentAfter < 120;
-                        // the pill comes and goes with it
-                        if (atEnd != follow) setState(() => missed = false);
-                        follow = atEnd;
+                        pinNote(chat);
                         return false;
                       },
-                      child: SelectionArea(
-                        child: ListView(
-                          controller: chatScroll,
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          children: [
-                            if (!state.loaded &&
-                                messages.isEmpty &&
-                                state.streaming.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.all(24),
-                                child: Text('Loading conversation…'),
-                              ),
-                            if (state.loaded &&
-                                messages.isEmpty &&
-                                state.streaming.isEmpty &&
-                                !state.busy)
-                              EmptyMessage(
-                                Icons.chat_bubble_outline,
-                                'Give notes. Get cuts.',
-                                'Ask for an edit, attach a file, or point at a moment in the Film tab.',
-                                // smaller when there's little room (a phone on its side, very large text)
-                                art: Mascot(
-                                  size: (available.maxHeight * .22).clamp(
-                                    56.0,
-                                    120.0,
+                      child: NotificationListener<ScrollEndNotification>(
+                        onNotification: (_) {
+                          pinNote(chat);
+                          final atEnd = chatScroll.position.extentAfter < 120;
+                          // the pill comes and goes with it
+                          if (atEnd != follow) setState(() => missed = false);
+                          follow = atEnd;
+                          return false;
+                        },
+                        child: SelectionArea(
+                          child: ListView(
+                            controller: chatScroll,
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                            children: [
+                              if (!state.loaded &&
+                                  messages.isEmpty &&
+                                  state.streaming.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.all(24),
+                                  child: Text('Loading conversation…'),
+                                ),
+                              if (state.loaded &&
+                                  messages.isEmpty &&
+                                  state.streaming.isEmpty &&
+                                  !state.busy)
+                                EmptyMessage(
+                                  Icons.chat_bubble_outline,
+                                  'Give notes. Get cuts.',
+                                  'Ask for an edit, attach a file, or point at a moment in the Film tab.',
+                                  // smaller when there's little room (a phone on its side, very large text)
+                                  art: Mascot(
+                                    size: (available.maxHeight * .22).clamp(
+                                      56.0,
+                                      120.0,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            for (final (i, item) in chat.indexed)
-                              if (item is Steps)
-                                // the steps between two things said, folded into one row (live while the agent works on)
-                                StepsRow(
-                                  steps: item.steps,
-                                  now: state.busy && i == chat.length - 1
-                                      ? status ?? 'Working'
-                                      : null,
-                                )
-                              else if (item is Asked)
-                                AskCard(
-                                  key: ValueKey('ask-${item.id}'),
-                                  questions: item.questions,
-                                  answered: item.answered,
-                                  onAnswer: (reply) => guard(
-                                    context,
-                                    () => sendToAgent(context, store, dir, {
-                                      'text': reply,
-                                    }),
-                                  ),
-                                )
-                              else if ((item as Said).message case final m
-                                  when m['role'] == 'user')
-                                Timed(
-                                  key: noteKeys.putIfAbsent(
-                                    '${m['id']}',
-                                    GlobalKey.new,
-                                  ),
-                                  at: m['at'] as num?,
-                                  reveal: reveal,
-                                  child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Container(
-                                      constraints: BoxConstraints(
-                                        maxWidth: available.maxWidth * .82,
-                                      ),
-                                      margin: const EdgeInsets.only(
-                                        bottom: 18,
-                                        left: 32,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 11,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: scheme.surfaceContainerHighest,
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(20),
-                                          topRight: Radius.circular(20),
-                                          bottomLeft: Radius.circular(20),
-                                          bottomRight: Radius.circular(6),
+                              for (final (i, item) in chat.indexed)
+                                if (item is Steps)
+                                  // the steps between two things said, folded into one row (live while the agent works on)
+                                  StepsRow(
+                                    steps: item.steps,
+                                    now: state.busy && i == chat.length - 1
+                                        ? status ?? 'Working'
+                                        : null,
+                                  )
+                                else if (item is Asked)
+                                  AskCard(
+                                    key: ValueKey('ask-${item.id}'),
+                                    questions: item.questions,
+                                    answered: item.answered,
+                                    onAnswer: (reply) => guard(
+                                      context,
+                                      () => sendToAgent(context, store, dir, {
+                                        'text': reply,
+                                      }),
+                                    ),
+                                  )
+                                else if ((item as Said).message case final m
+                                    when m['role'] == 'user')
+                                  Timed(
+                                    key: noteKeys.putIfAbsent(
+                                      '${m['id']}',
+                                      GlobalKey.new,
+                                    ),
+                                    at: m['at'] as num?,
+                                    reveal: reveal,
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Container(
+                                        constraints: BoxConstraints(
+                                          maxWidth: available.maxWidth * .82,
+                                        ),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 18,
+                                          left: 32,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 11,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: scheme.surfaceContainerHighest,
+                                          borderRadius: const BorderRadius.only(
+                                            topLeft: Radius.circular(20),
+                                            topRight: Radius.circular(20),
+                                            bottomLeft: Radius.circular(20),
+                                            bottomRight: Radius.circular(6),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${m['content'] ?? ''}',
+                                          style: text.bodyLarge,
                                         ),
                                       ),
-                                      child: Text(
-                                        '${m['content'] ?? ''}',
-                                        style: text.bodyLarge,
+                                    ),
+                                  )
+                                else
+                                  Timed(
+                                    at: item.message['at'] as num?,
+                                    reveal: reveal,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 18,
+                                      ),
+                                      child: Markdown(
+                                        '${item.message['content']}',
                                       ),
                                     ),
                                   ),
-                                )
-                              else
-                                Timed(
-                                  at: item.message['at'] as num?,
-                                  reveal: reveal,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(bottom: 18),
-                                    child: Markdown(
-                                      '${item.message['content']}',
+                              for (final q in queuedNotes)
+                                Align(
+                                  key: ValueKey('queued-$q'),
+                                  alignment: Alignment.centerRight,
+                                  child: Container(
+                                    constraints: BoxConstraints(
+                                      maxWidth: available.maxWidth * .82,
+                                    ),
+                                    margin: const EdgeInsets.only(
+                                      bottom: 18,
+                                      left: 32,
+                                    ),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      10,
+                                      16,
+                                      10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: scheme.outlineVariant,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Text(q, style: text.bodyLarge),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.schedule,
+                                              size: 14,
+                                              color: scheme.onSurfaceVariant,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Queued · the agent reads it next',
+                                              style: text.labelSmall?.copyWith(
+                                                color: scheme.onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                            for (final q in queuedNotes)
-                              Align(
-                                key: ValueKey('queued-$q'),
-                                alignment: Alignment.centerRight,
-                                child: Container(
-                                  constraints: BoxConstraints(
-                                    maxWidth: available.maxWidth * .82,
-                                  ),
-                                  margin: const EdgeInsets.only(
-                                    bottom: 18,
-                                    left: 32,
-                                  ),
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    10,
-                                    16,
-                                    10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: scheme.outlineVariant,
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
+                              if (state.streaming.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 18),
+                                  child: Markdown(state.streaming),
+                                ),
+                              if (status != null && !stepping)
+                                Padding(
+                                  key: const ValueKey('agent-status'),
+                                  padding: const EdgeInsets.only(bottom: 18),
+                                  child: Row(
                                     children: [
-                                      Text(q, style: text.bodyLarge),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.schedule,
-                                            size: 14,
+                                      const Mascot(size: 44, busy: true),
+                                      const SizedBox(width: 10),
+                                      Flexible(
+                                        child: Text(
+                                          '$status…',
+                                          style: text.bodyMedium?.copyWith(
                                             color: scheme.onSurfaceVariant,
                                           ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Queued · the agent reads it next',
-                                            style: text.labelSmall?.copyWith(
-                                              color: scheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ),
-                            if (state.streaming.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 18),
-                                child: Markdown(state.streaming),
-                              ),
-                            if (status != null && !stepping)
-                              Padding(
-                                key: const ValueKey('agent-status'),
-                                padding: const EdgeInsets.only(bottom: 18),
-                                child: Row(
-                                  children: [
-                                    const Mascot(size: 44, busy: true),
-                                    const SizedBox(width: 10),
-                                    Flexible(
-                                      child: Text(
-                                        '$status…',
-                                        style: text.bodyMedium?.copyWith(
-                                          color: scheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            if (state.error case final error?)
-                              RunProblem(message: error),
-                            // what the computer asks before going on (a download, say): where the agent waits, as on the desktop
-                            ConsentCards(store: store, dir: dir),
-                            if (project['proposal'] != null && !state.busy)
-                              proposalCard()
-                            else if (!state.busy && messages.isNotEmpty)
-                              ?latestCutCard(chat),
-                          ],
+                              if (state.error case final error?)
+                                RunProblem(message: error),
+                              // what the computer asks before going on (a download, say): where the agent waits, as on the desktop
+                              ConsentCards(store: store, dir: dir),
+                              if (project['proposal'] != null && !state.busy)
+                                proposalCard()
+                              else if (!state.busy && messages.isNotEmpty)
+                                ?latestCutCard(chat),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1197,13 +1212,23 @@ class _ProjectScreenState extends State<ProjectScreen> {
             'Your film starts here',
             'Ask AgentShot to create the first scene.',
           ),
-        if (project['proposal'] == null && objects(object(project['timeline'] ?? {})['items']).isNotEmpty)
-          Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: ManualTimeline(
-            items: objects(object(project['timeline'] ?? {})['items']),
-            media: object(project['media'] ?? {}), clips: object(project['clips'] ?? {}),
-            position: () => position, fps: (object(project['timeline'] ?? {})['fps'] as num? ?? 30).toDouble(),
-            onEdit: (edit) => store.update('timeline:edit', [dir, [edit]]),
-          )),
+        if (project['proposal'] == null &&
+            objects(object(project['timeline'] ?? {})['items']).isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: ManualTimeline(
+              items: objects(object(project['timeline'] ?? {})['items']),
+              media: object(project['media'] ?? {}),
+              clips: object(project['clips'] ?? {}),
+              position: () => position,
+              fps: (object(project['timeline'] ?? {})['fps'] as num? ?? 30)
+                  .toDouble(),
+              onEdit: (edit) => store.update('timeline:edit', [
+                dir,
+                [edit],
+              ]),
+            ),
+          ),
         if (version != null)
           Text(
             '${version['title']}',
@@ -1318,7 +1343,10 @@ class _ProjectScreenState extends State<ProjectScreen> {
       ),
     );
     if (mounted && value != null) {
-      addRange((value['t0'] as num).toDouble(), (value['t1'] as num).toDouble());
+      addRange(
+        (value['t0'] as num).toDouble(),
+        (value['t1'] as num).toDouble(),
+      );
     }
     await Future<void>.delayed(const Duration(milliseconds: 300));
     start.dispose();
@@ -1745,7 +1773,9 @@ class TimelinePanel extends StatelessWidget {
               if (count != null)
                 TextSpan(
                   text: '  $count',
-                  style: text.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
+                  style: text.labelLarge?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
             ],
           ),
@@ -1767,16 +1797,25 @@ class TimelinePanel extends StatelessWidget {
             children: [
               IconButton.filledTonal(
                 tooltip: 'Undo',
-                onPressed: () => guard(context, () => store.update('timeline:undo', [dir, false])),
+                onPressed: () => guard(
+                  context,
+                  () => store.update('timeline:undo', [dir, false]),
+                ),
                 icon: const Icon(Icons.undo_rounded),
               ),
               IconButton.filledTonal(
                 tooltip: 'Redo',
-                onPressed: () => guard(context, () => store.update('timeline:undo', [dir, true])),
+                onPressed: () => guard(
+                  context,
+                  () => store.update('timeline:undo', [dir, true]),
+                ),
                 icon: const Icon(Icons.redo_rounded),
               ),
               FilledButton.tonalIcon(
-                onPressed: () => guard(context, () => edit({'op': 'split', 'at': position()})),
+                onPressed: () => guard(
+                  context,
+                  () => edit({'op': 'split', 'at': position()}),
+                ),
                 icon: const Icon(Icons.content_cut_rounded, size: 18),
                 label: Text('Split at ${timestamp(position())}'),
               ),
@@ -1816,7 +1855,11 @@ class TimelinePanel extends StatelessWidget {
                     ),
                     if (item['muted'] == true) ...[
                       const SizedBox(width: 6),
-                      Icon(Icons.volume_off_rounded, size: 15, color: scheme.onSurfaceVariant),
+                      Icon(
+                        Icons.volume_off_rounded,
+                        size: 15,
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ],
                   ],
                 ),
@@ -1825,12 +1868,17 @@ class TimelinePanel extends StatelessWidget {
                   onSelected: (action) => guard(context, () async {
                     switch (action) {
                       case 'earlier':
-                        await edit({'op': 'move', 'id': item['id'], 'before': items[i - 1]['id']});
+                        await edit({
+                          'op': 'move',
+                          'id': item['id'],
+                          'before': items[i - 1]['id'],
+                        });
                       case 'later':
                         await edit({
                           'op': 'move',
                           'id': item['id'],
-                          if (i + 2 < items.length) 'before': items[i + 2]['id'],
+                          if (i + 2 < items.length)
+                            'before': items[i + 2]['id'],
                         });
                       case 'mute':
                         await edit({
@@ -1845,14 +1893,24 @@ class TimelinePanel extends StatelessWidget {
                           initial: '${item['in']}, ${item['out']}',
                         );
                         if (value == null) return;
-                        final n = value.split(',').map((s) => double.tryParse(s.trim())).toList();
+                        final n = value
+                            .split(',')
+                            .map((s) => double.tryParse(s.trim()))
+                            .toList();
                         if (n.length != 2 ||
                             n.any((v) => v == null || !v.isFinite) ||
                             n[0]! < 0 ||
                             n[1]! <= n[0]!) {
-                          throw BridgeException('Enter two valid seconds: start, end.');
+                          throw BridgeException(
+                            'Enter two valid seconds: start, end.',
+                          );
                         }
-                        await edit({'op': 'trim', 'id': item['id'], 'in': n[0], 'out': n[1]});
+                        await edit({
+                          'op': 'trim',
+                          'id': item['id'],
+                          'in': n[0],
+                          'out': n[1],
+                        });
                       case 'remove':
                         await edit({
                           'op': 'delete',
@@ -1861,13 +1919,27 @@ class TimelinePanel extends StatelessWidget {
                     }
                   }),
                   itemBuilder: (_) => [
-                    if (i > 0) const PopupMenuItem(value: 'earlier', child: Text('Move earlier')),
-                    if (i < items.length - 1) const PopupMenuItem(value: 'later', child: Text('Move later')),
+                    if (i > 0)
+                      const PopupMenuItem(
+                        value: 'earlier',
+                        child: Text('Move earlier'),
+                      ),
+                    if (i < items.length - 1)
+                      const PopupMenuItem(
+                        value: 'later',
+                        child: Text('Move later'),
+                      ),
                     if (item['kind'] == 'media') ...[
-                      PopupMenuItem(value: 'mute', child: Text(item['muted'] == true ? 'Unmute' : 'Mute')),
+                      PopupMenuItem(
+                        value: 'mute',
+                        child: Text(item['muted'] == true ? 'Unmute' : 'Mute'),
+                      ),
                       const PopupMenuItem(value: 'trim', child: Text('Trim…')),
                     ],
-                    const PopupMenuItem(value: 'remove', child: Text('Remove piece')),
+                    const PopupMenuItem(
+                      value: 'remove',
+                      child: Text('Remove piece'),
+                    ),
                   ],
                 ),
               ),
@@ -1916,7 +1988,14 @@ class _MixEditorState extends State<MixEditor> {
   bool changed = false;
 
   /// A level to set: what it is and its value on one line, the slider under it.
-  Widget level(String label, double value, double min, double max, ValueChanged<double> set, {IconData? icon}) {
+  Widget level(
+    String label,
+    double value,
+    double min,
+    double max,
+    ValueChanged<double> set, {
+    IconData? icon,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1925,7 +2004,10 @@ class _MixEditorState extends State<MixEditor> {
           padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
           child: Row(
             children: [
-              if (icon != null) ...[Icon(icon, size: 18, color: scheme.onSurfaceVariant), const SizedBox(width: 8)],
+              if (icon != null) ...[
+                Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+              ],
               Expanded(child: Text(label)),
               Text(
                 '${value.round() > 0 ? '+' : ''}${value.round()} dB',
@@ -1963,20 +2045,46 @@ class _MixEditorState extends State<MixEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          level('Film', film, -40, 12, (v) => film = v, icon: Icons.movie_outlined),
+          level(
+            'Film',
+            film,
+            -40,
+            12,
+            (v) => film = v,
+            icon: Icons.movie_outlined,
+          ),
           const SizedBox(height: 4),
-          dropdown('Music', source, {
-            '': 'No music',
-            if (source.isNotEmpty) source: source.split('/').last,
-            for (final e in widget.files.entries)
-              if (e.value['kind'] == 'audio') e.key: e.key.split('/').last,
-          }, (v) => setState(() {
-            source = v;
-            changed = true;
-          })),
+          dropdown(
+            'Music',
+            source,
+            {
+              '': 'No music',
+              if (source.isNotEmpty) source: source.split('/').last,
+              for (final e in widget.files.entries)
+                if (e.value['kind'] == 'audio') e.key: e.key.split('/').last,
+            },
+            (v) => setState(() {
+              source = v;
+              changed = true;
+            }),
+          ),
           if (source.isNotEmpty) ...[
-            level('Music', music, -40, 12, (v) => music = v, icon: Icons.music_note_outlined),
-            level('Lower music under speech', duck, 0, 40, (v) => duck = v, icon: Icons.record_voice_over_outlined),
+            level(
+              'Music',
+              music,
+              -40,
+              12,
+              (v) => music = v,
+              icon: Icons.music_note_outlined,
+            ),
+            level(
+              'Lower music under speech',
+              duck,
+              0,
+              40,
+              (v) => duck = v,
+              icon: Icons.record_voice_over_outlined,
+            ),
           ],
           const SizedBox(height: 10),
           FilledButton.tonal(
@@ -1985,7 +2093,8 @@ class _MixEditorState extends State<MixEditor> {
                 : () => guard(context, () async {
                     await widget.onSave({
                       'filmDb': film,
-                      if (source.isNotEmpty) 'music': {'src': source, 'db': music, 'duckDb': duck},
+                      if (source.isNotEmpty)
+                        'music': {'src': source, 'db': music, 'duckDb': duck},
                     });
                     if (mounted) setState(() => changed = false);
                   }),

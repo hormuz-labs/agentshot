@@ -119,7 +119,7 @@ const model = createServer(async (req, res) => {
 }).listen(0, '127.0.0.1')
 await new Promise(r => model.once('listening', r))
 mkdirSync(ud, { recursive: true })
-writeFileSync(join(ud, 'providers.json'), JSON.stringify([{ id: 'scripted', name: 'Scripted', baseUrl: `http://127.0.0.1:${model.address().port}/v1`, api: 'openai-completions', models: [{ id: 'scripted-agent' }] }]))
+writeFileSync(join(ud, 'providers.json'), JSON.stringify([{ id: 'scripted', name: 'Scripted', baseUrl: `http://127.0.0.1:${model.address().port}/v1`, api: 'openai-completions', models: [{ id: 'scripted-agent', ...(shots ? { name: 'Claude Opus 5' } : {}) }] }]))
 
 // Stand-ins for Clerk (signing in) and AgentShot's account service: just what signing in and finding the person's
 // computers use. The desktop reports itself here once signed in (its worker heartbeat), as it does to the real one.
