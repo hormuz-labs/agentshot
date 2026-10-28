@@ -5,6 +5,7 @@ import '../bridge/client.dart';
 import '../bridge/notify.dart' show NotifyPrefs;
 import '../bridge/store.dart';
 import 'common.dart';
+import 'delete_account.dart';
 import 'project.dart' show dropdown;
 import 'setup_ai.dart';
 
@@ -74,10 +75,24 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => leaving(context, onSignOut),
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Sign out'),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => leaving(context, onSignOut),
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Sign out'),
+                    ),
+                    TextButton.icon(
+                      key: const ValueKey('settings-delete-account'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: scheme.error,
+                      ),
+                      onPressed: () => deleteAccount(context, signedIn.email),
+                      icon: const Icon(Icons.person_remove_outlined),
+                      label: const Text('Delete my account'),
+                    ),
+                  ],
                 ),
               ),
             ),

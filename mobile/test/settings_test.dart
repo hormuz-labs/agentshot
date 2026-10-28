@@ -4,6 +4,7 @@ import 'package:agentshot_mobile/bridge/account.dart';
 import 'package:agentshot_mobile/bridge/client.dart';
 import 'package:agentshot_mobile/bridge/store.dart';
 import 'package:agentshot_mobile/ui/cut_card.dart';
+import 'package:agentshot_mobile/ui/delete_account.dart';
 import 'package:agentshot_mobile/ui/project.dart';
 import 'package:agentshot_mobile/ui/settings.dart';
 import 'package:agentshot_mobile/ui/setup_ai.dart';
@@ -302,6 +303,52 @@ void main() {
       await tester.tap(find.byTooltip('Close'));
       await tester.pumpAndSettle();
       expect(find.text('AgentShot credits'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Delete my account: says what goes, then the request from their own email (the page without an email app)',
+    (tester) async {
+      final opened = <Uri>[];
+      var mail = true;
+      openLink = (uri) async {
+        opened.add(uri);
+        return uri.scheme != 'mailto' || mail;
+      };
+      addTearDown(() => openLink = (_) async => false);
+      final store = BridgeStore(Computer(credits: true))
+        ..account = Signed()
+        ..connected = true;
+      await tester.pumpWidget(host(settings(store)));
+      await tester.pumpAndSettle();
+
+      // Cancel sends nothing
+      await tester.tap(find.byKey(const ValueKey('settings-delete-account')));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete your AgentShot account?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(opened, isEmpty);
+
+      // the request, addressed and signed with the account's email
+      await tester.tap(find.byKey(const ValueKey('settings-delete-account')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Email the request'));
+      await tester.pumpAndSettle();
+      expect(opened.single.scheme, 'mailto');
+      expect(opened.single.path, 'hello@hormuz-labs.dev');
+      expect(opened.single.toString(), contains('maya%40example.com'));
+      expect(opened.single.toString(), isNot(contains('+')));
+
+      // no email app: the page, with the address and the steps
+      opened.clear();
+      mail = false;
+      await tester.tap(find.byKey(const ValueKey('settings-delete-account')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Email the request'));
+      await tester.pumpAndSettle();
+      expect(opened.map((u) => u.scheme), ['mailto', 'https']);
+      expect(opened.last, deletePage);
     },
   );
 
