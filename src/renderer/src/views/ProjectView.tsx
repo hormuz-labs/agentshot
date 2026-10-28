@@ -1,7 +1,7 @@
 // A project on screen: the conversation first, the film beside it (the proposal to decide on, the picture, the timeline).
 // Point at the film (a box, a range, N for the moment) and say what should change, right there or in the chat.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Clapperboard, Globe, Images, MessagesSquare, PanelRight, Loader2, Upload, Check, FolderOpen, MessageSquarePlus, Pause, Play, SquareDashed, X } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Clapperboard, Globe, Images, MessagesSquare, PanelRight, Loader2, Upload, Check, FolderOpen, MessageSquarePlus, Pause, Play, SquareDashed, X, SplitSquareHorizontal, MoveHorizontal } from 'lucide-react'
 import { JobsTray } from '@/components/JobsTray'
 import { HistoryButton } from '@/components/HistoryButton'
 import { Conversations } from '@/components/Conversations'
@@ -25,13 +25,14 @@ import { CameraControls } from './CameraControls'
 import { VideoControls } from './VideoControls'
 import { useLiveMix, type MixSource } from '@/lib/liveMix'
 import { dbToGain, type Mix } from '../../../shared/mix'
-import { sameCut, sourceAt, timelineOfFile, type Edit } from '../../../shared/timeline'
+import { sameCut, sourceAt, timelineOfFile, itemAt, starts, length, type Edit } from '../../../shared/timeline'
 import { usePreview } from '@/lib/preview'
 import { demoOutputMessage } from '@/lib/demo-output'
 import { cameraAt, cameraRange } from '../../../shared/demo'
 import { Scrubber } from './Scrubber'
 import { Stage, type LiveEdit, type StageHandle } from './Stage'
 import type { Anchor, Box, Project } from '../../../shared/types'
+import { appendRange, parseRangeNotes } from '../../../shared/range-notes'
 
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
@@ -41,9 +42,19 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const stage = useRef<StageHandle>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const [time, setTime] = useState(0)
+  const [selectedPiece, setSelectedPiece] = useState<string | null>(null)
+  const [moveMode, setMoveMode] = useState(false)
   const [duration, setDuration] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [anchor, setAnchor] = useState<Anchor | undefined>()
+  const [draft, setDraft] = useState('')
+  const focusRange = useRef(false)
+  useLayoutEffect(() => {
+    if (!focusRange.current || !input.current) return
+    focusRange.current = false
+    input.current.focus()
+    input.current.setSelectionRange(input.current.value.length, input.current.value.length)
+  })
   // files attached to the next message: ones just added, or picked in the sidebar's tree
   const attached = useAttached(p.dir)
   const [drawing, setDrawing] = useState(false)
@@ -77,7 +88,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const [chatShut, setChatShut] = useState(false)
   useEffect(() => { if (!preview) setChatShut(false) }, [preview])
   /** Put the cursor in the message box, opening the conversation first if it's shut. */
-  const ask = () => { setChatShut(false); setTimeout(() => input.current?.focus(), 0) }
+  const ask = () => { setChatShut(false); setTimeout(() => { input.current?.focus(); const end = input.current?.value.length ?? 0; input.current?.setSelectionRange(end, end) }, 0) }
   // A message box at the selection itself (the box on the picture, the range or moment on the timeline): instructions
   // go from there without opening the chat.
   const [inline, setInline] = useState(false)
@@ -101,10 +112,13 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const send = useCallback(async (text: string, files = attached) => {
     const a = anchor
     const still = a ? stage.current?.still(a.box) : undefined
+    try {
+      await window.agentshot.agent.send(p.dir, { text, anchor: a, still, files })
+    } catch (e) { alert((e as Error).message); return false }
     setAnchor(undefined)
     setDrawing(false)
     clearAttached(p.dir)
-    await window.agentshot.agent.send(p.dir, { text, anchor: a, still, files }).catch(e => alert((e as Error).message))
+    return true
   }, [anchor, attached, p.dir])
 
   // Startup files belong to the submitted request, or to the first draft when no request was typed.
@@ -151,6 +165,11 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   // what the timeline shows: the edit, or the proposal's pieces while it is on screen
   // Fallback timelines generate piece ids: retain them across clock updates so thumbnails do not remount.
   const track = useMemo(() => onScreen === current ? tl : onScreen.timeline ?? timelineOfFile(onScreen.path, p.media[onScreen.path]), [onScreen, current, tl, p.media])
+  const manualItem = itemAt(track, time).item
+  const manualStart = manualItem ? starts(track)[track.items.indexOf(manualItem)] : 0
+  const canSplit = manualItem?.kind === 'media' && time > manualStart + .001 && time < manualStart + length(manualItem) - .001
+  useEffect(() => { if (!track.items.some(it => it.id === selectedPiece)) setSelectedPiece(null) }, [track])
+  useEffect(() => { setMoveMode(false); setSelectedPiece(null) }, [onScreen.id, !!proposal])
   const liveEdit = useMemo<LiveEdit | null>(() => !live ? null : {
     pieces: tl.items.map(it => it.kind === 'media'
       ? { id: it.id, url: mediaUrl(`${p.dir}/${p.proxies?.[it.src] || it.src}`), in: it.in, out: it.out, gain: it.muted ? 0 : dbToGain(it.db || 0) }
@@ -332,16 +351,26 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         time={time}
         notes={p.notes}
         range={anchor}
+        ranges={parseRangeNotes(draft).map(n => n.anchor)}
         track={track}
         clips={p.clips || {}}
-        selected={editing?.itemId ?? null}
+        selected={selectedPiece ?? editing?.itemId ?? null}
+        onSelect={id => { stage.current?.video?.pause(); setSelectedPiece(id) }}
+        moveMode={moveMode}
+        onExitMove={() => setMoveMode(false)}
         status={edited && !proposal ? <EditStatus saving={saving} onSave={saveVersion} /> : null}
         onSeek={seek}
-        onRange={r => setAnchor(r ? { ...r, box: anchor?.box } : undefined)}
-        onRangeEnd={() => setInline(true)}
+        onRange={r => { setAnchor(r ? { ...r, box: anchor?.box } : undefined); if (r) setChatShut(false) }}
+        onRangeEnd={r => {
+          stage.current?.video?.pause()
+          focusRange.current = true
+          setDraft(text => appendRange(text, r.t0, r.t1))
+          setAnchor(undefined); setInline(false); setChatShut(false)
+        }}
         ask={anchor && !anchor.box && !anchor.clip ? inlineAsk : undefined}
         onNote={n => seek(n.anchor.t0)}
         movable={!proposal}
+        onEdit={async edits => { stage.current?.video?.pause(); setP(await window.agentshot.timeline.edit(p.dir, edits)) }}
         onMove={(id, before) => doEdit([{ op: 'move', id, ...(before ? { before } : {}) }])}
         onInsert={insertFootage}
         onOpenClip={(id, clip, start) => {
@@ -351,12 +380,20 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         }}
       />
 
-      <div className="flex items-center gap-1">
+      <div data-timeline-transport className="flex flex-wrap items-center gap-1">
         <Button size="iconSm" variant="ghost" onClick={playPause}>
           {playing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
         </Button>
         <span className="tabular text-xs text-dim">{timecode(time)} <span className="text-faint">/ {timecode(duration)}</span></span>
         <span className="flex-1" />
+        <div data-manual-tools className="flex items-center gap-1">
+          <Tip label="Split the selected clip at the playhead">
+            <Button size="sm" variant="ghost" aria-label="Split" disabled={!!proposal || !canSplit} onClick={() => { stage.current?.video?.pause(); doEdit([{ op: 'split', at: time }]) }}><SplitSquareHorizontal />Split</Button>
+          </Tip>
+          <Tip label={moveMode ? 'Move mode is on. Click Move clip again to turn it off, or press Esc.' : 'Click to enable moving, then grab a clip and drag it to a new position.'}>
+            <Button size="sm" variant="ghost" className={cn('border border-transparent', moveMode && 'border-amber bg-amber-soft text-amber hover:bg-amber-soft hover:text-amber')} aria-label="Move clip" aria-pressed={moveMode} aria-describedby={moveMode ? 'move-clip-hint' : undefined} disabled={!!proposal || track.items.length < 2} onClick={() => { stage.current?.video?.pause(); setMoveMode(v => !v) }}><MoveHorizontal />Move clip</Button>
+          </Tip>
+        </div>
         <Tip label={<>Note at the playhead <Kbd>N</Kbd></>}>
           <Button size="sm" variant="ghost" onClick={noteHere}><MessageSquarePlus />Note</Button>
         </Tip>
@@ -364,6 +401,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
           <Button data-tour="box" size="sm" variant={drawing ? 'secondary' : 'ghost'} onClick={() => { stage.current?.video?.pause(); setDrawing(d => !d) }}><SquareDashed />Box</Button>
         </Tip>
       </div>
+      {moveMode && <p id="move-clip-hint" className="text-right text-xs text-amber">Drag a clip to move it · Click Move clip again to turn off · Esc also exits</p>}
     </div>
   )
 
@@ -425,6 +463,8 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
               agent={agent}
               active={active}
               anchor={anchor}
+              text={draft}
+              onText={setDraft}
               onClearAnchor={() => { setAnchor(undefined); setDrawing(false) }}
               attached={attached}
               onAttach={rels => attachFiles(p.dir, rels)}
