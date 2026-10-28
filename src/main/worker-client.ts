@@ -126,16 +126,25 @@ export class WorkerClient {
     const candidates = [...new Set([worker.activeUrl, ...worker.urls].filter((u): u is string => !!u).map(normalizeWorkerUrl))]
     if (!candidates.length) throw new Error('Worker has no reachable URLs.')
     let reachable: string | undefined
-    for (const candidate of candidates) {
-      const hello = await this.rawRequest(candidate, '/hello', {
-        method: 'GET',
-        fingerprint: worker.fingerprint.toLowerCase(),
-        token: worker.token,
-      }).catch(() => undefined)
-      if (hello && hello.status === 200) {
-        reachable = candidate
-        break
+    // a cloud worker opens this person's space first (it restarts into it, a few seconds, answering 503 meanwhile):
+    // keep trying a while, as the phone does
+    const end = Date.now() + 60_000
+    for (;;) {
+      let opening = false
+      for (const candidate of candidates) {
+        const hello = await this.rawRequest(candidate, '/hello', {
+          method: 'GET',
+          fingerprint: worker.fingerprint.toLowerCase(),
+          token: worker.token,
+        }).catch(() => undefined)
+        if (hello && hello.status === 200) {
+          reachable = candidate
+          break
+        }
+        if (hello?.status === 503) opening = true
       }
+      if (reachable || !(worker.pool || opening) || Date.now() > end) break
+      await new Promise(r => setTimeout(r, 1_000))
     }
     if (!reachable) throw new Error(`Could not reach worker "${worker.name}" on any address (${candidates.join(', ')}).`)
     const entry: SavedWorker = {
