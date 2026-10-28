@@ -34,6 +34,9 @@ import LegalPage from '../components/LegalPage.astro'
 
     <h3>Mobile companion and remote workers</h3>
     <p>In <strong>Settings → Mobile</strong>, you can pair the AgentShot iOS or Android companion app with your computer using a 6-digit verification code over local Wi-Fi or Tailscale. Paired connections are encrypted and pinned to your computer’s certificate so footage, notes and exports move directly between your phone and your computer.</p>
+    <h3>Camera and microphone on your phone</h3>
+    <p>The phone app uses the camera to scan the pairing QR code shown on your computer, and to record video when you choose to. Recordings go to your computer as part of a project.</p>
+    <p>The microphone is used only while you record: a video, or a voice note, which you say instead of typing a note while you hold the mic button. A voice note is turned into text by your phone’s own speech recognition (Google’s on Android, Apple’s on iPhone), under that provider’s terms, which may process it on the phone or on its servers; AgentShot receives only the text, which becomes your note. On a phone without speech recognition, the recording goes to your computer instead (or to the AgentShot cloud worker you’re using), is turned into text there by AgentShot’s built-in speech recognition, and is deleted once it has been heard. Like a typed note, the text then goes to the editing agent.</p>
     <p>You can also connect AgentShot to a home worker you run yourself (<code>manul --worker</code>) or lease an AgentShot cloud worker. When you connect a worker, AgentShot coordinates the encrypted peer mesh (<code>manul-mesh</code>) and syncs the active project’s files to that worker so it can run edits and renders for you.</p>
   </section>
 
