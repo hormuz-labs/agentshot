@@ -40,19 +40,22 @@ void main() {
     );
     FocusManager.instance.primaryFocus?.unfocus();
     await settle(tester);
-    // up a little, so the note shows above the agent's steps and reply
-    await tester.drag(find.byType(ListView).first, const Offset(0, 260));
+    // up to the start, so the note shows above the agent's steps and reply (not pinned over them)
+    await tester.drag(find.byType(ListView).first, const Offset(0, 900));
     await shot(tester, '3-conversation');
 
-    await tester.tap(find.byKey(const ValueKey('tab-Film')));
-    await waitFor(tester, find.text('A new cut is ready'));
-    await tester.tap(find.widgetWithText(ChoiceChip, 'After'));
-    await waitFor(
-      tester,
-      find.byTooltip('Play'),
-      timeout: const Duration(seconds: 60),
-    );
-    await shot(tester, '4-before-after');
+    // a tablet shows the film beside the conversation, so the shot above has the before and after too
+    if (find.byKey(const ValueKey('tab-Film')).evaluate().isNotEmpty) {
+      await tester.tap(find.byKey(const ValueKey('tab-Film')));
+      await waitFor(tester, find.text('A new cut is ready'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'After'));
+      await waitFor(
+        tester,
+        find.byTooltip('Play'),
+        timeout: const Duration(seconds: 60),
+      );
+      await shot(tester, '4-before-after');
+    }
 
     await tester.tap(find.byTooltip('Project actions').last);
     await settle(tester);
