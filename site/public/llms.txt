@@ -21,7 +21,7 @@ Launch offer: model usage on the AgentShot key is billed at 50% off its list rat
 - Pro: $45/month for 10,000 credits a month, or $432/year with 120,000 credits granted upfront.
 - Max: $80/month for 30,000 credits a month, or $768/year with 360,000 credits granted upfront.
 - Flex top-up: $20 for 5,000 credits, one-time, with an active Pro or Max plan.
-- Enterprise: custom volume, hello@hormuz-labs.dev.
+- Enterprise: custom volume, support@agentshot.si.
 - Model tiers on the AgentShot key: Low, Medium and High for everyone; Max and Ultra (the strongest models) on Pro and Max.
 - Credits never expire once granted.
 - [Pricing page](https://agentshot.si/pricing/)

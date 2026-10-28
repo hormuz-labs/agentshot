@@ -336,7 +336,7 @@ void main() {
       await tester.tap(find.text('Email the request'));
       await tester.pumpAndSettle();
       expect(opened.single.scheme, 'mailto');
-      expect(opened.single.path, 'hello@hormuz-labs.dev');
+      expect(opened.single.path, 'support@agentshot.si');
       expect(opened.single.toString(), contains('maya%40example.com'));
       expect(opened.single.toString(), isNot(contains('+')));
 

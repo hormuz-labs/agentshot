@@ -7,7 +7,7 @@ final deletePage = Uri.parse('https://agentshot.si/delete-account/');
 /// The request, from the person's own email so the account is known to be theirs.
 Uri deleteRequest(String? email) => Uri(
   scheme: 'mailto',
-  path: 'hello@hormuz-labs.dev',
+  path: 'support@agentshot.si',
   query: _query({
     'subject': 'Delete my AgentShot account',
     'body':
@@ -77,7 +77,7 @@ Future<void> deleteAccount(BuildContext context, String? email) async {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Write to hello@hormuz-labs.dev with the subject “Delete my AgentShot account”.',
+          'Write to support@agentshot.si with the subject “Delete my AgentShot account”.',
         ),
       ),
     );

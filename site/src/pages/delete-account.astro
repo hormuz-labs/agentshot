@@ -2,7 +2,7 @@
 import LegalPage from '../components/LegalPage.astro'
 const subject = 'Delete my AgentShot account'
 const body = 'Please delete my AgentShot account and the data that goes with it.\n\nThe email I sign in with:\n'
-const request = `mailto:hello@hormuz-labs.dev?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+const request = `mailto:support@agentshot.si?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 ---
 <LegalPage
   title="Delete your AgentShot account"
@@ -17,7 +17,7 @@ const request = `mailto:hello@hormuz-labs.dev?subject=${encodeURIComponent(subje
     <p><strong>In the phone app:</strong> Settings → Account → <strong>Delete my account</strong>.</p>
     <p><strong>From here:</strong> send us the request from the email address you sign in with, so we know the account is yours.</p>
     <p><a class="btn light" href={request}>Email the deletion request</a></p>
-    <p>Or write to <a href={request}>hello@hormuz-labs.dev</a> with the subject “Delete my AgentShot account”. If you have a plan, cancel it first in AgentShot under Settings → Keys → AgentShot key, so you aren't charged again.</p>
+    <p>Or write to <a href={request}>support@agentshot.si</a> with the subject “Delete my AgentShot account”. If you have a plan, cancel it first in AgentShot under Settings → Keys → AgentShot key, so you aren't charged again.</p>
   </section>
 
   <section>
