@@ -2,7 +2,7 @@
 // balance, same billing. The app (Settings → Keys → Manul key) is where people subscribe; the numbers here only describe it.
 
 export const STARTER_CREDITS = 1_000
-export const CONTACT = 'hello@hormuz-labs.dev'
+export const CONTACT = 'support@agentshot.si'
 /** Launch offer: model usage is billed at half its list rate. Set to 0 to end it (the app's is USAGE_RATE in the manul repo). */
 export const LAUNCH_DISCOUNT = 50
 
