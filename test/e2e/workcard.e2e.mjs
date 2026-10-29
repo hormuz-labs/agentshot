@@ -51,6 +51,19 @@ try {
   await card.screenshot({ path: join(shots, 'work-live.png') })
   await win.screenshot({ path: join(shots, 'work-window.png') })
 
+  // a note sent while it works: in the conversation at once, queued, until it's there for real
+  await app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('agent:send'); ipcMain.handle('agent:send', () => {}) })
+  const followUp = 'Also keep the logo in the corner'
+  await win.locator('[data-tour="composer"] textarea').fill(followUp)
+  await win.keyboard.press('Enter')
+  const queued = win.locator('[data-sent-note]')
+  await queued.getByText(followUp).waitFor()
+  await queued.getByText('Queued · AgentShot reads it next').waitFor()
+  await win.screenshot({ path: join(shots, 'work-queued.png') })
+  await send('MESSAGES_SNAPSHOT', { messages: [user, steps, done('c1', '{}'), done('c2', 'media/clip.mp4\nrenders/'), done('c3', "ENOENT: no such file or directory, open 'notes/brief.txt'", 'tool error'), done('c4', 'ok'), { id: 'u2', role: 'user', content: followUp }] })
+  await queued.waitFor({ state: 'detached' })
+  assert.equal(await win.getByText(followUp, { exact: true }).count(), 1, 'once: the queued note became the real one')
+
   // finished: in the order done, the reply under it; the AI's own failure in words, its message under details
   await send('MESSAGES_SNAPSHOT', { messages: [user, steps, done('c1', '{}'), done('c2', 'media/clip.mp4\nrenders/'), done('c3', "ENOENT: no such file or directory, open 'notes/brief.txt'", 'tool error'), done('c4', 'ok'), done('c5', 'renders/timeline-2.mp4'), { id: 'a2', role: 'assistant', content: 'Trimmed the opening. There was no brief in the project, so I went by the footage.' }] })
   await send('ACTIVITY_SNAPSHOT', { activityType: 'tools', content: { running: [] } })
