@@ -268,6 +268,19 @@ class Account {
     return (await lease()).connection;
   }
 
+  /// The computer [current] is (by its certificate) among this account's, reached the way the account knows (its
+  /// private-network address too, joining the network if this phone isn't on it yet). For a computer paired on a Wi-Fi
+  /// the phone has left. False when it isn't this account's, or doesn't answer that way either.
+  Future<bool> reach(BridgeClient client, Connection current) async {
+    if (!signedIn) return false;
+    final mine = (await computers())
+        .where((c) => c.connection.fingerprint == current.fingerprint)
+        .firstOrNull;
+    if (mine == null) return false;
+    await connect(client, mine);
+    return true;
+  }
+
   /// Opens [computer]: through the private network when it isn't on this Wi-Fi.
   Future<void> connect(
     BridgeClient client,

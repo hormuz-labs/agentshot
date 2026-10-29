@@ -169,6 +169,12 @@ class BridgeClient {
   /// A fresh connection for a computer in the person's account when its token was turned down (see Account).
   Future<Connection?> Function(Connection expired)? renew;
 
+  /// Another way to the same computer when none of its addresses answers (away from the Wi-Fi it was paired on): the
+  /// person's account, which knows it and its private-network address. True when it connected that way. Asked once per
+  /// time it goes out of reach.
+  Future<bool> Function(Connection current)? reachElsewhere;
+  bool _askedElsewhere = false;
+
   /// How this phone shows up on the desktop, under Settings → Mobile.
   static final deviceName = Platform.isIOS ? 'iPhone' : 'Android phone';
 
@@ -753,6 +759,7 @@ class BridgeClient {
           return;
         }
         delay = 1;
+        _askedElsewhere = false;
         _events.add({
           'channel': 'connection',
           'args': [true],
@@ -857,6 +864,13 @@ class BridgeClient {
         }
         // another of its addresses may answer (home Wi-Fi again, or the private network away)
         if (await _preferReachable(generation)) return;
+        // paired on a Wi-Fi and away from it now: the account knows this computer by its certificate, and its way in
+        final current = connection;
+        if (reachElsewhere != null && !_askedElsewhere && current != null) {
+          _askedElsewhere = true;
+          if (await reachElsewhere!(current).catchError((Object _) => false)) return;
+          if (_disposed || generation != _generation) return;
+        }
         // off, asleep or out of reach: keep trying
         _events.add({
           'channel': 'connection',
