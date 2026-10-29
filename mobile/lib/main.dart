@@ -218,6 +218,7 @@ class _AgentShotAppState extends State<AgentShotApp> {
         : PairScreen(
             key: ValueKey(link),
             client: client,
+            account: account,
             link: link,
             codes: codes,
             notice: notice,
