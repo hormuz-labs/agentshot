@@ -63,7 +63,7 @@ import * as Speakers from './speakers'
 import { duckEnvelope, mixArgs, mixCommands, regionsOnTimeline, type Mix } from '../shared/mix'
 import { spawn } from 'node:child_process'
 import { FFMPEG, FFPROBE, probe } from './media'
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import type { Anchor, BrowserMode, ClipInfo, ConsentRequest, Project, RecentProject, Transcript } from '../shared/types'
@@ -257,6 +257,21 @@ function mobileQr() {
 // phone connect" turns it on by hand, and only that keeps it up after signing out.
 let bridgeByHand = false
 const accountPhones = () => !!getConfig().account?.keyId && getConfig().accountPhones !== false
+/** The version to show people: a release's own. Run from source, package.json's is a placeholder (a release stamps the
+ *  real one from its tag as it's built): the newest release tag the source is on, said to be from source. */
+let shown: string | undefined
+function shownVersion() {
+  if (app.isPackaged) return app.getVersion()
+  if (shown) return shown
+  try {
+    const tag = execFileSync('git', ['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*'], { cwd: app.getAppPath(), encoding: 'utf8', timeout: 3_000 }).trim()
+    shown = `${tag.replace(/^v/, '')} (from source)`
+  } catch {
+    shown = `${app.getVersion()} (from source)`
+  }
+  return shown
+}
+
 function syncAccountPhones() {
   if (accountPhones()) void startBridgeAndMesh().catch(e => console.warn('Could not make this computer reachable for signed-in phones', e))
   else { stopMesh(); if (!bridgeByHand) void mobile.stop() }
@@ -1006,7 +1021,7 @@ function wire() {
   const onboarding = new OnboardingStore()
   ipcMain.handle('onboarding:settings-opened', () => onboarding.opened())
   ipcMain.handle('onboarding:settings-finish', (_e, status: 'completed' | 'skipped') => onboarding.finish(status))
-  ipcMain.handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, projectsRoot: Projects.projectsRoot() }))
+  ipcMain.handle('app:info', () => ({ version: shownVersion(), platform: process.platform, projectsRoot: Projects.projectsRoot() }))
   ipcMain.handle('update:state', () => updates?.state())
   ipcMain.handle('update:check', () => updates?.check())
   ipcMain.handle('update:install', () => updates?.install())
