@@ -6,7 +6,7 @@ desktop editing engine. This is an initial implementation, not a published store
 ## Run
 
 1. From the repository root: `npm install`, then `npm run dev`.
-2. On the desktop, open **Settings → Mobile** and turn on **Let my phone connect**.
+2. On the desktop, open **Settings → Mobile** and turn on **Let my phones connect**.
 3. In `mobile/`, start the emulator and the app (`make setup` once first: packages, the Android mesh library, a
    toolchain check):
 
