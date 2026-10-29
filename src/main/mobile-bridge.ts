@@ -1,7 +1,7 @@
 // Optional TLS bridge. Pairing is explicit on the desktop; paired devices persist (30 days) until revoked.
 import { createServer, type Server } from 'node:https'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { createHmac, randomBytes, randomInt, timingSafeEqual, X509Certificate } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual, X509Certificate } from 'node:crypto'
 import { createSocket, type Socket as UdpSocket } from 'node:dgram'
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
@@ -54,6 +54,8 @@ export const DEFAULT_MOBILE_PORT = 47821
 const WORKER_PRIVATE = /^(keys:set|memory:|skills:(enable|profile|newProfile)|tools:(install|remove)|browser:)/
 /** Calls that make a project, which then belongs to the lessee who made it. */
 const CREATES_PROJECT = new Set(['project:create', 'project:createMotion'])
+/** Answers the phone keeps and asks for again often (lists, projects, conversations): tagged, so an unchanged one isn't sent again. */
+const VERSIONED = new Set(['project:recent', 'project:open', 'project:peek', 'jobs:list', 'consent:list', 'agent:attach'])
 /** What starts new work that writes into the project (refused for a cloud lessee whose space is full). */
 const WRITES = new Set(['project:create', 'project:createMotion', 'agent:send', 'timeline:edit', 'mobile:export', 'export:run', 'clip:overlay', 'clip:save',
   'clip:insert', 'clip:move', 'clip:render', 'demo:create', 'mix:speech'])
@@ -404,12 +406,21 @@ export class MobileBridge {
       // a full space takes nothing new: no new work that writes (an edit, a render, the agent), until there's room
       if (lessee && WRITES.has(body.method)) this.options.quota?.ensureRoom(0)
       const result = await this.options.invoke(body.method, args)
+      let value = result
       if (lessee) {
         if (CREATES_PROJECT.has(body.method)) this.claim(result, lessee)
-        if (body.method === 'project:recent' && Array.isArray(result)) return reply(result.filter(r => this.mine((r as { dir?: unknown })?.dir, lessee)))
+        if (body.method === 'project:recent' && Array.isArray(result)) value = result.filter(r => this.mine((r as { dir?: unknown })?.dir, lessee))
       }
-      if (body.method === 'agent:attach') return reply(this.states.get(args[0] as string) || emptyAgentState())
-      return reply(result)
+      if (body.method === 'agent:attach') value = this.states.get(args[0] as string) || emptyAgentState()
+      // what the phone keeps, versioned: when it already has this very answer (it says so by its tag), a few bytes back
+      if (VERSIONED.has(body.method)) {
+        const json = JSON.stringify(value ?? null)
+        const tag = `"${createHash('sha1').update(json).digest('base64url')}"`
+        res.setHeader('etag', tag)
+        if (req.headers['if-none-match'] === tag) { res.writeHead(304); res.end(); return }
+        res.setHeader('content-type', 'application/json'); res.end(json); return
+      }
+      return reply(value)
     }
     if (url.pathname === '/events' && req.method === 'GET') {
       if (this.clients.size >= 20) throw new HttpError(429, 'Too many live connections')

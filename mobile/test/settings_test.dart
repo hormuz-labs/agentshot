@@ -13,9 +13,11 @@ import 'package:agentshot_mobile/ui/setup_ai.dart';
 class Computer extends BridgeClient {
   // no pictures or films from a pretend computer
   @override
-  Future<Uri> thumbnail(String project, String file) async => throw BridgeException('no picture');
+  Future<Uri> thumbnail(String project, String file) async =>
+      throw BridgeException('no picture');
   @override
-  Future<Uri> media(String project, String file) async => throw BridgeException('no film');
+  Future<Uri> media(String project, String file) async =>
+      throw BridgeException('no film');
 
   Computer({
     this.credits = false,
@@ -202,13 +204,10 @@ void main() {
         await tester.scrollUntilVisible(find.text(section), 80);
         expect(find.text(section), findsOneWidget, reason: section);
       }
-      await tester.scrollUntilVisible(
-        find.text('Signed in as maya@example.com'),
-        -80,
-      );
+      await tester.scrollUntilVisible(find.text('maya@example.com'), -80);
       expect(find.text('12,345 credits · Pro plan'), findsOneWidget);
       expect(find.text('Connected'), findsOneWidget);
-      expect(find.text('Switch computer'), findsOneWidget);
+      expect(find.text('Use a different computer'), findsOneWidget);
       expect(find.text('Sign out'), findsOneWidget);
       expect(
         find.text('AgentShot credits, plus your Anthropic key'),
@@ -218,7 +217,7 @@ void main() {
   );
 
   testWidgets(
-    'nothing set up yet: the AI line says so, and the sheet offers credits first, then keys',
+    'nothing set up yet: signed in, the credits are used; the sheet offers credits first, then keys',
     (tester) async {
       // a tall screen: every row on it
       tester.view.physicalSize = const Size(800, 2400);
@@ -231,10 +230,19 @@ void main() {
         ..connected = true;
       await tester.pumpWidget(host(settings(store)));
       await tester.pumpAndSettle();
+      // signed in on the phone: nothing to choose, their credits are used, never a warning
       expect(
         find.text('Not set up yet: choose credits or a key'),
-        findsOneWidget,
+        findsNothing,
       );
+      expect(find.text('AgentShot credits'), findsOneWidget);
+      expect(
+        computer.asked.where((a) => a.first == 'account:adopt'),
+        hasLength(1),
+      );
+      // the computer let go of them since (signed out there): the sheet offers them again
+      computer.credits = false;
+      computer.asked.clear();
       await tester.tap(find.text('AI models'));
       await tester.pumpAndSettle();
       // credits: not in use; one tap hands the phone's account to the computer
@@ -322,6 +330,11 @@ void main() {
         ..account = Signed()
         ..connected = true;
       await tester.pumpWidget(host(settings(store)));
+      await tester.pumpAndSettle();
+
+      // at the very end of Settings, away from everyday buttons
+      final delete = find.byKey(const ValueKey('settings-delete-account'));
+      await tester.scrollUntilVisible(delete, 200);
       await tester.pumpAndSettle();
 
       // Cancel sends nothing
@@ -442,7 +455,15 @@ void main() {
           {'id': '4', 'role': 'assistant', 'content': 'Done.'},
         ],
       });
+      // the film on screen above the conversation is this cut: no second player for it
       await tester.pumpWidget(MaterialApp(home: ProjectScreen(store: store)));
+      await tester.pumpAndSettle();
+      expect(find.byType(CutCard), findsNothing);
+      // a short screen (a phone on its side) has no room for the film above: the cut comes in the conversation
+      tester.view.physicalSize = const Size(800, 400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpAndSettle();
       final card = find.byType(CutCard);
       expect(card, findsOneWidget);

@@ -60,6 +60,26 @@ class AgentState {
   }
 }
 
+/// A file's machine name (an id, a camera's numbering, a screen recording) rather than one a person gave it.
+final _machineName = RegExp(
+  r'^(?:[0-9a-f]{8}-[0-9a-f]{4}-|[0-9a-f]{16,}$|(?:IMG|VID|PXL|MOV|DSC|DJI|MVI|GOPR?)_?\d|\d{6,}|Screen[ _]?Recording)',
+  caseSensitive: false,
+);
+
+/// What to call a project: its title, unless that's only its footage's machine name; then its latest cut's name (from
+/// [full], the whole project, when the list has only the title), else "Untitled film".
+String projectName(Json p, {Json? full}) {
+  final title = '${p['title'] ?? ''}'.trim();
+  if (title.isNotEmpty && !_machineName.hasMatch(title)) return title;
+  final cuts = objects((full ?? p)['versions'])
+      .where(
+        (v) => v['by'] == 'agent' && '${v['title'] ?? ''}'.trim().isNotEmpty,
+      )
+      .toList();
+  if (cuts.isNotEmpty) return '${cuts.last['title']}'.trim();
+  return 'Untitled film';
+}
+
 class BridgeStore extends ChangeNotifier {
   final BridgeClient client;
   late final StreamSubscription<Json> _subscription;
@@ -89,6 +109,13 @@ class BridgeStore extends ChangeNotifier {
     if (list is List && projects.isEmpty) {
       projects = objects(list);
       _notify();
+      // each kept project's own name (its cut's, when the title is only a file's), before the computer answers
+      for (final p in projects) {
+        if (p['dir'] case final String d) {
+          _named(await saved.read('project:$d'));
+        }
+      }
+      _notify();
     }
   }
 
@@ -97,6 +124,36 @@ class BridgeStore extends ChangeNotifier {
     await saved.clear();
     saved.computer = null;
     projects = [];
+    _tags.clear();
+  }
+
+  /// Each project's name, from the whole project when the phone has it (see [projectName]): for the list, which has
+  /// only titles.
+  final _names = <String, String>{};
+  String nameOf(Json p) => _names[p['dir']] ?? projectName(p);
+  void _named(Object? full) {
+    if (full is Map && full['dir'] is String) {
+      _names[full['dir'] as String] = projectName(object(full));
+    }
+  }
+
+  /// The computer's tag for what's kept under each name (see [BridgeClient.callKept]): sent back when asking again,
+  /// so an unchanged answer isn't sent twice. Jobs and requests for an OK aren't kept on disk, only here.
+  final _tags = <String, String?>{};
+
+  Future<String?> _tag(String name) async {
+    if (_tags.containsKey(name)) return _tags[name];
+    final kept = await saved.read('tag:$name');
+    return _tags[name] = kept is String ? kept : null;
+  }
+
+  /// Keeps [value] under [name] with the tag of the answer it is ([tag]); none when it changed here since (an event,
+  /// an edit), so the next ask gets it whole.
+  void _keep(String name, Object? value, [String? tag]) {
+    if (name.startsWith('project:')) _named(value);
+    saved.write(name, value);
+    saved.write('tag:$name', tag);
+    _tags[name] = tag;
   }
 
   /// A conversation as kept: what was said, never a run that looks like it's still going.
@@ -106,18 +163,21 @@ class BridgeStore extends ChangeNotifier {
     saved.write('agent:$dir', {'messages': a.messages, 'cost': a.cost});
   }
 
-  /// The gallery's examples: the computer's list, or the one kept from last time when it can't be reached.
+  /// The gallery's examples: the ones kept from last time at once (the computer's list replaces them behind, for next
+  /// time), else the computer's.
   Future<List<Json>> examples() async {
-    try {
-      final list = objects(await client.call('gallery:list'));
-      saved.write('gallery', list);
-      return list;
-    } catch (_) {
-      final kept = await saved.read('gallery');
-      if (kept is List) return objects(kept);
-      rethrow;
+    final kept = await saved.read('gallery');
+    final fresh = client.call('gallery:list').then((list) {
+      saved.write('gallery', objects(list));
+      return objects(list);
+    });
+    if (kept is List && kept.isNotEmpty) {
+      fresh.ignore();
+      return objects(kept);
     }
+    return fresh;
   }
+
   String? get dir => project?['dir'] as String?;
 
   /// What is still working on the computer: jobs (a render, a transcription) by name, and the agent.
@@ -172,16 +232,59 @@ class BridgeStore extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    final data = await Future.wait([
-      client.call('project:recent'),
-      client.call('jobs:list'),
-      client.call('consent:list'),
+    final answers = await Future.wait([
+      // the list showing is the kept one only when there is one (an empty list may just not be read yet)
+      client.callKept(
+        'project:recent',
+        [],
+        have: projects.isEmpty ? null : await _tag('projects'),
+      ),
+      client.callKept('jobs:list', [], have: _tags['jobs']),
+      client.callKept('consent:list', [], have: _tags['consents']),
     ]);
-    projects = objects(data[0]);
-    jobs = objects(data[1]);
-    consents = objects(data[2]);
-    saved.write('projects', projects);
+    if (!answers[0].unchanged) {
+      projects = objects(answers[0].value);
+      _keep('projects', projects, answers[0].tag);
+    }
+    if (!answers[1].unchanged) {
+      jobs = objects(answers[1].value);
+      _tags['jobs'] = answers[1].tag;
+    }
+    if (!answers[2].unchanged) {
+      consents = objects(answers[2].value);
+      _tags['consents'] = answers[2].tag;
+    }
     _notify();
+    unawaited(_keepAhead());
+  }
+
+  bool _ahead = false;
+
+  /// The latest projects, kept before they're tapped: each opens at once from the phone, even the first time.
+  /// Only what changed comes over; a computer too old to hand a project over unopened is left be.
+  Future<void> _keepAhead() async {
+    if (_ahead) return;
+    _ahead = true;
+    try {
+      for (final p in projects.take(12)) {
+        final d = p['dir'];
+        if (d is! String || d == dir) continue;
+        final name = 'project:$d';
+        final answer = await client.callKept('project:peek', [
+          d,
+        ], have: await _tag(name));
+        if (!answer.unchanged && answer.value is Map) {
+          _keep(name, answer.value, answer.tag);
+        } else if (!_names.containsKey(d)) {
+          _named(await saved.read(name));
+        }
+      }
+    } catch (_) {
+      // out of reach, or a computer from before peeking: the project comes when it's opened
+    } finally {
+      _ahead = false;
+      _notify();
+    }
   }
 
   /// Shows what the phone kept of a project (and its conversation), if it kept anything: true when it did.
@@ -189,6 +292,7 @@ class BridgeStore extends ChangeNotifier {
     final kept = await saved.read('project:$directory');
     if (kept is! Map) return false;
     project = object(kept);
+    _named(kept);
     final said = await saved.read('agent:$directory');
     if (said is Map && !(agents[directory]?.loaded ?? false)) {
       agent(directory).snapshot(object(said));
@@ -202,12 +306,18 @@ class BridgeStore extends ChangeNotifier {
   Future<void> open(String directory) async {
     final kept = dir == directory || await showSaved(directory);
     try {
-      project = object(await client.call('project:open', [directory]));
+      // what's showing is what's kept: unchanged on the computer, nothing more comes
+      final answer = await client.callKept('project:open', [
+        directory,
+      ], have: kept ? await _tag('project:$directory') : null);
+      if (!answer.unchanged) {
+        project = object(answer.value);
+        _keep('project:$directory', project, answer.tag);
+      }
     } catch (_) {
       if (kept) return;
       rethrow;
     }
-    saved.write('project:$directory', project);
     _notify();
     final state = await client.call('agent:attach', [directory]);
     if (state is Map && state['messages'] is List) {
@@ -226,7 +336,7 @@ class BridgeStore extends ChangeNotifier {
     final value = await client.call(method, args);
     if (value is Map && value.containsKey('versions')) {
       project = object(value);
-      if (dir case final d?) saved.write('project:$d', project);
+      if (dir case final d?) _keep('project:$d', project);
     }
     _notify();
   }
@@ -270,12 +380,14 @@ class BridgeStore extends ChangeNotifier {
       case 'project':
         if (args.isNotEmpty && args[0]['dir'] == dir) {
           project = object(args[0]);
-          saved.write('project:$dir', project);
+          _keep('project:$dir', project);
         }
       case 'jobs':
         jobs = objects(args.first);
+        _tags['jobs'] = null;
       case 'consent':
         consents = objects(args.first);
+        _tags['consents'] = null;
       case 'agent:state':
         agent(args[0] as String).snapshot(object(args[1]));
         _keepConversation(args[0] as String);
@@ -284,7 +396,8 @@ class BridgeStore extends ChangeNotifier {
       case 'agui':
         final event = object(args[1]);
         agent(args[0] as String).reduce(event);
-        if (event['type'] == 'MESSAGES_SNAPSHOT' || event['type'] == 'RUN_FINISHED') {
+        if (event['type'] == 'MESSAGES_SNAPSHOT' ||
+            event['type'] == 'RUN_FINISHED') {
           _keepConversation(args[0] as String);
         }
     }

@@ -96,27 +96,32 @@ class _CutCardState extends State<CutCard> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // the cut's own first frame, when the computer has it
-                FutureBuilder<Uri>(
-                  future: widget.store.client.thumbnail(
-                    widget.dir,
-                    widget.version['path'] as String,
+                // the cut's own first frame, when the computer has it (anew when it changed there)
+                StreamBuilder<(String, String)>(
+                  stream: widget.store.client.mediaChanged.where(
+                    (c) => c.$1 == widget.dir && c.$2 == widget.version['path'],
                   ),
-                  builder: (context, uri) => DecoratedBox(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xff1d1a17), Color(0xff3a2c16)],
-                      ),
+                  builder: (context, _) => FutureBuilder<Uri>(
+                    future: widget.store.client.thumbnail(
+                      widget.dir,
+                      widget.version['path'] as String,
                     ),
-                    child: uri.data == null
-                        ? null
-                        : Image.network(
-                            '${uri.data}',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const SizedBox(),
-                          ),
+                    builder: (context, uri) => DecoratedBox(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xff1d1a17), Color(0xff3a2c16)],
+                        ),
+                      ),
+                      child: uri.data == null
+                          ? null
+                          : Image.network(
+                              '${uri.data}',
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const SizedBox(),
+                            ),
+                    ),
                   ),
                 ),
                 Center(
@@ -159,7 +164,9 @@ class _CutCardState extends State<CutCard> {
         shape: smooth(
           Radii.card,
           side: BorderSide(
-            color: widget.highlight ? studio.accent.withValues(alpha: .55) : studio.hairline,
+            color: widget.highlight
+                ? studio.accent.withValues(alpha: .55)
+                : studio.hairline,
           ),
         ),
       ),

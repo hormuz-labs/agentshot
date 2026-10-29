@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../bridge/account.dart';
 import '../bridge/client.dart';
@@ -355,31 +356,78 @@ class _CloudScreenState extends State<CloudScreen> {
   String step = 'finding';
   String? error;
 
+  /// How long this try has taken, ticking each second: said on screen, and the bar fills against [usual].
+  final watch = Stopwatch();
+  Timer? tick;
+  static const usual = Duration(seconds: 30);
+
+  /// The most a try may take before it says so, whatever is still waiting underneath.
+  static const limit = Duration(seconds: 100);
+
+  /// Which try is current: one given up on (timed out, tried again) can't finish the screen later.
+  int attempt = 0;
+
   @override
   void initState() {
     super.initState();
     go();
   }
 
+  @override
+  void dispose() {
+    tick?.cancel();
+    super.dispose();
+  }
+
   Future<void> go() async {
+    final mine = ++attempt;
     setState(() {
       error = null;
       step = widget.held == null ? 'finding' : 'opening';
     });
-    try {
-      final spot = widget.held ?? await widget.account.lease();
+    watch
+      ..reset()
+      ..start();
+    tick?.cancel();
+    tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() => step = 'opening');
-      await widget.account.connect(
-        widget.client,
-        spot,
-        opening: () {
-          if (mounted) setState(() => step = 'opening');
-        },
-      );
-      if (mounted) Navigator.of(context).pop(true);
+      // past the limit, whatever still waits underneath: said, with Try again (this try can no longer finish)
+      if (watch.elapsed >= limit && mine == attempt) {
+        attempt++;
+        watch.stop();
+        tick?.cancel();
+        setState(
+          () => error =
+              'AgentShot Cloud is taking too long to answer. Check this phone’s internet connection, then try again.',
+        );
+        return;
+      }
+      setState(() {});
+    });
+    try {
+      await () async {
+        final spot = widget.held ?? await widget.account.lease();
+        if (!mounted || mine != attempt) return;
+        setState(() => step = 'opening');
+        await widget.account.connect(
+          widget.client,
+          spot,
+          away: () {
+            if (mounted && mine == attempt) setState(() => step = 'network');
+          },
+          opening: () {
+            if (mounted && mine == attempt) setState(() => step = 'opening');
+          },
+        );
+      }();
+      if (mounted && mine == attempt) Navigator.of(context).pop(true);
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted && mine == attempt) setState(() => error = '$e');
+    } finally {
+      if (mine == attempt) {
+        watch.stop();
+        tick?.cancel();
+      }
     }
   }
 
@@ -391,6 +439,10 @@ class _CloudScreenState extends State<CloudScreen> {
       'finding' => (
         'Finding a spot in AgentShot Cloud…',
         'This takes a moment.',
+      ),
+      'network' => (
+        'Connecting securely…',
+        'Joining your private network, for working from anywhere.',
       ),
       _ => (
         'Opening your space…',
@@ -433,9 +485,27 @@ class _CloudScreenState extends State<CloudScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  if (error == null)
-                    const SizedBox(width: 160, child: LinearProgressIndicator())
-                  else
+                  if (error == null) ...[
+                    // how far along against the usual, never quite full until it's in; and the seconds, honestly
+                    SizedBox(
+                      width: 160,
+                      child: LinearProgressIndicator(
+                        value: min(
+                          .92,
+                          watch.elapsed.inMilliseconds / usual.inMilliseconds,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      watch.elapsed < usual
+                          ? 'Usually under half a minute · ${watch.elapsed.inSeconds} s'
+                          : 'Taking longer than usual · ${watch.elapsed.inSeconds} s',
+                      style: text.labelMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ] else
                     FilledButton(onPressed: go, child: const Text('Try again')),
                 ],
               ),

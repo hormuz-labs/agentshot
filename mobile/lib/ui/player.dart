@@ -100,7 +100,8 @@ class _RemotePlayerState extends State<RemotePlayer> {
       PageRouteBuilder<void>(
         opaque: true,
         pageBuilder: (context, _, _) => _FullScreen(controller: c),
-        transitionsBuilder: (_, animation, _, child) => FadeTransition(opacity: animation, child: child),
+        transitionsBuilder: (_, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
       ),
     );
     if (mounted) setState(() {});
@@ -114,7 +115,9 @@ class _RemotePlayerState extends State<RemotePlayer> {
     final limit = MediaQuery.sizeOf(context).height * widget.maxHeight;
     if (error != null) {
       return Container(
-        constraints: BoxConstraints(maxHeight: limit.clamp(120, double.infinity)),
+        constraints: BoxConstraints(
+          maxHeight: limit.clamp(120, double.infinity),
+        ),
         padding: const EdgeInsets.all(Space.lg),
         decoration: ShapeDecoration(color: studio.surface2, shape: smooth(16)),
         child: SingleChildScrollView(
@@ -146,7 +149,10 @@ class _RemotePlayerState extends State<RemotePlayer> {
           child: DecoratedBox(
             decoration: ShapeDecoration(color: studio.film, shape: smooth(16)),
             child: const Center(
-              child: SizedBox.square(dimension: 26, child: CircularProgressIndicator(strokeWidth: 2.5)),
+              child: SizedBox.square(
+                dimension: 26,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
             ),
           ),
         ),
@@ -209,8 +215,9 @@ class _RemotePlayerState extends State<RemotePlayer> {
                         fit: StackFit.expand,
                         children: [
                           ColoredBox(color: studio.film, child: VideoPlayer(c)),
-                          // paused: one big way to play, over the picture
-                          if (!playing && !widget.boxMode)
+                          // not started yet: one big way to play, over the picture (after that, the bar below, and a
+                          // tap on the picture)
+                          if (!playing && position == 0 && !widget.boxMode)
                             Center(
                               child: IgnorePointer(
                                 child: Container(
@@ -219,28 +226,29 @@ class _RemotePlayerState extends State<RemotePlayer> {
                                   decoration: BoxDecoration(
                                     color: Colors.black.withValues(alpha: .45),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white.withValues(alpha: .25)),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: .25,
+                                      ),
+                                    ),
                                   ),
-                                  child: const Icon(Icons.play_arrow_rounded, size: 34, color: Colors.white),
+                                  child: const Icon(
+                                    Icons.play_arrow_rounded,
+                                    size: 34,
+                                    color: Colors.white,
+                                  ),
                                 ),
-                              ),
-                            ),
-                          if (!playing && !widget.boxMode)
-                            Positioned(
-                              right: 4,
-                              bottom: 4,
-                              child: IconButton(
-                                tooltip: 'Full screen',
-                                onPressed: fullScreen,
-                                color: Colors.white,
-                                icon: const Icon(Icons.fullscreen_rounded),
                               ),
                             ),
                           if (widget.boxMode)
                             Positioned(
                               top: Space.sm,
                               left: Space.sm,
-                              child: StatusPill('Drag to draw a box', color: studio.info, onMedia: true),
+                              child: StatusPill(
+                                'Drag to draw a box',
+                                color: studio.info,
+                                onMedia: true,
+                              ),
                             ),
                           if (widget.boxMode && from != null && to != null)
                             Positioned.fromRect(
@@ -281,7 +289,7 @@ class _RemotePlayerState extends State<RemotePlayer> {
               style: text.bodySmall?.copyWith(color: studio.danger),
             ),
           ),
-        // the transport: play, the scrubber, where it is of how long, sound (full screen is on the picture, paused)
+        // the transport: play, the scrubber, where it is of how long, sound, full screen (the picture stays clear)
         Padding(
           padding: const EdgeInsets.only(top: 2),
           child: Row(
@@ -289,12 +297,17 @@ class _RemotePlayerState extends State<RemotePlayer> {
               IconButton(
                 tooltip: playing ? 'Pause' : 'Play',
                 onPressed: toggle,
-                icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 26),
+                icon: Icon(
+                  playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  size: 26,
+                ),
               ),
               Expanded(
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 14,
+                    ),
                   ),
                   child: Slider(
                     value: position,
@@ -308,12 +321,28 @@ class _RemotePlayerState extends State<RemotePlayer> {
               ),
               Text(
                 '${timestamp(position / 1000)} / ${timestamp(duration / 1000)}',
-                style: text.labelMedium?.copyWith(color: studio.text2, fontFeatures: tabular),
+                style: text.labelMedium?.copyWith(
+                  color: studio.text2,
+                  fontFeatures: tabular,
+                ),
               ),
               IconButton(
                 tooltip: muted ? 'Unmute' : 'Mute',
                 onPressed: () => c.setVolume(muted ? 1 : 0),
-                icon: Icon(muted ? Icons.volume_off_rounded : Icons.volume_up_rounded, size: 20, color: studio.text2),
+                icon: Icon(
+                  muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                  size: 20,
+                  color: studio.text2,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Full screen',
+                onPressed: fullScreen,
+                icon: Icon(
+                  Icons.fullscreen_rounded,
+                  size: 22,
+                  color: studio.text2,
+                ),
               ),
             ],
           ),
@@ -362,8 +391,13 @@ class _FullScreenState extends State<_FullScreen> {
   @override
   Widget build(BuildContext context) {
     final duration = c.value.duration.inMilliseconds.toDouble();
-    final position = c.value.position.inMilliseconds.toDouble().clamp(0.0, duration);
-    final wide = c.value.aspectRatio > 1 && MediaQuery.sizeOf(context).width < MediaQuery.sizeOf(context).height;
+    final position = c.value.position.inMilliseconds.toDouble().clamp(
+      0.0,
+      duration,
+    );
+    final wide =
+        c.value.aspectRatio > 1 &&
+        MediaQuery.sizeOf(context).width < MediaQuery.sizeOf(context).height;
     final picture = AspectRatio(
       aspectRatio: c.value.aspectRatio > 0 ? c.value.aspectRatio : 16 / 9,
       child: VideoPlayer(c),
@@ -377,7 +411,9 @@ class _FullScreenState extends State<_FullScreen> {
               onTap: () => c.value.isPlaying ? c.pause() : c.play(),
               child: Center(
                 // a wide film on an upright phone turns to fill it
-                child: wide ? RotatedBox(quarterTurns: 1, child: picture) : picture,
+                child: wide
+                    ? RotatedBox(quarterTurns: 1, child: picture)
+                    : picture,
               ),
             ),
             Positioned(
@@ -386,7 +422,10 @@ class _FullScreenState extends State<_FullScreen> {
               child: IconButton(
                 tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
-                style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black54,
+                  foregroundColor: Colors.white,
+                ),
                 icon: const Icon(Icons.close_rounded),
               ),
             ),
@@ -395,25 +434,37 @@ class _FullScreenState extends State<_FullScreen> {
               right: Space.lg,
               bottom: Space.md,
               child: Theme(
-                data: Theme.of(context).copyWith(iconTheme: const IconThemeData(color: Colors.white)),
+                data: Theme.of(
+                  context,
+                ).copyWith(iconTheme: const IconThemeData(color: Colors.white)),
                 child: Row(
                   children: [
                     IconButton(
                       tooltip: c.value.isPlaying ? 'Pause' : 'Play',
                       color: Colors.white,
                       onPressed: () => c.value.isPlaying ? c.pause() : c.play(),
-                      icon: Icon(c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                      icon: Icon(
+                        c.value.isPlaying
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                      ),
                     ),
                     Expanded(
                       child: Slider(
                         value: position,
                         max: duration > 0 ? duration : 1,
-                        onChanged: duration <= 0 ? null : (v) => c.seekTo(Duration(milliseconds: v.round())),
+                        onChanged: duration <= 0
+                            ? null
+                            : (v) =>
+                                  c.seekTo(Duration(milliseconds: v.round())),
                       ),
                     ),
                     Text(
                       '${timestamp(position / 1000)} / ${timestamp(duration / 1000)}',
-                      style: const TextStyle(color: Colors.white, fontFeatures: tabular),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFeatures: tabular,
+                      ),
                     ),
                   ],
                 ),

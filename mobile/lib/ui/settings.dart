@@ -47,7 +47,12 @@ class SettingsScreen extends StatelessWidget {
     final signedIn = account?.signedIn == true ? account : null;
     return ListView(
       // room at the end to scroll clear of the tab bar
-      padding: const EdgeInsets.fromLTRB(Space.page, Space.xxl, Space.page, 120),
+      padding: const EdgeInsets.fromLTRB(
+        Space.page,
+        Space.xxl,
+        Space.page,
+        120,
+      ),
       children: [
         Text('Settings', style: Theme.of(context).textTheme.displaySmall),
         const SizedBox(height: Space.sm),
@@ -62,10 +67,11 @@ class SettingsScreen extends StatelessWidget {
                   ? Text(signedIn!.email![0].toUpperCase())
                   : const Icon(Icons.person_outline),
             ),
+            // an address has no spaces to break at: one line, cut short with … rather than split mid-word
             title: Text(
-              signedIn?.email != null
-                  ? 'Signed in as ${signedIn!.email}'
-                  : 'AgentShot account',
+              signedIn?.email ?? 'AgentShot account',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             subtitle: Credits(store: store),
             trailing: const Icon(Icons.chevron_right),
@@ -76,24 +82,10 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 8,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () => leaving(context, onSignOut),
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Sign out'),
-                    ),
-                    TextButton.icon(
-                      key: const ValueKey('settings-delete-account'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: scheme.error,
-                      ),
-                      onPressed: () => deleteAccount(context, signedIn.email),
-                      icon: const Icon(Icons.person_remove_outlined),
-                      label: const Text('Delete my account'),
-                    ),
-                  ],
+                child: TextButton.icon(
+                  onPressed: () => leaving(context, onSignOut),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign out'),
                 ),
               ),
             ),
@@ -129,11 +121,16 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Align(
               alignment: Alignment.centerLeft,
+              // on the cloud: leaving hands the spot back for the next person (the space stays theirs)
               child: signedIn != null
                   ? OutlinedButton.icon(
                       onPressed: () => leaving(context, onDisconnect),
-                      icon: const Icon(Icons.swap_horiz),
-                      label: const Text('Switch computer'),
+                      icon: Icon(cloud ? Icons.logout : Icons.swap_horiz),
+                      label: Text(
+                        cloud
+                            ? 'Leave AgentShot Cloud'
+                            : 'Use a different computer',
+                      ),
                     )
                   : OutlinedButton.icon(
                       onPressed: () => guard(context, onDisconnect),
@@ -262,6 +259,19 @@ class SettingsScreen extends StatelessWidget {
             },
           ),
         ]),
+        // for good, so at the very end and quiet, never beside everyday buttons (it asks before anything goes)
+        if (signedIn != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: Center(
+              child: TextButton(
+                key: const ValueKey('settings-delete-account'),
+                style: TextButton.styleFrom(foregroundColor: scheme.error),
+                onPressed: () => deleteAccount(context, signedIn.email),
+                child: const Text('Delete my account'),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -743,7 +753,16 @@ class _AiTileState extends State<AiTile> {
         .catchError((Object _) => null);
     // an older computer may not say: none, then
     final providers = listed is Map ? objects(listed['providers']) : <Json>[];
-    return aiSummary(keys, providers);
+    final line = aiSummary(keys, providers);
+    // nothing set up, but signed in here: their credits, rather than a warning to act on
+    if (line == null &&
+        await adoptCredits(widget.store).catchError((Object _) => false)) {
+      return aiSummary(
+        objects(await widget.store.client.call('keys:list')),
+        providers,
+      );
+    }
+    return line;
   }
 
   @override
@@ -826,9 +845,7 @@ class _StorageTileState extends State<StorageTile> {
       leading: const Icon(Icons.sd_storage_outlined),
       title: const Text('Saved on this phone'),
       subtitle: Text(
-        kept.hasData
-            ? _bytes(kept.data!)
-            : 'Films you’ve watched',
+        kept.hasData ? _bytes(kept.data!) : 'Films you’ve watched',
       ),
       trailing: TextButton(
         onPressed: (kept.data ?? 0) == 0

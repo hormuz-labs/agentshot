@@ -287,7 +287,9 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       `read-only); anything else is refused, so don't look elsewhere. Files the user adds are already copied into media/ (never look for the originals).\n` +
       `Stay inside the project folder. Never inspect, run or search AgentShot's own program files, other folders or system processes; ` +
       `if a tool fails, read its error and fix your input instead of investigating the app.\n` +
-      `Write replies in short plain Markdown. Say what you did, not how.\n\n` + MOTION_POINTER +
+      `Write replies in short plain Markdown. Say what you did, not how, in everyday words: no technical terms or numbers ` +
+      `(loudness units, resolutions, codecs, colour settings) unless the user asked for them. The user may be on a phone or a ` +
+      `computer: don't name buttons; say the new cut is ready to watch, keep or send back.\n\n` + MOTION_POINTER +
       motionBrief(input.env?.cwd ? bridge.project(input.env.cwd) : undefined) +
       walkthroughBrief(input.env?.cwd ? bridge.project(input.env.cwd) : undefined), { tag: false })],
     tools: [
@@ -735,7 +737,7 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       }),
       defineTool({
         name: 'propose_version',
-        description: 'Show a finished cut to the user as a before/after against the current version, with Accept / Reject.',
+        description: 'Show a finished cut to the user as a before/after against the current version, for them to keep or send back.',
         parameters: Type.Object({ path: Type.String({ description: 'the rendered file, relative to the project folder' }), title: Type.String({ description: 'short, e.g. "Ums removed"' }) }),
         execute: async (args: Any, api: Any) => {
           const p = proj(api)

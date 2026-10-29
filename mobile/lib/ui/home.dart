@@ -65,9 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute<void>(builder: (_) => ProjectScreen(store: store)),
       );
     }
-    // back from it: what was there has been seen
+    // back from it: what was there has been seen; the list freshens behind what's showing
     store.markSeen(project['dir'] as String);
-    await store.refresh();
+    store.refresh().ignore();
   }
 
   /// Brings footage in: a recording, or several videos, photos or both. Videos go first, so the project starts from
@@ -370,25 +370,25 @@ class _HomeScreenState extends State<HomeScreen> {
       StartOption(
         Icons.auto_awesome,
         'Describe it',
-        null,
+        'Say what to make; the agent makes it',
         ready ? createMotion : null,
       ),
       StartOption(
         Icons.add_photo_alternate_rounded,
         'Import',
-        null,
+        'Videos and photos from this phone',
         ready ? () => import() : null,
       ),
       StartOption(
         Icons.videocam_rounded,
         'Record',
-        null,
+        'Film something now',
         ready ? () => import(camera: true) : null,
       ),
       StartOption(
         Icons.language_rounded,
         'Walkthrough',
-        null,
+        'A guided tour of a website',
         ready ? () => createMotion(walkthrough: true) : null,
       ),
     ];
@@ -445,7 +445,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ? 'AgentShot Cloud'
         : (store.client.connection?.name ?? 'your computer');
     final (color, words) = store.connected
-        ? (studio.success, 'Connected to $name')
+        ? (studio.success, 'On $name')
         : store.projects.isNotEmpty
         ? (studio.accent, 'Reconnecting · showing what was here last')
         : (
@@ -484,13 +484,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// A "New film" tile after the projects, while there are few and no search.
+  bool newTile(List<Json> results) =>
+      search.isEmpty && results.isNotEmpty && results.length < 6;
+
   /// Search, for when there are enough projects to need it: opened from its icon.
   bool searching = false;
 
   Widget projects() {
     final results = store.projects
         .where(
-          (p) => '${p['title']}'.toLowerCase().contains(search.toLowerCase()),
+          (p) => store.nameOf(p).toLowerCase().contains(search.toLowerCase()),
         )
         .toList();
     final theme = Theme.of(context);
@@ -536,11 +540,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                   ],
                 ),
-                // only when something's wrong: connected is the normal state, not news
-                if (!store.connected) ...[
-                  const SizedBox(height: Space.sm),
-                  connection(),
-                ],
+                // where these projects are (AgentShot Cloud, or which computer), and when something's wrong
+                const SizedBox(height: Space.xs),
+                connection(),
                 if (store.consents.isNotEmpty) ...[
                   const SizedBox(height: Space.md),
                   Panel(
@@ -601,7 +603,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           SliverPadding(
             // room at the end
-            padding: const EdgeInsets.fromLTRB(Space.page, 0, Space.page, Space.xxl),
+            padding: const EdgeInsets.fromLTRB(
+              Space.page,
+              0,
+              Space.page,
+              Space.xxl,
+            ),
             sliver: SliverGrid.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: columns,
@@ -616,12 +623,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     MediaQuery.textScalerOf(context).scale(62) +
                     Space.md,
               ),
-              itemCount: results.length,
-              itemBuilder: (context, i) => ProjectCard(
-                project: results[i],
-                store: store,
-                onOpen: () => guard(context, () => open(results[i])),
-              ),
+              // a few projects leave room: the way to the next one fills it
+              itemCount: results.length + (newTile(results) ? 1 : 0),
+              itemBuilder: (context, i) => i == results.length
+                  ? NewFilmTile(onTap: startSheet)
+                  : ProjectCard(
+                      project: results[i],
+                      store: store,
+                      onOpen: () => guard(context, () => open(results[i])),
+                    ),
             ),
           ),
         ],
@@ -644,6 +654,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: Space.lg),
             AsyncPanel(
               load: store.examples,
+              placeholder: const GalleryPlaceholder(),
               builder: (data, reload) => GalleryList(
                 examples: objects(data),
                 store: store,
@@ -673,8 +684,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ConsentCards(store: store),
           const SizedBox(height: Space.md),
         ],
-        if (store.jobs.isEmpty)
-          const EmptyMessage(Icons.check_circle_outline, 'All quiet', ''),
+        if (store.jobs.isEmpty && store.consents.isEmpty)
+          const EmptyMessage(
+            Icons.check_circle_outline,
+            'All quiet',
+            'Renders, exports and anything that needs your OK show up here.',
+          ),
         for (final job in store.jobs.reversed)
           Padding(
             padding: const EdgeInsets.only(bottom: Space.sm),
@@ -788,7 +803,7 @@ class ProjectCard extends StatelessWidget {
                 Space.md,
               ),
               child: Text(
-                '${project['title']}',
+                store.nameOf(project),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
@@ -880,17 +895,17 @@ class ProjectCard extends StatelessWidget {
             ),
             const SizedBox(height: Space.sm + 2),
             Text(
-              '${project['title']}',
+              store.nameOf(project),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: text.titleSmall,
             ),
             const SizedBox(height: 2),
             if (opened != null)
-              Text(
-                ago(opened),
-                style: text.bodySmall?.copyWith(color: studio.text3),
-              ),
+              Text(switch (ago(opened)) {
+                'now' => 'Opened just now',
+                final at => 'Opened $at',
+              }, style: text.bodySmall?.copyWith(color: studio.text3)),
           ],
         ),
       ),
@@ -1493,7 +1508,9 @@ class NavItem extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    final color = selected ? Theme.of(context).colorScheme.onSurface : Studio.of(context).text2;
+    final color = selected
+        ? Theme.of(context).colorScheme.onSurface
+        : Studio.of(context).text2;
     return Semantics(
       button: true,
       selected: selected,
@@ -1509,6 +1526,116 @@ class NavItem extends StatelessWidget {
             child: destination.iconWith(selected: selected),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The way to the next film, beside a few projects: a dashed tile the size of a project's poster.
+class NewFilmTile extends StatelessWidget {
+  final VoidCallback onTap;
+  const NewFilmTile({super.key, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final studio = Studio.of(context);
+    final text = Theme.of(context).textTheme;
+    return Semantics(
+      button: true,
+      label: 'New film',
+      child: GestureDetector(
+        key: const ValueKey('new-film'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 10,
+              child: DecoratedBox(
+                decoration: ShapeDecoration(
+                  color: studio.surface2,
+                  shape: smooth(16, side: BorderSide(color: studio.hairline)),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 32,
+                    color: studio.accent,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: Space.sm + 2),
+            Text('New film', style: text.titleSmall),
+            const SizedBox(height: 2),
+            Text(
+              'Describe, import or record',
+              style: text.bodySmall?.copyWith(color: studio.text3),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Where the examples will be, while they come: their cards' shapes, softly pulsing.
+class GalleryPlaceholder extends StatefulWidget {
+  const GalleryPlaceholder({super.key});
+  @override
+  State<GalleryPlaceholder> createState() => _GalleryPlaceholderState();
+}
+
+class _GalleryPlaceholderState extends State<GalleryPlaceholder>
+    with SingleTickerProviderStateMixin {
+  late final pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final studio = Studio.of(context);
+    Widget block(double height, {double? width}) => Container(
+      height: height,
+      width: width,
+      decoration: ShapeDecoration(color: studio.surface2, shape: smooth(14)),
+    );
+    return FadeTransition(
+      opacity: Tween<double>(begin: .45, end: 1).animate(pulse),
+      child: Column(
+        key: const ValueKey('gallery-placeholder'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          block(48),
+          const SizedBox(height: Space.md),
+          Row(
+            children: [
+              for (final w in [56.0, 96.0, 104.0]) ...[
+                block(36, width: w),
+                const SizedBox(width: Space.sm),
+              ],
+            ],
+          ),
+          const SizedBox(height: Space.md),
+          for (var row = 0; row < 2; row++) ...[
+            Row(
+              children: [
+                Expanded(child: block(240)),
+                const SizedBox(width: Space.md),
+                Expanded(child: block(240)),
+              ],
+            ),
+            const SizedBox(height: Space.md),
+          ],
+        ],
       ),
     );
   }

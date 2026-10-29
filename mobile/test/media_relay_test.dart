@@ -112,21 +112,31 @@ void main() {
     expect(await play(uri, 'bytes=-3'), (206, '789'));
     expect(asked, isEmpty);
 
-    // checked with the computer by its tag: unchanged costs a 304, nothing more
+    Future<void> settle(bool Function() done) async {
+      for (var i = 0; i < 100 && !done(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    }
+
+    // checked with the computer by its tag behind what's already playing: unchanged costs a 304, nothing more
     MediaCache.recheck = Duration.zero;
     expect(await play(uri, 'bytes=0-1'), (206, '01'));
+    await settle(() => asked.isNotEmpty);
     expect(asked, ['HEAD whole "v1"']);
 
-    // a new render in its place: fetched again
+    // a new render in its place: the kept one plays at once, the new one comes behind it, and its picture reloads
     asked.clear();
     film = utf8.encode('ABCDEFGHIJKL');
     etag = '"v2"';
-    expect(await play(uri, 'bytes=0-3'), (206, 'ABCD'));
-    expect(asked.first, 'HEAD whole "v1"');
-    for (var i = 0; i < 50 && await cache.size() != 12; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    }
+    final changed = client.mediaChanged.first;
+    expect(await play(uri, 'bytes=0-3'), (206, '0123'));
+    expect(await changed.timeout(const Duration(seconds: 5)), ('/p', 'renders/cut.mp4'));
+    expect(asked, ['HEAD whole "v1"', 'GET whole']);
     expect(await cache.size(), 12);
+    final fresh = await client.media('/p', 'renders/cut.mp4');
+    expect(fresh, isNot(uri));
+    MediaCache.recheck = const Duration(minutes: 2);
+    expect(await play(fresh, 'bytes=0-3'), (206, 'ABCD'));
 
     // sharing it needs no network: the kept file, copied out
     asked.clear();

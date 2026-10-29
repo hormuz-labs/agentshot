@@ -152,7 +152,12 @@ class _AgentShotAppState extends State<AgentShotApp> {
   Future<void> _openFromNotification(String dir) async {
     if (!paired) return;
     try {
-      await store.open(dir);
+      // kept on the phone (most are, ahead of a tap): open at once, and the computer's version follows
+      if (await store.showSaved(dir)) {
+        store.open(dir).ignore();
+      } else {
+        await store.open(dir);
+      }
       navigator.currentState?.popUntil((route) => route.isFirst);
       await navigator.currentState?.push(
         MaterialPageRoute<void>(builder: (_) => ProjectScreen(store: store)),

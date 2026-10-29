@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
@@ -43,8 +44,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
   /// Something new came while they were reading further up.
   bool missed = false;
 
-  /// Notes sent while the agent was working, until they show in the conversation (it reads them next).
+  /// Notes sent, until they show in the conversation: at once as sent, while on their way (see [sendingNotes]) or
+  /// waiting for the agent at work to read them next.
   final queuedNotes = <String>[];
+
+  /// Of [queuedNotes], those still on their way to the computer.
+  final sendingNotes = <String>{};
 
   /// Swiped sideways: how far the times show (0 hidden, 1 shown), and where the swipe began.
   final reveal = ValueNotifier<double>(0);
@@ -121,27 +126,33 @@ class _ProjectScreenState extends State<ProjectScreen> {
       sendError = null;
     });
     final text = message.text.trim();
-    // the agent is working: the note goes in, and it reads it next
-    final queued = store.agent(dir).busy;
-    try {
-      await sendToAgent(context, store, dir, {
-        'text': text,
-        if (anchor != null) 'anchor': anchor,
-        if (attachments.isNotEmpty) 'files': attachments.toList(),
-      });
-      message.clear();
-      if (queued) queuedNotes.add(text);
+    final note = {
+      'text': text,
+      if (anchor != null) 'anchor': anchor,
+      if (attachments.isNotEmpty) 'files': attachments.toList(),
+    };
+    final (anchorWas, filesWere) = (anchor, attachments.toList());
+    // in the conversation at once, as sent; the computer catches up behind it
+    message.clear();
+    setState(() {
+      queuedNotes.add(text);
+      sendingNotes.add(text);
+      anchor = null;
+      boxMode = false;
+      attachments.clear();
       follow = true; // after sending, show what comes back
-      if (mounted) {
-        setState(() {
-          anchor = null;
-          boxMode = false;
-          attachments.clear();
-        });
-      }
+    });
+    try {
+      await sendToAgent(context, store, dir, note);
     } catch (e) {
+      // it didn't go: back in the box as it was, to try again
+      queuedNotes.remove(text);
+      if (message.text.isEmpty) message.text = text;
+      anchor ??= anchorWas;
+      if (attachments.isEmpty) attachments.addAll(filesWere);
       if (mounted) setState(() => sendError = e);
     }
+    sendingNotes.remove(text);
     if (mounted) setState(() => sending = false);
   }
 
@@ -239,7 +250,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
       await SharePlus.instance.share(
         ShareParams(
           files: files,
-          title: project['title'] as String,
+          title: projectName(project),
           sharePositionOrigin: box == null
               ? null
               : box.localToGlobal(Offset.zero) & box.size,
@@ -281,7 +292,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${p['title']}',
+                projectName(p),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleMedium,
@@ -307,11 +318,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
           actions: [
             // on a phone, Edit opens from here as a sheet (a wide screen has it beside the conversation)
             if (MediaQuery.sizeOf(context).width < 900) ...[
-              IconButton(
+              // said, not just drawn: the sliders alone don't say what's behind them
+              TextButton.icon(
                 key: const ValueKey('open-edit'),
-                tooltip: 'Edit',
                 onPressed: openEdit,
-                icon: const Icon(Icons.tune_rounded),
+                icon: const Icon(Icons.tune_rounded, size: 20),
+                label: const Text('Edit'),
               ),
             ],
             IconButton(
@@ -726,13 +738,21 @@ class _ProjectScreenState extends State<ProjectScreen> {
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Icon(
-                                              Icons.schedule,
+                                              sendingNotes.contains(q)
+                                                  ? Icons.arrow_upward
+                                                  : state.busy
+                                                  ? Icons.schedule
+                                                  : Icons.check,
                                               size: 14,
                                               color: scheme.onSurfaceVariant,
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              'Queued · the agent reads it next',
+                                              sendingNotes.contains(q)
+                                                  ? 'Sending…'
+                                                  : state.busy
+                                                  ? 'Queued · the agent reads it next'
+                                                  : 'Sent',
                                               style: text.labelSmall?.copyWith(
                                                 color: scheme.onSurfaceVariant,
                                               ),
@@ -819,6 +839,30 @@ class _ProjectScreenState extends State<ProjectScreen> {
                             );
                           }
                         },
+                      ),
+                    ),
+                  ),
+                // scrolled up to read: the words fade out under the way back down, rather than run behind it
+                if (!follow)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 64,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Theme.of(
+                                context,
+                              ).scaffoldBackgroundColor.withValues(alpha: 0),
+                              Theme.of(context).scaffoldBackgroundColor,
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1077,6 +1121,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   /// The film as the agent last made it, at the end of the conversation: to watch or download without leaving it.
   Widget? latestCutCard(List<ChatItem> chat) {
+    // the film on screen above is this cut: a second player for it would only compete
+    if (filmInSight) return null;
     // only after the turn that made it, as an attachment to that reply: a later answer shouldn't sit above an old cut
     final lastNote = chat.lastIndexWhere(
       (i) => i is Said && i.message['role'] == 'user',
@@ -2254,10 +2300,27 @@ class FileThumb extends StatefulWidget {
 }
 
 class _FileThumbState extends State<FileThumb> {
-  late final Future<Uri>? picture =
-      widget.kind == 'video' || widget.kind == 'image'
+  late Future<Uri>? picture = _picture();
+  StreamSubscription<(String, String)>? changed;
+
+  Future<Uri>? _picture() => widget.kind == 'video' || widget.kind == 'image'
       ? widget.store.client.thumbnail(widget.dir, widget.rel)
       : null;
+
+  @override
+  void initState() {
+    super.initState();
+    // shown from the phone at once; when the computer's file turned out to have changed, the new picture
+    changed = widget.store.client.mediaChanged
+        .where((c) => c.$1 == widget.dir && c.$2 == widget.rel)
+        .listen((_) => setState(() => picture = _picture()));
+  }
+
+  @override
+  void dispose() {
+    changed?.cancel();
+    super.dispose();
+  }
 
   IconData get icon => switch (widget.kind) {
     'video' => Icons.movie_outlined,

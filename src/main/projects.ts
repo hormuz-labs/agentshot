@@ -252,11 +252,16 @@ export async function syncFiles(p: Project): Promise<boolean> {
   return changed
 }
 
+/** A file's machine name (an id, a camera's numbering, a screen recording) rather than one a person gave it. */
+export const machineName = (s: string) => /^(?:[0-9a-f]{8}-[0-9a-f]{4}-|[0-9a-f]{16,}$|(?:IMG|VID|PXL|MOV|DSC|DJI|MVI|GOPR?)_?\d|\d{6,}|Screen[ _]?Recording)/i.test(s.trim())
+
 export async function addVersion(p: Project, absPath: string, title: string, by: Version['by'], timeline?: Version['timeline'], dry?: string) {
   const rel = relativeProjectPath(p.dir, absPath)
   p.media[rel] = await probe(absPath)
   const v: Version = { id: id(), path: rel, title, createdAt: Date.now(), by, ...(timeline ? { timeline } : {}), ...(dry ? { dry: relativeProjectPath(p.dir, dry) } : {}) }
   p.versions.push(v)
+  // a project named after its footage's machine name takes the first cut's name: what people call it from then on
+  if (by === 'agent' && title.trim() && machineName(p.title)) p.title = title.trim()
   return v
 }
 

@@ -122,6 +122,24 @@ describe('mobile TLS bridge', () => {
     const file = f.importFile.mock.calls[0][0]
     await expect(readFile(file)).rejects.toThrow()
   })
+  it('tags what the phone keeps, and says "unchanged" in a few bytes when it already has it', async () => {
+    const f = await fixture()
+    const ask = (have?: string) => f.call('/rpc', { token: f.token, headers: have ? { 'if-none-match': have } : {}, body: { method: 'project:peek', args: [f.dir] } })
+    const first = await ask()
+    expect(first.status).toBe(200); expect(JSON.parse(first.body)).toEqual({ method: 'project:peek', args: [f.dir] })
+    const tag = first.headers.etag as string
+    expect(tag).toMatch(/^"[\w-]+"$/)
+    const again = await ask(tag)
+    expect(again.status).toBe(304); expect(again.body).toBe('')
+    // something else (the answer changed): all of it, with its new tag
+    f.invoke.mockResolvedValueOnce({ method: 'project:peek', args: [f.dir], title: 'Renamed' })
+    const changed = await ask(tag)
+    expect(changed.status).toBe(200); expect(JSON.parse(changed.body).title).toBe('Renamed'); expect(changed.headers.etag).not.toBe(tag)
+    // answers that aren't kept stay untagged
+    expect((await f.call('/rpc', { token: f.token, body: { method: 'agent:models', args: [] } })).headers.etag).toBeUndefined()
+    // and a project that isn't this phone's isn't peeked at
+    expect((await f.call('/rpc', { token: f.token, body: { method: 'project:peek', args: ['/elsewhere'] } })).status).toBe(403)
+  })
   it('replays complete agent state when a phone reconnects', async () => {
     const f = await fixture()
     f.bridge.publish('agui', f.dir, { type: 'MESSAGES_SNAPSHOT', messages: [{ id: 'm1', role: 'user', content: 'Cut the ums' }] })

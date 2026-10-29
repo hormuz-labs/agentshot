@@ -169,8 +169,11 @@ class MediaCache {
   }
 
   /// Fetches [key] whole in the background, once at a time per key (a film streamed in parts by the player).
+  /// (Not `whenComplete(() => _filling.remove(key))`: that returns this very future, which then waits on itself.)
   Future<void> fill(String key, Future<void> Function() fetch) =>
-      _filling[key] ??= fetch().whenComplete(() => _filling.remove(key)).catchError((Object _) {});
+      _filling[key] ??= fetch().catchError((Object _) {}).whenComplete(() {
+        _filling.remove(key);
+      });
 
   /// How much is kept, in bytes.
   Future<int> size() async => (await _entries()).values.fold<int>(0, (sum, e) => sum + e.size);

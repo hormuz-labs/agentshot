@@ -22,6 +22,8 @@ const edit = z.discriminatedUnion('op', [
 export const mobileSchemas = {
   'app:info': z.tuple([]), 'project:recent': z.tuple([]), 'gallery:list': z.tuple([]),
   'project:open': z.tuple([dir]), 'project:delete': z.tuple([dir]),
+  // a project as it's saved, without opening it (no agent, no proxies made): for the phone to keep ahead of a tap
+  'project:peek': z.tuple([dir]),
   'project:close': z.tuple([dir]),
   'project:createMotion': z.tuple([z.object({ title: text.optional(), aspect: z.enum(['16:9', '9:16', '1:1']), length: time.optional(), example: id.optional(), walkthrough: z.boolean().optional(), model: model.optional() }).strict()]),
   'project:decide': z.tuple([dir, z.boolean()]), 'project:current': z.tuple([dir, id]), 'project:removeFiles': z.tuple([dir, z.array(rel).max(1000)]),
@@ -61,5 +63,5 @@ export function mobileArgs(method: string, args: unknown): unknown[] {
   return (mobileSchemas[method as keyof typeof mobileSchemas] as z.ZodType<unknown[]>).parse(args)
 }
 export function projectArgument(method: string): boolean {
-  return /^(project:(open|close|delete|decide|current|removeFiles)|agent:(attach|stop|send|models|setModel|newConversation|switch|rename)|timeline:|history:|transcript:|preview:|mobile:export|clip:|media:thumbnails|demo:|mix:|export:run)/.test(method)
+  return /^(project:(open|peek|close|delete|decide|current|removeFiles)|agent:(attach|stop|send|models|setModel|newConversation|switch|rename)|timeline:|history:|transcript:|preview:|mobile:export|clip:|media:thumbnails|demo:|mix:|export:run)/.test(method)
 }
