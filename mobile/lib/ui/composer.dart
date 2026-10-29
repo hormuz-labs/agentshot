@@ -130,6 +130,9 @@ class ComposerState extends State<Composer> {
   DateTime _since = DateTime.now();
   Timer? _tick, _limit;
 
+  /// Held down to talk (slide to cancel, let go to finish), not tapped on (tap again to finish).
+  bool held = false;
+
   /// How far the finger has slid toward cancelling: 0 at rest, 1 there.
   final cancelling = ValueNotifier<double>(0);
   static const _cancelAt = 110.0;
@@ -237,7 +240,7 @@ class ComposerState extends State<Composer> {
         setState(() => voice = VoiceStage.idle);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Hold the mic while you talk, then let go.'),
+            content: Text('Didn’t catch that. Tap the mic and talk.'),
           ),
         );
       }
@@ -423,7 +426,11 @@ class ComposerState extends State<Composer> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            c > .99 ? 'Let go to cancel' : '‹ Slide to cancel',
+                            !held
+                                ? 'Tap the mic when done'
+                                : c > .99
+                                ? 'Let go to cancel'
+                                : '‹ Slide to cancel',
                             style: text.labelMedium?.copyWith(
                               color: c > .99
                                   ? scheme.error
@@ -527,19 +534,30 @@ class ComposerState extends State<Composer> {
                   ),
                 )
               else
-                // hold to talk; slide left to cancel; let go to turn it into text
+                // tap to talk and tap again when done; or hold to talk, slide left to cancel, let go
                 GestureDetector(
                   key: const ValueKey('mic'),
-                  onLongPressStart: (_) => _startVoice(),
+                  onTap: () {
+                    if (recording) return unawaited(_endVoice(cancel: false));
+                    held = false;
+                    unawaited(_startVoice());
+                  },
+                  onLongPressStart: (_) {
+                    held = true;
+                    unawaited(_startVoice());
+                  },
                   onLongPressMoveUpdate: (d) => cancelling.value =
                       (-d.offsetFromOrigin.dx / _cancelAt).clamp(0.0, 1.0),
                   onLongPressEnd: (_) =>
                       _endVoice(cancel: cancelling.value > .99),
-                  onLongPressCancel: () => _endVoice(cancel: true),
+                  // only a hold that never became one; a tap to finish isn't a cancel (it fires first)
+                  onLongPressCancel: () {
+                    if (held) unawaited(_endVoice(cancel: true));
+                  },
                   // (not a tooltip: on a phone a tooltip shows on a long press, and would take the hold)
                   child: Semantics(
                     button: true,
-                    label: 'Hold to talk',
+                    label: recording ? 'Stop and use what you said' : 'Talk a note',
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       width: recording ? 52 : 44,

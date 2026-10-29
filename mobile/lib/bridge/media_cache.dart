@@ -73,6 +73,12 @@ class MediaCache {
     } catch (_) {
       // nothing kept yet, or an index that couldn't be read: start over
     }
+    // halves of downloads the app was closed in the middle of: nothing finishes them now
+    try {
+      await for (final f in dir.list()) {
+        if (f is File && f.path.endsWith('.part')) await f.delete().catchError((_) => File(''));
+      }
+    } catch (_) {}
     return _index ??= index;
   }
 

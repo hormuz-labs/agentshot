@@ -1027,9 +1027,26 @@ class BridgeClient {
   }
 
   /// The version of what came back: the computer's tag; a gallery example's poster never changes (one per example).
-  static String? _versionOf(String path, HttpClientResponse response) =>
-      response.headers.value(HttpHeaders.etagHeader) ??
-      (path == '/gallery' ? '"gallery"' : null);
+  /// A computer from before tags (every release so far) still gets its films kept: versioned by their whole size and
+  /// when they changed, which a new render in their place changes too.
+  static String? _versionOf(String path, HttpClientResponse response) {
+    final tag = response.headers.value(HttpHeaders.etagHeader);
+    if (tag != null) return tag;
+    if (path == '/gallery') return '"gallery"';
+    final total = response.statusCode == 206
+        ? int.tryParse(
+            response.headers
+                    .value(HttpHeaders.contentRangeHeader)
+                    ?.split('/')
+                    .last ??
+                '',
+          )
+        : (response.contentLength >= 0 ? response.contentLength : null);
+    if (total == null) return null;
+    final changed =
+        response.headers.value(HttpHeaders.lastModifiedHeader) ?? '';
+    return 'W/"$total-$changed"';
+  }
 
   static String _typeOf(HttpClientResponse response) =>
       response.headers.value(HttpHeaders.contentTypeHeader) ??
@@ -1055,7 +1072,7 @@ class BridgeClient {
       final response = await request.close().timeout(
         const Duration(seconds: 6),
       );
-      final tag = response.headers.value(HttpHeaders.etagHeader);
+      final tag = _versionOf(path, response);
       await response.drain<void>().catchError((_) {});
       if (response.statusCode == 304 ||
           (response.statusCode == 200 && tag == kept.etag)) {
@@ -1094,7 +1111,7 @@ class BridgeClient {
       final response = await request.close().timeout(
         const Duration(seconds: 15),
       );
-      final tag = response.headers.value(HttpHeaders.etagHeader);
+      final tag = _versionOf(path, response);
       await response.drain<void>().catchError((_) {});
       if (response.statusCode != 200 || tag == null || tag == kept.etag) return;
       await cache.fill(key, () => _fetchWhole(path, query, key));
@@ -1180,6 +1197,15 @@ class BridgeClient {
       await writer.abort();
       rethrow;
     }
+  }
+
+  /// A project file fetched whole into the phone in the background when it isn't kept yet: the film opened plays from
+  /// here from the first tap, not over the network, and never stalls there.
+  Future<void> keep(String project, String file) async {
+    final query = {'project': project, 'file': file};
+    final key = _cacheKey('/media', query);
+    if (key == null || await cache.lookup(key) != null) return;
+    await cache.fill(key, () => _fetchWhole('/media', query, key));
   }
 
   /// A project file on the phone, to share or save: what's kept when it's still current, else fetched (and kept).

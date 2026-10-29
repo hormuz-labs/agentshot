@@ -20,6 +20,8 @@ void main() {
   late HttpServer computer;
   late String fingerprint;
   var film = utf8.encode('0123456789'), etag = '"v1"';
+  // a computer from before tags (every release so far): no ETag, no 304
+  var tags = true;
   final asked = <String>[];
 
   setUpAll(() async {
@@ -51,10 +53,10 @@ void main() {
       final range = req.headers.value('range');
       asked.add('${req.method} ${range ?? 'whole'} ${req.headers.value('if-none-match') ?? ''}'.trim());
       res.headers
-        ..set('etag', etag)
         ..set('accept-ranges', 'bytes')
         ..contentType = ContentType('video', 'mp4');
-      if (req.headers.value('if-none-match') == etag) {
+      if (tags) res.headers.set('etag', etag);
+      if (tags && req.headers.value('if-none-match') == etag) {
         res.statusCode = 304;
         await res.close();
         return;
@@ -89,6 +91,33 @@ void main() {
       http.close(force: true);
     }
   }
+
+  test('a computer without tags still has its films kept, versioned by their size', () async {
+    final cache = MediaCache(root: () async => Directory('${tmp.path}/untagged'));
+    final client = BridgeClient(cache: cache);
+    await client.connectDirect(
+      Connection(Uri.parse('https://127.0.0.1:${computer.port}'), fingerprint, 'token'),
+    );
+    tags = false;
+    try {
+      // the film opened is fetched whole, without anyone playing it
+      await client.keep('/p', 'renders/old.mp4');
+      expect(await cache.size(), film.length);
+      asked.clear();
+      final uri = await client.media('/p', 'renders/old.mp4');
+      final http = HttpClient();
+      final req = await http.getUrl(uri);
+      req.headers.set('range', 'bytes=2-5');
+      final res = await req.close();
+      expect((res.statusCode, await utf8.decodeStream(res)), (206, '2345'));
+      http.close(force: true);
+      // played from the phone: nothing asked of the computer
+      expect(asked, isEmpty);
+    } finally {
+      tags = true;
+      await client.dispose();
+    }
+  });
 
   test('a film comes over once, then plays from the phone until it changes, and offline too', () async {
     final cache = MediaCache(root: () async => Directory('${tmp.path}/cache'));

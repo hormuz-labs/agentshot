@@ -286,16 +286,19 @@ class _ProjectScreenState extends State<ProjectScreen> {
       final studio = Studio.of(context);
       return Scaffold(
         appBar: AppBar(
+          // room for a name on two lines, and the offline line under it
+          toolbarHeight: 68,
           // beside the back arrow; at the page's margin when there's none
           titleSpacing: Navigator.canPop(context) ? 0 : Space.page,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // the whole name, on two lines when it needs them, rather than cut short
               Text(
                 projectName(p),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(height: 1.2),
               ),
               // only when it matters: offline, what shows is what was here last
               if (!store.connected)
@@ -326,17 +329,13 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 label: const Text('Edit'),
               ),
             ],
-            IconButton(
-              tooltip: 'Export film',
-              onPressed: exporting ? null : export,
-              icon: const Icon(Icons.ios_share_rounded),
-            ),
             PopupMenuButton<String>(
               tooltip: 'Project actions',
               onSelected: action,
               icon: const Icon(Icons.more_horiz_rounded),
               itemBuilder: (_) => [
                 for (final (key, name, icon) in const [
+                  ('export', 'Export film', Icons.ios_share_rounded),
                   ('files', 'Files', Icons.folder_outlined),
                   ('conversations', 'Conversations', Icons.forum_outlined),
                   ('models', 'Choose model', Icons.memory_rounded),
@@ -842,6 +841,29 @@ class _ProjectScreenState extends State<ProjectScreen> {
                       ),
                     ),
                   ),
+                // the conversation slips softly under the film above, rather than being cut off at its edge
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 32,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Theme.of(context).scaffoldBackgroundColor,
+                            Theme.of(
+                              context,
+                            ).scaffoldBackgroundColor.withValues(alpha: 0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 // scrolled up to read: the words fade out under the way back down, rather than run behind it
                 if (!follow)
                   Positioned(
@@ -1168,12 +1190,17 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   bool get hasFilm => shownProxy != null;
 
+  /// Films already asked onto the phone this visit (see [BridgeClient.keep]).
+  final keeping = <String>{};
+
   /// The film is on screen (above the tabs, or beside the conversation), with its bar for a new cut.
   bool filmInSight = false;
 
   /// The film, playing; notes in time and boxes on the picture go from here into the next note.
   Widget player({double maxHeight = .48}) {
     final proxy = shownProxy!;
+    // the film comes to the phone whole, once: every play after (and offline) is from here
+    if (keeping.add('$dir:$proxy')) store.client.keep(dir, proxy).ignore();
     return RemotePlayer(
       key: ValueKey('$dir:$proxy'),
       uri: () => store.client.media(dir, proxy),
@@ -1693,6 +1720,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   void action(String value) => guard(context, () async {
     switch (value) {
+      case 'export':
+        if (!exporting) await export();
       case 'files':
         openFiles();
       case 'models':

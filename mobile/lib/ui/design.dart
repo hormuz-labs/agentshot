@@ -15,7 +15,7 @@ abstract final class Space {
   static const double xs = 4, sm = 8, md = 12, lg = 16, xl = 20, xxl = 24, xxxl = 32;
 
   /// The page's side margin on a phone.
-  static const double page = 20;
+  static const double page = 16;
 }
 
 /// Corner radii, by the size of the thing.
@@ -156,6 +156,8 @@ class Studio extends ThemeExtension<Studio> {
 /// Timecodes and counts: figures of one width, so they don't jitter as they change.
 const tabular = [FontFeature.tabularFigures()];
 
+/// Compact for a phone held in one hand: more of the conversation and the film in sight, still at a reading size
+/// (the phone's own text size setting scales all of it).
 TextTheme _type(Color ink, Color quiet) {
   TextStyle s(double size, FontWeight weight, double tracking, double height, [Color? color]) => TextStyle(
     fontFamily: 'Inter',
@@ -167,22 +169,22 @@ TextTheme _type(Color ink, Color quiet) {
   );
   return TextTheme(
     // the one big moment on a screen (a home title)
-    displaySmall: s(24, FontWeight.w700, -0.5, 1.15),
+    displaySmall: s(22, FontWeight.w700, -0.5, 1.15),
     // screen titles
-    headlineLarge: s(24, FontWeight.w700, -0.5, 1.15),
-    headlineMedium: s(22, FontWeight.w700, -0.4, 1.2),
-    headlineSmall: s(19, FontWeight.w600, -0.3, 1.25),
+    headlineLarge: s(22, FontWeight.w700, -0.5, 1.15),
+    headlineMedium: s(20, FontWeight.w700, -0.4, 1.2),
+    headlineSmall: s(18, FontWeight.w600, -0.3, 1.25),
     // section and card titles
-    titleLarge: s(17, FontWeight.w600, -0.2, 1.3),
-    titleMedium: s(15, FontWeight.w500, -0.1, 1.3),
-    titleSmall: s(14, FontWeight.w500, 0, 1.3),
+    titleLarge: s(16, FontWeight.w600, -0.2, 1.3),
+    titleMedium: s(14.5, FontWeight.w500, -0.1, 1.3),
+    titleSmall: s(13.5, FontWeight.w500, 0, 1.3),
     // reading
-    bodyLarge: s(15, FontWeight.w400, 0, 1.4),
-    bodyMedium: s(14, FontWeight.w400, 0, 1.4),
-    bodySmall: s(12.5, FontWeight.w400, 0, 1.35, quiet),
+    bodyLarge: s(14, FontWeight.w400, 0, 1.4),
+    bodyMedium: s(13.5, FontWeight.w400, 0, 1.4),
+    bodySmall: s(12, FontWeight.w400, 0, 1.35, quiet),
     // buttons, chips, tabs
-    labelLarge: s(14, FontWeight.w600, 0, 1.2),
-    labelMedium: s(13, FontWeight.w500, 0, 1.2),
+    labelLarge: s(13.5, FontWeight.w600, 0, 1.2),
+    labelMedium: s(12.5, FontWeight.w500, 0, 1.2),
     labelSmall: s(11, FontWeight.w500, 0.1, 1.2),
   );
 }
