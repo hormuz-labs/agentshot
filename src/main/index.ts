@@ -188,6 +188,7 @@ const mobile = new MobileBridge(
     },
     galleryFile: (url, range) => mediaResponse(new Request(url, { headers: range ? { range } : {} }), LIB, [Projects.projectsRoot(), ...open.keys()], Gallery.GALLERY),
     meshIp: () => meshIp,
+    meshKey: () => meshJoin('client', undefined, { persistent: true }),
   },
   () => {
     const ips = reachableIps()
