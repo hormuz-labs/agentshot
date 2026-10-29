@@ -31,7 +31,7 @@ void main() {
     Future<void> appear(String pick) async {
       await reveal(tester, appearance);
       await tester.tap(
-        find.descendant(of: appearance, matching: find.text(pick)),
+        find.descendant(of: appearance, matching: find.byTooltip(pick)),
       );
       await settle(tester);
     }
@@ -46,7 +46,7 @@ void main() {
     expect(brightness(), Brightness.dark);
     await appear('Light');
     expect(brightness(), Brightness.light);
-    await appear('System');
+    await appear('As the phone');
 
     // AI: what the computer uses now in a line (here its own provider, the scripted model), then an own key added
     // (Added) and in the line, and removed again (asking first)
@@ -222,7 +222,7 @@ void main() {
     await closeSheet(tester);
 
     // About, and its licenses
-    await press(tester, find.text('About AgentShot'));
+    await press(tester, find.text('About'));
     await waitFor(tester, find.text('View licenses'));
     await tester.tap(find.text('View licenses'));
     await waitFor(tester, find.byType(LicensePage));

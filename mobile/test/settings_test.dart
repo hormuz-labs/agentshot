@@ -186,7 +186,7 @@ void main() {
   });
 
   testWidgets(
-    'Settings: account, computer, AI, the computer\'s own panels and the app, each in its place',
+    'Settings: the account, then one list of rows with their values; the computer\'s own under its name',
     (tester) async {
       final store =
           BridgeStore(Computer(credits: true, own: {'ANTHROPIC_API_KEY'}))
@@ -194,21 +194,17 @@ void main() {
             ..connected = true;
       await tester.pumpWidget(host(settings(store)));
       await tester.pumpAndSettle();
-      for (final section in [
-        'Account',
-        'Computer',
-        'AI',
-        'On Studio iMac',
-        'App',
-      ]) {
-        await tester.scrollUntilVisible(find.text(section), 80);
-        expect(find.text(section), findsOneWidget, reason: section);
+      // one list of rows, each its name and its value at the end; a heading only for the computer's own
+      for (final row in ['AI', 'Appearance', 'Notifications', 'Storage', 'About', 'On Studio iMac', 'Sign out']) {
+        await tester.scrollUntilVisible(find.text(row), 80);
+        expect(find.text(row), findsOneWidget, reason: row);
       }
+      expect(find.text('Account'), findsNothing);
+      expect(find.text('App'), findsNothing);
       await tester.scrollUntilVisible(find.text('maya@example.com'), -80);
       expect(find.text('12,345 credits · Pro plan'), findsOneWidget);
-      expect(find.text('Connected'), findsOneWidget);
-      expect(find.text('Use a different computer'), findsOneWidget);
-      expect(find.text('Sign out'), findsOneWidget);
+      expect(find.text('Studio iMac'), findsOneWidget);
+      expect(find.text('Switch'), findsOneWidget);
       expect(
         find.text('AgentShot credits, plus your Anthropic key'),
         findsOneWidget,
@@ -243,7 +239,7 @@ void main() {
       // the computer let go of them since (signed out there): the sheet offers them again
       computer.credits = false;
       computer.asked.clear();
-      await tester.tap(find.text('AI models'));
+      await tester.tap(find.byKey(const ValueKey('settings-ai')));
       await tester.pumpAndSettle();
       // credits: not in use; one tap hands the phone's account to the computer
       final credits = find.byKey(const ValueKey('ai-credits'));
@@ -401,11 +397,11 @@ void main() {
     await tester.ensureVisible(appearance);
     await tester.pumpAndSettle();
     await tester.tap(
-      find.descendant(of: appearance, matching: find.text('Dark')),
+      find.descendant(of: appearance, matching: find.byTooltip('Dark')),
     );
     expect(chosen, ThemeMode.dark);
     await tester.tap(
-      find.descendant(of: appearance, matching: find.text('Light')),
+      find.descendant(of: appearance, matching: find.byTooltip('Light')),
     );
     expect(chosen, ThemeMode.light);
   });
@@ -455,16 +451,10 @@ void main() {
           {'id': '4', 'role': 'assistant', 'content': 'Done.'},
         ],
       });
-      // the film on screen above the conversation is this cut: no second player for it
+      // a phone: the conversation has the screen, so the cut comes in it (a tap opens it full screen)
       await tester.pumpWidget(MaterialApp(home: ProjectScreen(store: store)));
       await tester.pumpAndSettle();
-      expect(find.byType(CutCard), findsNothing);
-      // a short screen (a phone on its side) has no room for the film above: the cut comes in the conversation
-      tester.view.physicalSize = const Size(800, 400);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('film-chip')), findsOneWidget);
       final card = find.byType(CutCard);
       expect(card, findsOneWidget);
       expect(

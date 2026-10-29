@@ -108,13 +108,13 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     await waitFor(tester, find.text('AgentShot Cloud'));
-    await press(tester, find.text('Switch computer'));
+    await press(tester, find.text('Leave'));
     await waitFor(tester, find.text('Leave AgentShot Cloud?'));
     expect(find.textContaining('The agent'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await settle(tester);
     expect(find.text('Leave AgentShot Cloud?'), findsNothing);
-    expect(find.text('Switch computer'), findsOneWidget); // still here, on it
+    expect(find.text('Leave'), findsOneWidget); // still here, on it
     await tester.tap(find.byKey(const ValueKey('nav-Projects')));
     await settle(tester);
     await reveal(tester, find.text('Mobile e2e in the cloud'));
@@ -171,7 +171,7 @@ void main() {
     Future<void> giveBack() async {
       await tester.tap(find.byKey(const ValueKey('nav-Settings')));
       await waitFor(tester, find.text('AgentShot Cloud'));
-      await press(tester, find.text('Switch computer'));
+      await press(tester, find.text('Leave'));
       await waitFor(tester, find.text('Your computers'));
       await waitFor(tester, ready, timeout: const Duration(minutes: 1));
     }

@@ -239,7 +239,7 @@ ThemeData agentShotTheme(Brightness brightness) {
       titleSpacing: Space.page,
       titleTextStyle: text.titleLarge,
     ),
-    iconTheme: IconThemeData(color: ink, size: 22),
+    iconTheme: IconThemeData(color: ink, size: 20),
     dividerTheme: DividerThemeData(color: studio.hairline, thickness: 1, space: 1),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -277,7 +277,8 @@ ThemeData agentShotTheme(Brightness brightness) {
       style: ElevatedButton.styleFrom(shape: control, elevation: 0, backgroundColor: studio.surface2),
     ),
     iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(minimumSize: const Size(44, 44), shape: smooth(12)),
+      // a 20 px icon in a 44 px target: small to look at, easy to hit
+      style: IconButton.styleFrom(minimumSize: const Size(44, 44), iconSize: 20, shape: smooth(12)),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
@@ -359,9 +360,11 @@ ThemeData agentShotTheme(Brightness brightness) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: dark ? studio.surface3 : const Color(0xff1f1c19),
-      contentTextStyle: text.bodyMedium?.copyWith(color: const Color(0xfff4efe8)),
+      // a quiet note above the composer, not a banner: small type, narrow, inset from the edges
+      contentTextStyle: text.bodySmall?.copyWith(color: const Color(0xfff4efe8)),
       actionTextColor: studio.accent,
-      shape: smooth(Radii.control),
+      shape: smooth(Radii.chip),
+      insetPadding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.md),
       elevation: 0,
     ),
     sliderTheme: SliderThemeData(
@@ -460,9 +463,14 @@ class Overline extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: Space.sm),
     child: Row(
       children: [
-        Text(
-          text,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Studio.of(context).text3),
+        // a long name (a computer's) cut short with large text, never past the edge
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Studio.of(context).text3),
+          ),
         ),
         // what goes with it, at the far end, cut short when it doesn't fit
         if (trailing case final t?) ...[

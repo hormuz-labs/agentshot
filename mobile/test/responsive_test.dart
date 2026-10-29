@@ -275,15 +275,15 @@ void main() {
         await tester.pumpWidget(host(ProjectScreen(store: store)));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        // the new cut, once: in the conversation on a phone (playing there, with Before/After, Send back and
-        // Keep), under the film beside it on a wide screen
+        // the new cut, once: in the conversation on a phone (a card, with Send back and Keep, that opens it full
+        // screen), under the film beside it on a wide screen
         final card = find.byKey(const ValueKey('proposal-card'));
         final bar = find.byKey(const ValueKey('proposal-bar'));
         expect(card.evaluate().length + bar.evaluate().length, 1);
         if (card.evaluate().isNotEmpty) {
-          expect(find.descendant(of: card, matching: find.byType(RemotePlayer)), findsOneWidget);
-          // one film at a time: the one above steps aside
-          expect(find.byType(RemotePlayer), findsOneWidget);
+          // the conversation has the screen: no film playing in it, the chip at the top says a cut waits
+          expect(find.byType(RemotePlayer), findsNothing);
+          expect(find.text('A new cut is waiting'), findsOneWidget);
         }
         // a quiet composer: the field, the + and the mic (hold to talk); the model and credits wait in the tray
         expect(find.byKey(const ValueKey('model')), findsNothing);

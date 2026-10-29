@@ -327,11 +327,6 @@ class BridgeStore extends ChangeNotifier {
     }
   }
 
-  void useProject(Json value) {
-    project = value;
-    _notify();
-  }
-
   Future<void> update(String method, List<dynamic> args) async {
     final value = await client.call(method, args);
     if (value is Map && value.containsKey('versions')) {

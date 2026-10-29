@@ -23,7 +23,7 @@ void main() {
     await tester.tap(find.byTooltip('Close'));
     await settle(tester);
 
-    final disconnect = find.text('Disconnect this device');
+    final disconnect = find.text('Disconnect');
     await reveal(tester, disconnect);
     await tester.tap(disconnect);
     await settle(tester);

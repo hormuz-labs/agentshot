@@ -79,7 +79,7 @@ void main() {
     final appearance = find.byKey(const ValueKey('appearance'));
     await reveal(tester, appearance);
     await tester.tap(
-      find.descendant(of: appearance, matching: find.text('Dark')),
+      find.descendant(of: appearance, matching: find.byTooltip('Dark')),
     );
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('nav-Projects')));

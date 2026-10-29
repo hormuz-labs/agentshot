@@ -45,22 +45,40 @@ class SettingsScreen extends StatelessWidget {
     final cloud = store.onCloud;
     final computer = store.client.connection?.name ?? 'Your computer';
     final signedIn = account?.signedIn == true ? account : null;
+    final text = Theme.of(context).textTheme;
+    final studio = Studio.of(context);
+    Widget row(
+      IconData icon,
+      String title, {
+      Widget? end,
+      VoidCallback? onTap,
+      Key? key,
+      bool chevron = true,
+    }) => SettingRow(
+      key: key,
+      icon: icon,
+      title: title,
+      end: end,
+      onTap: onTap,
+      chevron: chevron,
+    );
     return ListView(
-      // room at the end to scroll clear of the tab bar
+      // the tab bar sits below the page, not over it: no room needed at the end
       padding: const EdgeInsets.fromLTRB(
         Space.page,
         Space.xxl,
         Space.page,
-        120,
+        Space.lg,
       ),
       children: [
-        Text('Settings', style: Theme.of(context).textTheme.displaySmall),
-        const SizedBox(height: Space.sm),
+        Text('Settings', style: text.displaySmall),
+        const SizedBox(height: Space.md),
         // who this is: the account this phone signed in with (its credits), or the computer's when paired by code
-        Section('Account', [
+        Section(null, [
           ListTile(
             key: const ValueKey('settings-account'),
             leading: CircleAvatar(
+              radius: 18,
               backgroundColor: scheme.primaryContainer,
               foregroundColor: scheme.onPrimaryContainer,
               child: signedIn?.email?.isNotEmpty == true
@@ -74,204 +92,150 @@ class SettingsScreen extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             subtitle: Credits(store: store),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: Icon(Icons.chevron_right, color: studio.text3),
             onTap: () => accountDetails(context),
           ),
-          if (signedIn != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => leaving(context, onSignOut),
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Sign out'),
-                ),
-              ),
-            ),
-        ], divided: false),
-        // what this phone works on now, and how to change it
-        Section(cloud ? 'AgentShot Cloud' : 'Computer', [
-          ListTile(
-            leading: Icon(cloud ? Icons.cloud_outlined : Icons.computer),
-            title: Text(computer),
-            subtitle: Row(
+        ]),
+        // everyday: each a row, its value at the end
+        Section(null, [
+          // what this phone works on: AgentShot Cloud or a computer; leaving it (or changing computer) at its end
+          row(
+            cloud ? Icons.cloud_outlined : Icons.computer,
+            computer,
+            key: const ValueKey('settings-where'),
+            chevron: false,
+            end: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   Icons.circle,
-                  size: 10,
-                  color: store.connected ? Colors.green : scheme.outline,
+                  size: 8,
+                  color: store.connected ? studio.success : studio.text3,
                 ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(store.connected ? 'Connected' : 'Connecting…'),
-                ),
-              ],
-            ),
-          ),
-          if (cloud)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                'Your projects, conversations and settings live in your own space, kept for you between visits.',
-                style: TextStyle(color: scheme.onSurfaceVariant),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              // on the cloud: leaving hands the spot back for the next person (the space stays theirs)
-              child: signedIn != null
-                  ? OutlinedButton.icon(
-                      onPressed: () => leaving(context, onDisconnect),
-                      icon: Icon(cloud ? Icons.logout : Icons.swap_horiz),
-                      label: Text(
-                        cloud
-                            ? 'Leave AgentShot Cloud'
-                            : 'Use a different computer',
-                      ),
-                    )
-                  : OutlinedButton.icon(
-                      onPressed: () => guard(context, onDisconnect),
-                      icon: const Icon(Icons.link_off),
-                      label: const Text('Disconnect this device'),
-                    ),
-            ),
-          ),
-          if (signedIn == null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Text(
-                'You can also remove this phone on your computer, in AgentShot → Settings → Mobile.',
-                style: TextStyle(color: scheme.onSurfaceVariant),
-              ),
-            ),
-        ], divided: false),
-        // how AgentShot thinks, in one line, and where to change it
-        Section('AI', [AiTile(store: store)]),
-        // the computer's own: not a cloud worker's, which keeps them to itself
-        if (!cloud)
-          Section('On $computer', [
-            ListTile(
-              leading: const Icon(Icons.auto_awesome_outlined),
-              title: const Text('Skills & profiles'),
-              subtitle: const Text('What the agent knows how to do'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => skills(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.psychology_outlined),
-              title: const Text('Memory'),
-              subtitle: const Text('Your taste, across projects'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => memory(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.build_outlined),
-              title: const Text('Desktop tools'),
-              subtitle: const Text('Speech recognition and extras'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => tools(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.language),
-              title: const Text('Agent browser'),
-              subtitle: const Text('The browser the agent uses'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => browser(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.dns_outlined),
-              title: const Text('Model providers'),
-              subtitle: const Text('Custom endpoints set up on the computer'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => providers(context),
-            ),
-          ]),
-        Section('App', [
-          // light or dark at a tap (or as the phone is set)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text('Appearance'),
-                const SizedBox(height: 10),
-                SegmentedButton<ThemeMode>(
-                  key: const ValueKey('appearance'),
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
-                      value: ThemeMode.system,
-                      icon: Icon(Icons.brightness_auto_outlined),
-                      label: Text('System'),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.light,
-                      icon: Icon(Icons.light_mode_outlined),
-                      label: Text('Light'),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.dark,
-                      icon: Icon(Icons.dark_mode_outlined),
-                      label: Text('Dark'),
-                    ),
-                  ],
-                  selected: {theme},
-                  onSelectionChanged: (v) => onTheme(v.first),
+                const SizedBox(width: Space.xs),
+                TextButton(
+                  onPressed: () => signedIn != null
+                      ? leaving(context, onDisconnect)
+                      : guard(context, onDisconnect),
+                  child: Text(
+                    cloud
+                        ? 'Leave'
+                        : signedIn != null
+                        ? 'Switch'
+                        : 'Disconnect',
+                  ),
                 ),
               ],
             ),
+            onTap: () {},
           ),
-          ListTile(
-            leading: const Icon(Icons.notifications_none),
-            title: const Text('Notifications'),
-            subtitle: const Text('When work is done, or needs you'),
-            trailing: const Icon(Icons.chevron_right),
+          AiTile(store: store),
+          row(
+            Icons.contrast_rounded,
+            'Appearance',
+            chevron: false,
+            end: SegmentedButton<ThemeMode>(
+              key: const ValueKey('appearance'),
+              showSelectedIcon: false,
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              // symbols, as the phone's own quick settings: the words are their tooltips
+              segments: const [
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  icon: Icon(Icons.brightness_auto_outlined, size: 18),
+                  tooltip: 'As the phone',
+                ),
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  icon: Icon(Icons.light_mode_outlined, size: 18),
+                  tooltip: 'Light',
+                ),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  icon: Icon(Icons.dark_mode_outlined, size: 18),
+                  tooltip: 'Dark',
+                ),
+              ],
+              selected: {theme},
+              onSelectionChanged: (v) => onTheme(v.first),
+            ),
+          ),
+          row(
+            Icons.notifications_none,
+            'Notifications',
             onTap: () => notifications(context),
           ),
           StorageTile(store: store),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('About AgentShot'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              final version = await appVersion;
-              if (!context.mounted) return;
-              showAboutDialog(
-                context: context,
-                applicationName: 'AgentShot',
-                applicationIcon: Image.asset(
-                  'assets/manul.png',
-                  width: 48,
-                  height: 48,
-                ),
-                applicationVersion: version,
-                applicationLegalese:
-                    '© 2026 agenthormuz@proton.me · GPL-3.0-or-later',
-                children: [
-                  const Text(
-                    'A video editor you direct by talking. Mobile companion for Android and iOS.\nagentshot.si',
-                  ),
-                ],
-              );
-            },
-          ),
+          row(Icons.info_outline, 'About', onTap: () => about(context)),
         ]),
-        // for good, so at the very end and quiet, never beside everyday buttons (it asks before anything goes)
-        if (signedIn != null)
+        // the computer's own: not a cloud worker's, which keeps them to itself
+        if (!cloud)
+          Section('On $computer', [
+            row(
+              Icons.auto_awesome_outlined,
+              'Skills & profiles',
+              onTap: () => skills(context),
+            ),
+            row(
+              Icons.psychology_outlined,
+              'Memory',
+              onTap: () => memory(context),
+            ),
+            row(
+              Icons.build_outlined,
+              'Desktop tools',
+              onTap: () => tools(context),
+            ),
+            row(Icons.language, 'Agent browser', onTap: () => browser(context)),
+            row(
+              Icons.dns_outlined,
+              'Model providers',
+              onTap: () => providers(context),
+            ),
+          ]),
+        if (signedIn != null) ...[
+          Section(null, [
+            row(
+              Icons.logout,
+              'Sign out',
+              chevron: false,
+              onTap: () => leaving(context, onSignOut),
+            ),
+          ]),
+          // for good, so at the very end and quiet, never beside everyday buttons (it asks before anything goes)
           Padding(
-            padding: const EdgeInsets.only(top: 24),
+            padding: const EdgeInsets.only(top: Space.sm),
             child: Center(
               child: TextButton(
                 key: const ValueKey('settings-delete-account'),
-                style: TextButton.styleFrom(foregroundColor: scheme.error),
+                style: TextButton.styleFrom(
+                  foregroundColor: scheme.error,
+                  textStyle: text.labelMedium,
+                ),
                 onPressed: () => deleteAccount(context, signedIn.email),
                 child: const Text('Delete my account'),
               ),
             ),
           ),
+        ],
+      ],
+    );
+  }
+
+  /// The app's name, version and licence.
+  Future<void> about(BuildContext context) async {
+    final version = await appVersion;
+    if (!context.mounted) return;
+    showAboutDialog(
+      context: context,
+      applicationName: 'AgentShot',
+      applicationIcon: Image.asset('assets/manul.png', width: 48, height: 48),
+      applicationVersion: version,
+      applicationLegalese: '© 2026 agenthormuz@proton.me · GPL-3.0-or-later',
+      children: [
+        const Text(
+          'A video editor you direct by talking. Mobile companion for Android and iOS.\nagentshot.si',
+        ),
       ],
     );
   }
@@ -698,8 +662,70 @@ class Credits extends StatelessWidget {
 }
 
 /// A titled group of settings on a card.
-class Section extends StatelessWidget {
+/// A settings row: its symbol, its name, and at its end its value or control, shrunk to fit rather than spilling
+/// past the edge (large text, a small phone); a chevron when it opens something.
+class SettingRow extends StatelessWidget {
+  final IconData icon;
+  final Color? iconColor;
   final String title;
+  final Widget? end;
+  final VoidCallback? onTap;
+  final bool chevron;
+  const SettingRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.iconColor,
+    this.end,
+    this.onTap,
+    this.chevron = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final studio = Studio.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.lg,
+            Space.xs,
+            Space.sm,
+            Space.xs,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: iconColor ?? studio.text2),
+              const SizedBox(width: Space.md),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (end case final e?)
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FittedBox(fit: BoxFit.scaleDown, child: e),
+                  ),
+                ),
+              if (onTap != null && chevron)
+                Icon(Icons.chevron_right, color: studio.text3),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class Section extends StatelessWidget {
+  /// A quiet heading above the group, when it needs one.
+  final String? title;
   final List<Widget> children;
 
   /// A line between rows (off for a card that is one item with its actions).
@@ -707,14 +733,15 @@ class Section extends StatelessWidget {
   const Section(this.title, this.children, {super.key, this.divided = true});
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 20),
+    padding: const EdgeInsets.only(top: Space.md),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: Overline(title),
-        ),
+        if (title case final t?)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: Space.xs),
+            child: Overline(t),
+          ),
         Card(
           margin: EdgeInsets.zero,
           clipBehavior: Clip.antiAlias,
@@ -722,7 +749,7 @@ class Section extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (final (i, child) in children.indexed) ...[
-                if (divided && i > 0) const Divider(height: 1, indent: 16),
+                if (divided && i > 0) const Divider(height: 1, indent: 52),
                 child,
               ],
             ],
@@ -775,22 +802,22 @@ class _AiTileState extends State<AiTile> {
       final line = snapshot.data;
       final missing = done && line == null;
       final scheme = Theme.of(context).colorScheme;
-      return ListTile(
+      return SettingRow(
         key: const ValueKey('settings-ai'),
-        leading: Icon(
-          missing ? Icons.error_outline : Icons.auto_awesome,
-          color: missing ? scheme.error : scheme.primary,
-        ),
-        title: const Text('AI models'),
-        subtitle: Text(
+        icon: missing ? Icons.error_outline : Icons.auto_awesome,
+        iconColor: missing ? scheme.error : scheme.primary,
+        title: 'AI',
+        end: Text(
           snapshot.hasError
               ? 'Couldn’t check'
               : !done
-              ? 'Checking…'
-              : line ?? 'Not set up yet: choose credits or a key',
-          style: missing ? TextStyle(color: scheme.error) : null,
+              ? '…'
+              : line ?? 'Not set up',
+          maxLines: 1,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: missing ? scheme.error : Studio.of(context).text3,
+          ),
         ),
-        trailing: const Icon(Icons.chevron_right),
         onTap: () async {
           await showKeys(context, widget.store);
           if (mounted) {
@@ -840,28 +867,38 @@ class _StorageTileState extends State<StorageTile> {
   @override
   Widget build(BuildContext context) => FutureBuilder<int>(
     future: size,
-    builder: (context, kept) => ListTile(
+    builder: (context, kept) => SettingRow(
       key: const ValueKey('settings-storage'),
-      leading: const Icon(Icons.sd_storage_outlined),
-      title: const Text('Saved on this phone'),
-      subtitle: Text(
-        kept.hasData ? _bytes(kept.data!) : 'Films you’ve watched',
-      ),
-      trailing: TextButton(
-        onPressed: (kept.data ?? 0) == 0
-            ? null
-            : () => guard(context, () async {
-                if (!await confirm(
-                  context,
-                  'Clear saved films?',
-                  'They stay on your computer. They’ll come over again the next time you play them.',
-                  action: 'Clear',
-                )) {
-                  return;
-                }
-                await widget.store.client.cache.clear();
-              }),
-        child: const Text('Clear'),
+      icon: Icons.sd_storage_outlined,
+      title: 'Storage',
+      chevron: false,
+      end: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            kept.hasData ? _bytes(kept.data!) : '…',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Studio.of(context).text3,
+              fontFeatures: tabular,
+            ),
+          ),
+          TextButton(
+            onPressed: (kept.data ?? 0) == 0
+                ? null
+                : () => guard(context, () async {
+                    if (!await confirm(
+                      context,
+                      'Clear saved films?',
+                      'They stay on your computer. They’ll come over again the next time you play them.',
+                      action: 'Clear',
+                    )) {
+                      return;
+                    }
+                    await widget.store.client.cache.clear();
+                  }),
+            child: const Text('Clear'),
+          ),
+        ],
       ),
     ),
   );

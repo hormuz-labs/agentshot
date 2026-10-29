@@ -93,7 +93,7 @@ void main() {
       await waitFor(tester, find.text(computer));
       expect(find.textContaining('https://'), findsNothing);
       await reveal(tester, find.text('Signed in as maya@example.com'));
-      final switching = find.text('Switch computer');
+      final switching = find.text('Switch');
       await reveal(tester, switching);
       await tester.tap(switching);
       await waitFor(tester, find.text('Your computers'));

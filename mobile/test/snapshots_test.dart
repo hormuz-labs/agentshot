@@ -82,6 +82,8 @@ void main() {
       for (var i = 0; i < 50 && !client.sent.contains('project:peek /q'); i++) {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       }
+      // asked is not yet kept: a moment for the answer to be written down
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       await first.saved.flush();
       first.dispose();
 
@@ -116,6 +118,8 @@ void main() {
     for (var i = 0; i < 50 && !client.sent.contains('project:peek /q'); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
+    // asked is not yet kept: a moment for the answer to be written down
+    await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(
       client.sent,
       containsAll([

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'media_cache.dart';
@@ -1179,8 +1180,9 @@ class BridgeClient {
   Future<void> _fetchWhole(
     String path,
     Map<String, String> query,
-    String key,
-  ) async {
+    String key, {
+    void Function(double)? progress,
+  }) async {
     final response = await (await _request('GET', path, query)).close();
     final etag = _versionOf(path, response);
     if (response.statusCode != 200 || etag == null) {
@@ -1188,9 +1190,13 @@ class BridgeClient {
       return;
     }
     final writer = await cache.write(key, etag, _typeOf(response));
+    final total = response.contentLength;
+    var got = 0;
     try {
       await for (final chunk in response) {
         writer.add(chunk);
+        got += chunk.length;
+        if (total > 0) progress?.call(got / total);
       }
       await writer.commit(response.contentLength);
     } catch (_) {
@@ -1205,8 +1211,32 @@ class BridgeClient {
     final query = {'project': project, 'file': file};
     final key = _cacheKey('/media', query);
     if (key == null || await cache.lookup(key) != null) return;
-    await cache.fill(key, () => _fetchWhole('/media', query, key));
+    final name = '$project\n$file';
+    // said a percent at a time, not a chunk at a time
+    var said = -1;
+    void at(double? p) {
+      final percent = p == null ? null : (p * 100).floor();
+      if (percent != null && percent == said) return;
+      said = percent ?? -1;
+      final now = {...keeping.value};
+      if (p == null) {
+        now.remove(name);
+      } else {
+        now[name] = p;
+      }
+      keeping.value = now;
+    }
+
+    at(0);
+    try {
+      await cache.fill(key, () => _fetchWhole('/media', query, key, progress: at));
+    } finally {
+      at(null);
+    }
   }
+
+  /// Films on their way onto the phone (see [keep]), by project and file: how far each has come, 0 to 1.
+  final keeping = ValueNotifier<Map<String, double>>({});
 
   /// A project file on the phone, to share or save: what's kept when it's still current, else fetched (and kept).
   Future<File> download(

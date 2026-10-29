@@ -21,6 +21,9 @@ class CutCard extends StatefulWidget {
   final String headline;
   final bool highlight;
   final List<Widget> actions;
+
+  /// Opens the cut full screen (on a phone) instead of playing it in the card.
+  final VoidCallback? onOpen;
   const CutCard({
     super.key,
     required this.store,
@@ -30,6 +33,7 @@ class CutCard extends StatefulWidget {
     required this.headline,
     this.highlight = false,
     this.actions = const [],
+    this.onOpen,
   });
   @override
   State<CutCard> createState() => _CutCardState();
@@ -87,7 +91,7 @@ class _CutCardState extends State<CutCard> {
       child: InkWell(
         key: const ValueKey('cut-play'),
         customBorder: smooth(12),
-        onTap: () => setState(() => playing = true),
+        onTap: widget.onOpen ?? () => setState(() => playing = true),
         child: ClipRSuperellipse(
           borderRadius: BorderRadius.circular(12),
           child: SizedBox(

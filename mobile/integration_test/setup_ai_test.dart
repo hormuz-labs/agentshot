@@ -98,7 +98,7 @@ void main() {
       tester,
       find.descendant(of: ai, matching: find.text('Your OpenAI key')),
     );
-    await press(tester, find.text('AI models'));
+    await press(tester, find.byKey(const ValueKey('settings-ai')));
     await waitFor(tester, keyTile());
     await tester.tap(keyTile());
     await waitFor(tester, find.text('Remove the OpenAI key?'));
