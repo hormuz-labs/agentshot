@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import type { AccountStatus, Balance, KeyInfo } from '../../../shared/types'
 import { ProvidersSection } from './ProvidersSection'
+import { CodeSignIn } from '@/components/CodeSignIn'
 
 const AGENTSHOT_KEY = 'MANUL_KEY'
 
@@ -152,6 +153,7 @@ function AgentShotKey({ agentshotKey, onKeys }: { agentshotKey?: KeyInfo; onKeys
           )}
           {error && <p className="max-w-sm text-center text-xs text-bad">{error}</p>}
           {!account.available && <p className="text-xs text-faint">Signing in isn’t available in this build.</p>}
+          {!busy && <CodeSignIn onSignedIn={refresh} />}
           <button className="text-xs text-faint underline-offset-2 hover:text-fg hover:underline" onClick={() => setPasting(true)}>Have a key? Paste it</button>
         </div>
       )}

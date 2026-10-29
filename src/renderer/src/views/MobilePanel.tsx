@@ -7,6 +7,7 @@ import type { MobileState } from '../../../main/mobile-bridge'
 import type { WorkerClientStatus } from '../../../main/worker-client'
 import type { DiscoveredWorker } from '../../../main/account'
 import type { CloudWorkerStatus } from '../../../preload'
+import { CodeSignIn } from '@/components/CodeSignIn'
 
 const field = 'h-8 rounded-lg border border-line bg-bg px-2.5 text-xs outline-none placeholder:text-faint focus:border-amber/60'
 const message = (e: unknown) => String((e as Error)?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
@@ -116,6 +117,9 @@ export function MobilePanel() {
             </div>
             <Button size="sm" variant="primary" disabled={busy} onClick={signIn}>Sign in</Button>
           </div>
+        )}
+        {!account.email && (
+          <CodeSignIn onSignedIn={async () => setState(await window.agentshot.mobile.status())} />
         )}
 
         <div>

@@ -119,7 +119,40 @@ export async function manageBilling(open: (url: string) => Promise<void> | void)
   await open(url)
 }
 
-export function cancelSignIn() { pending?.cancel() }
+export function cancelSignIn() { pending?.cancel(); codeWaiting?.() }
+
+let codeWaiting: (() => void) | null = null
+
+/** Sign in with a code, for a computer whose browser is signed in to someone else: the account service gives a code to
+ *  show ([show]); once it's typed on the person's phone, signed in there, this computer has the same account. Resolves
+ *  with who signed in. */
+export async function signInWithCode(show: (code: string, expiresAt: number) => void, everyMs = 2_000): Promise<AccountStatus> {
+  codeWaiting?.()
+  const r = await fetch(`${AUTH.account()}/v1/link/start`, { method: 'POST', signal: AbortSignal.timeout(15_000) }).catch(() => null)
+  if (!r?.ok) throw new Error('Could not reach AgentShot. Try again in a moment.')
+  const { code, secret, expiresAt } = await r.json() as { code: string; secret: string; expiresAt: number }
+  show(code, expiresAt)
+  let cancelled = false
+  codeWaiting = () => { cancelled = true }
+  try {
+    while (!cancelled && Date.now() < expiresAt) {
+      await new Promise(done => setTimeout(done, everyMs))
+      if (cancelled) break
+      const t = await fetch(`${AUTH.account()}/v1/link/take`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, secret }), signal: AbortSignal.timeout(15_000),
+      }).catch(() => null)
+      if (!t || t.status === 202 || t.status >= 500) continue // waiting for the phone, or a hiccup: ask again
+      if (!t.ok) break
+      const got = await t.json() as { key: string; key_id: string; email: string }
+      setKey(MANUL_KEY, got.key)
+      setConfig({ account: { email: got.email, keyId: got.key_id } })
+      return accountStatus()
+    }
+    throw new Error(cancelled ? 'Signing in was cancelled.' : 'That code ran out. Make a new one.')
+  } finally {
+    codeWaiting = null
+  }
+}
 
 /** Sign out on this computer: the key goes (it stays the person's: signing in again brings it back). */
 export function signOut(): AccountStatus {

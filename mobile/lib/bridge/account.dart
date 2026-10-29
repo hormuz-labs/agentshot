@@ -206,6 +206,13 @@ class Account {
   /// Credits left and the plan ({credits, plan: {name}?, …}).
   Future<Json> balance() => _asKey('GET', '/v1/balance');
 
+  /// Signs a computer in to this account with the code it shows (for a computer whose browser is signed in to someone
+  /// else): the account service hands the computer this account once it's approved here. The email it's signed in as.
+  Future<String> signInComputer(String code) async {
+    final got = await _asKey('POST', '/v1/link/approve', body: {'code': code});
+    return '${got['email'] ?? email ?? ''}';
+  }
+
   /// The person's computers that are on and signed in to AgentShot now, and a cloud worker they lease.
   Future<List<Computer>> computers() async {
     final data = await _asKey('GET', '/v1/workers');

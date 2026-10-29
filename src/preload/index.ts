@@ -145,6 +145,10 @@ const api = {
   account: {
     status: () => ipcRenderer.invoke('account:status') as Promise<AccountStatus>,
     signIn: () => ipcRenderer.invoke('account:signIn') as Promise<AccountStatus>,
+    /** signs in with a code typed on the person's phone (signed in there): resolves once it's taken */
+    signInWithCode: () => ipcRenderer.invoke('account:signInWithCode') as Promise<AccountStatus>,
+    /** the code to show, as soon as there is one, and when it runs out */
+    onCode: on<[string, number]>('account:code'),
     cancel: () => ipcRenderer.invoke('account:cancel'),
     signOut: () => ipcRenderer.invoke('account:signOut') as Promise<AccountStatus>,
     /** credits, plan and model tiers (shared with Pitch), and what's on sale */

@@ -66,6 +66,7 @@ Future<String?> askText(
   String initial = '',
   String? hint,
   bool secret = false,
+  String action = 'Save',
 }) async {
   final controller = TextEditingController(text: initial);
   final result = await showDialog<String>(
@@ -88,7 +89,7 @@ Future<String?> askText(
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, controller.text.trim()),
-          child: const Text('Save'),
+          child: Text(action),
         ),
       ],
     ),

@@ -195,6 +195,13 @@ class SettingsScreen extends StatelessWidget {
           ]),
         if (signedIn != null) ...[
           Section(null, [
+            // a computer whose browser is signed in to someone else: its code, typed here, signs it in as you
+            row(
+              Icons.add_to_queue_rounded,
+              'Sign in a computer',
+              key: const ValueKey('settings-sign-in-computer'),
+              onTap: () => signInComputer(context, signedIn),
+            ),
             row(
               Icons.logout,
               'Sign out',
@@ -220,6 +227,25 @@ class SettingsScreen extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  /// The code a computer shows (AgentShot → Sign in with a code from your phone), typed here: it's then signed in as this
+  /// phone's account.
+  Future<void> signInComputer(BuildContext context, Account account) async {
+    final code = await askText(
+      context,
+      'Sign in a computer',
+      hint: 'The code on the computer, like K7QF-2M9X',
+      action: 'Sign in',
+    );
+    if (code == null || code.trim().isEmpty || !context.mounted) return;
+    await guard(context, () async {
+      final email = await account.signInComputer(code.trim());
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('That computer is signed in as $email.')),
+      );
+    });
   }
 
   /// The app's name, version and licence.

@@ -94,6 +94,14 @@ class Signed extends Account {
     'credits': 12345,
     'plan': {'name': 'Pro'},
   };
+
+  /// Codes typed under Sign in a computer.
+  final codes = <String>[];
+  @override
+  Future<String> signInComputer(String code) async {
+    codes.add(code);
+    return email!;
+  }
 }
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
@@ -523,6 +531,30 @@ void main() {
       await conversation();
       expect(find.byType(CutCard), findsNothing);
       await close();
+    },
+  );
+
+  testWidgets(
+    'Sign in a computer: its code, typed here, signs it in as this phone\'s account',
+    (tester) async {
+      final account = Signed();
+      final store = BridgeStore(Computer())
+        ..account = account
+        ..connected = true;
+      await tester.pumpWidget(host(settings(store)));
+      await tester.pumpAndSettle();
+      final row = find.byKey(const ValueKey('settings-sign-in-computer'));
+      await tester.scrollUntilVisible(row, 80);
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, ' k7qf-2m9x ');
+      await tester.tap(find.text('Sign in').last);
+      await tester.pumpAndSettle();
+      expect(account.codes, ['k7qf-2m9x']);
+      expect(
+        find.text('That computer is signed in as maya@example.com.'),
+        findsOneWidget,
+      );
     },
   );
 }

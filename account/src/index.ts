@@ -24,11 +24,22 @@
 // make a new one.
 
 import { readFile } from 'node:fs/promises'
-import { createHmac, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { brandPage } from '../../src/shared/brand-page.ts'
 import { costForCredits, creditsForCost, creditsForPrice, DISCOUNT, isPaid, PLANS, productEnv, providerConfigs, STARTER_CREDITS, TIERS, tiersFor, TOPUPS, type PlanKey, type TopupKey } from './plans.ts'
 import { LEASE_LIMITS, LeaseCapped, planOf, type LeaseLimits, type Wallet, type WorkerCapabilities, type WorkerRecord } from './wallet.ts'
 import { checkMusic, checkVoice, compose, KEY_ENV, MediaError, speak, VENDOR_NAME, VOICES, type Choice, type MusicRequest, type Voice, type VoiceRequest } from './media.ts'
+
+/** Codes to sign a computer in with (see /v1/link): eight letters and digits that can't be mistaken for each other,
+ *  good for ten minutes; the computer's secret is kept only as its hash. */
+const LINK_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const LINK_TTL_MS = 10 * 60_000
+const linkSecret = (secret: string) => createHash('sha256').update(secret).digest('base64url')
+/** A code as typed: any case, with or without its dash or spaces. */
+export const linkCode = (code: unknown) => {
+  const c = typeof code === 'string' ? code.toUpperCase().replace(/[\s-]/g, '') : ''
+  return c.length === 8 && [...c].every(ch => LINK_ALPHABET.includes(ch)) ? c : undefined
+}
 
 export interface Env {
   /** Clerk's Frontend API, e.g. https://clerk.agentshot.si (the OAuth issuer) */
@@ -279,6 +290,9 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
   if (url.pathname === '/v1/workers' && req.method === 'GET') return listWorkers()
   if (url.pathname === '/v1/workers/lease' && req.method === 'POST') return leaseWorker()
   if (url.pathname === '/v1/workers/release' && req.method === 'POST') return releaseWorker()
+  if (url.pathname === '/v1/link/start' && req.method === 'POST') return startLink()
+  if (url.pathname === '/v1/link/approve' && req.method === 'POST') return approveLink()
+  if (url.pathname === '/v1/link/take' && req.method === 'POST') return takeLink()
   return fail(404, 'Not found.')
 
   async function signIn() {
@@ -573,6 +587,46 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
       }
     }
     return json({ workers: [...owned.map(toClient), ...leased.map(toClient)], poolAvailable })
+  }
+
+  // Signing a computer in with a code: the computer asks for one and shows it; the person types it on their phone,
+  // signed in there; the computer then has the phone's account. For a computer whose browser is signed in to someone else.
+  async function startLink() {
+    if (!wallet) return fail(503, 'Accounts are unavailable. Try again later.')
+    const code = Array.from({ length: 8 }, () => LINK_ALPHABET[randomInt(LINK_ALPHABET.length)]).join('')
+    const secret = randomBytes(32).toString('base64url')
+    const expiresAt = Date.now() + LINK_TTL_MS
+    await wallet.startLink(code, linkSecret(secret), expiresAt)
+    return json({ code: `${code.slice(0, 4)}-${code.slice(4)}`, secret, expiresAt })
+  }
+
+  async function approveLink() {
+    const vk = await caller()
+    if (vk instanceof Response) return vk
+    const userId = await owner(vk)
+    if (!wallet || !userId) return fail(503, 'Accounts are unavailable. Try again later.')
+    const body = (await req.json().catch(() => ({}))) as { code?: unknown }
+    const code = linkCode(body.code)
+    const email = (await wallet.account(userId))?.email
+    if (!code || !email || !(await wallet.approveLink(code, vk.id, email))) {
+      return fail(404, 'That code isn’t valid any more. Make a new one on the computer.')
+    }
+    return json({ ok: true, email })
+  }
+
+  async function takeLink() {
+    if (!wallet) return fail(503, 'Accounts are unavailable. Try again later.')
+    const body = (await req.json().catch(() => ({}))) as { code?: unknown; secret?: unknown }
+    const code = linkCode(body.code)
+    if (!code || typeof body.secret !== 'string') return fail(400, 'Make a new code and try again.')
+    const got = await wallet.takeLink(code, linkSecret(body.secret))
+    if (got === 'waiting') return json({ waiting: true }, 202)
+    if (!got) return fail(404, 'That code ran out. Make a new one.')
+    const vk = await getKey(got.keyId)
+    if (!vk) return fail(502, 'Could not reach the gateway. Try again in a moment.')
+    if (!vk.is_active) return fail(403, 'Your AgentShot key is turned off. Contact support.')
+    track(env, 'manul signed in', got.keyId, { by_code: true })
+    return json({ key: vk.value, key_id: vk.id, email: got.email })
   }
 
   async function leaseWorker() {
