@@ -58,19 +58,17 @@ void main() {
     await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
     await waitFor(
       tester,
-      find.text('What are we making?'),
+      home,
       timeout: const Duration(minutes: 2),
     );
     // ignore: avoid_print
     print('CLOUD_OPENED_IN ${DateTime.now().difference(tapped).inMilliseconds} ms');
     // it keeps only what this person makes there: nothing yet
-    await reveal(tester, find.text('A home for your films'));
+    await reveal(tester, find.text('No projects yet'));
 
     // an idea becomes a project on the worker, and its agent answers
-    await start(tester, 'Start from an idea');
-    await answer(tester, 'Mobile e2e in the cloud');
-    await waitFor(tester, find.text('Choose a format'));
-    await tester.tap(find.text('16:9'));
+    await start(tester, 'Describe it');
+    await describe(tester, 'Mobile e2e in the cloud', format: '16:9');
     // the worker has no AI of its own: this person's AgentShot credits, handed over from the phone
     await waitFor(
       tester,
@@ -185,14 +183,12 @@ void main() {
     await tester.tap(cloud);
     await waitFor(
       tester,
-      find.text('What are we making?'),
+      home,
       timeout: const Duration(minutes: 2),
     );
     Future<void> newIdea() async {
-      await start(tester, 'Start from an idea');
-      await answer(tester, 'Mobile e2e room again');
-      await waitFor(tester, find.text('Choose a format'));
-      await tester.tap(find.text('16:9'));
+      await start(tester, 'Describe it');
+      await describe(tester, 'Mobile e2e room again', format: '16:9');
       await settle(tester);
     }
 
@@ -235,7 +231,7 @@ void main() {
     await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
     await waitFor(
       tester,
-      find.text('What are we making?'),
+      home,
       timeout: const Duration(minutes: 2),
     );
     // ignore: avoid_print
@@ -267,7 +263,7 @@ void main() {
     await tester.tap(cloud);
     await waitFor(
       tester,
-      find.text('What are we making?'),
+      home,
       timeout: const Duration(minutes: 2),
     );
     await giveBack();

@@ -9,6 +9,7 @@ import 'package:agentshot_mobile/ui/computers.dart';
 import 'package:agentshot_mobile/ui/home.dart';
 import 'package:agentshot_mobile/ui/pair.dart';
 import 'package:agentshot_mobile/ui/project.dart';
+import 'package:agentshot_mobile/ui/player.dart';
 import 'package:agentshot_mobile/ui/settings.dart';
 
 class FakeClient extends BridgeClient {
@@ -214,7 +215,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         for (final label in ['Examples', 'Activity', 'Settings']) {
-          final destination = find.text(label).last;
+          // icons only in the bar (the rail beside a wide screen names them)
+          final destination = find.byKey(ValueKey('nav-$label')).evaluate().isNotEmpty
+              ? find.byKey(ValueKey('nav-$label'))
+              : find.text(label).last;
           await tester.ensureVisible(destination);
           await tester.tap(destination);
           await tester.pumpAndSettle();
@@ -271,22 +275,27 @@ void main() {
         await tester.pumpWidget(host(ProjectScreen(store: store)));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        expect(find.byKey(const ValueKey('proposal-card')), findsOneWidget);
-        // to watch and download right there
-        expect(find.byKey(const ValueKey('cut-play')), findsOneWidget);
-        expect(find.byKey(const ValueKey('cut-download')), findsOneWidget);
-        final dot = find.byKey(const ValueKey('tab-Film-dot'));
-        if (dot.evaluate().isNotEmpty) {
-          expect(tester.widget<Badge>(dot).isLabelVisible, isTrue);
+        // the new cut, once: in the conversation on a phone (playing there, with Before/After, Send back and
+        // Keep), under the film beside it on a wide screen
+        final card = find.byKey(const ValueKey('proposal-card'));
+        final bar = find.byKey(const ValueKey('proposal-bar'));
+        expect(card.evaluate().length + bar.evaluate().length, 1);
+        if (card.evaluate().isNotEmpty) {
+          expect(find.descendant(of: card, matching: find.byType(RemotePlayer)), findsOneWidget);
+          // one film at a time: the one above steps aside
+          expect(find.byType(RemotePlayer), findsOneWidget);
         }
-        // the model and credits sit in the top row, above the field, the model's long name cut short; with
-        // nothing typed the button on the right is the mic (hold to talk)
-        final model = tester.getRect(find.byKey(const ValueKey('model')));
-        final field = tester.getRect(find.byKey(const ValueKey('composer')));
-        expect(model.width, lessThanOrEqualTo(200));
-        expect(model.bottom, lessThanOrEqualTo(field.top + 1));
+        // a quiet composer: the field, the + and the mic (hold to talk); the model and credits wait in the tray
+        expect(find.byKey(const ValueKey('model')), findsNothing);
         expect(find.byKey(const ValueKey('mic')), findsOneWidget);
         expect(find.byTooltip('Send'), findsNothing);
+        await tester.ensureVisible(find.byTooltip('Add'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Add'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'The tray');
+        // the model's long name cut short
+        expect(tester.getRect(find.byKey(const ValueKey('model'))).width, lessThanOrEqualTo(200));
         // picking a model works: the picker closes cleanly with no error
         // (with very large text on a short screen the composer scrolls)
         await tester.ensureVisible(find.byKey(const ValueKey('model')));
@@ -311,7 +320,7 @@ void main() {
         expect(tester.takeException(), isNull);
         tester.view.resetViewInsets();
         await tester.pumpAndSettle();
-        for (final label in ['Film', 'Files']) {
+        for (final label in ['Edit', 'Files']) {
           final chip = find.byKey(ValueKey('tab-$label'));
           if (chip.evaluate().isEmpty) continue;
           await tester.ensureVisible(chip);

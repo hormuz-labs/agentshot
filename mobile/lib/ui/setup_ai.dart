@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../bridge/client.dart';
 import '../bridge/store.dart';
 import 'common.dart';
+import 'design.dart';
 import 'settings.dart' show Credits;
 
 /// Sends a note to the agent on the computer. When the computer has no AI to edit with yet, offers to set it up
@@ -36,7 +37,7 @@ Future<void> sendToAgent(
 /// Lets the person choose how AgentShot on their computer thinks. True once it can.
 Future<bool> setUpAi(BuildContext context, BridgeStore store) async {
   final account = store.account;
-  final choice = await showModalBottomSheet<String>(
+  final choice = await showSheet<String>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,

@@ -5,6 +5,7 @@ import '../bridge/client.dart';
 import '../bridge/pick.dart';
 import '../bridge/store.dart';
 import 'common.dart';
+import 'design.dart';
 import 'home.dart' show ConsentCards;
 import 'markdown.dart';
 import 'mascot.dart';
@@ -80,13 +81,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
     if (next?.$1 != pinned?.$1) setState(() => pinned = next);
   }
 
-  int section = 0;
-
   /// Film and conversation side by side (a wide screen), so a new cut is already in sight.
   bool wide = false;
-
-  /// The new cut the person has looked at in the Film tab (no dot on the tab for it any more).
-  String? seen;
   bool after = true, boxMode = false, sending = false, exporting = false;
 
   /// Why the last note didn't go (shown above the composer, the note kept there to try again).
@@ -101,7 +97,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
     setState(() {
       message.text = appendRange(message.text, start, end);
       message.selection = TextSelection.collapsed(offset: message.text.length);
-      section = 0;
     });
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => composerKey.currentState?.focusInput(),
@@ -277,34 +272,80 @@ class _ProjectScreenState extends State<ProjectScreen> {
           body: Center(child: Text('Open a project first.')),
         );
       }
+      final studio = Studio.of(context);
       return Scaffold(
         appBar: AppBar(
-          title: Text(
-            '${p['title']}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          // beside the back arrow; at the page's margin when there's none
+          titleSpacing: Navigator.canPop(context) ? 0 : Space.page,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${p['title']}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              // only when it matters: offline, what shows is what was here last
+              if (!store.connected)
+                Row(
+                  children: [
+                    Icon(Icons.circle, size: 7, color: studio.accent),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Offline · what was here last',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
           ),
           actions: [
+            // on a phone, Edit opens from here as a sheet (a wide screen has it beside the conversation)
+            if (MediaQuery.sizeOf(context).width < 900) ...[
+              IconButton(
+                key: const ValueKey('open-edit'),
+                tooltip: 'Edit',
+                onPressed: openEdit,
+                icon: const Icon(Icons.tune_rounded),
+              ),
+            ],
             IconButton(
               tooltip: 'Export film',
               onPressed: exporting ? null : export,
-              icon: const Icon(Icons.ios_share),
+              icon: const Icon(Icons.ios_share_rounded),
             ),
             PopupMenuButton<String>(
               tooltip: 'Project actions',
               onSelected: action,
+              icon: const Icon(Icons.more_horiz_rounded),
               itemBuilder: (_) => [
-                for (final item in const {
-                  'conversations': 'Conversations',
-                  'models': 'Choose model',
-                  'history': 'History',
-                  'transcript': 'Transcript',
-                  'timeline': 'Timeline & mix',
-                  'versions': 'Versions',
-                }.entries)
-                  PopupMenuItem(value: item.key, child: Text(item.value)),
+                for (final (key, name, icon) in const [
+                  ('files', 'Files', Icons.folder_outlined),
+                  ('conversations', 'Conversations', Icons.forum_outlined),
+                  ('models', 'Choose model', Icons.memory_rounded),
+                  ('history', 'History', Icons.history_rounded),
+                  ('transcript', 'Transcript', Icons.subtitles_outlined),
+                  ('timeline', 'Timeline & mix', Icons.view_timeline_outlined),
+                  ('versions', 'Versions', Icons.layers_outlined),
+                ])
+                  PopupMenuItem(
+                    value: key,
+                    child: Row(
+                      children: [
+                        Icon(icon, size: 20, color: studio.text2),
+                        const SizedBox(width: Space.md),
+                        Text(name),
+                      ],
+                    ),
+                  ),
               ],
             ),
+            const SizedBox(width: Space.xs),
           ],
         ),
         body: SafeArea(
@@ -312,25 +353,23 @@ class _ProjectScreenState extends State<ProjectScreen> {
             children: [
               // banners take their size, but never more than the screen shares out (a landscape phone with
               // the keyboard up leaves a sliver), and scroll within it
-              if (!store.connected)
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(8),
-                    child: Text(
-                      store.connectionError ?? 'Reconnecting…',
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
               if (exporting)
                 Flexible(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.fromLTRB(
+                      Space.lg,
+                      Space.xs,
+                      Space.lg,
+                      Space.sm,
+                    ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(exportStatus ?? ''),
-                        const SizedBox(height: 8),
+                        Text(
+                          exportStatus ?? '',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                        const SizedBox(height: Space.sm),
                         const LinearProgressIndicator(),
                       ],
                     ),
@@ -342,6 +381,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
                     wide =
                         size.maxWidth >= 900 &&
                         MediaQuery.textScalerOf(context).scale(16) <= 26;
+                    // where a new cut is decided: under the film when it's in sight, else in the conversation
+                    filmInSight = hasFilm && (wide || size.maxHeight > 420);
                     if (wide) {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -354,6 +395,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                               children: [
                                 film(),
                                 const SizedBox(height: 24),
+                                const Overline('Files'),
                                 files(),
                               ],
                             ),
@@ -364,17 +406,27 @@ class _ProjectScreenState extends State<ProjectScreen> {
                     // A phone in landscape with the keyboard up leaves a sliver: give it all to the note being typed.
                     // (Height alone: the Scaffold has already taken the keyboard out of this body's insets.)
                     if (size.maxHeight < 200) return chat();
+                    // the film stays in sight above the conversation; it steps aside while a note is typed (kept
+                    // playing where it was), and while a new cut waits (that plays in its card, one film at a time)
+                    final typing = MediaQuery.viewInsetsOf(context).bottom > 0;
+                    final cutInChat =
+                        project['proposal'] != null && !store.agent(dir).busy;
+                    final stageUp = filmInSight && !typing && !cutInChat;
                     return Column(
                       children: [
-                        tabs(),
-                        Expanded(
-                          child: section == 0
-                              ? chat()
-                              : ListView(
-                                  padding: const EdgeInsets.all(16),
-                                  children: [section == 1 ? film() : files()],
-                                ),
-                        ),
+                        // never more than about half the height (large text, a short phone): it scrolls within
+                        if (hasFilm && !cutInChat)
+                          Visibility(
+                            visible: stageUp,
+                            maintainState: true,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxHeight: size.maxHeight * .55,
+                              ),
+                              child: SingleChildScrollView(child: stage()),
+                            ),
+                          ),
+                        Expanded(child: chat()),
                       ],
                     );
                   },
@@ -440,102 +492,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
     'memory' || 'remember' || 'forget' => 'Remembering',
     _ => 'Working',
   };
-
-  /// Conversation, Film and Files on a narrow screen: one rounded track across the width, the part showing raised.
-  Widget tabs() {
-    final scheme = Theme.of(context).colorScheme;
-    final proposal = project['proposal'] as String?;
-    if (section == 1) seen = proposal;
-    final waiting = proposal != null && proposal != seen;
-    final label = Theme.of(context).textTheme.labelLarge;
-    const parts = [
-      ('Conversation', Icons.chat_bubble_outline, Icons.chat_bubble),
-      ('Film', Icons.movie_outlined, Icons.movie),
-      ('Files', Icons.folder_outlined, Icons.folder),
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            for (final (i, (name, icon, chosen)) in parts.indexed)
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  selected: section == i,
-                  child: GestureDetector(
-                    key: ValueKey('tab-$name'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => setState(() => section = i),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOut,
-                      constraints: const BoxConstraints(minHeight: 40),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: section == i ? scheme.surface : null,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: section == i
-                            ? [
-                                BoxShadow(
-                                  color: scheme.shadow.withValues(alpha: .08),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      // large text on a small phone shrinks the words to fit rather than cutting them off
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Badge(
-                              key: ValueKey('tab-$name-dot'),
-                              isLabelVisible: waiting && name == 'Film',
-                              smallSize: 8,
-                              child: Icon(
-                                section == i ? chosen : icon,
-                                size: 18,
-                                color: section == i
-                                    ? scheme.primary
-                                    : scheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              name,
-                              maxLines: 1,
-                              style: label?.copyWith(
-                                color: section == i
-                                    ? scheme.onSurface
-                                    : scheme.onSurfaceVariant,
-                                fontWeight: section == i
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Future<Json?> loadCredits() async {
     try {
@@ -654,7 +610,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                                 EmptyMessage(
                                   Icons.chat_bubble_outline,
                                   'Give notes. Get cuts.',
-                                  'Ask for an edit, attach a file, or point at a moment in the Film tab.',
+                                  'Ask for an edit.',
                                   // smaller when there's little room (a phone on its side, very large text)
                                   art: Mascot(
                                     size: (available.maxHeight * .22).clamp(
@@ -815,8 +771,19 @@ class _ProjectScreenState extends State<ProjectScreen> {
                                 RunProblem(message: error),
                               // what the computer asks before going on (a download, say): where the agent waits, as on the desktop
                               ConsentCards(store: store, dir: dir),
+                              // a new cut: right under the reply that made it, playing there, with Before/After,
+                              // Send back and Keep (on a wide screen it's under the film beside)
                               if (project['proposal'] != null && !state.busy)
-                                proposalCard()
+                                wide
+                                    ? const SizedBox.shrink()
+                                    : hasFilm
+                                    ? Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: Space.lg,
+                                        ),
+                                        child: proposalBar(preview: true),
+                                      )
+                                    : proposalCard()
                               else if (!state.busy && messages.isNotEmpty)
                                 ?latestCutCard(chat),
                             ],
@@ -914,97 +881,104 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 onDismiss: () => setState(() => sendError = null),
               ),
             ),
-          // Bound composer height under large text/landscape/keyboard constraints; content scrolls.
+          // Bound the bottom (a new cut's bar and the composer) under large text/landscape/keyboard; it scrolls.
           ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: (available.maxHeight * .55).clamp(
+              maxHeight: (available.maxHeight * .62).clamp(
                 0.0,
-                MediaQuery.sizeOf(context).height * .4,
+                MediaQuery.sizeOf(context).height * .5,
               ),
             ),
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-              child: Composer(
-                key: composerKey,
-                controller: message,
-                busy: state.busy,
-                sending: sending,
-                canSend: canSend,
-                onSend: send,
-                onStop: () => guard(context, () async {
-                  await store.client.call('agent:stop', [dir]);
-                }),
-                onChanged: (v) {
-                  if (v.endsWith('@')) mentions();
-                  setState(() {});
-                },
-                hear: (note) => store.client.voiceNote(note, dir),
-                onVoiceError: (e, note) =>
-                    setState(() => voiceError = (e, note)),
-                header: [
-                  if (anchor != null)
-                    InputChip(
-                      visualDensity: VisualDensity.compact,
-                      label: Text(
-                        'Note at ${timestamp(anchor!['t0'] as num)}${anchor!['box'] != null ? ' · box' : ''}',
-                      ),
-                      onDeleted: () => setState(() {
-                        anchor = null;
-                        boxMode = false;
-                      }),
-                    ),
-                  for (final f in attachments)
-                    InputChip(
-                      visualDensity: VisualDensity.compact,
-                      label: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 240),
-                        child: Text(
-                          attachmentLabel(f),
-                          overflow: TextOverflow.ellipsis,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Composer(
+                    key: composerKey,
+                    controller: message,
+                    busy: state.busy,
+                    sending: sending,
+                    canSend: canSend,
+                    onSend: send,
+                    onStop: () => guard(context, () async {
+                      await store.client.call('agent:stop', [dir]);
+                    }),
+                    onChanged: (v) {
+                      if (v.endsWith('@')) mentions();
+                      setState(() {});
+                    },
+                    hear: (note) => store.client.voiceNote(note, dir),
+                    onVoiceError: (e, note) =>
+                        setState(() => voiceError = (e, note)),
+                    header: [
+                      if (anchor != null)
+                        InputChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(
+                            'Note at ${timestamp(anchor!['t0'] as num)}${anchor!['box'] != null ? ' · box' : ''}',
+                          ),
+                          onDeleted: () => setState(() {
+                            anchor = null;
+                            boxMode = false;
+                          }),
                         ),
-                      ),
-                      onDeleted: () => setState(() => attachments.remove(f)),
-                    ),
-                  // the model sits in the top row, its name cut short when it doesn't fit
-                  FutureBuilder<String>(
-                    future: model,
-                    builder: (context, snapshot) => ComposerChip(
-                      key: const ValueKey('model'),
-                      label: Text(snapshot.data ?? 'Automatic'),
-                      onTap: () => action('models'),
-                    ),
-                  ),
-                  FutureBuilder<Json?>(
-                    future: credits,
-                    builder: (context, snapshot) => snapshot.data == null
-                        ? const SizedBox.shrink()
-                        : ComposerChip(
-                            key: const ValueKey('credits'),
-                            icon: Icons.toll_outlined,
-                            label: Text(
-                              Credits.describe(
-                                snapshot.data!,
-                              ).split(' · ').first,
+                      for (final f in attachments)
+                        InputChip(
+                          visualDensity: VisualDensity.compact,
+                          label: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 240),
+                            child: Text(
+                              attachmentLabel(f),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                  ),
-                ],
-                tray: [
-                  ActionChip(
-                    avatar: const Icon(Icons.attach_file, size: 18),
-                    label: const Text('Attach files'),
-                    onPressed: () {
-                      composerKey.currentState?.closeTray();
-                      guard(context, importFiles);
-                    },
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.alternate_email, size: 18),
-                    label: const Text('Mention a file, version or clip'),
-                    onPressed: () {
-                      composerKey.currentState?.closeTray();
-                      mentions();
-                    },
+                          onDeleted: () =>
+                              setState(() => attachments.remove(f)),
+                        ),
+                    ],
+                    tray: [
+                      ActionChip(
+                        avatar: const Icon(Icons.attach_file, size: 18),
+                        label: const Text('Attach files'),
+                        onPressed: () {
+                          composerKey.currentState?.closeTray();
+                          guard(context, importFiles);
+                        },
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.alternate_email, size: 18),
+                        label: const Text('Mention a file, version or clip'),
+                        onPressed: () {
+                          composerKey.currentState?.closeTray();
+                          mentions();
+                        },
+                      ),
+                      // the model and credits: in the tray, the model's name cut short when it doesn't fit
+                      FutureBuilder<String>(
+                        future: model,
+                        builder: (context, snapshot) => ComposerChip(
+                          key: const ValueKey('model'),
+                          label: Text(snapshot.data ?? 'Automatic'),
+                          onTap: () => action('models'),
+                        ),
+                      ),
+                      FutureBuilder<Json?>(
+                        future: credits,
+                        builder: (context, snapshot) => snapshot.data == null
+                            ? const SizedBox.shrink()
+                            : ComposerChip(
+                                key: const ValueKey('credits'),
+                                icon: Icons.toll_outlined,
+                                label: Text(
+                                  Credits.describe(
+                                    snapshot.data!,
+                                  ).split(' · ').first,
+                                ),
+                              ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1051,7 +1025,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
     if (chosen == null || !mounted) return;
     setState(() {
       attachments.addAll(chosen);
-      section = 0;
     });
   }
 
@@ -1075,7 +1048,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
         dir: dir,
         version: version,
         play: cutPlay(version),
-        headline: 'A new cut is ready',
+        headline: 'New cut',
         highlight: true,
         actions: [
           FilledButton.icon(
@@ -1084,15 +1057,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
             label: const Text('Keep'),
           ),
           TextButton(onPressed: sendBack, child: const Text('Send back')),
-          // beside the conversation on a wide screen the film is already in sight
-          if (!wide)
-            TextButton(
-              onPressed: () => setState(() {
-                after = true;
-                section = 1;
-              }),
-              child: const Text('Before / after'),
-            ),
         ],
       ),
     );
@@ -1140,84 +1104,289 @@ class _ProjectScreenState extends State<ProjectScreen> {
     );
   }
 
-  Widget film() {
+  /// The cut on screen: the new one while it waits (After) or the film as kept (Before).
+  Json? get shownVersion {
     final selected = after
         ? project['proposal'] ?? project['current']
         : project['current'];
-    final versions = objects(project['versions']);
-    final version = versions.where((v) => v['id'] == selected).firstOrNull;
-    final path = version?['path'] as String?;
-    final proxy = object(project['proxies'] ?? {})[path] as String? ?? path;
+    return objects(
+      project['versions'],
+    ).where((v) => v['id'] == selected).firstOrNull;
+  }
+
+  /// What plays for [shownVersion]: its lighter proxy when there is one.
+  String? get shownProxy {
+    final path = shownVersion?['path'] as String?;
+    return object(project['proxies'] ?? {})[path] as String? ?? path;
+  }
+
+  bool get hasFilm => shownProxy != null;
+
+  /// The film is on screen (above the tabs, or beside the conversation), with its bar for a new cut.
+  bool filmInSight = false;
+
+  /// The film, playing; notes in time and boxes on the picture go from here into the next note.
+  Widget player({double maxHeight = .48}) {
+    final proxy = shownProxy!;
+    return RemotePlayer(
+      key: ValueKey('$dir:$proxy'),
+      uri: () => store.client.media(dir, proxy),
+      initialPosition: position,
+      maxHeight: maxHeight,
+      ranges: draftRanges(message.text),
+      // the range strip under the film beside the conversation on a wide screen (a phone notes a range from Edit)
+      onRange: sending || !wide ? null : addRange,
+      onPosition: (value) => position = value,
+      boxMode: boxMode,
+      onBox: (box) => setState(() {
+        anchor = {'t0': position, 'box': box};
+        boxMode = false;
+      }),
+    );
+  }
+
+  /// A new cut is waiting: which one plays (Before, After), and keep it or send it back. At the bottom of the screen,
+  /// where a thumb reaches on any phone; the buttons span the width.
+  Widget proposalBar({bool preview = false}) {
+    final studio = Studio.of(context);
+    final text = Theme.of(context).textTheme;
+    return Panel(
+      key: ValueKey(preview ? 'proposal-card' : 'proposal-bar'),
+      highlight: true,
+      radius: 18,
+      padding: const EdgeInsets.all(Space.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: Space.xs),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: Space.xs,
+              children: [
+                // one run of text, so it wraps rather than overflows with large type
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          margin: const EdgeInsets.only(right: Space.sm),
+                          decoration: ShapeDecoration(
+                            gradient: studio.spark,
+                            shape: smooth(7),
+                          ),
+                          child: Icon(
+                            Icons.auto_awesome,
+                            size: 13,
+                            color: studio.onAccent,
+                          ),
+                        ),
+                      ),
+                      TextSpan(text: 'New cut', style: text.titleSmall),
+                      // what changed, as the agent named the cut
+                      if (objects(project['versions'])
+                              .where((v) => v['id'] == project['proposal'])
+                              .firstOrNull?['title']
+                          case final String title)
+                        TextSpan(
+                          text: '  $title',
+                          style: text.bodySmall?.copyWith(color: studio.text3),
+                        ),
+                    ],
+                  ),
+                ),
+                // which plays above
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: ShapeDecoration(
+                    color: studio.surface2,
+                    shape: smooth(11),
+                  ),
+                  child: Wrap(
+                    children: [
+                      for (final (label, value) in const [
+                        ('Before', false),
+                        ('After', true),
+                      ])
+                        ChoiceChip(
+                          label: Text(label),
+                          selected: after == value,
+                          onSelected: (_) => setState(() => after = value),
+                          backgroundColor: Colors.transparent,
+                          selectedColor: studio.accent,
+                          side: BorderSide.none,
+                          labelStyle: text.labelMedium?.copyWith(
+                            color: after == value
+                                ? studio.onAccent
+                                : studio.text2,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // in the conversation, the cut itself, playing right here (Before or After)
+          if (preview) ...[
+            const SizedBox(height: Space.sm),
+            player(maxHeight: .35),
+          ],
+          const SizedBox(height: Space.sm),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: sendBack,
+                  // large text: the words shrink to the button rather than spill out
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Send back'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: Space.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: keep,
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Keep'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The film above the tabs on a phone.
+  Widget stage() => Padding(
+    padding: const EdgeInsets.fromLTRB(Space.md, Space.xs, Space.md, 0),
+    child: player(maxHeight: .3),
+  );
+
+  /// Beside the conversation on a wide screen: the film, what to decide about a new cut, then what can be done with it.
+  Widget film() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (hasFilm) player(),
+      if (project['proposal'] != null) ...[
+        const SizedBox(height: Space.md),
+        proposalBar(),
+      ],
+      const SizedBox(height: Space.lg),
+      editTools(),
+    ],
+  );
+
+  /// What can be done with the film: notes at a moment, on a box or a range, the timeline, earlier notes. One plain
+  /// list; each says what it does once chosen.
+  /// Edit, as a sheet from the bottom on a phone: each choice closes it and does its thing on the film above.
+  void openEdit() => fitSheet(
+    'Edit',
+    (sheet) => ListenableBuilder(
+      listenable: store,
+      builder: (_, _) => editTools(sheet: sheet),
+    ),
+  );
+
+  /// Files, as a sheet from the bottom (from the project menu).
+  void openFiles() => fitSheet(
+    'Files',
+    (_) => ListenableBuilder(listenable: store, builder: (_, _) => files()),
+  );
+
+  /// A sheet as tall as what's in it (up to most of the screen, then it scrolls), its title on top.
+  Future<void> fitSheet(String title, Widget Function(BuildContext) content) =>
+      showSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (sheet) => SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            Space.page,
+            0,
+            Space.page,
+            Space.xxl,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(title, style: Theme.of(sheet).textTheme.titleLarge),
+              const SizedBox(height: Space.sm),
+              content(sheet),
+            ],
+          ),
+        ),
+      );
+
+  Widget editTools({BuildContext? sheet}) {
+    final studio = Studio.of(context);
+    final timeline = objects(object(project['timeline'] ?? {})['items']);
+    Widget row(
+      IconData icon,
+      String label,
+      VoidCallback? onTap, {
+      bool on = false,
+    }) => ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: Space.xs),
+      leading: Icon(icon, color: on ? studio.accent : null),
+      title: Text(label),
+      enabled: onTap != null,
+      // from the sheet: it closes, so what's chosen happens on the film
+      onTap: onTap == null
+          ? null
+          : () {
+              if (sheet != null) Navigator.pop(sheet);
+              onTap();
+            },
+    );
+    if (!hasFilm) {
+      return const EmptyMessage(
+        Icons.movie_outlined,
+        'Your film starts here',
+        'Ask AgentShot to create the first scene.',
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (project['proposal'] != null)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'A new cut is ready',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('Before'),
-                        selected: !after,
-                        onSelected: (_) => setState(() => after = false),
-                      ),
-                      ChoiceChip(
-                        label: const Text('After'),
-                        selected: after,
-                        onSelected: (_) => setState(() => after = true),
-                      ),
-                      FilledButton.icon(
-                        onPressed: keep,
-                        icon: const Icon(Icons.check),
-                        label: const Text('Keep'),
-                      ),
-                      TextButton(
-                        onPressed: sendBack,
-                        child: const Text('Send back'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        if (proxy != null)
-          RemotePlayer(
-            key: ValueKey('$dir:$proxy'),
-            uri: () => store.client.media(dir, proxy),
-            initialPosition: position,
-            ranges: draftRanges(message.text),
-            onRange: sending ? null : addRange,
-            onPosition: (value) => position = value,
-            boxMode: boxMode,
-            onBox: (box) => setState(() {
-              anchor = {'t0': position, 'box': box};
-              section = 0;
-            }),
-          ),
-        if (proxy == null)
-          const EmptyMessage(
-            Icons.movie_outlined,
-            'Your film starts here',
-            'Ask AgentShot to create the first scene.',
-          ),
-        if (project['proposal'] == null &&
-            objects(object(project['timeline'] ?? {})['items']).isNotEmpty)
+        row(Icons.add_comment_outlined, 'Note here', () {
+          setState(() => anchor = {'t0': position});
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => composerKey.currentState?.focusInput(),
+          );
+        }),
+        row(
+          Icons.crop_free_rounded,
+          boxMode ? 'Cancel box' : 'Draw a box',
+          () => setState(() => boxMode = !boxMode),
+          on: boxMode,
+        ),
+        row(
+          Icons.straighten_rounded,
+          'Note a range',
+          sending ? null : rangeNote,
+        ),
+        row(
+          Icons.view_timeline_outlined,
+          'Timeline & mix',
+          () => action('timeline'),
+        ),
+        if (project['proposal'] == null && timeline.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: Space.md),
             child: ManualTimeline(
-              items: objects(object(project['timeline'] ?? {})['items']),
+              items: timeline,
               media: object(project['media'] ?? {}),
               clips: object(project['clips'] ?? {}),
               position: () => position,
@@ -1229,58 +1398,26 @@ class _ProjectScreenState extends State<ProjectScreen> {
               ]),
             ),
           ),
-        if (version != null)
-          Text(
-            '${version['title']}',
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            OutlinedButton.icon(
-              onPressed: () => setState(() {
-                anchor = {'t0': position};
-                section = 0;
-              }),
-              icon: const Icon(Icons.add_comment_outlined),
-              label: const Text('Note here'),
+        if (objects(project['notes']).isNotEmpty) ...[
+          const SizedBox(height: Space.lg),
+          const Overline('Notes'),
+          for (final note in objects(project['notes']))
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: Space.xs),
+              leading: Icon(
+                note['status'] == 'resolved'
+                    ? Icons.check_circle_rounded
+                    : Icons.mode_comment_outlined,
+                color: note['status'] == 'resolved'
+                    ? studio.success
+                    : studio.text2,
+              ),
+              title: Text('${note['text']}'),
+              subtitle: Text(
+                '${timestamp(note['anchor']?['t0'] as num? ?? 0)} · ${note['reply'] ?? note['status']}',
+              ),
             ),
-            OutlinedButton.icon(
-              onPressed: () => setState(() => boxMode = !boxMode),
-              icon: const Icon(Icons.crop_free),
-              label: Text(boxMode ? 'Cancel box' : 'Draw a box'),
-            ),
-            OutlinedButton(
-              onPressed: sending ? null : rangeNote,
-              child: const Text('Note a range'),
-            ),
-            OutlinedButton(
-              onPressed: () => action('timeline'),
-              child: const Text('Timeline & mix'),
-            ),
-          ],
-        ),
-        if (boxMode)
-          const Padding(
-            padding: EdgeInsets.all(8),
-            child: Text(
-              'Drag over the picture to attach a precise box to your next note.',
-            ),
-          ),
-        for (final note in objects(project['notes']))
-          ListTile(
-            leading: Icon(
-              note['status'] == 'resolved'
-                  ? Icons.check_circle_outline
-                  : Icons.comment_outlined,
-            ),
-            title: Text('${note['text']}'),
-            subtitle: Text(
-              '${timestamp(note['anchor']?['t0'] as num? ?? 0)} · ${note['reply'] ?? note['status']}',
-            ),
-          ),
+        ],
       ],
     );
   }
@@ -1358,20 +1495,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Project files', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 4),
-        Text(
-          'Everything you brought in. Tap one to open it, then add it (or parts of it) to your next note.',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: () => guard(context, importFiles),
           icon: const Icon(Icons.add),
-          label: const Text('Import files'),
+          label: const Text('Import'),
         ),
+        const SizedBox(height: Space.md),
         for (final entry in entries)
           Card(
             key: ValueKey('file-${entry.key}'),
@@ -1409,7 +1538,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
                   if (value == 'add') {
                     setState(() {
                       attachments.add(entry.key);
-                      section = 0;
                     });
                   } else if (value == 'download') {
                     final file = await store.client.download(dir, entry.key);
@@ -1519,6 +1647,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   void action(String value) => guard(context, () async {
     switch (value) {
+      case 'files':
+        openFiles();
       case 'models':
         await panel(
           'Choose a model',
@@ -1702,7 +1832,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
                                         attachments.add(media);
                                         message.text =
                                             'In @$media from ${segment['s']}s to ${segment['e']}s: ';
-                                        section = 0;
                                       });
                                     },
                                   ),

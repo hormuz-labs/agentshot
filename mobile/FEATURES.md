@@ -32,7 +32,8 @@ not shipped on desktop are not counted as existing features.
 | Appearance / brand | Light/dark/system, canonical artwork, fonts, launch and store icons | Animated 3D mascot and sound reactions |
 | Menu / shortcuts / command palette | Touch navigation and project menu | Searchable mobile action palette |
 | Desktop updates / telemetry / notices | Store-managed mobile updates; Flutter license screen; no mobile analytics added | Store release configuration and final notices review |
-| Background desktop projects | Desktop keeps processing; mobile reconnects and replays agent state | Push notifications and offline cache |
+| Background desktop projects | Desktop keeps processing; mobile reconnects and replays agent state; local notifications | Push notifications when the app is closed |
+| Offline and repeat viewing | Films, posters and thumbnails kept on the phone by ETag (revalidated with a 304, refetched only when changed, up to 2 GB, cleared in Settings or on disconnect); project list, projects, conversations and examples open from the last copy | Editing while offline |
 
 This ledger distinguishes implemented mobile controls from capabilities available
 through the desktop agent. It is not a claim of complete native UI parity.

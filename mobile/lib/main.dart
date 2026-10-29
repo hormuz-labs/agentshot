@@ -9,6 +9,8 @@ import 'bridge/mesh.dart';
 import 'bridge/notify.dart';
 import 'bridge/store.dart';
 import 'ui/computers.dart';
+import 'ui/design.dart';
+export 'ui/design.dart' show agentShotTheme;
 import 'ui/home.dart';
 import 'ui/splash.dart';
 import 'ui/pair.dart';
@@ -24,97 +26,6 @@ void main() {
     }
   });
   runApp(const AgentShotApp());
-}
-
-ThemeData agentShotTheme(Brightness brightness) {
-  final dark = brightness == Brightness.dark;
-  final scheme =
-      ColorScheme.fromSeed(
-        seedColor: Color(dark ? 0xfff2a541 : 0xffc06f12),
-        brightness: brightness,
-      ).copyWith(
-        primary: Color(dark ? 0xfff2a541 : 0xffa85f0c),
-        onPrimary: Color(dark ? 0xff1a1208 : 0xffffffff),
-        surface: Color(dark ? 0xff161412 : 0xfffbfbf9),
-        onSurface: Color(dark ? 0xffefe8df : 0xff141413),
-        outlineVariant: Color(dark ? 0xff2c2723 : 0xffe4e4e2),
-        surfaceContainerLowest: Color(dark ? 0xff0e0d0c : 0xffffffff),
-        surfaceContainerLow: Color(dark ? 0xff161412 : 0xfffcfcfb),
-        surfaceContainer: Color(dark ? 0xff1d1a17 : 0xfff3f3f1),
-        surfaceContainerHigh: Color(dark ? 0xff1d1a17 : 0xfff0f0ee),
-        surfaceContainerHighest: Color(dark ? 0xff25211d : 0xffefefed),
-      );
-  final typography = ThemeData(
-    brightness: brightness,
-    fontFamily: 'Inter',
-  ).textTheme;
-  return ThemeData(
-    useMaterial3: true,
-    colorScheme: scheme,
-    fontFamily: 'Inter',
-    textTheme: typography.copyWith(
-      headlineLarge: typography.headlineLarge?.copyWith(
-        fontFamily: 'SourceSerif4',
-      ),
-      headlineMedium: typography.headlineMedium?.copyWith(
-        fontFamily: 'SourceSerif4',
-      ),
-      headlineSmall: typography.headlineSmall?.copyWith(
-        fontFamily: 'SourceSerif4',
-      ),
-    ),
-    scaffoldBackgroundColor: scheme.surface,
-    visualDensity: VisualDensity.standard,
-    inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-      ),
-    ),
-    // buttons and chips are round pills throughout
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        minimumSize: const Size(48, 48),
-        shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-      ),
-    ),
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(48, 48),
-        shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        side: BorderSide(color: scheme.outlineVariant),
-      ),
-    ),
-    textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(shape: const StadiumBorder()),
-    ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(shape: const StadiumBorder()),
-    ),
-    segmentedButtonTheme: const SegmentedButtonThemeData(
-      style: ButtonStyle(shape: WidgetStatePropertyAll(StadiumBorder())),
-    ),
-    chipTheme: ChipThemeData(
-      shape: StadiumBorder(side: BorderSide(color: scheme.outlineVariant)),
-      side: BorderSide(color: scheme.outlineVariant),
-      backgroundColor: scheme.surfaceContainerLow,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    ),
-    snackBarTheme: const SnackBarThemeData(
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(18)),
-      ),
-    ),
-    cardTheme: CardThemeData(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: scheme.outlineVariant),
-      ),
-    ),
-  );
 }
 
 class AgentShotApp extends StatefulWidget {
@@ -137,7 +48,7 @@ class _AgentShotAppState extends State<AgentShotApp> {
   final navigator = GlobalKey<NavigatorState>();
   // an agentshot://pair link from the phone's camera, handed to the pair screen
   String? link;
-  ThemeMode theme = ThemeMode.system;
+  ThemeMode theme = ThemeMode.dark;
   @override
   void initState() {
     super.initState();
@@ -157,7 +68,8 @@ class _AgentShotAppState extends State<AgentShotApp> {
       final saved = preferences.getString('theme');
       theme =
           ThemeMode.values.where((m) => m.name == saved).firstOrNull ??
-          ThemeMode.system;
+          // a studio: dark until the person picks otherwise, so the film is the brightest thing on screen
+          ThemeMode.dark;
     } catch (_) {
       // the system's look, then
     }
@@ -166,6 +78,8 @@ class _AgentShotAppState extends State<AgentShotApp> {
       store.account = account;
       client.renew = account.renew;
       paired = await client.restore();
+      // what the phone kept of this computer shows at once, before it answers (or while it can't)
+      if (paired) await store.restoreSaved();
       if (paired) client.listen();
       await notifier.start();
       if (paired) unawaited(notifier.askPermission());
@@ -200,6 +114,7 @@ class _AgentShotAppState extends State<AgentShotApp> {
       await account.release();
     }
     await client.disconnect();
+    await store.forgetSaved();
     store.project = null;
     store.agents.clear();
     if (mounted) setState(() => paired = false);
@@ -221,6 +136,9 @@ class _AgentShotAppState extends State<AgentShotApp> {
   void _watch() {
     if (!store.revoked || !paired) return;
     store.revoked = false;
+    // turned away: nothing of that computer's stays on the phone
+    unawaited(store.forgetSaved());
+    unawaited(client.cache.clear().catchError((_) {}));
     store.project = null;
     store.agents.clear();
     navigator.currentState?.popUntil((route) => route.isFirst);
@@ -246,6 +164,7 @@ class _AgentShotAppState extends State<AgentShotApp> {
 
   void connected() {
     unawaited(notifier.askPermission());
+    unawaited(store.restoreSaved());
     link = null;
     setState(() {
       paired = true;

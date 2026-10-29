@@ -83,7 +83,7 @@ void main() {
       await tester.tap(find.text(computer));
       await waitFor(
         tester,
-        find.text('What are we making?'),
+        home,
         timeout: const Duration(seconds: 60),
       );
       await reveal(tester, find.text(project));
@@ -102,7 +102,7 @@ void main() {
       await tester.tap(find.text(computer));
       await waitFor(
         tester,
-        find.text('What are we making?'),
+        home,
         timeout: const Duration(seconds: 60),
       );
       await tester.tap(find.byKey(const ValueKey('nav-Settings')));

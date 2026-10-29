@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'design.dart';
 import 'package:flutter/services.dart';
 import '../bridge/client.dart';
 import 'ask_card.dart';
@@ -294,7 +295,7 @@ class _StepsRowState extends State<StepsRow> {
 
 /// The steps of a run, each a line; opened, a step shows what it ran and what came of it, to read or copy.
 Future<void> showSteps(BuildContext context, List<Step> steps) =>
-    showModalBottomSheet<void>(
+    showSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,

@@ -108,6 +108,15 @@ describe('mobile TLS bridge', () => {
     expect(range.status).toBe(206); expect(range.body).toBe('2345'); expect(range.headers['content-range']).toBe('bytes 2-5/10')
     expect((await f.call(path, { token: f.token, headers: { range: 'bytes=-3' } })).body).toBe('789')
     expect((await f.call(path, { token: f.token, headers: { range: 'bytes=20-' } })).status).toBe(416)
+    // a film the phone kept: the same version answers 304 (nothing sent), a changed one comes in full
+    const tag = range.headers.etag as string
+    expect(tag).toMatch(/^"[a-z0-9]+-[a-z0-9]+"$/)
+    const same = await f.call(path, { token: f.token, headers: { 'if-none-match': tag } })
+    expect(same.status).toBe(304); expect(same.body).toBe('')
+    expect((await f.call(path, { token: f.token, method: 'HEAD', headers: { 'if-none-match': tag } })).status).toBe(304)
+    await writeFile(join(f.dir, 'film.mp4'), '0123456789AB')
+    const changed = await f.call(path, { token: f.token, headers: { 'if-none-match': tag } })
+    expect(changed.status).toBe(200); expect(changed.body).toBe('0123456789AB'); expect(changed.headers.etag).not.toBe(tag)
     const upload = await f.call(`/upload?${new URLSearchParams({ project: f.dir, name: 'phone.mp4' })}`, { token: f.token, raw: 'real footage bytes' })
     expect(upload.status).toBe(200); expect(JSON.parse(upload.body)).toEqual({ name: 'phone.mp4', content: 'real footage bytes' })
     const file = f.importFile.mock.calls[0][0]

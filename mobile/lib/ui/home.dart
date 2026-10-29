@@ -4,6 +4,7 @@ import '../bridge/client.dart';
 import '../bridge/pick.dart';
 import '../bridge/store.dart';
 import 'common.dart';
+import 'design.dart';
 import 'project.dart';
 import 'settings.dart';
 import 'player.dart';
@@ -28,13 +29,17 @@ class HomeScreen extends StatefulWidget {
     required this.onDisconnect,
     this.account,
     required this.onSignOut,
+    this.initialSection = 0,
   });
+
+  /// The tab it opens on.
+  final int initialSection;
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int section = 0;
+  late int section = widget.initialSection;
   String search = '';
   bool working = false;
   double? progress;
@@ -47,7 +52,13 @@ class _HomeScreenState extends State<HomeScreen> {
   (List<Picked>, String?)? _lastImport;
   BridgeStore get store => widget.store;
   Future<void> open(Json project) async {
-    await store.open(project['dir'] as String);
+    final dir = project['dir'] as String;
+    // opened here before: it opens at once on what the phone kept, and the computer's version follows
+    if (await store.showSaved(dir)) {
+      store.open(dir).ignore();
+    } else {
+      await store.open(dir);
+    }
     if (mounted) {
       await Navigator.push(
         context,
@@ -153,21 +164,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> createMotion({Json? example, bool walkthrough = false}) async {
-    final title = await askText(
+    final asked = await askToCreate(
       context,
-      walkthrough ? 'What should AgentShot film?' : 'What are we making?',
-      hint: walkthrough
-          ? 'A walkthrough of my product at https://…'
-          : 'Describe your video…',
+      walkthrough: walkthrough,
+      basedOn: example?['title'] as String?,
     );
-    if (title == null || title.isEmpty || !mounted) return;
-    var aspect = '16:9';
-    if (!walkthrough) {
-      final choice = await chooseFormat(context);
-      if (choice == null) return;
-      aspect = choice;
-    }
-    if (!mounted) return;
+    if (asked == null || !mounted) return;
+    final (title, aspect) = asked;
     await guard(context, () async {
       setState(() => working = true);
       try {
@@ -233,73 +236,67 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ];
       final narrow = MediaQuery.sizeOf(context).width < 760;
+      final studio = Studio.of(context);
       return Scaffold(
-        appBar: AppBar(
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.asset(
-                'assets/manul.png',
-                width: 34,
-                height: 34,
-                excludeFromSemantics: true,
-              ),
-              const SizedBox(width: 10),
-              const Flexible(child: Text('AgentShot')),
-            ],
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Refresh',
-              onPressed: () => guard(context, store.refresh),
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
         body: SafeArea(
+          bottom: !narrow,
           child: Column(
             children: [
-              // never more than the screen shares out (a landscape phone with the keyboard up leaves a sliver)
-              if (!store.connected)
-                Flexible(
-                  child: Material(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.sync, size: 20),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              store.connectionError ??
-                                  'Connecting to your computer…',
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
+              if (working)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    Space.page,
+                    Space.sm,
+                    Space.page,
+                    0,
+                  ),
+                  child: Panel(
+                    padding: const EdgeInsets.all(Space.md),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.cloud_upload_rounded,
+                              size: 18,
+                              color: studio.accent,
                             ),
-                          ),
-                          // never stuck waiting: another computer, or the same one again
-                          TextButton(
-                            onPressed: () =>
-                                guard(context, widget.onDisconnect),
-                            child: const Text('Change computer'),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: Space.sm),
+                            Expanded(
+                              child: Text(
+                                status ?? 'Getting things ready…',
+                                key: status == null
+                                    ? null
+                                    : const ValueKey('upload-status'),
+                                style: Theme.of(context).textTheme.labelMedium,
+                              ),
+                            ),
+                            if (progress != null)
+                              Text(
+                                '${(progress! * 100).round()}%',
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: studio.text2,
+                                      fontFeatures: tabular,
+                                    ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: Space.sm),
+                        LinearProgressIndicator(value: progress),
+                      ],
                     ),
                   ),
                 ),
-              if (working) LinearProgressIndicator(value: progress),
-              if (working && status != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                  child: Text(status!, key: const ValueKey('upload-status')),
-                ),
               if (importError case (final name, final error))
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(
+                    Space.lg,
+                    Space.sm,
+                    Space.lg,
+                    0,
+                  ),
                   child: ProblemCard(
                     title: 'Couldn’t add $name',
                     error: error,
@@ -324,15 +321,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               labelType: NavigationRailLabelType.all,
                               leading: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
+                                  vertical: Space.md,
                                 ),
-                                child: FloatingActionButton(
-                                  heroTag: null,
+                                child: TileButton(
+                                  icon: Icons.add_rounded,
                                   tooltip: 'Start something new',
-                                  elevation: 1,
-                                  shape: const CircleBorder(),
+                                  accent: true,
                                   onPressed: startSheet,
-                                  child: const Icon(Icons.add),
                                 ),
                               ),
                               destinations: [
@@ -346,7 +341,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
-                        const VerticalDivider(width: 1),
+                        VerticalDivider(width: 1, color: studio.hairline),
                         Expanded(child: views[section]),
                       ],
                     );
@@ -356,85 +351,52 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        // the + sits in a notch in the middle of the bar, two tabs either side
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        floatingActionButton: narrow
-            ? FloatingActionButton(
-                heroTag: null,
-                tooltip: 'Start something new',
-                shape: const CircleBorder(),
-                elevation: 2,
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                onPressed: startSheet,
-                child: const Icon(Icons.add, size: 30),
-              )
-            : null,
         bottomNavigationBar: narrow
-            ? BottomAppBar(
-                // its own surface: a shade apart from the page, lifted a little
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                elevation: 6,
-                shadowColor: Colors.black,
-                shape: const CircularNotchedRectangle(),
-                notchMargin: 8,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                height: 72,
-                child: Row(
-                  children: [
-                    for (final (i, d) in destinations.indexed) ...[
-                      if (i == 2) const SizedBox(width: 72),
-                      Expanded(
-                        child: NavItem(
-                          d,
-                          selected: section == i,
-                          onTap: () => setState(() => section = i),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+            ? TabBarFlat(
+                destinations: destinations,
+                selected: section,
+                onSelect: (i) => setState(() => section = i),
+                onCreate: startSheet,
               )
             : null,
       );
     },
   );
 
-  /// The ways to start something, behind the + in the bar (or atop the side rail).
+  /// The ways to start something, behind the + (in the header, or atop the side rail).
   List<StartOption> get starts {
     final ready = !working && store.connected;
     return [
       StartOption(
-        Icons.add_photo_alternate_outlined,
-        'Import footage',
-        'Videos and photos from this phone',
-        ready ? () => import() : null,
-      ),
-      StartOption(
-        Icons.videocam_outlined,
-        'Record',
-        'Film something now',
-        ready ? () => import(camera: true) : null,
-      ),
-      StartOption(
         Icons.auto_awesome,
-        'Start from an idea',
-        'Describe it; AgentShot makes it',
+        'Describe it',
+        null,
         ready ? createMotion : null,
       ),
       StartOption(
-        Icons.web,
-        'Film a walkthrough',
-        'A site or product, filmed for you',
+        Icons.add_photo_alternate_rounded,
+        'Import',
+        null,
+        ready ? () => import() : null,
+      ),
+      StartOption(
+        Icons.videocam_rounded,
+        'Record',
+        null,
+        ready ? () => import(camera: true) : null,
+      ),
+      StartOption(
+        Icons.language_rounded,
+        'Walkthrough',
+        null,
         ready ? () => createMotion(walkthrough: true) : null,
       ),
     ];
   }
 
-  /// The + in the bar: what to start, from any tab.
-  void startSheet() => showModalBottomSheet<void>(
+  /// The +: what to start, from any tab.
+  void startSheet() => showSheet<void>(
     context: context,
-    showDragHandle: true,
     isScrollControlled: true,
     useSafeArea: true,
     // the options turn on as soon as the computer is connected, sheet open or not
@@ -442,32 +404,88 @@ class _HomeScreenState extends State<HomeScreen> {
       listenable: store,
       builder: (sheet, _) => SingleChildScrollView(
         key: const ValueKey('start-sheet'),
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        padding: const EdgeInsets.fromLTRB(Space.lg, 0, Space.lg, Space.xxl),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Start something new',
-              style: Theme.of(sheet).textTheme.titleLarge,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Space.xs,
+                0,
+                Space.xs,
+                Space.md,
+              ),
+              child: Text(
+                'Create',
+                style: Theme.of(sheet).textTheme.titleLarge,
+              ),
             ),
-            const SizedBox(height: 12),
             for (final option in starts)
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                enabled: option.onTap != null,
-                leading: Icon(option.icon),
-                title: Text(option.title),
-                subtitle: Text(option.hint),
-                onTap: () {
-                  Navigator.pop(sheet);
-                  option.onTap?.call();
-                },
+              OptionRow(
+                icon: option.icon,
+                title: option.title,
+                subtitle: option.hint,
+                onTap: option.onTap == null
+                    ? null
+                    : () {
+                        Navigator.pop(sheet);
+                        option.onTap!();
+                      },
               ),
           ],
         ),
       ),
     ),
   );
+
+  /// Where the projects are, in a few words, with a dot: connected (green), on the way (amber), out of reach.
+  Widget connection() {
+    final studio = Studio.of(context);
+    final name = store.onCloud
+        ? 'AgentShot Cloud'
+        : (store.client.connection?.name ?? 'your computer');
+    final (color, words) = store.connected
+        ? (studio.success, 'Connected to $name')
+        : store.projects.isNotEmpty
+        ? (studio.accent, 'Reconnecting · showing what was here last')
+        : (
+            studio.accent,
+            store.connectionError ?? 'Connecting to your computer…',
+          );
+    return Row(
+      key: const ValueKey('connection'),
+      children: [
+        Icon(Icons.circle, size: 8, color: color),
+        const SizedBox(width: Space.sm),
+        Flexible(
+          child: Text(
+            words,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: studio.text2),
+          ),
+        ),
+        if (!store.connected) ...[
+          const SizedBox(width: Space.xs),
+          // never stuck waiting: another computer, or the same one again
+          TextButton(
+            onPressed: () => guard(context, widget.onDisconnect),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: Space.sm),
+              textStyle: Theme.of(context).textTheme.labelMedium,
+            ),
+            child: const Text('Change computer'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Search, for when there are enough projects to need it: opened from its icon.
+  bool searching = false;
 
   Widget projects() {
     final results = store.projects
@@ -476,202 +494,605 @@ class _HomeScreenState extends State<HomeScreen> {
         )
         .toList();
     final theme = Theme.of(context);
+    final studio = Studio.of(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final columns = (width / 230).floor().clamp(2, 5);
     return RefreshIndicator(
       onRefresh: store.refresh,
-      child: ListView(
-        // room at the end to scroll clear of the + and the bar
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
-        children: [
-          Text('What are we making?', style: theme.textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text(
-            'Bring your footage. Tell AgentShot what should change.',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+      color: studio.accent,
+      child: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              Space.page,
+              Space.xxl,
+              Space.page,
+              0,
+            ),
+            sliver: SliverList.list(
+              children: [
+                // the page's name, and search (rarely needed) beside it
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Projects',
+                        style: theme.textTheme.displaySmall,
+                      ),
+                    ),
+                    if (store.projects.isNotEmpty)
+                      IconButton(
+                        tooltip: searching ? 'Close search' : 'Search projects',
+                        onPressed: () => setState(() {
+                          searching = !searching;
+                          if (!searching) search = '';
+                        }),
+                        icon: Icon(
+                          searching
+                              ? Icons.close_rounded
+                              : Icons.search_rounded,
+                          color: studio.text2,
+                        ),
+                      ),
+                  ],
+                ),
+                // only when something's wrong: connected is the normal state, not news
+                if (!store.connected) ...[
+                  const SizedBox(height: Space.sm),
+                  connection(),
+                ],
+                if (store.consents.isNotEmpty) ...[
+                  const SizedBox(height: Space.md),
+                  Panel(
+                    key: const ValueKey('needs-you'),
+                    highlight: true,
+                    padding: const EdgeInsets.all(Space.md),
+                    onTap: () => setState(() => section = 2),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.front_hand_rounded,
+                          color: studio.accent,
+                          size: 20,
+                        ),
+                        const SizedBox(width: Space.md),
+                        Expanded(
+                          child: Text(
+                            store.consents.length == 1
+                                ? '${store.consents.first['title']}'
+                                : '${store.consents.length} questions are waiting for you',
+                            style: theme.textTheme.titleSmall,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded, color: studio.text3),
+                      ],
+                    ),
+                  ),
+                ],
+                if (searching) ...[
+                  const SizedBox(height: Space.xs),
+                  TextField(
+                    key: const ValueKey('search-projects'),
+                    autofocus: true,
+                    onChanged: (value) => setState(() => search = value),
+                    decoration: InputDecoration(
+                      hintText: 'Search projects',
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        color: studio.text3,
+                      ),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: Space.lg),
+                if (results.isEmpty)
+                  EmptyMessage(
+                    Icons.video_library_outlined,
+                    search.isEmpty ? 'No projects yet' : 'No matches',
+                    search.isEmpty ? 'Tap + to make one.' : '',
+                    art: search.isEmpty ? const Mascot(size: 88) : null,
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-          TextField(
-            onChanged: (value) => setState(() => search = value),
-            decoration: InputDecoration(
-              labelText: 'Search projects',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(28),
-                borderSide: BorderSide.none,
+          SliverPadding(
+            // room at the end
+            padding: const EdgeInsets.fromLTRB(Space.page, 0, Space.page, Space.xxl),
+            sliver: SliverGrid.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: Space.md,
+                mainAxisSpacing: Space.xl,
+                // the poster (16:10), then two lines of title and one of where/when, at any text size
+                mainAxisExtent:
+                    ((width - Space.page * 2 - Space.md * (columns - 1)) /
+                            columns) *
+                        10 /
+                        16 +
+                    MediaQuery.textScalerOf(context).scale(62) +
+                    Space.md,
+              ),
+              itemCount: results.length,
+              itemBuilder: (context, i) => ProjectCard(
+                project: results[i],
+                store: store,
+                onOpen: () => guard(context, () => open(results[i])),
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          if (results.isEmpty)
-            EmptyMessage(
-              Icons.video_library_outlined,
-              'A home for your films',
-              search.isEmpty
-                  ? 'Tap + to bring in footage or start from an idea. Your desktop projects show up here too.'
-                  : 'Nothing matches that. Try another word.',
-              art: search.isEmpty ? const Mascot(size: 88) : null,
-            ),
-          for (final p in results)
-            Builder(
-              builder: (context) {
-                final scheme = Theme.of(context).colorScheme;
-                final status = store.statusOf('${p['dir']}');
-                final urgent = status == 'Needs your OK';
-                Future<void> trash() => guard(context, () async {
-                  if (await confirm(
-                    context,
-                    'Delete project?',
-                    'Move this project and all of its files to the Trash on your computer?',
-                  )) {
-                    await store.client.call('project:delete', [p['dir']]);
-                    await store.refresh();
-                  }
-                });
-                return ListTile(
-                  key: ValueKey('project-${p['dir']}'),
-                  contentPadding: const EdgeInsets.only(left: 4),
-                  leading: Badge(
-                    isLabelVisible: status != null,
-                    smallSize: 9,
-                    backgroundColor: urgent ? scheme.error : scheme.primary,
-                    child: const Icon(Icons.movie_outlined),
-                  ),
-                  title: Text(
-                    '${p['title']}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  // what it's up to, when it's up to something
-                  subtitle: Text(
-                    status ?? 'On your computer',
-                    style: status == null
-                        ? null
-                        : TextStyle(
-                            color: urgent ? scheme.error : scheme.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                  ),
-                  onTap: () => guard(context, () => open(p)),
-                  // held: what can be done with it
-                  onLongPress: () => showModalBottomSheet<void>(
-                    context: context,
-                    useSafeArea: true,
-                    builder: (sheet) => SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            title: Text(
-                              '${p['title']}',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.open_in_new),
-                            title: const Text('Open'),
-                            onTap: () {
-                              Navigator.pop(sheet);
-                              guard(context, () => open(p));
-                            },
-                          ),
-                          ListTile(
-                            leading: Icon(
-                              Icons.delete_outline,
-                              color: scheme.error,
-                            ),
-                            title: Text(
-                              'Move to Trash',
-                              style: TextStyle(color: scheme.error),
-                            ),
-                            onTap: () {
-                              Navigator.pop(sheet);
-                              trash();
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    tooltip: 'Project actions',
-                    onSelected: (_) => trash(),
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('Move to Trash'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
         ],
       ),
     );
   }
 
-  Widget gallery() => ListView(
-    padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
-    children: [
-      Text(
-        'Start with a little inspiration',
-        style: Theme.of(context).textTheme.headlineMedium,
-      ),
-      const SizedBox(height: 12),
-      const Text(
-        'Real motion examples, with the prompts and creators behind them.',
-      ),
-      const SizedBox(height: 20),
-      AsyncPanel(
-        load: () => store.client.call('gallery:list'),
-        builder: (data, reload) => GalleryList(
-          examples: objects(data),
-          store: store,
-          onUse: (e) => createMotion(example: e),
+  Widget gallery() => CustomScrollView(
+    slivers: [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(
+          Space.page,
+          Space.xxl,
+          Space.page,
+          120,
+        ),
+        sliver: SliverList.list(
+          children: [
+            Text('Examples', style: Theme.of(context).textTheme.displaySmall),
+            const SizedBox(height: Space.lg),
+            AsyncPanel(
+              load: store.examples,
+              builder: (data, reload) => GalleryList(
+                examples: objects(data),
+                store: store,
+                onUse: (e) => createMotion(example: e),
+              ),
+            ),
+          ],
         ),
       ),
     ],
   );
-  Widget activity() => ListView(
-    padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
-    children: [
-      Text('Activity', style: Theme.of(context).textTheme.headlineMedium),
-      const SizedBox(height: 16),
-      ConsentCards(store: store),
-      if (store.jobs.isEmpty)
-        const EmptyMessage(
-          Icons.check_circle_outline,
-          'All quiet for now',
-          'Imports, transcription, downloads and renders appear here.',
-        ),
-      for (final job in store.jobs.reversed)
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${job['status'] == 'done' ? job['doneTitle'] ?? job['title'] : job['title']}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text('${job['detail'] ?? job['status']}'),
-                if (job['status'] == 'running')
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: LinearProgressIndicator(
-                      value: (job['progress'] as num?)?.toDouble().clamp(0, 1),
+
+  Widget activity() {
+    final studio = Studio.of(context);
+    final text = Theme.of(context).textTheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        Space.page,
+        Space.xxl,
+        Space.page,
+        120,
+      ),
+      children: [
+        Text('Activity', style: text.displaySmall),
+        const SizedBox(height: Space.lg),
+        if (store.consents.isNotEmpty) ...[
+          ConsentCards(store: store),
+          const SizedBox(height: Space.md),
+        ],
+        if (store.jobs.isEmpty)
+          const EmptyMessage(Icons.check_circle_outline, 'All quiet', ''),
+        for (final job in store.jobs.reversed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Space.sm),
+            child: Panel(
+              padding: const EdgeInsets.all(Space.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: ShapeDecoration(
+                      color: job['status'] == 'running'
+                          ? studio.accentSoft
+                          : job['status'] == 'done'
+                          ? studio.success.withValues(alpha: .14)
+                          : studio.surface2,
+                      shape: smooth(12),
+                    ),
+                    child: Icon(
+                      job['status'] == 'running'
+                          ? Icons.autorenew_rounded
+                          : job['status'] == 'done'
+                          ? Icons.check_rounded
+                          : Icons.error_outline_rounded,
+                      size: 20,
+                      color: job['status'] == 'running'
+                          ? studio.accent
+                          : job['status'] == 'done'
+                          ? studio.success
+                          : studio.danger,
                     ),
                   ),
-              ],
+                  const SizedBox(width: Space.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${job['status'] == 'done' ? job['doneTitle'] ?? job['title'] : job['title']}',
+                          style: text.titleSmall,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${job['detail'] ?? job['status']}',
+                          style: text.bodySmall,
+                        ),
+                        if (job['status'] == 'running')
+                          Padding(
+                            padding: const EdgeInsets.only(top: Space.sm),
+                            child: LinearProgressIndicator(
+                              value: (job['progress'] as num?)
+                                  ?.toDouble()
+                                  .clamp(0, 1),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// A project in the grid: its poster (the film's opening frame), what it's up to on it, its title and when it was
+/// last opened. Held: what can be done with it (open, move to Trash).
+class ProjectCard extends StatelessWidget {
+  final Json project;
+  final BridgeStore store;
+  final VoidCallback onOpen;
+  const ProjectCard({
+    super.key,
+    required this.project,
+    required this.store,
+    required this.onOpen,
+  });
+
+  String get dir => '${project['dir']}';
+
+  Future<void> trash(BuildContext context) => guard(context, () async {
+    if (await confirm(
+      context,
+      'Delete project?',
+      'Move this project and all of its files to the Trash on your computer?',
+      action: 'Move to Trash',
+    )) {
+      await store.client.call('project:delete', [dir]);
+      await store.refresh();
+    }
+  });
+
+  void actions(BuildContext context) => showSheet<void>(
+    context: context,
+    useSafeArea: true,
+    builder: (sheet) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Space.lg, 0, Space.lg, Space.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Space.xs,
+                0,
+                Space.xs,
+                Space.md,
+              ),
+              child: Text(
+                '${project['title']}',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            OptionRow(
+              icon: Icons.open_in_new_rounded,
+              title: 'Open',
+              onTap: () {
+                Navigator.pop(sheet);
+                onOpen();
+              },
+            ),
+            OptionRow(
+              icon: Icons.delete_outline_rounded,
+              title: 'Move to Trash',
+              onTap: () {
+                Navigator.pop(sheet);
+                trash(context);
+              },
+            ),
+          ],
         ),
-    ],
+      ),
+    ),
   );
+
+  @override
+  Widget build(BuildContext context) {
+    final studio = Studio.of(context);
+    final text = Theme.of(context).textTheme;
+    final status = store.statusOf(dir);
+    final urgent = status == 'Needs your OK';
+    final opened = project['openedAt'] as num?;
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        key: ValueKey('project-$dir'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onOpen,
+        // held: what can be done with it
+        onLongPress: () => actions(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 10,
+              child: ClipRSuperellipse(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Poster(
+                      store: store,
+                      dir: dir,
+                      file: project['thumb'] == null ? null : 'thumb.jpg',
+                      seed: '${project['title']}',
+                    ),
+                    // a fine inner edge, so a dark frame doesn't melt into the page
+                    DecoratedBox(
+                      decoration: ShapeDecoration(
+                        shape: smooth(
+                          16,
+                          side: BorderSide(color: studio.hairline),
+                        ),
+                      ),
+                    ),
+                    if (status != null)
+                      Positioned(
+                        left: Space.sm,
+                        top: Space.sm,
+                        right: 48,
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: StatusPill(
+                            switch (status) {
+                              'Needs your OK' => 'Needs you',
+                              'Working…' => 'Working',
+                              'New reply' => 'New',
+                              _ => status,
+                            },
+                            onMedia: true,
+                            live: status == 'Working…',
+                            color: urgent ? studio.danger : studio.accent,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: Space.sm + 2),
+            Text(
+              '${project['title']}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: text.titleSmall,
+            ),
+            const SizedBox(height: 2),
+            if (opened != null)
+              Text(
+                ago(opened),
+                style: text.bodySmall?.copyWith(color: studio.text3),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// How long ago, in the fewest words: "now", "5m", "3h", "2d", "Mar 4".
+String ago(num millis) {
+  final then = DateTime.fromMillisecondsSinceEpoch(millis.toInt());
+  final d = DateTime.now().difference(then);
+  if (d.inMinutes < 1) return 'now';
+  if (d.inHours < 1) return '${d.inMinutes}m ago';
+  if (d.inDays < 1) return '${d.inHours}h ago';
+  if (d.inDays < 7) return '${d.inDays}d ago';
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${months[then.month - 1]} ${then.day}';
+}
+
+/// A picture of a project file (a poster, a frame) as the phone keeps it; until it comes (or when there is none), a
+/// warm gradient of the project's own, so the grid never shows grey boxes.
+class Poster extends StatefulWidget {
+  final BridgeStore store;
+  final String dir;
+
+  /// The project file to show ('thumb.jpg', a gallery poster URL with [gallery]); none: the gradient alone.
+  final String? file;
+  final bool gallery;
+
+  /// What the gradient is made from (the title), so each project keeps its own colours.
+  final String seed;
+  const Poster({
+    super.key,
+    required this.store,
+    required this.dir,
+    required this.file,
+    required this.seed,
+    this.gallery = false,
+  });
+  @override
+  State<Poster> createState() => _PosterState();
+}
+
+class _PosterState extends State<Poster> {
+  Future<Uri>? uri;
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(Poster old) {
+    super.didUpdateWidget(old);
+    if (old.file != widget.file || old.dir != widget.dir) _load();
+  }
+
+  void _load() {
+    final file = widget.file;
+    // a picture that can't come (offline, no such file) shows the gradient: nothing to report
+    uri = file == null
+        ? null
+        : ((widget.gallery
+                ? widget.store.client.gallery(file)
+                : widget.store.client.media(widget.dir, file))
+            ..ignore());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = _Placeholder(seed: widget.seed);
+    if (uri == null) return placeholder;
+    return FutureBuilder<Uri>(
+      future: uri,
+      builder: (context, snapshot) {
+        final at = snapshot.data;
+        if (at == null) return placeholder;
+        return Image.network(
+          at.toString(),
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => placeholder,
+          frameBuilder: (context, child, frame, synchronous) => synchronous
+              ? child
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    placeholder,
+                    AnimatedOpacity(
+                      opacity: frame == null ? 0 : 1,
+                      duration: Motion.normal,
+                      curve: Motion.curve,
+                      child: child,
+                    ),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+}
+
+class _Placeholder extends StatelessWidget {
+  final String seed;
+  const _Placeholder({required this.seed});
+  @override
+  Widget build(BuildContext context) {
+    final studio = Studio.of(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // a hue of the project's own, within warm-to-cool so it sits with the amber
+    final hue =
+        (seed.codeUnits.fold<int>(7, (h, c) => (h * 31 + c) & 0xffff) % 220) +
+        10.0;
+    final a = HSLColor.fromAHSL(1, hue, .38, dark ? .22 : .78).toColor();
+    final b = HSLColor.fromAHSL(
+      1,
+      (hue + 40) % 360,
+      .32,
+      dark ? .12 : .88,
+    ).toColor();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [a, b],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.movie_creation_outlined,
+          size: 28,
+          color: (dark ? Colors.white : studio.text2).withValues(
+            alpha: dark ? .35 : .6,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The tab bar, as Instagram has it: flat along the bottom, icons only, + in the middle to make something.
+class TabBarFlat extends StatelessWidget {
+  final List<Destination> destinations;
+  final int selected;
+  final ValueChanged<int> onSelect;
+  final VoidCallback onCreate;
+  const TabBarFlat({
+    super.key,
+    required this.destinations,
+    required this.selected,
+    required this.onSelect,
+    required this.onCreate,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final studio = Studio.of(context);
+    final items = [
+      for (final (i, d) in destinations.indexed)
+        Expanded(
+          child: NavItem(d, selected: selected == i, onTap: () => onSelect(i)),
+        ),
+    ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: studio.canvas,
+        border: Border(top: BorderSide(color: studio.hairline)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 52,
+          child: Row(
+            children: [
+              ...items.take(2),
+              Expanded(
+                child: IconButton(
+                  tooltip: 'Start something new',
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add_box_outlined, size: 27),
+                ),
+              ),
+              ...items.skip(2),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// What AgentShot on the computer asks before doing it (a download, an install): the same question the desktop shows,
@@ -691,75 +1112,97 @@ class ConsentCards extends StatelessWidget {
         if (dir == null || item['project'] == null || item['project'] == dir)
           item,
     ];
+    final studio = Studio.of(context);
+    final text = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final item in asked)
-          Container(
+          Padding(
             key: ValueKey('consent-${item['id']}'),
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: scheme.primary.withValues(alpha: .45)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Icon(
-                        item['sizeMB'] != null
-                            ? Icons.download_rounded
-                            : Icons.help_outline,
-                        color: scheme.primary,
+            padding: const EdgeInsets.only(bottom: Space.md),
+            child: Panel(
+              highlight: true,
+              padding: const EdgeInsets.fromLTRB(
+                Space.lg,
+                Space.lg,
+                Space.lg,
+                Space.md,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: ShapeDecoration(
+                          color: studio.accentSoft,
+                          shape: smooth(11),
+                        ),
+                        child: Icon(
+                          item['sizeMB'] != null
+                              ? Icons.download_rounded
+                              : Icons.help_outline_rounded,
+                          size: 20,
+                          color: studio.accent,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        '${item['title']}',
-                        style: Theme.of(context).textTheme.titleMedium,
+                      const SizedBox(width: Space.md),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 7),
+                          child: Text(
+                            '${item['title']}',
+                            style: text.titleMedium,
+                          ),
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: Space.sm),
+                  Text(
+                    '${item['body']}',
+                    style: text.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${item['body']}',
-                  style: TextStyle(color: scheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    TextButton(
-                      onPressed: () => guard(context, () async {
-                        await store.client.call('consent:answer', [
-                          item['id'],
-                          false,
-                        ]);
-                      }),
-                      child: const Text('Not now'),
-                    ),
-                    FilledButton(
-                      onPressed: () => guard(context, () async {
-                        await store.client.call('consent:answer', [
-                          item['id'],
-                          true,
-                        ]);
-                      }),
-                      child: Text('${item['confirm']}'),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: Space.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => guard(context, () async {
+                            await store.client.call('consent:answer', [
+                              item['id'],
+                              false,
+                            ]);
+                          }),
+                          child: const Text('Not now'),
+                        ),
+                      ),
+                      const SizedBox(width: Space.sm),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => guard(context, () async {
+                            await store.client.call('consent:answer', [
+                              item['id'],
+                              true,
+                            ]);
+                          }),
+                          child: Text(
+                            '${item['confirm']}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
       ],
@@ -783,6 +1226,81 @@ class GalleryList extends StatefulWidget {
 
 class _GalleryListState extends State<GalleryList> {
   String query = '', tag = 'All';
+
+  /// An example up close: its film playing, who made it and the prompt behind it, and a way to start from it.
+  void show(Json e) {
+    final studio = Studio.of(context);
+    final text = Theme.of(context).textTheme;
+    sheet(
+      context,
+      '${e['title']}',
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRSuperellipse(
+            borderRadius: BorderRadius.circular(Radii.card),
+            child: ColoredBox(
+              color: studio.film,
+              child: RemotePlayer(
+                key: ValueKey(e['id']),
+                uri: () => widget.store.client.gallery(e['video'] as String),
+              ),
+            ),
+          ),
+          const SizedBox(height: Space.lg),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: studio.surface3,
+                child: Text(
+                  '${e['creator']?['name'] ?? e['creator']?['handle'] ?? '?'}'
+                      .characters
+                      .first
+                      .toUpperCase(),
+                  style: text.labelMedium,
+                ),
+              ),
+              const SizedBox(width: Space.sm),
+              Expanded(
+                child: Text(
+                  'By ${e['creator']?['name'] ?? ''}',
+                  style: text.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          if ('${e['source'] ?? ''}'.isNotEmpty || e['post'] != null) ...[
+            const SizedBox(height: Space.sm),
+            SelectableText('${e['source'] ?? ''}', style: text.bodySmall),
+            if (e['post'] != null)
+              SelectableText('${e['post']}', style: text.bodySmall),
+          ],
+          const SizedBox(height: Space.lg),
+          Panel(
+            color: studio.surface2,
+            radius: Radii.control,
+            padding: const EdgeInsets.all(Space.md),
+            child: SelectableText(
+              '${e['prompt'] ?? e['skill'] ?? ''}',
+              style: text.bodyMedium,
+            ),
+          ),
+          const SizedBox(height: Space.xl),
+          SparkButton(
+            expand: true,
+            icon: Icons.auto_awesome,
+            label: const Text('Use this example'),
+            onPressed: () {
+              Navigator.pop(context);
+              widget.onUse(e);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tags = <String>{
@@ -790,77 +1308,148 @@ class _GalleryListState extends State<GalleryList> {
       for (final e in widget.examples)
         for (final t in objects(e['tags'])) '${t['name']}',
     };
-    final items = widget.examples.where(
-      (e) =>
-          '${e['title']} ${e['prompt']}'.toLowerCase().contains(
-            query.toLowerCase(),
-          ) &&
-          (tag == 'All' || objects(e['tags']).any((t) => t['name'] == tag)),
+    final items = widget.examples
+        .where(
+          (e) =>
+              '${e['title']} ${e['prompt']}'.toLowerCase().contains(
+                query.toLowerCase(),
+              ) &&
+              (tag == 'All' || objects(e['tags']).any((t) => t['name'] == tag)),
+        )
+        .toList();
+    return LayoutBuilder(
+      builder: (context, box) {
+        final columns = (box.maxWidth / 220).floor().clamp(2, 5);
+        final cell = (box.maxWidth - Space.md * (columns - 1)) / columns;
+        return list(items, tags, columns, cell);
+      },
     );
+  }
+
+  Widget list(List<Json> items, Set<String> tags, int columns, double cell) {
+    final studio = Studio.of(context);
+    final text = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
-          decoration: const InputDecoration(
-            labelText: 'Search examples',
-            prefixIcon: Icon(Icons.search),
+          key: const ValueKey('search-examples'),
+          decoration: InputDecoration(
+            hintText: 'Search examples',
+            prefixIcon: Icon(Icons.search_rounded, color: studio.text3),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 13),
           ),
           onChanged: (v) => setState(() => query = v),
         ),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: tag,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Category'),
-          items: tags
-              .map(
-                (t) => DropdownMenuItem(
-                  value: t,
-                  child: Text(t, overflow: TextOverflow.ellipsis),
-                ),
-              )
-              .toList(),
-          onChanged: (v) => setState(() => tag = v ?? 'All'),
-        ),
-        const SizedBox(height: 12),
-        for (final e in items)
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.play_circle_outline),
-              title: Text('${e['title']}'),
-              subtitle: Text(
-                'By ${e['creator']?['name'] ?? e['creator']?['handle'] ?? ''}',
-              ),
-              onTap: () => sheet(
-                context,
-                '${e['title']}',
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    RemotePlayer(
-                      key: ValueKey(e['id']),
-                      uri: () =>
-                          widget.store.client.gallery(e['video'] as String),
+        const SizedBox(height: Space.md),
+        // the categories, side by side, to scroll through
+        SingleChildScrollView(
+          key: const ValueKey('example-tags'),
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final t in tags)
+                Padding(
+                  padding: const EdgeInsets.only(right: Space.sm),
+                  child: ChoiceChip(
+                    label: Text(t),
+                    selected: tag == t,
+                    onSelected: (_) => setState(() => tag = t),
+                    labelStyle: text.labelMedium?.copyWith(
+                      color: tag == t ? studio.accent : null,
                     ),
-                    const SizedBox(height: 16),
-                    Text('By ${e['creator']?['name'] ?? ''}'),
-                    SelectableText('${e['source'] ?? ''}'),
-                    if (e['post'] != null) SelectableText('${e['post']}'),
-                    const SizedBox(height: 12),
-                    SelectableText('${e['prompt'] ?? e['skill'] ?? ''}'),
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        widget.onUse(e);
-                      },
-                      child: const Text('Use this example'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: Space.lg),
+        if (items.isEmpty)
+          const EmptyMessage(
+            Icons.search_off_rounded,
+            'No examples match',
+            'Try another word or category.',
+          ),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: Space.md,
+            mainAxisSpacing: Space.xl,
+            // every poster the same shape (4:5), then two lines of title and one of who made it
+            mainAxisExtent:
+                cell * 5 / 4 +
+                Space.sm +
+                MediaQuery.textScalerOf(context).scale(62),
+          ),
+          itemBuilder: (context, i) {
+            final e = items[i];
+            return Semantics(
+              button: true,
+              child: GestureDetector(
+                key: ValueKey('example-${e['id']}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => show(e),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 4 / 5,
+                      child: ClipRSuperellipse(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Poster(
+                              store: widget.store,
+                              dir: '',
+                              file: e['poster'] as String?,
+                              gallery: true,
+                              seed: '${e['title']}',
+                            ),
+                            Positioned(
+                              left: Space.sm,
+                              bottom: Space.sm,
+                              child: Container(
+                                width: 30,
+                                height: 30,
+                                decoration: ShapeDecoration(
+                                  color: Colors.black.withValues(alpha: .55),
+                                  shape: const CircleBorder(),
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: Space.sm),
+                    Text(
+                      '${e['title']}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleSmall,
+                    ),
+                    Text(
+                      'By ${e['creator']?['name'] ?? e['creator']?['handle'] ?? ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall?.copyWith(color: studio.text3),
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -869,7 +1458,8 @@ class _GalleryListState extends State<GalleryList> {
 /// A way to start something, in the + sheet.
 class StartOption {
   final IconData icon;
-  final String title, hint;
+  final String title;
+  final String? hint;
   final VoidCallback? onTap;
   const StartOption(this.icon, this.title, this.hint, this.onTap);
 }
@@ -903,8 +1493,7 @@ class NavItem extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context), scheme = theme.colorScheme;
-    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
+    final color = selected ? Theme.of(context).colorScheme.onSurface : Studio.of(context).text2;
     return Semantics(
       button: true,
       selected: selected,
@@ -913,26 +1502,11 @@ class NavItem extends StatelessWidget {
       child: InkResponse(
         key: ValueKey('nav-${destination.label}'),
         onTap: onTap,
-        radius: 36,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconTheme(
-                data: IconThemeData(color: color, size: 24),
-                child: destination.iconWith(selected: selected),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                destination.label,
-                maxLines: 1,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: color,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ],
+        radius: 26,
+        child: Center(
+          child: IconTheme(
+            data: IconThemeData(color: color, size: 26),
+            child: destination.iconWith(selected: selected),
           ),
         ),
       ),

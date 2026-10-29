@@ -510,16 +510,20 @@ export class MobileBridge {
       await artifactPath(dir, rel)
       const file = await this.options.thumbnail?.(dir, rel)
       if (!file) throw new HttpError(404, 'No picture for this file')
-      const ext = extname(file).toLowerCase()
+      const ext = extname(file).toLowerCase(), info = await stat(file)
+      // the phone keeps pictures it has seen: it asks again with the tag, and hears "not modified" when they haven't
+      if (fresh(req, res, info)) return
       res.writeHead(200, {
         'content-type': ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg',
-        'content-length': String((await stat(file)).size),
-        'cache-control': 'private, max-age=3600',
+        'content-length': String(info.size),
+        'cache-control': 'private, no-cache',
       })
       await pipeline(createReadStream(file), res); return
     }
     if (url.pathname === '/media' && (req.method === 'GET' || req.method === 'HEAD')) {
-      const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee); const file = await artifactPath(dir, url.searchParams.get('file') || ''); const size = (await stat(file)).size
+      const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee); const file = await artifactPath(dir, url.searchParams.get('file') || ''); const info = await stat(file), size = info.size
+      // the phone keeps the films it has played and only fetches one again when it changed (a new render in its place)
+      if (fresh(req, res, info)) return
       const mime: Record<string, string> = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' }
       res.setHeader('content-type', mime[extname(file).toLowerCase()] || 'application/octet-stream'); res.setHeader('accept-ranges', 'bytes')
       let start = 0, end = size - 1
@@ -593,6 +597,20 @@ export class MobileBridge {
   }
 }
 
+
+/** A file's version as a tag (its size and when it was last written): what the phone kept is still it while they match. */
+export const etagOf = (info: { size: number; mtimeMs: number }) => `"${info.size.toString(36)}-${Math.floor(info.mtimeMs).toString(36)}"`
+
+/** Tags the reply with the file's version; when the phone already has that version, answers 304 and says so. */
+function fresh(req: IncomingMessage, res: ServerResponse, info: { size: number; mtimeMs: number }): boolean {
+  const tag = etagOf(info)
+  res.setHeader('etag', tag)
+  res.setHeader('last-modified', new Date(info.mtimeMs).toUTCString())
+  const asked = req.headers['if-none-match']
+  if (!asked || !asked.split(',').some(t => t.trim().replace(/^W\//, '') === tag)) return false
+  res.writeHead(304); res.end()
+  return true
+}
 
 async function syncFilePath(dir: string, rel: string, mustExist: boolean): Promise<string> {
   const parts = rel.split('/')

@@ -23,8 +23,8 @@ void main() {
           w.label is Text &&
           ((w.label as Text).data ?? '').startsWith('Note at'),
     );
+    // the film is above the conversation: loaded once its controls are there
     Future<void> film() async {
-      await tester.tap(find.byKey(const ValueKey('tab-Film')));
       await waitFor(
         tester,
         find.byTooltip('Play'),
@@ -57,7 +57,7 @@ void main() {
     expect(tester.widget<Slider>(slider).value, isNot(before));
 
     // Note here: the next note points at the playhead; its chip takes that off again
-    await press(tester, find.text('Note here'));
+    await editTool(tester, 'Note here');
     await waitFor(tester, note);
     await tester.tap(
       find.descendant(of: note, matching: find.byTooltip('Delete')),
@@ -67,16 +67,11 @@ void main() {
 
     // a box on the picture: Draw a box, then Cancel box, then draw one for real
     await film();
-    await press(tester, find.text('Draw a box'));
-    expect(
-      find.text(
-        'Drag over the picture to attach a precise box to your next note.',
-      ),
-      findsOneWidget,
-    );
-    await press(tester, find.text('Cancel box'));
-    expect(find.text('Draw a box'), findsOneWidget);
-    await press(tester, find.text('Draw a box'));
+    await editTool(tester, 'Draw a box');
+    expect(find.text('Drag to draw a box'), findsOneWidget);
+    await editTool(tester, 'Cancel box');
+    expect(find.text('Drag to draw a box'), findsNothing);
+    await editTool(tester, 'Draw a box');
     final picture = tester.getRect(find.byType(RemotePlayer));
     await tester.dragFrom(
       picture.topLeft + Offset(picture.width * .3, picture.width * .15),
@@ -95,11 +90,12 @@ void main() {
       timeout: const Duration(minutes: 2),
     );
     // the note is kept with the film, at its moment
-    await film();
+    await openEdit(tester);
     await reveal(tester, find.text('Mobile e2e: soften this corner'));
+    await closeSheet(tester);
 
     // a time range: a wrong one is caught, a right one goes on the next note; Cancel leaves things as they were
-    await press(tester, find.text('Note a range'));
+    await editTool(tester, 'Note a range');
     await waitFor(tester, find.text('Note a time range'));
     await tester.enterText(
       find.widgetWithText(TextField, 'Start (seconds)'),
@@ -122,14 +118,14 @@ void main() {
     );
     await settle(tester);
     await film();
-    await press(tester, find.text('Note a range'));
+    await editTool(tester, 'Note a range');
     await waitFor(tester, find.text('Note a time range'));
     await tester.tap(find.text('Cancel'));
     await waitGone(tester, find.text('Note a time range'));
     expect(find.byTooltip('Play'), findsOneWidget); // still on the film
 
-    // Timeline & mix, from the button under the film
-    await press(tester, find.widgetWithText(OutlinedButton, 'Timeline & mix'));
+    // Timeline & mix, from Edit
+    await editTool(tester, 'Timeline & mix');
     await waitFor(tester, find.text('Audio mix'));
     await closeSheet(tester);
   });

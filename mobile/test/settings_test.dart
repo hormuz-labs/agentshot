@@ -11,9 +11,11 @@ import 'package:agentshot_mobile/ui/setup_ai.dart';
 
 /// A computer whose keys and providers the test sets; it remembers what the phone asked of it.
 class Computer extends BridgeClient {
-  // no pictures from a pretend computer
+  // no pictures or films from a pretend computer
   @override
   Future<Uri> thumbnail(String project, String file) async => throw BridgeException('no picture');
+  @override
+  Future<Uri> media(String project, String file) async => throw BridgeException('no film');
 
   Computer({
     this.credits = false,

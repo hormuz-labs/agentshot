@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
+import 'media_cache.dart';
 import 'mesh.dart';
 
 typedef Json = Map<String, dynamic>;
@@ -137,7 +138,10 @@ class BridgeClient {
   Stream<Json> get events => _events.stream;
   int _generation = 0;
   bool _disposed = false;
-  BridgeClient({this.storage = const FlutterSecureStorage()});
+  /// The films and pictures kept on this phone (see [MediaCache]): played from here while the computer has nothing new.
+  final MediaCache cache;
+  BridgeClient({this.storage = const FlutterSecureStorage(), MediaCache? cache})
+    : cache = cache ?? MediaCache();
 
   /// A fresh connection for a computer in the person's account when its token was turned down (see Account).
   Future<Connection?> Function(Connection expired)? renew;
@@ -838,12 +842,19 @@ class BridgeClient {
         await local.response.close();
         return;
       }
-      final remote = await _request(
-        local.method,
-        route.substring(_relaySecret.length + 1),
-        local.uri.queryParameters,
-      );
+      final path = route.substring(_relaySecret.length + 1);
+      final query = local.uri.queryParameters;
       final range = local.headers.value(HttpHeaders.rangeHeader);
+      final key = _cacheKey(path, query);
+      // kept on the phone and still what the computer has (or the computer can't be reached): played from here
+      if (key != null) {
+        final kept = await cache.lookup(key);
+        if (kept != null && await _stillCurrent(path, query, key, kept.$1)) {
+          await _serveKept(local, kept.$2, kept.$1, range);
+          return;
+        }
+      }
+      final remote = await _request(local.method, path, query);
       if (range != null) remote.headers.set(HttpHeaders.rangeHeader, range);
       final response = await remote.close();
       local.response.statusCode = response.statusCode;
@@ -852,31 +863,147 @@ class BridgeClient {
         'content-length',
         'content-range',
         'accept-ranges',
+        'etag',
       ]) {
         final value = response.headers.value(key);
         if (value != null) local.response.headers.set(key, value);
       }
+      final etag = _versionOf(path, response);
+      // the whole file, as it comes (a picture): kept on its way through
+      if (key != null && etag != null && local.method == 'GET' && response.statusCode == 200) {
+        final writer = await cache.write(key, etag, _typeOf(response));
+        try {
+          await local.response.addStream(
+            response.map((chunk) {
+              writer.add(chunk);
+              return chunk;
+            }),
+          );
+          await writer.commit(response.contentLength);
+        } catch (_) {
+          await writer.abort();
+          rethrow;
+        }
+        await local.response.close();
+        return;
+      }
       await local.response.addStream(response);
       await local.response.close();
+      // a film the player streams in parts: fetched whole in the background, to play from the phone next time
+      if (key != null && etag != null && response.statusCode == 206) {
+        unawaited(cache.fill(key, () => _fetchWhole(path, query, key)));
+      }
     } catch (_) {
       local.response.statusCode = 502;
       await local.response.close().catchError((_) {});
     }
   }
 
+  /// Where a computer's file is kept on the phone.
+  String? _cacheKey(String path, Map<String, String> query) {
+    final computer = connection?.fingerprint;
+    if (computer == null) return null;
+    return MediaCache.keyOf(computer, path, query);
+  }
+
+  /// The version of what came back: the computer's tag; a gallery example's poster never changes (one per example).
+  static String? _versionOf(String path, HttpClientResponse response) =>
+      response.headers.value(HttpHeaders.etagHeader) ?? (path == '/gallery' ? '"gallery"' : null);
+
+  static String _typeOf(HttpClientResponse response) =>
+      response.headers.value(HttpHeaders.contentTypeHeader) ?? 'application/octet-stream';
+
+  /// Whether what's kept is still the computer's version: asked by its tag (a few bytes back when it is), at most every
+  /// couple of minutes. When the computer can't be reached, what's kept is the best there is, so it plays.
+  Future<bool> _stillCurrent(String path, Map<String, String> query, String key, CachedMedia kept) async {
+    if (cache.recentlyChecked(key) || path == '/gallery') return true;
+    try {
+      // the thumbnail route answers GET only; a 304 has no body either way
+      final request = await _request(path == '/media' ? 'HEAD' : 'GET', path, query)
+          .timeout(const Duration(seconds: 4));
+      request.headers.set(HttpHeaders.ifNoneMatchHeader, kept.etag);
+      final response = await request.close().timeout(const Duration(seconds: 6));
+      final tag = response.headers.value(HttpHeaders.etagHeader);
+      await response.drain<void>().catchError((_) {});
+      if (response.statusCode == 304 || (response.statusCode == 200 && tag == kept.etag)) {
+        cache.markChecked(key);
+        return true;
+      }
+      if (response.statusCode == 200) {
+        // changed on the computer: fetched again
+        await cache.drop(key);
+        return false;
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// A kept file, served to the player as the computer would (in the parts it asks for).
+  Future<void> _serveKept(HttpRequest local, File file, CachedMedia kept, String? range) async {
+    final size = kept.size;
+    final out = local.response;
+    out.headers
+      ..set(HttpHeaders.contentTypeHeader, kept.type)
+      ..set(HttpHeaders.acceptRangesHeader, 'bytes')
+      ..set(HttpHeaders.etagHeader, kept.etag);
+    var start = 0, end = size - 1;
+    if (range != null) {
+      final match = RegExp(r'^bytes=(\d*)-(\d*)$').firstMatch(range.trim());
+      final a = int.tryParse(match?.group(1) ?? ''), b = int.tryParse(match?.group(2) ?? '');
+      if (a != null) {
+        start = a;
+        if (b != null) end = min(b, size - 1);
+      } else if (b != null) {
+        start = max(0, size - b);
+      }
+      if (match == null || (a == null && b == null) || start > end || start >= size) {
+        out.statusCode = 416;
+        out.headers.set(HttpHeaders.contentRangeHeader, 'bytes */$size');
+        await out.close();
+        return;
+      }
+      out.statusCode = 206;
+      out.headers.set(HttpHeaders.contentRangeHeader, 'bytes $start-$end/$size');
+    }
+    out.contentLength = max(0, end - start + 1);
+    if (local.method == 'HEAD' || size == 0) {
+      await out.close();
+      return;
+    }
+    await out.addStream(file.openRead(start, end + 1));
+    await out.close();
+  }
+
+  /// The whole of a file into the cache, without anyone waiting on it.
+  Future<void> _fetchWhole(String path, Map<String, String> query, String key) async {
+    final response = await (await _request('GET', path, query)).close();
+    final etag = _versionOf(path, response);
+    if (response.statusCode != 200 || etag == null) {
+      await response.drain<void>();
+      return;
+    }
+    final writer = await cache.write(key, etag, _typeOf(response));
+    try {
+      await for (final chunk in response) {
+        writer.add(chunk);
+      }
+      await writer.commit(response.contentLength);
+    } catch (_) {
+      await writer.abort();
+      rethrow;
+    }
+  }
+
+  /// A project file on the phone, to share or save: what's kept when it's still current, else fetched (and kept).
   Future<File> download(
     String project,
     String relative, {
     void Function(double)? progress,
   }) async {
-    final response = await (await _request('GET', '/media', {
-      'project': project,
-      'file': relative,
-    })).close();
-    if (response.statusCode != 200) {
-      await _decode(response);
-      throw BridgeException('Download failed');
-    }
+    final query = {'project': project, 'file': relative};
+    final key = _cacheKey('/media', query);
     final directory = await Directory(
       '${(await getTemporaryDirectory()).path}/agentshot-exports',
     ).create(recursive: true);
@@ -887,18 +1014,46 @@ class BridgeClient {
     final file = File(
       '${directory.path}/${DateTime.now().microsecondsSinceEpoch}-$name',
     );
-    final sink = file.openWrite();
+    if (key != null) {
+      final kept = await cache.lookup(key);
+      if (kept != null && await _stillCurrent('/media', query, key, kept.$1)) {
+        progress?.call(1);
+        return kept.$2.copy(file.path);
+      }
+    }
+    final response = await (await _request('GET', '/media', query)).close();
+    if (response.statusCode != 200) {
+      await _decode(response);
+      throw BridgeException('Download failed');
+    }
+    final etag = response.headers.value(HttpHeaders.etagHeader);
     var received = 0;
+    final counted = response.map((chunk) {
+      received += chunk.length;
+      if (response.contentLength > 0) {
+        progress?.call(received / response.contentLength);
+      }
+      return chunk;
+    });
+    // kept as it comes, then copied out to share: the next share (or a look in the player) needs no network
+    if (key != null && etag != null) {
+      final writer = await cache.write(key, etag, _typeOf(response));
+      try {
+        await for (final chunk in counted) {
+          writer.add(chunk);
+        }
+        await writer.commit(response.contentLength);
+      } catch (_) {
+        await writer.abort();
+        rethrow;
+      }
+      final kept = await cache.lookup(key);
+      if (kept != null) return kept.$2.copy(file.path);
+      throw BridgeException('Download failed');
+    }
+    final sink = file.openWrite();
     try {
-      await sink.addStream(
-        response.map((chunk) {
-          received += chunk.length;
-          if (response.contentLength > 0) {
-            progress?.call(received / response.contentLength);
-          }
-          return chunk;
-        }),
-      );
+      await sink.addStream(counted);
       await sink.close();
       return file;
     } catch (_) {
@@ -923,6 +1078,8 @@ class BridgeClient {
     await storage.delete(key: _storageKey);
     await storage.delete(key: _meshStorageKey);
     await Mesh.stop();
+    // what was kept of that computer's films goes with it
+    await cache.clear().catchError((_) {});
   }
 
   Future<void> dispose() async {

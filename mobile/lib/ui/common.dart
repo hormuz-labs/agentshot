@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'design.dart';
 import '../bridge/client.dart';
 
 Future<T?> sheet<T>(BuildContext context, String title, Widget child) =>
-    showModalBottomSheet<T>(
+    showSheet<T>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -197,8 +198,10 @@ class EmptyMessage extends StatelessWidget {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 8),
-        Text(body, textAlign: TextAlign.center),
+        if (body.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(body, textAlign: TextAlign.center),
+        ],
       ],
     ),
   );

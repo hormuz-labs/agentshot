@@ -196,7 +196,9 @@ void main() {
       store.agent('/p').snapshot({'messages': []});
       await tester.pumpWidget(app(ProjectScreen(store: store)));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('tab-Files')));
+      await tester.tap(find.byTooltip('Project actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Files').last);
       await tester.pumpAndSettle();
       for (final rel in [
         'media/surf.mp4',

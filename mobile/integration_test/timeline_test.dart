@@ -21,8 +21,8 @@ void main() {
     (w) => w.key is ValueKey && '${(w.key as ValueKey).value}'.startsWith('piece-'),
   );
   Future<void> files(WidgetTester tester) async {
-    await tester.tap(find.byKey(const ValueKey('tab-Files')));
-    await waitFor(tester, find.text('Project files'));
+    await openFiles(tester);
+    await waitFor(tester, find.text('Files'));
   }
 
   /// The ⋮ menu of the file named [name] in the Files tab, then [item].
@@ -58,8 +58,8 @@ void main() {
       expect(kind, Pick.videos);
       return media(['$title.mp4', 'Gull flyby.mp4']);
     };
-    await start(tester, 'Import footage');
-    await waitFor(tester, find.text('What are you bringing in?'));
+    await start(tester, 'Import');
+    await waitFor(tester, find.byKey(const ValueKey('pick-videos')));
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('pick-videos')));
     await waitFor(
@@ -75,7 +75,7 @@ void main() {
       return media(['Theme music.m4a', 'Shot list.txt', 'Dunes 1.jpg']);
     };
     await press(tester, find.text('Import files'));
-    await waitFor(tester, find.text('What are you bringing in?'));
+    await waitFor(tester, find.byKey(const ValueKey('pick-videos')));
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('pick-files')));
     for (final name in ['Theme music.m4a', 'Shot list.txt', 'Dunes 1.jpg']) {
@@ -85,7 +85,7 @@ void main() {
         timeout: const Duration(minutes: 1),
       );
     }
-    await tester.tap(find.byKey(const ValueKey('tab-Conversation')));
+    await closeSheet(tester);
     await settle(tester);
     while (find.byTooltip('Delete').evaluate().isNotEmpty) {
       await tester.tap(find.byTooltip('Delete').first);
@@ -155,8 +155,7 @@ void main() {
       tester.element(find.byType(SnackBar).first),
     ).clearSnackBars();
 
-    // the playhead into the film, for splitting there
-    await tester.tap(find.byKey(const ValueKey('tab-Film')));
+    // the playhead into the film, for splitting there (the timeline is in Edit)
     await waitFor(
       tester,
       find.byTooltip('Play'),
@@ -328,7 +327,7 @@ void main() {
       await closeSheet(tester);
     }
 
-    await tester.tap(find.byKey(const ValueKey('tab-Conversation')));
+    await closeSheet(tester);
     await transcribe();
     // as on the desktop: at the end of the conversation, where the agent waits, in view without scrolling
     await waitFor(tester, find.text('Not now').hitTestable());

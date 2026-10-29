@@ -20,20 +20,20 @@ void main() {
     final wrong = codeOf(pairLink) == '000000' ? '111111' : '000000';
     await enterCode(tester, withCode(pairLink, wrong));
     await waitFor(tester, find.textContaining('Invalid or expired code'));
-    expect(find.text('What are we making?'), findsNothing);
+    expect(home, findsNothing);
 
     await enterCode(tester, pairLink);
     await waitFor(
       tester,
-      find.text('What are we making?'),
+      home,
       timeout: const Duration(minutes: 1),
     );
-    await reveal(tester, find.text('On your computer'));
+    await reveal(tester, projectCard.first);
     await reveal(tester, find.text(project));
 
     // The connection survives a restart: the app comes back paired, not on the pair screen.
     await launch(tester);
-    await reveal(tester, find.text('On your computer'));
+    await reveal(tester, projectCard.first);
     expect(find.text('Continue with Google'), findsNothing);
   });
 
@@ -72,7 +72,7 @@ void main() {
     await showCodes(tester);
     await press(tester, find.text('Paste code'));
     await settle(tester, const Duration(seconds: 3));
-    expect(find.text('What are we making?'), findsNothing);
+    expect(home, findsNothing);
     // Scan QR code opens the camera (allowed by the runner), and back. Last in the file: a slow emulator may
     // rebuild the app's screen behind the camera, after which it no longer hears pairing links.
     await showCodes(tester);

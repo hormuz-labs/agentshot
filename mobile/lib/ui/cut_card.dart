@@ -3,6 +3,7 @@ import 'package:share_plus/share_plus.dart';
 import '../bridge/client.dart';
 import '../bridge/store.dart';
 import 'common.dart';
+import 'design.dart';
 import 'player.dart';
 
 /// A cut in the conversation, as a chat app shows an attachment: watch it right there (it loads only when tapped),
@@ -85,9 +86,9 @@ class _CutCardState extends State<CutCard> {
       label: 'Play the cut here',
       child: InkWell(
         key: const ValueKey('cut-play'),
-        borderRadius: BorderRadius.circular(12),
+        customBorder: smooth(12),
         onTap: () => setState(() => playing = true),
-        child: ClipRRect(
+        child: ClipRSuperellipse(
           borderRadius: BorderRadius.circular(12),
           child: SizedBox(
             width: 120,
@@ -147,20 +148,19 @@ class _CutCardState extends State<CutCard> {
       textStyle: WidgetStatePropertyAll(text.labelLarge),
       iconSize: const WidgetStatePropertyAll(18),
     );
+    final studio = Studio.of(context);
     return Container(
       key: ValueKey('cut-${widget.version['id']}'),
       margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(10),
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: widget.highlight
-            ? scheme.primaryContainer.withValues(alpha: .3)
-            : scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: widget.highlight
-              ? scheme.primary.withValues(alpha: .3)
-              : scheme.outlineVariant,
+      decoration: ShapeDecoration(
+        color: studio.surface1,
+        shape: smooth(
+          Radii.card,
+          side: BorderSide(
+            color: widget.highlight ? studio.accent.withValues(alpha: .55) : studio.hairline,
+          ),
         ),
       ),
       child: Column(
@@ -168,10 +168,10 @@ class _CutCardState extends State<CutCard> {
         children: [
           // the cut, small; tapped, it plays here full width
           if (playing)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+            ClipRSuperellipse(
+              borderRadius: BorderRadius.circular(14),
               child: ColoredBox(
-                color: Colors.black,
+                color: studio.film,
                 child: RemotePlayer(
                   key: ValueKey('cut-player-${widget.play}'),
                   uri: () => widget.store.client.media(widget.dir, widget.play),

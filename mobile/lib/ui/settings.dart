@@ -5,6 +5,7 @@ import '../bridge/client.dart';
 import '../bridge/notify.dart' show NotifyPrefs;
 import '../bridge/store.dart';
 import 'common.dart';
+import 'design.dart';
 import 'delete_account.dart';
 import 'project.dart' show dropdown;
 import 'setup_ai.dart';
@@ -45,11 +46,11 @@ class SettingsScreen extends StatelessWidget {
     final computer = store.client.connection?.name ?? 'Your computer';
     final signedIn = account?.signedIn == true ? account : null;
     return ListView(
-      // room at the end to scroll clear of the + and the bar
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
+      // room at the end to scroll clear of the tab bar
+      padding: const EdgeInsets.fromLTRB(Space.page, Space.xxl, Space.page, 120),
       children: [
-        Text('Settings', style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 8),
+        Text('Settings', style: Theme.of(context).textTheme.displaySmall),
+        const SizedBox(height: Space.sm),
         // who this is: the account this phone signed in with (its credits), or the computer's when paired by code
         Section('Account', [
           ListTile(
@@ -233,6 +234,7 @@ class SettingsScreen extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => notifications(context),
           ),
+          StorageTile(store: store),
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('About AgentShot'),
@@ -700,14 +702,8 @@ class Section extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
+          padding: const EdgeInsets.only(left: 4),
+          child: Overline(title),
         ),
         Card(
           margin: EdgeInsets.zero,
@@ -786,5 +782,70 @@ class _AiTileState extends State<AiTile> {
         },
       );
     },
+  );
+}
+
+/// What the phone keeps of the computer's films and pictures (to play them at once, offline too), how much room that
+/// takes, and a way to let it go.
+class StorageTile extends StatefulWidget {
+  final BridgeStore store;
+  const StorageTile({super.key, required this.store});
+  @override
+  State<StorageTile> createState() => _StorageTileState();
+}
+
+class _StorageTileState extends State<StorageTile> {
+  late Future<int> size = widget.store.client.cache.size();
+  late final changes = widget.store.client.cache.changes.listen((_) {
+    if (mounted) setState(() => size = widget.store.client.cache.size());
+  });
+
+  @override
+  void initState() {
+    super.initState();
+    changes;
+  }
+
+  @override
+  void dispose() {
+    changes.cancel();
+    super.dispose();
+  }
+
+  static String _bytes(int n) => n < 1 << 20
+      ? '${(n / 1024).ceil()} KB'
+      : n < 1 << 30
+      ? '${(n / (1 << 20)).toStringAsFixed(n < 10 << 20 ? 1 : 0)} MB'
+      : '${(n / (1 << 30)).toStringAsFixed(1)} GB';
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<int>(
+    future: size,
+    builder: (context, kept) => ListTile(
+      key: const ValueKey('settings-storage'),
+      leading: const Icon(Icons.sd_storage_outlined),
+      title: const Text('Saved on this phone'),
+      subtitle: Text(
+        kept.hasData
+            ? _bytes(kept.data!)
+            : 'Films you’ve watched',
+      ),
+      trailing: TextButton(
+        onPressed: (kept.data ?? 0) == 0
+            ? null
+            : () => guard(context, () async {
+                if (!await confirm(
+                  context,
+                  'Clear saved films?',
+                  'They stay on your computer. They’ll come over again the next time you play them.',
+                  action: 'Clear',
+                )) {
+                  return;
+                }
+                await widget.store.client.cache.clear();
+              }),
+        child: const Text('Clear'),
+      ),
+    ),
   );
 }

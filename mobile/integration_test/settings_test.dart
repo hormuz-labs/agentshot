@@ -14,7 +14,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('nav-Activity')));
     await waitFor(tester, find.text('Activity'));
     await tester.tap(find.byKey(const ValueKey('nav-Examples')));
-    await waitFor(tester, find.text('Start with a little inspiration'));
+    await waitFor(tester, find.text('Examples'));
 
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     await waitFor(tester, find.text('Connected'));

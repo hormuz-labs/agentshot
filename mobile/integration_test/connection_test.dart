@@ -59,7 +59,7 @@ void main() {
       (w) => w is IconButton && w.tooltip == 'Send' && w.onPressed != null,
     );
     await waitGone(tester, sendable, timeout: const Duration(seconds: 60));
-    await tester.tap(find.byKey(const ValueKey('tab-Film')));
+    // the film, above the conversation
     await waitFor(
       tester,
       find.text('Retry preview'),

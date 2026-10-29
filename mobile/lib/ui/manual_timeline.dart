@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'design.dart';
 import '../bridge/client.dart';
 
 /// Manual clip editing on both phones: drag the grip to reorder, tap a clip for its tools.
@@ -36,7 +37,7 @@ class ManualTimeline extends StatelessWidget {
         to;
     final index = items.indexOf(item);
     final playhead = position();
-    await showModalBottomSheet<void>(
+    await showSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,

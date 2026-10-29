@@ -11,16 +11,10 @@ void main() {
   testWidgets('searches, filters, plays and uses an example', (tester) async {
     await launchPaired(tester);
     await tester.tap(find.byKey(const ValueKey('nav-Examples')));
-    final search = find.widgetWithText(TextField, 'Search examples');
+    final search = find.byKey(const ValueKey('search-examples'));
     await waitFor(tester, search);
-    final tiles = find.descendant(
-      of: find.byType(Card),
-      matching: find.byWidgetPredicate(
-        (w) =>
-            w is ListTile &&
-            w.leading is Icon &&
-            (w.leading as Icon).icon == Icons.play_circle_outline,
-      ),
+    final tiles = find.byWidgetPredicate(
+      (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('example-'),
     );
     await waitFor(tester, tiles);
     String titleOf(Finder tile) => tester
@@ -42,24 +36,19 @@ void main() {
 
     // a category narrows the list; All brings everything back
     final all = tiles.evaluate().length;
-    await press(
-      tester,
-      find.widgetWithText(DropdownButtonFormField<String>, 'All'),
+    final chips = find.descendant(
+      of: find.byKey(const ValueKey('example-tags')),
+      matching: find.byType(ChoiceChip),
     );
     final tags = tester
-        .widgetList<DropdownMenuItem<String>>(
-          find.byType(DropdownMenuItem<String>),
-        )
-        .map((i) => i.value!)
+        .widgetList<ChoiceChip>(chips)
+        .map((c) => (c.label as Text).data!)
         .where((t) => t != 'All')
-        .toSet();
+        .toList();
     expect(tags, isNotEmpty);
-    await tester.tap(find.text(tags.first).last);
-    await settle(tester);
+    await press(tester, find.widgetWithText(ChoiceChip, tags.first));
     expect(tiles.evaluate().length, inInclusiveRange(1, all));
-    await press(tester, find.text(tags.first).first);
-    await tester.tap(find.text('All').last);
-    await settle(tester);
+    await press(tester, find.widgetWithText(ChoiceChip, 'All'));
     expect(tiles.evaluate().length, all);
 
     // an example: its video plays, and it starts a project
@@ -82,9 +71,7 @@ void main() {
       await tester.tap(find.byTooltip('Pause'));
     }
     await press(tester, find.text('Use this example'));
-    await answer(tester, 'Mobile e2e from an example');
-    await waitFor(tester, find.text('Choose a format'));
-    await tester.tap(find.text('1:1'));
+    await describe(tester, 'Mobile e2e from an example', format: '1:1');
     await waitFor(
       tester,
       find.widgetWithText(AppBar, 'Mobile e2e from an example'),
