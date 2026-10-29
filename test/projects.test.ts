@@ -34,6 +34,17 @@ describe('projects', () => {
     expect(p.media['media/My Clip.mp4'].duration).toBeCloseTo(2, 0)
   })
 
+  it('names a project from a phone-numbered file by its day, and reads older ones that way too', async () => {
+    const numbered = join(root, '5959.mp4')
+    writeFileSync(numbered, readFileSync(clip))
+    const p = await Projects.createFromFiles([numbered])
+    expect(p.title).toMatch(/^Video from \d{1,2} [A-Z][a-z]{2}$/)
+    expect(p.dir).toMatch(/video-from-/)
+    // a project titled by its number before this
+    writeFileSync(join(p.dir, 'project.json'), JSON.stringify({ ...JSON.parse(readFileSync(join(p.dir, 'project.json'), 'utf8')), title: '5959' }))
+    expect((await Projects.load(p.dir)).title).toBe(p.title)
+  })
+
   it('starts with a timeline of the whole file in its own format', async () => {
     const p = await Projects.createFromFile(clip)
     expect(p.timeline).toMatchObject({ width: 320, height: 240, fps: 25, items: [{ kind: 'media', src: 'media/My Clip.mp4', in: 0 }] })

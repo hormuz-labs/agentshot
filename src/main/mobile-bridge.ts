@@ -25,6 +25,9 @@ type Options = {
   onProjectSynced?: (dir: string) => Promise<void> | void
   /** This computer's Headscale mesh IP, when the userspace mesh node is up. */
   meshIp?: () => string | undefined
+  /** A key for a phone to join this computer's mesh (a phone paired before the mesh was up has none: without it, it
+   *  can't reach the computer away from the Wi-Fi it was paired on). */
+  meshKey?: () => Promise<{ controlUrl: string; authKey: string } | null>
   /** A cloud worker (pool): leased to one person at a time, each seeing only the projects they made here. */
   pool?: boolean
   /** Asks the account now who leases this cloud worker (a heartbeat), for a lease that began since the last one. */
@@ -386,7 +389,10 @@ export class MobileBridge {
       this.signedIn.set(token, { name, lastSeen: Date.now() })
     }
     if (url.pathname === '/hello' && req.method === 'GET') {
-      return reply({ urls: this.status().addresses })
+      const st = this.status()
+      // a phone not on the mesh yet asks to join it (?mesh=join), so it reaches this computer from anywhere after
+      const key = url.searchParams.get('mesh') === 'join' && st.mesh && !this.options.pool ? await this.options.meshKey?.().catch(() => null) : null
+      return reply({ urls: st.addresses, ...(key ? { mesh: { control: key.controlUrl, key: key.authKey } } : {}) })
     }
     // "Disconnect this device" on the phone: it forgets the desktop, and the desktop forgets it (and its live streams)
     if (url.pathname === '/unpair' && req.method === 'POST') {

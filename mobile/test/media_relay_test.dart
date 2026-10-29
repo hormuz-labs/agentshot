@@ -23,6 +23,7 @@ void main() {
   // a computer from before tags (every release so far): no ETag, no 304
   var tags = true;
   final asked = <String>[];
+  final hellos = <String>[];
 
   setUpAll(() async {
     tmp = await Directory.systemTemp.createTemp('media-relay-test-');
@@ -46,7 +47,12 @@ void main() {
     computer.listen((req) async {
       final res = req.response;
       if (req.uri.path == '/hello') {
-        res.write('{}');
+        hellos.add(req.uri.query);
+        res.write(
+          req.uri.queryParameters['mesh'] == 'join'
+              ? '{"mesh":{"control":"https://mesh.example","key":"k"}}'
+              : '{}',
+        );
         await res.close();
         return;
       }
@@ -91,6 +97,36 @@ void main() {
       http.close(force: true);
     }
   }
+
+  test(
+    'paired before the computer had its private network: asks for a way on, once',
+    () async {
+      BridgeClient.canJoinMesh = true;
+      hellos.clear();
+      final client = BridgeClient(
+        cache: MediaCache(root: () async => Directory('${tmp.path}/mesh')),
+      );
+      try {
+        await client.connectDirect(
+          Connection(
+            Uri.parse('https://127.0.0.1:${computer.port}'),
+            fingerprint,
+            'token',
+          ),
+        );
+        client.listen();
+        // it says hello again on every reconnect: the stand-in's events end at once
+        for (var i = 0; i < 60 && hellos.length < 4; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        expect(hellos.length, greaterThanOrEqualTo(4));
+        expect(hellos.where((q) => q == 'mesh=join'), hasLength(1));
+      } finally {
+        BridgeClient.canJoinMesh = false;
+        await client.dispose();
+      }
+    },
+  );
 
   test('a computer without tags still has its films kept, versioned by their size', () async {
     final cache = MediaCache(root: () async => Directory('${tmp.path}/untagged'));

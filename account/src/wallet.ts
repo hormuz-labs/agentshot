@@ -77,7 +77,16 @@ export interface Wallet {
   /** Moves a lease's end to [until] while it is still [userId]'s and hasn't lapsed (a lapsed lease is never brought
    *  back). It may move earlier: a lease nobody uses runs out. The record after, or undefined when nothing changed. */
   extendLease(workerId: string, userId: string, until: number, now?: number, limits?: LeaseLimits): Promise<WorkerRecord | undefined>
+  /** Signing a computer in with a code (/v1/link): the computer starts one (its [secret] only it knows), a signed-in
+   *  phone approves it with its own key, and the computer takes that once. No key is kept, only whose it is. */
+  startLink(code: string, secret: string, until: number, now?: number): Promise<void>
+  /** False when the code isn't waiting (unknown, run out, or approved already). */
+  approveLink(code: string, keyId: string, email: string, now?: number): Promise<boolean>
+  /** The approval, once (the code goes with it); 'waiting' before it; undefined for a wrong code or secret, or one run out. */
+  takeLink(code: string, secret: string, now?: number): Promise<LinkApproval | 'waiting' | undefined>
 }
+
+export type LinkApproval = { keyId: string; email: string }
 
 /** The Pitch database. */
 export async function postgresWallet(connectionString: string, agentshotDatabase?: string, { createTables = false } = {}): Promise<Wallet> {
@@ -107,6 +116,13 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
     updated_at timestamptz NOT NULL DEFAULT now()
   )`)
   await own.query(`ALTER TABLE manul_workers ADD COLUMN IF NOT EXISTS leased_since timestamptz`)
+  await own.query(`CREATE TABLE IF NOT EXISTS manul_link_codes (
+    code text PRIMARY KEY,
+    secret text NOT NULL,
+    key_id text,
+    email text,
+    expires_at timestamptz NOT NULL
+  )`)
   type WorkerRow = { id: string; owner_id: string | null; pool: boolean; name: string; urls: unknown; fingerprint: string; secret: string; capabilities: unknown; leased_to: string | null; leased_until: string | Date | null; leased_since?: string | Date | null; updated_at: string | Date }
   const rowToWorker = (r: WorkerRow): WorkerRecord => ({
     id: r.id,
@@ -239,6 +255,28 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
       )
       return r.rows[0] ? rowToWorker(r.rows[0]) : undefined
     },
+    async startLink(code, secret, until, now = Date.now()) {
+      // the run-out ones go as new ones come
+      await own.query(`DELETE FROM manul_link_codes WHERE expires_at < $1`, [new Date(now).toISOString()])
+      await own.query(`INSERT INTO manul_link_codes (code, secret, expires_at) VALUES ($1, $2, $3)`, [code, secret, new Date(until).toISOString()])
+    },
+    async approveLink(code, keyId, email, now = Date.now()) {
+      const r = await own.query(
+        `UPDATE manul_link_codes SET key_id = $2, email = $3 WHERE code = $1 AND key_id IS NULL AND expires_at > $4`,
+        [code, keyId, email, new Date(now).toISOString()],
+      )
+      return r.rowCount === 1
+    },
+    async takeLink(code, secret, now = Date.now()) {
+      const at = new Date(now).toISOString()
+      const taken = await own.query(
+        `DELETE FROM manul_link_codes WHERE code = $1 AND secret = $2 AND expires_at > $3 AND key_id IS NOT NULL RETURNING key_id, email`,
+        [code, secret, at],
+      )
+      if (taken.rows[0]) return { keyId: taken.rows[0].key_id as string, email: taken.rows[0].email as string }
+      const waiting = await own.query(`SELECT 1 FROM manul_link_codes WHERE code = $1 AND secret = $2 AND expires_at > $3`, [code, secret, at])
+      return waiting.rowCount ? 'waiting' : undefined
+    },
     async close() { await pool.end(); if (own !== pool) await own.end() },
   }
   return wallet
@@ -262,6 +300,7 @@ export function memoryWallet() {
   const subscriptions = new Map<string, Subscription>()
   const charges = new Map<string, Charged>()
   const locks = new Map<string, Promise<unknown>>()
+  const links = new Map<string, { secret: string; until: number; approval?: LinkApproval }>()
   const workers = new Map<string, WorkerRecord>()
   const wallet: Wallet & { ledger: typeof ledger; subscriptions: typeof subscriptions; profiles: typeof profiles; workers: typeof workers } = {
     ledger, subscriptions, profiles, workers,
@@ -334,6 +373,22 @@ export function memoryWallet() {
       if (!w || w.leasedTo !== userId || (w.leasedUntil ?? 0) <= now) return undefined
       w.leasedUntil = Math.min(until, (w.leasedSince ?? now) + limits.maxMs)
       return { ...w }
+    },
+    async startLink(code, secret, until) {
+      links.set(code, { secret, until })
+    },
+    async approveLink(code, keyId, email, now = Date.now()) {
+      const l = links.get(code)
+      if (!l || l.approval || l.until <= now) return false
+      l.approval = { keyId, email }
+      return true
+    },
+    async takeLink(code, secret, now = Date.now()) {
+      const l = links.get(code)
+      if (!l || l.secret !== secret || l.until <= now) return undefined
+      if (!l.approval) return 'waiting'
+      links.delete(code)
+      return l.approval
     },
   }
   return wallet

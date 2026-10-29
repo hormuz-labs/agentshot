@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart' show ValueNotifier;
+import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'media_cache.dart';
@@ -168,6 +168,12 @@ class BridgeClient {
 
   /// A fresh connection for a computer in the person's account when its token was turned down (see Account).
   Future<Connection?> Function(Connection expired)? renew;
+
+  /// Another way to the same computer when none of its addresses answers (away from the Wi-Fi it was paired on): the
+  /// person's account, which knows it and its private-network address. True when it connected that way. Asked once per
+  /// time it goes out of reach.
+  Future<bool> Function(Connection current)? reachElsewhere;
+  bool _askedElsewhere = false;
 
   /// How this phone shows up on the desktop, under Settings → Mobile.
   static final deviceName = Platform.isIOS ? 'iPhone' : 'Android phone';
@@ -558,12 +564,28 @@ class BridgeClient {
     return opened.future;
   }
 
+  /// Asked the computer for a way onto its private network this run (once is enough: it remembers after joining).
+  bool _askedMesh = false;
+
+  /// Whether this phone can join the private network (the embedded node is Android's for now).
+  @visibleForTesting
+  static bool canJoinMesh = Platform.isAndroid;
+
   Future<void> _refreshAddresses() async {
     final current = connection;
     if (current == null || _http == null || current.token.isEmpty) return;
+    // paired before the computer was on its private network, or that didn't come up here: ask for a way on, so it's
+    // still reachable away from this Wi-Fi
+    final joinMesh = canJoinMesh &&
+        !_askedMesh &&
+        Mesh.proxyPort == null &&
+        await storage.read(key: _meshStorageKey) == null;
     for (final candidate in current.urls) {
       try {
-        final uri = candidate.replace(path: '/hello');
+        final uri = candidate.replace(
+          path: '/hello',
+          queryParameters: joinMesh ? {'mesh': 'join'} : null,
+        );
         final req = await _open('GET', uri);
         req.followRedirects = false;
         req.headers.set(
@@ -573,6 +595,17 @@ class BridgeClient {
         final res = await req.close().timeout(const Duration(seconds: 4));
         if (res.statusCode != 200) continue;
         final data = object(await _decode(res));
+        if (joinMesh) _askedMesh = true;
+        final mesh = data['mesh'];
+        if (mesh is Map && mesh['control'] is String && mesh['key'] is String) {
+          final control = mesh['control'] as String;
+          // in the background: joining takes a while, and the Wi-Fi works meanwhile
+          unawaited(
+            Mesh.start(control, mesh['key'] as String)
+                .then((_) => rememberMesh(control))
+                .catchError((Object _) {}),
+          );
+        }
         final nextUrls = <Uri>[candidate];
         for (final raw in (data['urls'] as List? ?? const [])) {
           if (raw is String) {
@@ -596,6 +629,8 @@ class BridgeClient {
             current.fingerprint,
             current.token,
             nextUrls,
+            current.machine,
+            current.name,
           );
           await storage.write(
             key: _storageKey,
@@ -753,6 +788,7 @@ class BridgeClient {
           return;
         }
         delay = 1;
+        _askedElsewhere = false;
         _events.add({
           'channel': 'connection',
           'args': [true],
@@ -857,6 +893,13 @@ class BridgeClient {
         }
         // another of its addresses may answer (home Wi-Fi again, or the private network away)
         if (await _preferReachable(generation)) return;
+        // paired on a Wi-Fi and away from it now: the account knows this computer by its certificate, and its way in
+        final current = connection;
+        if (reachElsewhere != null && !_askedElsewhere && current != null) {
+          _askedElsewhere = true;
+          if (await reachElsewhere!(current).catchError((Object _) => false)) return;
+          if (_disposed || generation != _generation) return;
+        }
         // off, asleep or out of reach: keep trying
         _events.add({
           'channel': 'connection',

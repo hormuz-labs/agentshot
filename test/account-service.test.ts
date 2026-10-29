@@ -243,6 +243,51 @@ describe('the account service: credits and plans', () => {
   })
 })
 
+describe('the account service: signing a computer in with a code', () => {
+  const start = async () => (await call('/v1/link/start', { method: 'POST' })).json()
+  const take = (code: string, secret: string) => call('/v1/link/take', { method: 'POST', body: JSON.stringify({ code, secret }) })
+
+  it('the computer shows a code, the signed-in phone approves it, the computer takes the phone\'s account once', async () => {
+    await ask('good')
+    const { code, secret, expiresAt } = await start()
+    expect(code).toMatch(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/)
+    expect(expiresAt).toBeGreaterThan(Date.now())
+    // waiting for the phone
+    expect((await take(code, secret)).status).toBe(202)
+    // typed on the phone, any case, without the dash
+    const approved = await call('/v1/link/approve', { method: 'POST', headers: asKey(), body: JSON.stringify({ code: code.replace('-', '').toLowerCase() }) })
+    expect(approved.status).toBe(200)
+    expect((await approved.json()).email).toBe('ada@example.com')
+    const got = await take(code, secret)
+    expect(got.status).toBe(200)
+    expect(await got.json()).toEqual({ key: 'sk-bf-vk_1', key_id: 'vk_1', email: 'ada@example.com' })
+    // once only
+    expect((await take(code, secret)).status).toBe(404)
+  })
+
+  it('only the computer that asked can take it, only a signed-in phone can approve it, and only once', async () => {
+    await ask('good')
+    const { code, secret } = await start()
+    expect((await take(code, 'not-the-secret')).status).toBe(404)
+    expect((await call('/v1/link/approve', { method: 'POST', body: JSON.stringify({ code }) })).status).toBe(401)
+    expect((await call('/v1/link/approve', { method: 'POST', headers: asKey('sk-wrong'), body: JSON.stringify({ code }) })).status).toBe(401)
+    expect((await call('/v1/link/approve', { method: 'POST', headers: asKey(), body: JSON.stringify({ code }) })).status).toBe(200)
+    // a second approval can't swap in another account
+    expect((await call('/v1/link/approve', { method: 'POST', headers: asKey(), body: JSON.stringify({ code }) })).status).toBe(404)
+    expect((await call('/v1/link/approve', { method: 'POST', headers: asKey(), body: JSON.stringify({ code: 'ZZZZ-ZZZZ' }) })).status).toBe(404)
+    expect((await call('/v1/link/approve', { method: 'POST', headers: asKey(), body: JSON.stringify({ code: 'nonsense' }) })).status).toBe(404)
+  })
+
+  it('a code runs out after ten minutes', async () => {
+    await ask('good')
+    const { code, secret } = await start()
+    const later = Date.now() + 11 * 60_000
+    expect(await wallet.approveLink(code.replace('-', ''), 'vk_1', 'ada@example.com', later)).toBe(false)
+    expect(await wallet.takeLink(code.replace('-', ''), 'whatever', later)).toBeUndefined()
+    void secret
+  })
+})
+
 describe('the account service as production runs it', () => {
   it('loads with Node stripping its types (no TypeScript-only syntax such as parameter properties or enums)', () => {
     const run = spawnSync(process.execPath, ['--input-type=module', '-e', "await import('./account/src/index.ts'); await import('./account/src/wallet.ts')"], {

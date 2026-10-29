@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
+import '../bridge/account.dart';
 import '../bridge/client.dart';
 import 'common.dart';
 import 'google_logo.dart';
@@ -10,6 +11,10 @@ import 'google_logo.dart';
 class PairScreen extends StatefulWidget {
   final BridgeClient client;
   final VoidCallback onPaired;
+
+  /// The AgentShot account this phone is signed in with, if it is: a computer paired here that isn't signed in is
+  /// offered it, so it's reachable from anywhere and listed under Your computers.
+  final Account? account;
 
   /// Signs in to AgentShot in the browser; afterwards the app shows the person's computers.
   final Future<void> Function() onSignIn;
@@ -29,6 +34,7 @@ class PairScreen extends StatefulWidget {
     super.key,
     required this.client,
     required this.onPaired,
+    this.account,
     required this.onSignIn,
     this.link,
     this.codes = false,
@@ -82,6 +88,37 @@ class _PairScreenState extends State<PairScreen> {
     }
   }
 
+  /// Paired with a computer that isn't signed in, from a phone that is: once, "sign it in as you?". Then it joins the
+  /// private network (reachable away from this Wi-Fi) and shows up under Your computers. Asked, never done quietly:
+  /// it may be someone else's computer.
+  Future<void> offerAccount() async {
+    final account = widget.account;
+    if (account == null || !account.signedIn || account.key == null) return;
+    final status = await widget.client
+        .call('account:status')
+        .catchError((Object _) => <String, dynamic>{});
+    if (status is Map && '${status['email'] ?? ''}'.isNotEmpty) return;
+    if (!mounted) return;
+    final name = widget.client.connection?.name ?? 'this computer';
+    if (!await confirm(
+      context,
+      'Sign $name in as ${account.email}?',
+      'Then you can reach it from anywhere, not just on this Wi-Fi, and it shows up under Your computers.',
+      action: 'Sign in',
+    )) {
+      return;
+    }
+    await widget.client
+        .call('account:adopt', [
+          {
+            'key': account.key,
+            'keyId': ?account.keyId,
+            'email': ?account.email,
+          },
+        ])
+        .then<void>((_) {}, onError: (Object _) {});
+  }
+
   /// Pairs with a scanned or pasted QR payload, or with the 6-digit code typed below.
   Future<void> pair([String? payload]) async {
     setState(() {
@@ -90,6 +127,7 @@ class _PairScreenState extends State<PairScreen> {
     });
     try {
       await widget.client.pair(payload ?? currentCode);
+      await offerAccount();
       if (mounted) widget.onPaired();
     } catch (e) {
       if (mounted) {

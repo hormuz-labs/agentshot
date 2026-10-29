@@ -17,6 +17,7 @@ import { ASPECTS, type Aspect } from '../shared/motion-formats'
 import { example as galleryExample, exampleVideo } from './gallery'
 import { sameCut, timelineOfFile, type Timeline } from '../shared/timeline'
 import { newestProjects } from '../shared/project-order'
+import { machineMade, titleFromFile } from '../shared/project-title'
 import { filesystemSlug, toPortablePath } from '../shared/paths'
 import { relativeProjectPath } from './paths'
 import type { MediaInfo, Note, Project, RecentProject, Version } from '../shared/types'
@@ -34,6 +35,8 @@ export function recent(): RecentProject[] {
   try {
     const list = (JSON.parse(readFileSync(recentFile(), 'utf8')) as RecentProject[]).filter(r => existsSync(join(r.dir, 'project.json')))
     return newestProjects(list.map(r => {
+      // named by a device (5959, from a phone's picker) before titles were made readable
+      if (machineMade(r.title) && Number.isFinite(r.createdAt)) r = { ...r, title: titleFromFile(r.title, r.createdAt) }
       if (Number.isFinite(r.createdAt)) return r
       // Older recent.json entries only stored openedAt; recover the immutable creation date, not the last-opened date.
       try { return { ...r, createdAt: JSON.parse(readFileSync(join(r.dir, 'project.json'), 'utf8')).createdAt } }
@@ -98,6 +101,7 @@ export async function load(dir: string): Promise<Project> {
     timeline(p.timeline)
   }
   p.dir = dir
+  if (machineMade(p.title)) p.title = titleFromFile(p.title, p.createdAt)
   if (!p.timeline) { const v = p.versions.find(x => x.id === p.current)!; p.timeline = timelineOf(v.path, p.media[v.path]) }
   touchRecent(p)
   return p
@@ -117,7 +121,7 @@ export async function createFromFiles(files: string[], progress?: (done: number,
   const sources = [...new Set(files.filter(Boolean))]
   if (!sources.length) throw new Error('Choose files to start a project.')
   const file = sources.find(f => kindByName(f) === 'video') || sources[0]
-  const title = basename(file, extname(file))
+  const title = titleFromFile(basename(file, extname(file)))
   let dir = join(projectsRoot(), slug(title))
   for (let n = 2; existsSync(dir); n++) dir = join(projectsRoot(), `${slug(title)}-${n}`)
   const p: Project = { id: id(), title, dir, createdAt: Date.now(), versions: [], current: '', notes: [], media: {}, files: {}, ...(model ? { model } : {}) }
@@ -137,7 +141,7 @@ export async function createFromFiles(files: string[], progress?: (done: number,
     }
     const info = p.media[rel]
     const v: Version = { id: id(), path: rel, title: 'Original', createdAt: Date.now(), by: 'import' }
-    p.title = basename(rel, extname(rel))
+    p.title = titleFromFile(basename(rel, extname(rel)), p.createdAt)
     p.versions = [v]
     p.current = v.id
     p.timeline = timelineOf(rel, info)

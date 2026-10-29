@@ -12,12 +12,12 @@ const bridges: MobileBridge[] = []
 const folders: string[] = []
 afterEach(async () => { await Promise.all(bridges.splice(0).map(b => b.stop())); await Promise.all(folders.splice(0).map(d => rm(d, { recursive: true, force: true }))) })
 
-async function fixture() {
+async function fixture(extra: Partial<ConstructorParameters<typeof MobileBridge>[0]> = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'agentshot-bridge-test-')); folders.push(dir)
   await writeFile(join(dir, 'film.mp4'), '0123456789')
   const invoke = vi.fn(async (method: string, args: unknown[]) => ({ method, args }))
   const importFile = vi.fn(async (file: string) => ({ name: basename(file), content: await readFile(file, 'utf8') }))
-  const bridge = new MobileBridge({ invoke, projects: () => [{ dir }], importFile, galleryFile: () => new Response('gallery') }); bridges.push(bridge)
+  const bridge = new MobileBridge({ invoke, projects: () => [{ dir }], importFile, galleryFile: () => new Response('gallery'), ...extra }); bridges.push(bridge)
   const status = await bridge.start()
   const base = status.addresses[0] || ''
   expect(base).toMatch(/^https:/)
@@ -170,6 +170,22 @@ describe('mobile TLS bridge', () => {
     const hello = await f.call('/hello', { token: f.token })
     expect(hello.status).toBe(200)
     expect(JSON.parse(hello.body).urls).toEqual(f.status.addresses)
+  })
+  it('hands a paired phone a key to its mesh when it asks, so it reaches the computer away from the Wi-Fi', async () => {
+    let mesh: string | undefined
+    const meshKey = vi.fn(async () => ({ controlUrl: 'https://mesh.example', authKey: 'key-1' }))
+    const f = await fixture({ meshIp: () => mesh, meshKey })
+    // no mesh on this computer: nothing to hand
+    expect(JSON.parse((await f.call('/hello?mesh=join', { token: f.token })).body).mesh).toBeUndefined()
+    mesh = '100.64.0.9'
+    // a phone already on it doesn't ask
+    expect(JSON.parse((await f.call('/hello', { token: f.token })).body).mesh).toBeUndefined()
+    expect(meshKey).not.toHaveBeenCalled()
+    const asked = JSON.parse((await f.call('/hello?mesh=join', { token: f.token })).body)
+    expect(asked.mesh).toEqual({ control: 'https://mesh.example', key: 'key-1' })
+    // never to someone who isn't paired
+    expect((await f.call('/hello?mesh=join')).status).toBe(401)
+    expect(meshKey).toHaveBeenCalledTimes(1)
   })
 
 it('validates anchors and rejects path-bearing or unknown fields', () => {

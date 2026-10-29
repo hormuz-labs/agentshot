@@ -25,7 +25,7 @@ import { startUpdates } from './updates'
 import { CLOUD_WORKER_SECRET, KEYS, keyStatus, loadKeys, setKey } from './keys'
 import * as UserSpace from './user-space'
 import { isProviderKeyEnv } from '../shared/providers'
-import { accountStatus, accountWorkers, adoptKey, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, workerHeartbeat } from './account'
+import { accountStatus, accountWorkers, adoptKey, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signInLink, signInWithCode, signOut, workerHeartbeat } from './account'
 import { importOmp, ompAvailable, providerInfo, removeProvider, saveProvider } from './providers'
 import { asJob, listJobs, onJobs } from './jobs'
 import { toolPath, toolStatus } from './media'
@@ -188,6 +188,7 @@ const mobile = new MobileBridge(
     },
     galleryFile: (url, range) => mediaResponse(new Request(url, { headers: range ? { range } : {} }), LIB, [Projects.projectsRoot(), ...open.keys()], Gallery.GALLERY),
     meshIp: () => meshIp,
+    meshKey: () => meshJoin('client', undefined, { persistent: true }),
   },
   () => {
     const ips = reachableIps()
@@ -1070,6 +1071,15 @@ function wire() {
     syncAccountPhones()
     return s
   })
+  // the code shows in the window as soon as there is one; signed in once the phone takes it
+  ipcMain.handle('account:signInWithCode', async () => {
+    const s = await signInWithCode((code, expiresAt) => win?.webContents.send('account:code', code, expiresAt))
+    agent?.keysChanged()
+    syncAccountPhones()
+    app.focus({ steal: true })
+    return s
+  })
+  ipcMain.handle('account:signInLink', () => signInLink())
   ipcMain.handle('account:cancel', () => cancelSignIn())
   ipcMain.handle('account:signOut', () => { const s = signOut(); agent?.keysChanged(); syncAccountPhones(); return s })
   ipcMain.handle('account:balance', () => balance())
