@@ -93,6 +93,22 @@ describe('AguiAdapter (pi-durable view → AG-UI events)', () => {
     expect(types().filter(t => t === EventType.RUN_ERROR)).toHaveLength(1)
   })
 
+  it('an error belongs to its turn: asking again, or a reply that carried on, clears it, even rebuilt from history', () => {
+    const failed = { id: 1, model: [{ role: 'assistant', stopReason: 'error', errorMessage: '502 Bad Gateway', content: [] }] }
+    // rebuilt (the app opened again) after the person asked again: no old error comes back
+    const asked = harness()
+    asked.a.update(view({ entries: [failed, user(2, 'continue edit')] }))
+    expect(asked.types()).not.toContain(EventType.RUN_ERROR)
+    // a retry that worked, in the same turn
+    const carried = harness()
+    carried.a.update(view({ entries: [failed, { id: 3, model: [{ role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'Done.' }] }] }] }))
+    expect(carried.types()).not.toContain(EventType.RUN_ERROR)
+    // the latest turn ended on it: still said
+    const ended = harness()
+    ended.a.update(view({ entries: [user(0, 'zoom in'), failed] }))
+    expect(ended.types()).toContain(EventType.RUN_ERROR)
+  })
+
   it('replay resends the full state', () => {
     const { a, types } = harness()
     const v = view({ entries: [user(1, 'hi')] })
