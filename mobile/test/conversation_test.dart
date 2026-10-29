@@ -7,6 +7,13 @@ import 'package:agentshot_mobile/ui/project.dart';
 
 class HistoryClient extends BridgeClient {
   @override
+  Future<({bool unchanged, dynamic value, String? tag})> callKept(
+    String method,
+    List<dynamic> args, {
+    String? have,
+  }) async => (unchanged: false, value: await call(method, args), tag: null);
+
+  @override
   Future<dynamic> call(String method, [List<dynamic> args = const []]) async {
     return switch (method) {
       'project:open' => {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../bridge/client.dart';
 import '../bridge/store.dart';
 import 'common.dart';
+import 'design.dart';
 import 'settings.dart' show Credits;
 
 /// Sends a note to the agent on the computer. When the computer has no AI to edit with yet, offers to set it up
@@ -16,6 +17,16 @@ Future<void> sendToAgent(
     await store.client.call('agent:send', [dir, message]);
   } on BridgeException catch (e) {
     if (e.code != 'needs-key' || !context.mounted) rethrow;
+    // signed in here: their AgentShot credits, without a question, and the note goes
+    if (await adoptCredits(store).catchError((Object _) => false)) {
+      try {
+        await store.client.call('agent:send', [dir, message]);
+        return;
+      } on BridgeException catch (again) {
+        if (again.code != 'needs-key') rethrow;
+      }
+    }
+    if (!context.mounted) rethrow;
     if (!await setUpAi(context, store)) {
       throw BridgeException(
         'Choose AgentShot credits or an AI key to send notes.',
@@ -33,10 +44,22 @@ Future<void> sendToAgent(
   }
 }
 
+/// AgentShot credits for the computer (or cloud worker), from the account this phone is signed in with, without
+/// asking: someone signed in has nothing to choose. False when the phone isn't signed in.
+Future<bool> adoptCredits(BridgeStore store) async {
+  final account = store.account;
+  if (account == null || !account.signedIn) return false;
+  await store.client.call('account:adopt', [
+    {'key': account.key, 'keyId': ?account.keyId, 'email': ?account.email},
+  ]);
+  if (store.onCloud) await account.useCloudCredits();
+  return true;
+}
+
 /// Lets the person choose how AgentShot on their computer thinks. True once it can.
 Future<bool> setUpAi(BuildContext context, BridgeStore store) async {
   final account = store.account;
-  final choice = await showModalBottomSheet<String>(
+  final choice = await showSheet<String>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,

@@ -3,6 +3,7 @@ import 'package:share_plus/share_plus.dart';
 import '../bridge/client.dart';
 import '../bridge/store.dart';
 import 'common.dart';
+import 'design.dart';
 import 'player.dart';
 
 /// A cut in the conversation, as a chat app shows an attachment: watch it right there (it loads only when tapped),
@@ -20,6 +21,9 @@ class CutCard extends StatefulWidget {
   final String headline;
   final bool highlight;
   final List<Widget> actions;
+
+  /// Opens the cut full screen (on a phone) instead of playing it in the card.
+  final VoidCallback? onOpen;
   const CutCard({
     super.key,
     required this.store,
@@ -29,6 +33,7 @@ class CutCard extends StatefulWidget {
     required this.headline,
     this.highlight = false,
     this.actions = const [],
+    this.onOpen,
   });
   @override
   State<CutCard> createState() => _CutCardState();
@@ -85,9 +90,9 @@ class _CutCardState extends State<CutCard> {
       label: 'Play the cut here',
       child: InkWell(
         key: const ValueKey('cut-play'),
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => setState(() => playing = true),
-        child: ClipRRect(
+        customBorder: smooth(12),
+        onTap: widget.onOpen ?? () => setState(() => playing = true),
+        child: ClipRSuperellipse(
           borderRadius: BorderRadius.circular(12),
           child: SizedBox(
             width: 120,
@@ -95,27 +100,32 @@ class _CutCardState extends State<CutCard> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // the cut's own first frame, when the computer has it
-                FutureBuilder<Uri>(
-                  future: widget.store.client.thumbnail(
-                    widget.dir,
-                    widget.version['path'] as String,
+                // the cut's own first frame, when the computer has it (anew when it changed there)
+                StreamBuilder<(String, String)>(
+                  stream: widget.store.client.mediaChanged.where(
+                    (c) => c.$1 == widget.dir && c.$2 == widget.version['path'],
                   ),
-                  builder: (context, uri) => DecoratedBox(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xff1d1a17), Color(0xff3a2c16)],
-                      ),
+                  builder: (context, _) => FutureBuilder<Uri>(
+                    future: widget.store.client.thumbnail(
+                      widget.dir,
+                      widget.version['path'] as String,
                     ),
-                    child: uri.data == null
-                        ? null
-                        : Image.network(
-                            '${uri.data}',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const SizedBox(),
-                          ),
+                    builder: (context, uri) => DecoratedBox(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xff1d1a17), Color(0xff3a2c16)],
+                        ),
+                      ),
+                      child: uri.data == null
+                          ? null
+                          : Image.network(
+                              '${uri.data}',
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const SizedBox(),
+                            ),
+                    ),
                   ),
                 ),
                 Center(
@@ -147,20 +157,21 @@ class _CutCardState extends State<CutCard> {
       textStyle: WidgetStatePropertyAll(text.labelLarge),
       iconSize: const WidgetStatePropertyAll(18),
     );
+    final studio = Studio.of(context);
     return Container(
       key: ValueKey('cut-${widget.version['id']}'),
       margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(10),
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: widget.highlight
-            ? scheme.primaryContainer.withValues(alpha: .3)
-            : scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: widget.highlight
-              ? scheme.primary.withValues(alpha: .3)
-              : scheme.outlineVariant,
+      decoration: ShapeDecoration(
+        color: studio.surface1,
+        shape: smooth(
+          Radii.card,
+          side: BorderSide(
+            color: widget.highlight
+                ? studio.accent.withValues(alpha: .55)
+                : studio.hairline,
+          ),
         ),
       ),
       child: Column(
@@ -168,10 +179,10 @@ class _CutCardState extends State<CutCard> {
         children: [
           // the cut, small; tapped, it plays here full width
           if (playing)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+            ClipRSuperellipse(
+              borderRadius: BorderRadius.circular(14),
               child: ColoredBox(
-                color: Colors.black,
+                color: studio.film,
                 child: RemotePlayer(
                   key: ValueKey('cut-player-${widget.play}'),
                   uri: () => widget.store.client.media(widget.dir, widget.play),

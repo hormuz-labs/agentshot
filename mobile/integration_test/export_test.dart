@@ -13,10 +13,15 @@ void main() {
   ) async {
     await launchPaired(tester);
     await openProject(tester);
-    final export = find.byTooltip('Export film');
+    // Export is in the project's ⋯ menu
+    Future<void> export() async {
+      await tester.tap(find.byTooltip('Project actions'));
+      await settle(tester);
+      await tester.tap(find.text('Export film'));
+    }
 
     // changed my mind: closing the sheet exports nothing
-    await tester.tap(export);
+    await export();
     await waitFor(tester, find.text('Export your film'));
     await closeSheet(tester);
     expect(find.text('Rendering on your desktop…'), findsNothing);
@@ -28,7 +33,7 @@ void main() {
       expect(find.text(pick), findsOneWidget);
     }
 
-    await tester.tap(export);
+    await export();
     await waitFor(tester, find.text('Export your film'));
     await choose('Original', '9:16 · Shorts, Reels, TikTok');
     await choose('Fit the whole frame', 'Fill the frame');
@@ -37,16 +42,15 @@ void main() {
     await press(tester, find.text('Render and download'));
     // rendered on the desktop, downloaded, then the share sheet over the app
     cue('back');
-    await waitFor(
-      tester,
-      find.byWidgetPredicate(
-        (w) =>
-            w is IconButton &&
-            w.tooltip == 'Export film' &&
-            w.onPressed != null,
-      ),
-      timeout: const Duration(minutes: 3),
-    );
+    // done: the render and download lines under the header are gone
+    bool working() =>
+        find.textContaining('Rendering').evaluate().isNotEmpty ||
+        find.textContaining('Downloading').evaluate().isNotEmpty;
+    final end = DateTime.now().add(const Duration(minutes: 3));
+    while (working() && DateTime.now().isBefore(end)) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(working(), isFalse);
     expect(find.byType(SnackBar), findsNothing); // no error
   });
 }

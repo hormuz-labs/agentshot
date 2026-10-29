@@ -13,15 +13,9 @@ void main() {
   ) async {
     await launchPaired(tester);
 
-    await start(tester, 'Start from an idea');
+    await start(tester, 'Describe it');
     await waitFor(tester, find.text('Describe your video…'));
-    await tester.enterText(
-      find.byType(TextField).last,
-      'Mobile e2e motion title card',
-    );
-    await tester.tap(find.text('Save'));
-    await waitFor(tester, find.text('Choose a format'));
-    await tester.tap(find.text('9:16'));
+    await describe(tester, 'Mobile e2e motion title card', format: '9:16');
 
     // The new project opens on the conversation; the agent makes the clip and puts it in the film.
     await waitFor(
@@ -34,8 +28,8 @@ void main() {
       findsNothing,
     ); // the runner checks the agent's tools on the desktop
 
-    await tester.tap(find.byKey(const ValueKey('tab-Film')));
-    await waitFor(tester, find.text('A new cut is ready'));
+    // the new cut, playing in its card under the reply
+    await waitFor(tester, find.text('New cut'));
     await tester.tap(find.widgetWithText(ChoiceChip, 'After'));
     await waitFor(
       tester,
@@ -46,8 +40,8 @@ void main() {
     await waitFor(tester, find.text('Opening title added'));
 
     await tester.pageBack();
-    await waitFor(tester, find.text('What are we making?'));
-    await reveal(tester, find.text('On your computer'));
+    await waitFor(tester, home);
+    await reveal(tester, projectCard.first);
     await reveal(tester, find.text('Mobile e2e motion title card'));
   });
 
@@ -56,13 +50,13 @@ void main() {
     const idea = 'Mobile e2e walkthrough of the examples page';
 
     // Cancel: nothing is made
-    await start(tester, 'Film a walkthrough');
-    await waitFor(tester, find.text('What should AgentShot film?'));
-    await answer(tester, null);
-    expect(find.text('What are we making?'), findsOneWidget);
+    await start(tester, 'Walkthrough');
+    await waitFor(tester, find.byKey(const ValueKey('create-sheet')));
+    await describe(tester, null);
+    expect(home, findsOneWidget);
 
-    await start(tester, 'Film a walkthrough');
-    await answer(tester, idea);
+    await start(tester, 'Walkthrough');
+    await describe(tester, idea);
     await waitFor(
       tester,
       find.widgetWithText(AppBar, idea),

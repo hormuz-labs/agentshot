@@ -237,21 +237,18 @@ void main() {
     expect(text.text, isEmpty);
   });
 
-  testWidgets('a tap is not a note: it says how', (tester) async {
+  testWidgets('a tap starts listening, a second tap finishes; nothing said says so', (tester) async {
     await tester.pumpWidget(composer());
-    final hold = await tester.startGesture(
-      tester.getCenter(find.byKey(const ValueKey('mic'))),
-    );
-    await tester.pump(
-      const Duration(milliseconds: 520),
-    ); // just a long press, let go at once
-    await hold.up();
-    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mic')));
+    await tester.pump();
+    // listening: how to finish, not how to slide (no finger is holding it)
+    expect(find.text('Tap the mic when done'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('mic')));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     expect(heard, isEmpty);
-    expect(
-      find.text('Hold the mic while you talk, then let go.'),
-      findsOneWidget,
-    );
+    expect(find.text('Didn’t catch that. Tap the mic and talk.'), findsOneWidget);
   });
 
   testWidgets(

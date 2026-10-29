@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'design.dart';
 import '../bridge/client.dart';
 
 Future<T?> sheet<T>(BuildContext context, String title, Widget child) =>
-    showModalBottomSheet<T>(
+    showSheet<T>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -127,7 +128,15 @@ Future<bool> confirm(
 class AsyncPanel extends StatefulWidget {
   final Future<dynamic> Function() load;
   final Widget Function(dynamic, VoidCallback) builder;
-  const AsyncPanel({super.key, required this.load, required this.builder});
+
+  /// Shown while it loads, in the shape of what's coming (else a spinner).
+  final Widget? placeholder;
+  const AsyncPanel({
+    super.key,
+    required this.load,
+    required this.builder,
+    this.placeholder,
+  });
   @override
   State<AsyncPanel> createState() => _AsyncPanelState();
 }
@@ -159,6 +168,7 @@ class _AsyncPanelState extends State<AsyncPanel> {
         );
       }
       if (snapshot.connectionState != ConnectionState.done) {
+        if (widget.placeholder case final shape?) return shape;
         return const Center(
           child: Padding(
             padding: EdgeInsets.all(24),
@@ -197,8 +207,10 @@ class EmptyMessage extends StatelessWidget {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 8),
-        Text(body, textAlign: TextAlign.center),
+        if (body.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(body, textAlign: TextAlign.center),
+        ],
       ],
     ),
   );

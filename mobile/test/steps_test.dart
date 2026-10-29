@@ -107,7 +107,7 @@ void main() {
   );
 
   testWidgets(
-    'a run reads as the work done, in words; what went wrong says why; the commands only under Show details',
+    'a finished run is one line that opens to its steps; what went wrong says why; a step opens to its command',
     (tester) async {
       final copied = <String>[];
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -127,6 +127,23 @@ void main() {
           ),
         ),
       );
+      // done: one line; what didn't work says why, even folded; no commands up front
+      expect(find.text('3 steps'), findsOneWidget);
+      expect(find.text('Looked at IMG_1.jpg'), findsOneWidget);
+      expect(
+        find.text('That picture isn’t in the project.'),
+        findsOneWidget,
+        reason: 'a failed step says why',
+      );
+      expect(find.text('grep batches'), findsNothing);
+      expect(
+        find.textContaining('grep -E'),
+        findsNothing,
+        reason: 'no commands up front',
+      );
+      // a tap opens every step, in words
+      await tester.tap(find.byKey(const ValueKey('steps-summary')));
+      await tester.pumpAndSettle();
       for (final t in [
         'grep batches',
         'Read results.json',
@@ -134,28 +151,15 @@ void main() {
       ]) {
         expect(find.text(t), findsOneWidget);
       }
-      expect(find.byIcon(Icons.check_rounded), findsNWidgets(2));
-      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
-      expect(
-        find.text('That picture isn’t in the project.'),
-        findsOneWidget,
-        reason: 'a failed step says why',
-      );
-      expect(
-        find.textContaining('grep -E'),
-        findsNothing,
-        reason: 'no commands up front',
-      );
-      // details: each step opens to the command and its output, monospace, with Copy
-      await tester.tap(find.text('Show details'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('grep batches').last);
+      // and a step opens to the command and its output, monospace, with Copy
+      await tester.tap(find.text('grep batches'));
       await tester.pumpAndSettle();
       expect(find.text(r'$ grep -E "=== batch" log.txt'), findsOneWidget);
       expect(find.textContaining('batch 2/36'), findsOneWidget);
       await tester.tap(find.byTooltip('Copy').first);
       expect(copied, [r'$ grep -E "=== batch" log.txt']);
-      await tester.tap(find.text('Hide details'));
+      // folded again: back to the one line
+      await tester.tap(find.byKey(const ValueKey('steps-summary')));
       await tester.pumpAndSettle();
       expect(find.textContaining('grep -E'), findsNothing);
     },

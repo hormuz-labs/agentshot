@@ -21,8 +21,8 @@ void main() {
     await launch(tester);
     await shot(tester, '1-pair');
     await enterCode(tester, pairLink);
-    await waitFor(tester, find.text('What are we making?'));
-    await reveal(tester, find.text('On your computer'));
+    await waitFor(tester, home);
+    await reveal(tester, projectCard.first);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, 2000));
     await shot(tester, '2-projects');
 
@@ -45,9 +45,8 @@ void main() {
     await shot(tester, '3-conversation');
 
     // a tablet shows the film beside the conversation, so the shot above has the before and after too
-    if (find.byKey(const ValueKey('tab-Film')).evaluate().isNotEmpty) {
-      await tester.tap(find.byKey(const ValueKey('tab-Film')));
-      await waitFor(tester, find.text('A new cut is ready'));
+    if (find.byKey(const ValueKey('open-edit')).evaluate().isNotEmpty) {
+      await waitFor(tester, find.text('New cut'));
       await tester.tap(find.widgetWithText(ChoiceChip, 'After'));
       await waitFor(
         tester,
@@ -64,28 +63,27 @@ void main() {
     await tester.tap(find.byTooltip('Close').last);
     await settle(tester);
     await tester.pageBack();
-    await waitFor(tester, find.byTooltip('Refresh'));
+    await waitFor(tester, find.byTooltip('Start something new'));
 
-    await start(tester, 'Start from an idea');
+    await start(tester, 'Describe it');
     await waitFor(tester, find.text('Describe your video…'));
     await tester.enterText(
-      find.byType(TextField).last,
+      find.byKey(const ValueKey('create-idea')),
       'A 15-second launch teaser for our new running shoes, bold type, upbeat',
     );
     await shot(tester, '6-idea');
-    await tester.tap(find.text('Cancel'));
-    await settle(tester);
+    await describe(tester, null);
 
     // the same conversation in the dark theme, switched in Settings → Appearance
-    await tester.tap(find.text('Settings').last);
+    await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     final appearance = find.byKey(const ValueKey('appearance'));
     await reveal(tester, appearance);
     await tester.tap(
-      find.descendant(of: appearance, matching: find.text('Dark')),
+      find.descendant(of: appearance, matching: find.byTooltip('Dark')),
     );
     await settle(tester);
-    await tester.tap(find.text('Projects').last);
-    await reveal(tester, find.text('On your computer'));
+    await tester.tap(find.byKey(const ValueKey('nav-Projects')));
+    await reveal(tester, projectCard.first);
     await openProject(tester);
     await waitFor(tester, find.text(reply));
     await tester.drag(find.byType(ListView).first, const Offset(0, 260));

@@ -54,6 +54,42 @@ Future<void> press(WidgetTester tester, Finder finder) async {
   await settle(tester, const Duration(milliseconds: 500));
 }
 
+/// Home: the projects page, known by its + button (the heading "Projects" is also a tab's name).
+final home = find.byTooltip('Start something new');
+
+/// A project in the home grid (any).
+final projectCard = find.byWidgetPredicate(
+  (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('project-'),
+);
+
+/// Opens the project's Edit: a sheet from the title bar on a phone (a wide screen has it beside the film already).
+Future<void> openEdit(WidgetTester tester) async {
+  final open = find.byKey(const ValueKey('open-edit'));
+  if (open.evaluate().isEmpty) return;
+  await tester.tap(open);
+  await settle(tester);
+}
+
+/// A choice in the project's Edit ([openEdit]); from the sheet, it closes as the choice is made.
+Future<void> editTool(WidgetTester tester, String item) async {
+  await openEdit(tester);
+  await press(tester, find.text(item));
+}
+
+/// Opens the project's Files (a sheet from the project menu, ⋯).
+Future<void> openFiles(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Project actions').last);
+  await settle(tester);
+  await tester.tap(find.text('Files').last);
+  await settle(tester);
+}
+
+/// Pulls the home list down to refresh it.
+Future<void> pullToRefresh(WidgetTester tester) async {
+  await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
+  await settle(tester, const Duration(seconds: 1));
+}
+
 /// Answers the text question on screen ([askText]) with [value]: Save, or Cancel when [value] is null.
 Future<void> answer(WidgetTester tester, String? value) async {
   await waitFor(tester, find.byType(AlertDialog));
@@ -67,6 +103,31 @@ Future<void> answer(WidgetTester tester, String? value) async {
     );
   }
   await tester.tap(find.text(value == null ? 'Cancel' : 'Save').last);
+  await settle(tester);
+}
+
+/// Describes what to make in the create sheet ([askToCreate]) and makes it, in [format] when given (16:9 otherwise);
+/// closes the sheet without making anything when [idea] is null.
+Future<void> describe(WidgetTester tester, String? idea, {String? format}) async {
+  final sheet = find.byKey(const ValueKey('create-sheet'));
+  await waitFor(tester, sheet);
+  await settle(tester);
+  if (idea == null) {
+    // the scrim above the sheet
+    await tester.tapAt(const Offset(20, 20));
+    await settle(tester);
+    return;
+  }
+  await tester.enterText(find.byKey(const ValueKey('create-idea')), idea);
+  await settle(tester);
+  if (format != null) await press(tester, find.descendant(of: sheet, matching: find.text(format)));
+  await press(
+    tester,
+    find.descendant(
+      of: sheet,
+      matching: find.byWidgetPredicate((w) => w is Text && (w.data == 'Create' || w.data == 'Film it')),
+    ),
+  );
   await settle(tester);
 }
 
@@ -324,7 +385,7 @@ Future<void> enterCode(WidgetTester tester, String link) async {
   final before = error();
   bool started() =>
       find.text('Connecting…').evaluate().isNotEmpty ||
-      find.byTooltip('Refresh').evaluate().isNotEmpty ||
+      find.byTooltip('Start something new').evaluate().isNotEmpty ||
       (error() != null && error() != before);
   Future<bool> waitStarted(Duration timeout) async {
     final end = DateTime.now().add(timeout);
@@ -376,14 +437,13 @@ Future<void> showCodes(WidgetTester tester) async {
 /// Starts the app paired with the desktop: pairs with [pairLink] unless an earlier test file already did.
 Future<void> launchPaired(WidgetTester tester) async {
   await launch(tester);
-  // paired already: home, with its Refresh (its heading may be scrolled out of view)
-  final home = find.byTooltip('Refresh');
+  // paired already: home, with its + button
   if (home.evaluate().isEmpty) {
     await enterCode(tester, pairLink);
   }
   await waitFor(tester, home);
   // the desktop's projects have loaded (below the fold on a small phone)
-  await reveal(tester, find.text('On your computer'));
+  await reveal(tester, projectCard.first);
 }
 
 /// Opens the desktop's test project from the Projects list.

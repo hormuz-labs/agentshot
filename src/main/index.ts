@@ -1136,6 +1136,7 @@ function wire() {
   })
   ipcMain.handle('gallery:list', () => Gallery.examples())
   ipcMain.handle('project:open', (_e, dir: string) => openProject(dir))
+  ipcMain.handle('project:peek', async (_e, dir: string) => open.get(dir) || (await Projects.load(dir)))
   ipcMain.handle('preview:prepare', (_e, dir: string, media: string, retry = false) => {
     const p = projectOf(dir)
     if (!p.media[media]) throw new Error('This video is not part of the project.')

@@ -92,7 +92,7 @@ void main() {
   WidgetController.hitTestWarningShouldBeFatal = true;
 
   testWidgets(
-    'scrolled up: Jump to latest takes you back down; the note being answered is pinned on top',
+    'scrolled up: the message box steps aside, and the down arrow takes you back to the latest',
     (tester) async {
       final store = storeWith(Quiet(), talk(10));
       await tester.pumpWidget(app(ProjectScreen(store: store)));
@@ -105,15 +105,15 @@ void main() {
       // reading further up
       await tester.drag(find.byType(ListView).first, const Offset(0, 900));
       await tester.pumpAndSettle();
-      expect(find.text('Jump to latest'), findsOneWidget);
-      // a reply's note scrolled off the top is pinned
-      await tester.drag(find.byType(ListView).first, const Offset(0, -260));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('pinned-note')), findsOneWidget);
-      await tester.tap(find.text('Jump to latest'));
+      expect(find.bySemanticsLabel('Jump to latest'), findsOneWidget);
+      // the message box steps out of the way while reading further up
+      expect(find.byKey(const ValueKey('mic')).hitTestable(), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('jump-to-latest')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('jump-to-latest')), findsNothing);
       expect(find.text('Reply number 9.', findRichText: true), findsWidgets);
+      // and comes back at the latest
+      expect(find.byKey(const ValueKey('mic')).hitTestable(), findsOneWidget);
     },
   );
 

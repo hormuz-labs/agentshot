@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'design.dart';
 import 'dictation.dart';
-import 'glass.dart';
 
 /// The microphone, for voice notes: records to a file, says how loud it is meanwhile. Behind an interface so the
 /// tests can stand in for it ([VoiceRecorder.override]).
@@ -74,7 +74,7 @@ class _MicRecorder implements VoiceRecorder {
 class Composer extends StatefulWidget {
   final TextEditingController controller;
 
-  /// Above the field: the moment noted, attached files, the model and credits.
+  /// Above the field: what goes with the note (the moment noted, attached files); none most of the time.
   final List<Widget> header;
 
   /// The tray's own buttons (attach, mention…), shown inline when > is open.
@@ -129,6 +129,9 @@ class ComposerState extends State<Composer> {
   final levels = <double>[];
   DateTime _since = DateTime.now();
   Timer? _tick, _limit;
+
+  /// Held down to talk (slide to cancel, let go to finish), not tapped on (tap again to finish).
+  bool held = false;
 
   /// How far the finger has slid toward cancelling: 0 at rest, 1 there.
   final cancelling = ValueNotifier<double>(0);
@@ -237,7 +240,7 @@ class ComposerState extends State<Composer> {
         setState(() => voice = VoiceStage.idle);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Hold the mic while you talk, then let go.'),
+            content: Text('Didn’t catch that. Tap the mic and talk.'),
           ),
         );
       }
@@ -322,19 +325,23 @@ class ComposerState extends State<Composer> {
     final text = Theme.of(context).textTheme;
     final typed = widget.controller.text.trim().isNotEmpty;
     final recording = voice == VoiceStage.recording;
+    final studio = Studio.of(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: recording ? scheme.primary : scheme.outlineVariant,
+      padding: const EdgeInsets.fromLTRB(6, 8, 6, 6),
+      decoration: ShapeDecoration(
+        color: studio.surface1,
+        shape: smooth(
+          22,
+          side: BorderSide(
+            color: recording ? studio.accent : studio.hairline,
+            width: recording ? 1.5 : 1,
+          ),
         ),
-        boxShadow: [
+        shadows: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: .06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? .35 : .06),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -365,10 +372,16 @@ class ComposerState extends State<Composer> {
                 IconButton(
                   tooltip: 'Add',
                   onPressed: () => setState(() => trayOpen = !trayOpen),
+                  style: IconButton.styleFrom(
+                    backgroundColor: trayOpen ? studio.accentSoft : studio.surface2,
+                    fixedSize: const Size(40, 40),
+                    minimumSize: const Size(40, 40),
+                    shape: const CircleBorder(),
+                  ),
                   icon: AnimatedRotation(
-                    turns: trayOpen ? .25 : 0,
-                    duration: const Duration(milliseconds: 150),
-                    child: const Icon(Icons.chevron_right),
+                    turns: trayOpen ? .125 : 0,
+                    duration: Motion.fast,
+                    child: Icon(Icons.add_rounded, size: 22, color: trayOpen ? studio.accent : studio.text2),
                   ),
                 ),
               Expanded(
@@ -413,7 +426,11 @@ class ComposerState extends State<Composer> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            c > .99 ? 'Let go to cancel' : '‹ Slide to cancel',
+                            !held
+                                ? 'Tap the mic when done'
+                                : c > .99
+                                ? 'Let go to cancel'
+                                : '‹ Slide to cancel',
                             style: text.labelMedium?.copyWith(
                               color: c > .99
                                   ? scheme.error
@@ -453,11 +470,15 @@ class ComposerState extends State<Composer> {
                       maxLines: 6,
                       textCapitalization: TextCapitalization.sentences,
                       style: text.bodyLarge,
-                      decoration: const InputDecoration(
-                        hintText: 'Ask for a change…',
+                      decoration: InputDecoration(
+                        hintText: 'Message…',
+                        hintStyle: text.bodyLarge?.copyWith(color: studio.text3),
+                        filled: false,
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                       ),
                       onChanged: widget.onChanged,
                     ),
@@ -476,39 +497,74 @@ class ComposerState extends State<Composer> {
                   icon: const Icon(Icons.stop_rounded),
                 )
               else if (typed && !recording)
-                IconButton.filled(
-                  tooltip: 'Send',
-                  onPressed: widget.canSend ? widget.onSend : null,
-                  icon: widget.sending
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.arrow_upward),
+                // the spark: this goes to the AI
+                Tooltip(
+                  message: 'Send',
+                  child: Semantics(
+                    button: true,
+                    enabled: widget.canSend,
+                    child: Material(
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      color: Colors.transparent,
+                      child: Ink(
+                        width: 44,
+                        height: 44,
+                        decoration: ShapeDecoration(
+                          gradient: widget.canSend ? studio.spark : null,
+                          color: widget.canSend ? null : studio.surface3,
+                          shape: const CircleBorder(),
+                        ),
+                        child: InkWell(
+                          onTap: widget.canSend ? widget.onSend : null,
+                          child: Center(
+                            child: widget.sending
+                                ? SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: studio.onAccent),
+                                  )
+                                : Icon(
+                                    Icons.arrow_upward_rounded,
+                                    color: widget.canSend ? studio.onAccent : studio.text3,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 )
               else
-                // hold to talk; slide left to cancel; let go to turn it into text
+                // tap to talk and tap again when done; or hold to talk, slide left to cancel, let go
                 GestureDetector(
                   key: const ValueKey('mic'),
-                  onLongPressStart: (_) => _startVoice(),
+                  onTap: () {
+                    if (recording) return unawaited(_endVoice(cancel: false));
+                    held = false;
+                    unawaited(_startVoice());
+                  },
+                  onLongPressStart: (_) {
+                    held = true;
+                    unawaited(_startVoice());
+                  },
                   onLongPressMoveUpdate: (d) => cancelling.value =
                       (-d.offsetFromOrigin.dx / _cancelAt).clamp(0.0, 1.0),
                   onLongPressEnd: (_) =>
                       _endVoice(cancel: cancelling.value > .99),
-                  onLongPressCancel: () => _endVoice(cancel: true),
+                  // only a hold that never became one; a tap to finish isn't a cancel (it fires first)
+                  onLongPressCancel: () {
+                    if (held) unawaited(_endVoice(cancel: true));
+                  },
                   // (not a tooltip: on a phone a tooltip shows on a long press, and would take the hold)
                   child: Semantics(
                     button: true,
-                    label: 'Hold to talk',
+                    label: recording ? 'Stop and use what you said' : 'Talk a note',
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
-                      width: recording ? 56 : 48,
-                      height: recording ? 56 : 48,
+                      width: recording ? 52 : 44,
+                      height: recording ? 52 : 44,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: recording
-                            ? scheme.primary
-                            : scheme.surfaceContainerHigh,
+                        color: recording ? studio.accent : studio.surface2,
                         boxShadow: recording
                             ? [
                                 BoxShadow(
@@ -587,29 +643,33 @@ class ComposerChip extends StatelessWidget {
   const ComposerChip({super.key, required this.label, this.icon, this.onTap});
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final studio = Studio.of(context);
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 200),
-      child: GlassPill(
-        onTap: onTap,
-        padding: const EdgeInsets.fromLTRB(12, 7, 10, 7),
-        icon: icon,
-        iconColor: scheme.onSurfaceVariant,
-        label: DefaultTextStyle.merge(
-          style: Theme.of(
-            context,
-          ).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(child: label),
-              if (onTap != null)
-                Icon(
-                  Icons.expand_more_rounded,
-                  size: 16,
-                  color: scheme.onSurfaceVariant,
-                ),
-            ],
+      constraints: const BoxConstraints(maxWidth: 180),
+      child: Material(
+        color: studio.surface2,
+        shape: smooth(Radii.chip),
+        child: InkWell(
+          customBorder: smooth(Radii.chip),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+            child: DefaultTextStyle.merge(
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(color: studio.text2),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 15, color: studio.text3),
+                    const SizedBox(width: 5),
+                  ],
+                  Flexible(child: label),
+                  if (onTap != null) Icon(Icons.expand_more_rounded, size: 16, color: studio.text3),
+                ],
+              ),
+            ),
           ),
         ),
       ),

@@ -47,13 +47,6 @@ void main() {
   }
 
   // The section chips scroll sideways when they don't fit (large text on a phone), as a person would swipe them.
-  Future<void> chip(WidgetTester tester, String label) async {
-    final target = find.byKey(ValueKey('tab-$label'));
-    await tester.ensureVisible(target);
-    await settle(tester, const Duration(milliseconds: 300));
-    await tester.tap(target);
-  }
-
   Future<void> sheet(WidgetTester tester, String menu, String where) async {
     await tester.tap(find.byTooltip('Project actions').last);
     await settle(tester, const Duration(milliseconds: 500));
@@ -104,19 +97,19 @@ void main() {
           await settle(tester);
         }
 
-        await tester.ensureVisible(find.text('Projects').last);
-        await tester.tap(find.text('Projects').last);
-        await reveal(tester, find.text('On your computer'));
+        await tester.ensureVisible(find.byKey(const ValueKey('nav-Projects')));
+        await tester.tap(find.byKey(const ValueKey('nav-Projects')));
+        await reveal(tester, projectCard.first);
         await openProject(tester);
         await visit(tester, '$where, project conversation');
         // Wide screens show the conversation and the film side by side; narrow ones switch between them.
-        if (find.byKey(const ValueKey('tab-Film')).evaluate().isNotEmpty) {
-          await chip(tester, 'Film');
-          await visit(tester, '$where, project film');
-          await chip(tester, 'Files');
+        if (find.byKey(const ValueKey('open-edit')).evaluate().isNotEmpty) {
+          await openEdit(tester);
+          await visit(tester, '$where, project edit');
+          await closeSheet(tester);
+          await openFiles(tester);
           await visit(tester, '$where, project files');
-          await chip(tester, 'Conversation');
-          await settle(tester);
+          await closeSheet(tester);
         }
         for (final menu in [
           'Conversations',
@@ -134,7 +127,7 @@ void main() {
         );
         await visit(tester, '$where, typing a note');
         await tester.pageBack();
-        await waitFor(tester, find.byTooltip('Refresh')); // home again
+        await waitFor(tester, find.byTooltip('Start something new')); // home again
       });
     }
   }

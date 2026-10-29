@@ -99,7 +99,9 @@ List<ChatItem> fold(List<Json> messages) {
         if (s == null) continue;
         s.result = '${m['content'] ?? ''}';
         s.failed = m['error'] != null;
-        s.hint = m['hint'] as String? ?? (s.failed ? failureHint(s.name, s.result!) : null);
+        s.hint =
+            m['hint'] as String? ??
+            (s.failed ? failureHint(s.name, s.result!) : null);
         // laying out a demo can come back with questions to settle first
         if (s.name == 'demo_layout' || s.name == 'compose_demo') {
           final asks = _json(s.result)['questions'];
@@ -144,8 +146,9 @@ IconData _icon(String name) => switch (name) {
   _ => Icons.build_outlined,
 };
 
-/// A run of steps in the chat, as the work it was: what it's doing now (while it works), then each step in plain words,
-/// ticked or crossed (with what went wrong); the commands and raw output only under Show details.
+/// A run of steps in the chat. While it works: what it's doing now, then the last few steps done. Once done: one
+/// line ("21 steps"), with any step that didn't work under it saying why; a tap opens every step, and a tap on a step
+/// its command and output.
 class StepsRow extends StatefulWidget {
   final List<Step> steps;
 
@@ -158,8 +161,10 @@ class StepsRow extends StatefulWidget {
 }
 
 class _StepsRowState extends State<StepsRow> {
-  bool details = false, all = false;
-  static const shown = 5;
+  bool open = false;
+
+  /// While it works, the steps done shown under what it's doing now.
+  static const recent = 3;
 
   @override
   Widget build(BuildContext context) {
@@ -169,172 +174,139 @@ class _StepsRowState extends State<StepsRow> {
     final ok = dark ? const Color(0xff7fcf8f) : const Color(0xff2e7d32);
     final steps = widget.steps;
     final now = widget.now;
-    final hidden = all ? 0 : (steps.length - shown).clamp(0, steps.length);
-    final technical = steps.any((s) => s.detail != null || (s.result?.trim().isNotEmpty ?? false));
+    final failed = steps.where((s) => s.failed).toList();
 
-    Widget line(Step s) {
-      final running = !s.done && now != null;
-      return Padding(
-        key: ValueKey('line-${s.id}'),
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: s.failed
-                  ? Icon(Icons.close_rounded, size: 18, color: scheme.error)
-                  : running
-                  ? Padding(
-                      padding: const EdgeInsets.all(3),
-                      child: CircularProgressIndicator(strokeWidth: 2, color: scheme.primary),
-                    )
-                  : s.done
-                  ? Icon(Icons.check_rounded, size: 18, color: ok)
-                  : Icon(Icons.remove_rounded, size: 18, color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    s.title,
-                    style: text.bodyMedium?.copyWith(
-                      color: s.failed ? scheme.onSurface : scheme.onSurfaceVariant,
+    Widget line(Step s) => Padding(
+      key: ValueKey('line-${s.id}'),
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: s.failed
+                ? Icon(Icons.close_rounded, size: 17, color: scheme.error)
+                : Icon(Icons.check_rounded, size: 17, color: ok),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  s.title,
+                  style: text.bodyMedium?.copyWith(
+                    color: s.failed
+                        ? scheme.onSurface
+                        : scheme.onSurfaceVariant,
+                  ),
+                ),
+                if (s.failed)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      s.hint ??
+                          'This step didn’t work; the agent carries on without it.',
+                      style: text.bodySmall?.copyWith(color: scheme.error),
                     ),
                   ),
-                  if (s.failed)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // a surface of its own (not a painted box), so the steps' taps show on it
+    return Padding(
+      key: const ValueKey('steps'),
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Material(
+        color: scheme.surfaceContainerLow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (now != null) ...[
+                // what it's doing now, first, so it's seen without scrolling; then the latest done, newest first
+                Row(
+                  key: const ValueKey('steps-now'),
+                  children: [
+                    // Manul runs while the agent works
+                    const Mascot(size: 30, busy: true),
+                    const SizedBox(width: 8),
+                    Expanded(
                       child: Text(
-                        s.hint ?? 'This step didn’t work; the agent carries on without it.',
-                        style: text.bodySmall?.copyWith(color: scheme.error),
+                        '$now…'.replaceAll('……', '…'),
+                        style: text.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      key: const ValueKey('steps'),
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // what it's doing now, first, so it's seen without scrolling
-          if (now != null)
-            Padding(
-              key: const ValueKey('steps-now'),
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  // Manul runs while the agent works
-                  const Mascot(size: 34, busy: true),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text('$now…'.replaceAll('……', '…'), style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-            ),
-          // newest first while it works (under the now line); in the order done once finished
-          for (final s in (now != null ? steps.reversed : steps).take(steps.length - hidden))
-            if (now == null || s.done) line(s),
-          Wrap(
-            spacing: 4,
-            children: [
-              if (hidden > 0)
-                TextButton(
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    visualDensity: VisualDensity.compact,
-                    textStyle: text.labelMedium,
-                  ),
-                  onPressed: () => setState(() => all = true),
-                  child: Text('Show $hidden more'),
+                  ],
                 ),
-              if (technical)
-                TextButton(
-                  key: const ValueKey('steps-details'),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    visualDensity: VisualDensity.compact,
-                    textStyle: text.labelMedium,
+                for (final s
+                    in steps.reversed.where((s) => s.done).take(recent))
+                  line(s),
+              ] else ...[
+                // done: one line, opened with a tap
+                InkWell(
+                  key: const ValueKey('steps-summary'),
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => setState(() => open = !open),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          failed.isEmpty
+                              ? Icons.check_circle_outline_rounded
+                              : Icons.error_outline_rounded,
+                          size: 18,
+                          color: failed.isEmpty ? ok : scheme.error,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            steps.length == 1
+                                ? '1 step'
+                                : '${steps.length} steps',
+                            style: text.bodyMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          open
+                              ? Icons.expand_less_rounded
+                              : Icons.expand_more_rounded,
+                          size: 20,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
                   ),
-                  onPressed: () => setState(() => details = !details),
-                  child: Text(details ? 'Hide details' : 'Show details'),
                 ),
+                // what didn't work says why, even folded
+                if (!open)
+                  for (final s in failed) line(s),
+                if (open)
+                  for (final s in steps) StepTile(step: s),
+              ],
             ],
           ),
-          if (details)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [for (final s in steps) StepTile(step: s)],
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
 }
-
-/// The steps of a run, each a line; opened, a step shows what it ran and what came of it, to read or copy.
-Future<void> showSteps(BuildContext context, List<Step> steps) =>
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: .6,
-        maxChildSize: .95,
-        minChildSize: .3,
-        builder: (context, scroll) => Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 8, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      steps.length == 1 ? '1 step' : '${steps.length} steps',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                controller: scroll,
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-                children: [for (final s in steps) StepTile(step: s)],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
 
 class StepTile extends StatefulWidget {
   final Step step;
@@ -468,7 +440,9 @@ String runProblem(String message) {
   if (RegExp(r'credit|balance|402|quota|billing|insufficient').hasMatch(m)) {
     return 'There aren’t enough AI credits for AgentShot to carry on. Add credits, then ask again.';
   }
-  if (RegExp(r'network|econn|fetch failed|timed? ?out|socket|enotfound').hasMatch(m)) {
+  if (RegExp(
+    r'network|econn|fetch failed|timed? ?out|socket|enotfound',
+  ).hasMatch(m)) {
     return 'The computer couldn’t reach the AI service. Check its internet connection, then ask AgentShot again.';
   }
   if (RegExp(r'api.?key|401|403|unauthori[sz]ed|forbidden').hasMatch(m)) {
@@ -507,7 +481,9 @@ class _RunProblemState extends State<RunProblem> {
             children: [
               Icon(Icons.error_outline_rounded, size: 20, color: scheme.error),
               const SizedBox(width: 10),
-              Expanded(child: Text(runProblem(widget.message), style: text.bodyMedium)),
+              Expanded(
+                child: Text(runProblem(widget.message), style: text.bodyMedium),
+              ),
             ],
           ),
           TextButton(
@@ -519,10 +495,10 @@ class _RunProblemState extends State<RunProblem> {
             onPressed: () => setState(() => details = !details),
             child: Text(details ? 'Hide details' : 'Show details'),
           ),
-          if (details) Output(label: 'What the AI service said', text: widget.message),
+          if (details)
+            Output(label: 'What the AI service said', text: widget.message),
         ],
       ),
     );
   }
 }
-

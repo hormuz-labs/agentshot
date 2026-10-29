@@ -11,7 +11,7 @@ import 'support.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  /// Import footage → [choice] in the sheet; the picker returns [names].
+  /// Import → [choice] in the sheet; the picker returns [names].
   Future<void> importing(
     WidgetTester tester,
     String choice,
@@ -22,14 +22,14 @@ void main() {
       expect(asked, kind, reason: '$choice asks the picker for $kind');
       return media(names);
     };
-    await start(tester, 'Import footage');
-    await waitFor(tester, find.text('What are you bringing in?'));
+    await start(tester, 'Import');
+    await waitFor(tester, find.byKey(const ValueKey('pick-videos')));
     await settle(tester);
     await tester.tap(find.text(choice));
   }
 
   Future<void> filesShow(WidgetTester tester, List<String> names) async {
-    await tester.tap(find.byKey(const ValueKey('tab-Files')));
+    await openFiles(tester);
     for (final name in names) {
       await waitFor(
         tester,
@@ -74,7 +74,7 @@ void main() {
         );
       }
       await tester.pageBack();
-      await waitFor(tester, find.byTooltip('Refresh'));
+      await waitFor(tester, find.byTooltip('Start something new'));
 
       // photos only: a project made from scratch in the chosen format, with the photos in it
       await importing(tester, 'Photos', Pick.photos, [
@@ -82,7 +82,7 @@ void main() {
         'Dunes 2.jpg',
         'Dunes 3.jpg',
       ]);
-      await waitFor(tester, find.text('Choose a format'));
+      await waitFor(tester, find.text('Format'));
       await tester.tap(find.text('9:16'));
       await waitFor(
         tester,
@@ -91,7 +91,7 @@ void main() {
       );
       await filesShow(tester, ['Dunes 1.jpg', 'Dunes 2.jpg', 'Dunes 3.jpg']);
       await tester.pageBack();
-      await waitFor(tester, find.byTooltip('Refresh'));
+      await waitFor(tester, find.byTooltip('Start something new'));
 
       // a mix with a photo first: the project still starts from the video
       await importing(tester, 'Photos and videos', Pick.media, [
@@ -106,7 +106,7 @@ void main() {
       await filesShow(tester, ['Sunset walk.mp4', 'Dunes 1.jpg']);
 
       // several photos attached to a note inside the project
-      await tester.tap(find.byKey(const ValueKey('tab-Conversation')));
+      await closeSheet(tester);
       Picker.override = (asked) async {
         expect(asked, Pick.photos);
         return media(['Dunes 2.jpg', 'Dunes 3.jpg']);
@@ -116,7 +116,7 @@ void main() {
       await waitFor(tester, find.text('Attach files'));
       await settle(tester);
       await tester.tap(find.text('Attach files'));
-      await waitFor(tester, find.text('What are you bringing in?'));
+      await waitFor(tester, find.byKey(const ValueKey('pick-videos')));
       await settle(tester);
       await tester.tap(find.text('Photos'));
       await waitFor(
@@ -206,7 +206,7 @@ void main() {
 
       // one photo, landscape
       await importing(tester, 'Photos', Pick.photos, ['Dunes 2.jpg']);
-      await waitFor(tester, find.text('Choose a format'));
+      await waitFor(tester, find.text('Format'));
       await tester.tap(find.text('16:9'));
       await waitFor(
         tester,

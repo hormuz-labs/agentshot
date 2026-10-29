@@ -83,7 +83,7 @@ void main() {
       await tester.tap(find.text(computer));
       await waitFor(
         tester,
-        find.text('What are we making?'),
+        home,
         timeout: const Duration(seconds: 60),
       );
       await reveal(tester, find.text(project));
@@ -93,7 +93,7 @@ void main() {
       await waitFor(tester, find.text(computer));
       expect(find.textContaining('https://'), findsNothing);
       await reveal(tester, find.text('Signed in as maya@example.com'));
-      final switching = find.text('Switch computer');
+      final switching = find.text('Switch');
       await reveal(tester, switching);
       await tester.tap(switching);
       await waitFor(tester, find.text('Your computers'));
@@ -102,7 +102,7 @@ void main() {
       await tester.tap(find.text(computer));
       await waitFor(
         tester,
-        find.text('What are we making?'),
+        home,
         timeout: const Duration(seconds: 60),
       );
       await tester.tap(find.byKey(const ValueKey('nav-Settings')));

@@ -67,7 +67,9 @@ void main() {
     await waitFor(tester, find.text('Renamed on the phone'));
     await closeSheet(tester);
 
-    // the model: one of the desktop's (the chip then names it), then back to Automatic; each closes the picker
+    // the model (in the composer's tray): one of the desktop's (the chip then names it), then back to Automatic;
+    // each closes the picker
+    await press(tester, find.byTooltip('Add'));
     await press(tester, model);
     await waitFor(tester, find.text('Choose a model'));
     final scripted = find.widgetWithText(ListTile, 'Scripted');

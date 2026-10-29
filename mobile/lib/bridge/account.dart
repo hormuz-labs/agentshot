@@ -284,10 +284,11 @@ class Account {
           '/v1/mesh/join',
           body: {'role': 'client', 'persistent': true},
         );
+        // never longer than its own limit: a start stuck underneath doesn't hold the person here
         await Mesh.start(
           join['controlUrl'] as String,
           join['authKey'] as String,
-        );
+        ).timeout(const Duration(seconds: 50));
         await client.rememberMesh(join['controlUrl'] as String);
         first = await client.firstToAnswer(
           target,
@@ -392,8 +393,8 @@ class Account {
       return data;
     } on BridgeException {
       rethrow;
-    } catch (_) {
-      throw BridgeException(failure);
+    } catch (e) {
+      throw BridgeException(isBlockedNetwork(e) ? blockedNetwork : failure);
     } finally {
       http.close();
     }

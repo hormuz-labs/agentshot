@@ -1,6 +1,6 @@
 // Editing from the phone: a note asks for an edit, the desktop agent cuts the film and proposes it, and the
 // conversation says so with a card. The first cut goes back with feedback, right from the card; the second the phone
-// watches (the card takes it to the Film tab, whose dot said a cut was waiting), compares before/after and keeps.
+// watches it in its card, compares before/after there and keeps.
 import 'package:agentshot_mobile/ui/player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +18,6 @@ void main() {
     await newConversation(tester);
 
     final card = find.byKey(const ValueKey('proposal-card'));
-    final dot = find.byKey(const ValueKey('tab-Film-dot'));
     Future<void> askForTheEdit() async {
       await sendNote(tester, 'Mobile e2e: tighten the opening');
       // what the agent is doing shows as a line of words (its tools stay out of the chat), then its reply and the card
@@ -28,7 +27,6 @@ void main() {
         find.descendant(of: card, matching: find.text('Opening tightened')),
         findsOneWidget,
       );
-      expect(tester.widget<Badge>(dot).isLabelVisible, isTrue);
       // the agent's steps, one card in words (from the computer, as on the desktop), the commands only under details
       final steps = find.byKey(const ValueKey('steps'));
       // up from the card to this turn's steps (the list builds what's near the screen), the latest of them
@@ -84,17 +82,12 @@ void main() {
       find.descendant(of: card, matching: find.byTooltip('Download')),
     );
     cue('back');
+    // the cut plays in its card, with Before and After right there
     await waitFor(
       tester,
-      find.descendant(of: card, matching: find.byTooltip('Download')),
+      find.descendant(of: card, matching: find.byTooltip('Play')),
       timeout: const Duration(minutes: 2),
     );
-    await press(
-      tester,
-      find.descendant(of: card, matching: find.text('Before / after')),
-    );
-    await waitFor(tester, find.text('A new cut is ready'));
-    expect(tester.widget<Badge>(dot).isLabelVisible, isFalse);
     expect(
       tester
           .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'After'))
@@ -108,7 +101,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Keep'));
     await waitFor(tester, find.text('Opening tightened'));
     await settle(tester, const Duration(seconds: 2));
-    expect(find.text('A new cut is ready'), findsNothing);
+    expect(find.text('New cut'), findsNothing);
     expect(card, findsNothing);
 
     // the kept cut is in Versions; choosing it there closes the list
