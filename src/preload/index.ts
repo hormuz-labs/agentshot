@@ -145,6 +145,8 @@ const api = {
   account: {
     status: () => ipcRenderer.invoke('account:status') as Promise<AccountStatus>,
     signIn: () => ipcRenderer.invoke('account:signIn') as Promise<AccountStatus>,
+    /** the waiting sign-in's link, to open in another browser (the one with the right Google account) */
+    signInLink: () => ipcRenderer.invoke('account:signInLink') as Promise<string | null>,
     /** signs in with a code typed on the person's phone (signed in there): resolves once it's taken */
     signInWithCode: () => ipcRenderer.invoke('account:signInWithCode') as Promise<AccountStatus>,
     /** the code to show, as soon as there is one, and when it runs out */

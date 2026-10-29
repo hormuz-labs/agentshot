@@ -25,7 +25,7 @@ import { startUpdates } from './updates'
 import { CLOUD_WORKER_SECRET, KEYS, keyStatus, loadKeys, setKey } from './keys'
 import * as UserSpace from './user-space'
 import { isProviderKeyEnv } from '../shared/providers'
-import { accountStatus, accountWorkers, adoptKey, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signInWithCode, signOut, workerHeartbeat } from './account'
+import { accountStatus, accountWorkers, adoptKey, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signInLink, signInWithCode, signOut, workerHeartbeat } from './account'
 import { importOmp, ompAvailable, providerInfo, removeProvider, saveProvider } from './providers'
 import { asJob, listJobs, onJobs } from './jobs'
 import { toolPath, toolStatus } from './media'
@@ -1078,6 +1078,7 @@ function wire() {
     app.focus({ steal: true })
     return s
   })
+  ipcMain.handle('account:signInLink', () => signInLink())
   ipcMain.handle('account:cancel', () => cancelSignIn())
   ipcMain.handle('account:signOut', () => { const s = signOut(); agent?.keysChanged(); syncAccountPhones(); return s })
   ipcMain.handle('account:balance', () => balance())

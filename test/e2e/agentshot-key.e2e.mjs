@@ -1,4 +1,4 @@
-// Settings → Keys → AgentShot key: offers signing in; pasting a key instead makes the agent use "AgentShot" (AgentShot's gateway picks the real model, see
+// Settings → Keys → AgentShot key: offers signing in (and its link, to open in another browser); pasting a key instead makes the agent use "AgentShot" (AgentShot's gateway picks the real model, see
 // gateway.ts), the key never comes back to the page, and removing it takes the model away. Talks to no gateway.
 import { _electron as electron } from 'playwright-core'
 import { dismissOnboarding, dismissSettingsOnboarding } from './onboarding.mjs'
@@ -26,6 +26,21 @@ try {
   await win.click('nav >> text=Keys')
   await win.click('role=tab[name=/AgentShot key/]')
   await win.waitForSelector('button:has-text("Sign in to AgentShot")')
+
+  // signing in, when the default browser has the wrong Google account: the waiting sign-in's link, to copy into
+  // another browser (the browser itself stays shut here)
+  await app.evaluate(({ shell }) => { shell.openExternal = async () => {} })
+  await win.click('button:has-text("Sign in to AgentShot")')
+  await win.click('[data-testid="copy-sign-in-link"]')
+  await win.waitForSelector('text=Paste it in the browser with your Google account.')
+  const link = await app.evaluate(({ clipboard }) => clipboard.readText())
+  assert.match(link, /\/oauth\/authorize\?/, 'the link is the sign-in itself')
+  assert.match(link, /redirect_uri=http%3A%2F%2F127\.0\.0\.1%3A47619%2Foauth%2Fcallback/, 'and it comes back to this computer')
+  assert.match(link, /code_challenge=/, 'signed for this sign-in only')
+  await win.screenshot({ path: join(out, 'agentshot-sign-in-link.png') })
+  await win.click('button:has-text("Cancel")')
+  await win.waitForSelector('button:has-text("Sign in to AgentShot")')
+
   await win.click('text=Have a key? Paste it')
   await win.fill('[aria-label="AgentShot key"]', 'sk-bf-e2e-secret')
   await win.click('button:has-text("Save")')

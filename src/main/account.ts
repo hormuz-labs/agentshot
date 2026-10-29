@@ -28,7 +28,11 @@ export const accountStatus = (): AccountStatus => ({ email: getConfig().account?
 const b64url = (b: Buffer) => b.toString('base64url')
 const PAGE = brandPage
 
-let pending: { server: Server; cancel: () => void } | null = null
+let pending: { server: Server; cancel: () => void; link?: string } | null = null
+
+/** The sign-in link while a sign-in waits: to open in another browser than the default one (the one signed in to the
+ *  right Google account). It comes back to this computer either way. */
+export const signInLink = () => pending?.link ?? null
 
 /** Sign in: opens the browser, waits for the way back, stores the key. Resolves with who signed in. */
 export async function signIn(open: (url: string) => Promise<void> | void, timeoutMs = 5 * 60_000): Promise<AccountStatus> {
@@ -55,7 +59,9 @@ export async function signIn(open: (url: string) => Promise<void> | void, timeou
         response_type: 'code', client_id: AUTH.clientId(), redirect_uri: REDIRECT, scope: 'openid email profile',
         state, code_challenge: b64url(createHash('sha256').update(verifier).digest()), code_challenge_method: 'S256',
       })
-      try { await open(`${AUTH.issuer()}/oauth/authorize?${q}`) } catch (e) { done(); reject(e) }
+      const link = `${AUTH.issuer()}/oauth/authorize?${q}`
+      if (pending) pending.link = link
+      try { await open(link) } catch (e) { done(); reject(e) }
     })
   })
 

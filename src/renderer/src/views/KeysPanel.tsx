@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import type { AccountStatus, Balance, KeyInfo } from '../../../shared/types'
 import { ProvidersSection } from './ProvidersSection'
-import { CodeSignIn } from '@/components/CodeSignIn'
+import { CodeSignIn, CopySignInLink } from '@/components/CodeSignIn'
 
 const AGENTSHOT_KEY = 'MANUL_KEY'
 
@@ -144,10 +144,13 @@ function AgentShotKey({ agentshotKey, onKeys }: { agentshotKey?: KeyInfo; onKeys
       ) : (
         <div className="mt-4 flex flex-col items-center gap-2">
           {busy ? (
-            <div className="flex items-center gap-2 text-[13px] text-dim">
-              <Loader2 className="size-3.5 animate-spin" />Finish signing in in your browser…
-              <Button size="sm" variant="ghost" onClick={() => window.agentshot.account.cancel()}>Cancel</Button>
-            </div>
+            <>
+              <div className="flex items-center gap-2 text-[13px] text-dim">
+                <Loader2 className="size-3.5 animate-spin" />Finish signing in in your browser…
+                <Button size="sm" variant="ghost" onClick={() => window.agentshot.account.cancel()}>Cancel</Button>
+              </div>
+              <CopySignInLink />
+            </>
           ) : (
             <Button size="md" variant="primary" disabled={!account.available} onClick={signIn}>Sign in to AgentShot</Button>
           )}
