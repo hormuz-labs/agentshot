@@ -437,6 +437,9 @@ String runProblem(String message) {
   if (RegExp(r'overloaded|529|503|unavailable|capacity').hasMatch(m)) {
     return 'The AI service is overloaded right now. Ask AgentShot again in a moment.';
   }
+  if (RegExp(r'\b50[024]\b|bad gateway|internal server error|gateway time-?out').hasMatch(m)) {
+    return 'The AI service had a problem on its side. Ask AgentShot again in a moment.';
+  }
   if (RegExp(r'credit|balance|402|quota|billing|insufficient').hasMatch(m)) {
     return 'There aren’t enough AI credits for AgentShot to carry on. Add credits, then ask again.';
   }

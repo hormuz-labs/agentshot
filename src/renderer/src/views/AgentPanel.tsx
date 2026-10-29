@@ -352,12 +352,25 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, text, o
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }) }, [agent.messages.length, agent.streaming?.text.length, Object.keys(agent.pending).length, consents.length])
 
   const [sending, setSending] = useState(false)
+  // what was just sent, in the conversation at once: until it's there for real (the agent at work reads it next)
+  const [sent, setSent] = useState<string[]>([])
+  useEffect(() => {
+    setSent(waiting => waiting.filter(w => !shown.some(m => m.role === 'user' && String(m.content ?? '').includes(w))))
+  }, [agent.messages])
   const hasDraft = !!text.trim() || !!attached.length
   const submit = async () => {
     if (!hasDraft || sending) return
     setSending(true)
     const submitted = text
-    try { if (await onSend(text.trim()) !== false) setText(current => current === submitted ? '' : current) } finally { setSending(false) }
+    const said = text.trim()
+    if (said) setSent(waiting => [...waiting, said])
+    try {
+      if (await onSend(said) !== false) setText(current => current === submitted ? '' : current)
+      else setSent(waiting => waiting.filter(w => w !== said))
+    } catch (e) {
+      setSent(waiting => waiting.filter(w => w !== said))
+      throw e
+    } finally { setSending(false) }
   }
   // @ in the message box: a list of the project's files, versions and clips; picking one attaches it
   const [caret, setCaret] = useState(0)
@@ -475,6 +488,14 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, text, o
         {/* working, before its first step shows: the now line on its own */}
         {agent.busy && blocks.at(-1)?.kind !== 'work' && !agent.streaming?.text && Object.keys(agent.pending).length > 0 && <WorkCard calls={[]} results={results} now={activity.label} />}
         {agent.streaming?.text && <ChatMarkdown text={agent.streaming.text} />}
+        {sent.map(w => (
+          <div key={w} data-sent-note className="ml-auto w-fit max-w-[85%] rounded-2xl border border-line px-4 py-2.5 text-[14px]">
+            <div className="whitespace-pre-wrap">{w}</div>
+            <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-faint">
+              <Loader2 className={cn('size-3', !agent.busy && 'animate-spin')} />{agent.busy ? 'Queued · AgentShot reads it next' : 'Sending…'}
+            </div>
+          </div>
+        ))}
         {consents.map(c => <ConsentCard key={c.id} c={c} />)}
         {agent.error && <RunProblem message={agent.error} />}
         </div>

@@ -33,10 +33,13 @@ function messagesOf(view: Any): { messages: Message[]; cost: number; error?: str
     for (const [i, m] of ((e.model || []) as Any[]).entries()) {
       const id = `${e.id}:${i}`
       if (m.role === 'user') {
+        // a new turn: an error before it was the last turn's, answered by asking again
+        error = undefined
         // when it was said, for the phone's swipe-to-see-times
         messages.push({ id, role: 'user', content: textOf(m.content), ...(m.timestamp ? { at: m.timestamp } : {}) } as Message)
       } else if (m.role === 'assistant') {
-        if (m.stopReason === 'error') error = friendly(m.errorMessage || 'The model returned an error.')
+        // the turn's error is its latest reply's: one that carried on after it (a retry that worked) clears it
+        error = m.stopReason === 'error' ? friendly(m.errorMessage || 'The model returned an error.') : undefined
         const calls = ((m.content || []) as Any[]).filter(c => c.type === 'toolCall')
         messages.push({
           id, role: 'assistant', ...(m.timestamp ? { at: m.timestamp } : {}),
