@@ -5,6 +5,7 @@ import 'package:agentshot_mobile/bridge/client.dart';
 import 'package:agentshot_mobile/bridge/store.dart';
 import 'package:agentshot_mobile/ui/cut_card.dart';
 import 'package:agentshot_mobile/ui/delete_account.dart';
+import 'package:agentshot_mobile/ui/film_editor.dart';
 import 'package:agentshot_mobile/ui/project.dart';
 import 'package:agentshot_mobile/ui/settings.dart';
 import 'package:agentshot_mobile/ui/setup_ai.dart';
@@ -195,7 +196,15 @@ void main() {
       await tester.pumpWidget(host(settings(store)));
       await tester.pumpAndSettle();
       // one list of rows, each its name and its value at the end; a heading only for the computer's own
-      for (final row in ['AI', 'Appearance', 'Notifications', 'Storage', 'About', 'On Studio iMac', 'Sign out']) {
+      for (final row in [
+        'AI',
+        'Appearance',
+        'Notifications',
+        'Storage',
+        'About',
+        'On Studio iMac',
+        'Sign out',
+      ]) {
         await tester.scrollUntilVisible(find.text(row), 80);
         expect(find.text(row), findsOneWidget, reason: row);
       }
@@ -407,7 +416,7 @@ void main() {
   });
 
   testWidgets(
-    'the agent\'s latest cut, at the end of the conversation, to watch and download there',
+    'the agent\'s latest cut, in the conversation over the film, to download there',
     (tester) async {
       final store = BridgeStore(Computer())..connected = true;
       store.project = {
@@ -451,10 +460,21 @@ void main() {
           {'id': '4', 'role': 'assistant', 'content': 'Done.'},
         ],
       });
-      // a phone: the conversation has the screen, so the cut comes in it (a tap opens it full screen)
+      // a phone: the film is the screen, and the conversation over it holds the cut, under the reply that made it
+      Future<void> conversation() async {
+        await tester.tap(find.byKey(const ValueKey('editor-activity')));
+        await tester.pumpAndSettle();
+      }
+
+      Future<void> close() async {
+        Navigator.of(tester.element(find.byType(FilmEditor))).pop();
+        await tester.pumpAndSettle();
+      }
+
       await tester.pumpWidget(MaterialApp(home: ProjectScreen(store: store)));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('film-chip')), findsOneWidget);
+      expect(find.byType(FilmEditor), findsOneWidget);
+      await conversation();
       final card = find.byType(CutCard);
       expect(card, findsOneWidget);
       expect(
@@ -469,6 +489,7 @@ void main() {
         find.descendant(of: card, matching: find.byTooltip('Download')),
         findsOneWidget,
       );
+      await close();
       // a later answer that made no cut: the old cut doesn't sit under it
       store.agent('/p').snapshot({
         'messages': [
@@ -483,7 +504,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await conversation();
       expect(find.byType(CutCard), findsNothing);
+      await close();
       // the imported original isn't announced as the agent's
       store.project = {...store.project!, 'current': 'v1'};
       store.agent('/p').snapshot({
@@ -497,7 +520,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await conversation();
       expect(find.byType(CutCard), findsNothing);
+      await close();
     },
   );
 }

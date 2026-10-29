@@ -21,7 +21,7 @@ import 'composer.dart';
 import 'timed.dart';
 import 'glass.dart';
 import 'file_view.dart';
-import 'film_screen.dart';
+import 'film_editor.dart';
 import 'settings.dart' show Credits;
 import 'import.dart';
 import 'setup_ai.dart';
@@ -265,9 +265,11 @@ class _ProjectScreenState extends State<ProjectScreen> {
       }
       final studio = Studio.of(context);
       final phone = MediaQuery.sizeOf(context).width < 900;
+      // a phone with a film: the film is the screen (see [FilmEditor]), the conversation a sheet over it
+      final editing = phone && (hasFilm || p['proposal'] != null);
       return Scaffold(
-        // a phone: no bar; the film is at the top with its controls on it (see [stageControls]), and a slim bar
-        // only while it's out of sight
+        backgroundColor: editing ? Colors.black : null,
+        // a phone: no bar (the editor has its own; without a film, the film chip heads the conversation)
         appBar: phone
             ? null
             : AppBar(
@@ -338,11 +340,11 @@ class _ProjectScreenState extends State<ProjectScreen> {
                         ],
                       );
                     }
+                    if (editing) return editor(p);
                     // A phone in landscape with the keyboard up leaves a sliver: give it all to the note being typed.
                     // (Height alone: the Scaffold has already taken the keyboard out of this body's insets.)
                     if (size.maxHeight < 200) return chat();
-                    // a phone: the conversation gets the screen; the film is a chip at the top that opens it full
-                    // screen, where it's watched, marked and decided on
+                    // a phone without a film yet: the conversation, under the project's chip
                     return Column(
                       children: [
                         filmHeader(p, studio, bar: phone),
@@ -453,7 +455,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
             child: InkWell(
               key: const ValueKey('film-chip'),
               customBorder: smooth(12),
-              onTap: hasFilm || waiting ? () => openFilm() : null,
+              onTap: null,
               child: Padding(
                 padding: const EdgeInsets.all(Space.xs),
                 child: Row(
@@ -562,55 +564,79 @@ class _ProjectScreenState extends State<ProjectScreen> {
     );
   }
 
-  /// The film full screen (see [FilmScreen]); what's chosen there happens here: a note at the moment (or on a box
-  /// there) goes in the message box, a range, the timeline, sharing, or keeping or sending back a new cut.
-  Future<void> openFilm() async {
-    final versions = objects(project['versions']);
-    final kept = versions
-        .where((v) => v['id'] == project['current'])
-        .firstOrNull;
+  /// On a phone, the project as its film (see [FilmEditor]): notes pinned on the picture and the strip, what the agent
+  /// is doing at the top, and a new cut decided on right there.
+  Widget editor(Json p) {
+    final versions = objects(p['versions']);
+    final kept = versions.where((v) => v['id'] == p['current']).firstOrNull;
     final proposal = versions
-        .where((v) => v['id'] == project['proposal'])
+        .where((v) => v['id'] == p['proposal'])
         .firstOrNull;
-    final film = kept ?? proposal;
-    if (film == null) return;
+    final film = kept ?? proposal!;
+    keepFilm(cutPlay(film));
     if (proposal != null) keepFilm(cutPlay(proposal));
-    final choice = await Navigator.of(context).push<FilmChoice>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => FilmScreen(
-          film: () => store.client.media(dir, cutPlay(film)),
-          proposal: proposal == null || kept == null
-              ? null
-              : () => store.client.media(dir, cutPlay(proposal)),
-          startAt: position,
-          menu: menuItems,
+    final state = store.agent(dir);
+    final shots = [
+      for (final item in objects(object(p['timeline'] ?? {})['items']))
+        switch ((item['in'], item['out'], item['dur'])) {
+          (num a, num b, _) => (b - a).toDouble(),
+          (_, _, num d) => d.toDouble(),
+          _ => 0.0,
+        },
+    ];
+    return FilmEditor(
+      key: ValueKey('editor-$dir'),
+      title: projectName(p),
+      film: () => store.client.media(dir, cutPlay(film)),
+      proposal: proposal == null || kept == null
+          ? null
+          : () => store.client.media(dir, cutPlay(proposal)),
+      notes: objects(p['notes']),
+      shots: shots,
+      working: state.busy
+          ? (state.tools.isNotEmpty
+                ? doing(state.tools.values.last)
+                : 'Thinking')
+          : null,
+      connected: store.connected,
+      onNote: (text, at) =>
+          sendToAgent(context, store, dir, {'text': text, 'anchor': ?at}),
+      onActivity: openActivity,
+      onKeep: keep,
+      onSendBack: sendBack,
+      onBack: () => Navigator.maybePop(context),
+      menu: menuItems,
+      onAction: action,
+      onPosition: (at) => position = at,
+    );
+  }
+
+  /// The conversation, over the film: everything the agent did and said, its questions, the cuts it made.
+  bool activityOpen = false;
+  Future<void> openActivity() async {
+    activityOpen = true;
+    await showSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheet) => FractionallySizedBox(
+        heightFactor: .92,
+        child: Material(
+          type: MaterialType.transparency,
+          // built from this screen: once it's gone (the project closed under the sheet), nothing to show
+          child: ListenableBuilder(
+            listenable: store,
+            builder: (_, _) => mounted ? chat() : const SizedBox.shrink(),
+          ),
         ),
       ),
     );
-    if (choice == null || !mounted) return;
-    position = choice.position;
-    void note(Json at) {
-      setState(() => anchor = at);
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => composerKey.currentState?.focusInput(),
-      );
-    }
+    activityOpen = false;
+  }
 
-    switch (choice.what) {
-      case 'note':
-        note({'t0': position});
-      case 'box':
-        note({'t0': position, 'box': ?choice.box});
-      case 'range':
-        await rangeNote();
-      case 'keep':
-        keep();
-      case 'sendBack':
-        sendBack();
-      default:
-        action(choice.what);
-    }
+  /// A cut tapped in the conversation over the film: back to the film, which is playing it.
+  void closeActivity() {
+    if (activityOpen) Navigator.maybePop(context);
   }
 
   /// Keeps the newest message in view as the agent works, unless the person scrolled up to read.
@@ -1291,7 +1317,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
         version: version,
         play: cutPlay(version),
         headline: 'New cut',
-        onOpen: wide ? null : openFilm,
+        onOpen: wide ? null : closeActivity,
         highlight: true,
         actions: [
           FilledButton.icon(
@@ -1346,7 +1372,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
       version: version,
       play: cutPlay(version),
       headline: 'Your film',
-      onOpen: wide ? null : openFilm,
+      onOpen: wide ? null : closeActivity,
     );
   }
 
