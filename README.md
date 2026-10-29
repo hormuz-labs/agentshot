@@ -35,10 +35,6 @@
 
 ## What is AgentShot
 
-This is the Manul monorepo: the desktop app (`src/`), [website](site/README.md) (`site/`),
-[account service](account/README.md), [AI gateway](gateway/README.md), and mobile clients (`mobile/`).
-See [workspace and hosting](docs/workspace.md) for development commands and deployment setup.
-
 AgentShot is **a video editor you direct by talking**. Drop in your footage, say what you want, and point at the frame when something's off. It makes the cut **on your own computer** and shows you a before / after of every change, to keep or send back. You never have to touch a timeline.
 
 <p align="center">
@@ -229,40 +225,30 @@ Then it edits like a pro would: cuts the time it spent thinking, speeds through 
 
 ---
 
-## Your phone, from anywhere
+## On your phone
 
 <table>
 <tr>
-<td width="33%" valign="top">
-
-<img src="docs/icons/qr-code.svg" width="44" alt="">
-
-### Scan once
-Turn on **Settings → Mobile** and AgentShot shows a QR code. Scan it with the [companion app](mobile/README.md) and you're paired, pinned to your computer's certificate.
-
-</td>
-<td width="33%" valign="top">
-
-<img src="docs/icons/smartphone.svg" width="44" alt="">
-
-### Direct on the go
-Shoot and send clips, ask for edits, draw boxes on the frame, review before / after proposals and share the export, all from your phone.
-
-</td>
-<td width="33%" valign="top">
-
-<img src="docs/icons/server.svg" width="44" alt="">
-
-### Heavy lifting elsewhere
-Hand renders and agent edits to a **Cloud Worker**, or your own workstation running `manul --worker`. Projects sync peer to peer.
-
-</td>
+<td width="25%"><img src="docs/phone-projects.webp" alt="Projects on the phone: each film by its first frame, and where they are (AgentShot Cloud)"></td>
+<td width="25%"><img src="docs/phone-conversation.webp" alt="A project on the phone: the conversation full height under a one-line film chip, the agent's question as buttons"></td>
+<td width="25%"><img src="docs/phone-film.webp" alt="The film full screen as a reel, with Note, Box, Range, Timeline, Share and More down the right"></td>
+<td width="25%"><img src="docs/phone-settings.webp" alt="Settings on the phone: one short list, each row with its value at the end"></td>
 </tr>
 </table>
 
-Away from home, the phone and your computer meet over AgentShot's own private mesh (Headscale/WireGuard, built into the app; no Tailscale install, no IP addresses, no port forwarding). Traffic stays end-to-end encrypted and pinned. <sub>Pairing from anywhere is on Android today; iOS pairs on the same Wi-Fi, with the code shown under the QR.</sub>
+The companion app is the same AgentShot, made for one hand.
 
-**Cloud workers.** A cloud worker is AgentShot running headless as a lendable worker, leased to one person at a time. Your computer can hand it renders and agent edits (Settings → Mobile → Use cloud worker), and the phone can work on one when none of your computers is on (Your computers → Use a cloud worker). Whoever leases it sees only the projects they made there, and its own keys and settings stay its own. To lend one of your computers, turn on **Share this computer as a cloud worker** in Settings → Mobile and enter the pool key (the account service's `WORKER_POOL_SECRET`). That starts a separate background worker with its own profile and projects folder: none of your projects, keys or sign-in go with it. On a server, AgentShot started with `--worker` and `MANUL_POOL_SECRET` does the same.
+- **Sign in once.** Use the same account as your computer and every computer signed in to it is listed, at home or away. One tap opens one.
+- **No computer on? Use AgentShot Cloud.** The phone works on a cloud worker, in your own space that's kept between visits.
+- **The conversation first.** A project opens as the conversation, with the film behind a one-line chip. Tap it and the film plays full screen.
+- **Point at the film.** Mark a moment, draw a box on the picture or note a range. The message box opens already tagged with that moment, so you just say what should change.
+- **Talk your notes.** Tap the mic and the phone's own speech recognition types as you speak.
+- **Keep or send back.** A new cut opens full screen with Before / After, **Keep** and **Send back**.
+- **Instant, and offline.** Projects, conversations and films are kept on the phone and open at once. Only what changed comes over the network again, and anything already kept still plays offline.
+
+Away from home, the phone and your computer meet over AgentShot's own private network, built into the app: no Tailscale, no IP addresses, no port forwarding, and the connection stays encrypted end to end.
+
+<sub>To let phones in, turn on <b>Settings → Mobile → Let my phones connect</b> on the computer. A computer that isn't signed in pairs with a QR code or a 6-digit code instead. Away from home and AgentShot Cloud are on Android for now; an iPhone connects on the same Wi-Fi. Not in the stores yet: build it from <a href="mobile/README.md"><code>mobile/</code></a>. You can also lend a computer or a server to AgentShot Cloud: see <a href="docs/cloud-workers.md">cloud workers</a>.</sub>
 
 ---
 
@@ -298,7 +284,7 @@ On first run AgentShot asks whether to send crash reports and usage statistics. 
 | **Windows 10 (1903+) / 11, x64** | [`AgentShot-windows-x64-Setup.exe`](https://github.com/hormuz-labs/agentshot/releases/latest) |
 | **Debian / Ubuntu** | signed apt repository, [three commands below](#debian--ubuntu) |
 | **Other Linux** | AppImage from the [latest release](https://github.com/hormuz-labs/agentshot/releases/latest) |
-| **Android / iOS** | the companion app in [`mobile/`](mobile/README.md) |
+| **Android / iOS** | the companion app: [build it from `mobile/`](mobile/README.md) (store releases are coming) |
 
 <details>
 <summary><b>macOS: never used Terminal?</b></summary>
@@ -355,7 +341,7 @@ Install AgentShot from https://github.com/hormuz-labs/agentshot. On macOS run `b
 
 - **An AI key.** Sign in under **Settings → Keys → AgentShot key**: new accounts start with 1,000 credits, and Pro and Max plans (shared with Pitch: same email, same plan) add more every month. Or bring your own Claude, Gemini or OpenAI key, kept in your system's keychain; your own keys are used first.
 - **A guided start.** A first-run walkthrough connects a key, adds footage and gives your first direction; the editor tour then covers notes, boxes, files, proposals, versions and export. Replay it from the sidebar's **Product tour**, **Help → Product Tour**, or the command palette (<kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd>).
-- **Hack on it.** Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+- **Hack on it.** Run it from source with **[CONTRIBUTING.md](CONTRIBUTING.md)**. The repository also holds the [website](site/README.md), the [account service](account/README.md), the [AI gateway](gateway/README.md) and the [phone app](mobile/README.md); [workspace and hosting](docs/workspace.md) covers how they're run and deployed.
 
 ---
 
@@ -364,7 +350,7 @@ Install AgentShot from https://github.com/hormuz-labs/agentshot. On macOS run `b
 <table>
 <tr>
 <td width="72"><b>Now</b></td>
-<td>Directing by talking and pointing, titles, music, every export shape, mobile companion with pairing from anywhere, cloud &amp; home workers</td>
+<td>Directing by talking and pointing, titles, music, every export shape, the phone app (instant and offline, from anywhere), AgentShot Cloud and home workers</td>
 <td width="40" align="center"><img src="docs/icons/circle-dot.svg" width="20" alt=""></td>
 </tr>
 <tr>
