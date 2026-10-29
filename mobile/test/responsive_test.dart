@@ -8,8 +8,8 @@ import 'package:agentshot_mobile/bridge/store.dart';
 import 'package:agentshot_mobile/ui/computers.dart';
 import 'package:agentshot_mobile/ui/home.dart';
 import 'package:agentshot_mobile/ui/pair.dart';
+import 'package:agentshot_mobile/ui/film_editor.dart';
 import 'package:agentshot_mobile/ui/project.dart';
-import 'package:agentshot_mobile/ui/player.dart';
 import 'package:agentshot_mobile/ui/settings.dart';
 
 class FakeClient extends BridgeClient {
@@ -216,7 +216,8 @@ void main() {
         expect(tester.takeException(), isNull);
         for (final label in ['Examples', 'Activity', 'Settings']) {
           // icons only in the bar (the rail beside a wide screen names them)
-          final destination = find.byKey(ValueKey('nav-$label')).evaluate().isNotEmpty
+          final destination =
+              find.byKey(ValueKey('nav-$label')).evaluate().isNotEmpty
               ? find.byKey(ValueKey('nav-$label'))
               : find.text(label).last;
           await tester.ensureVisible(destination);
@@ -275,15 +276,30 @@ void main() {
         await tester.pumpWidget(host(ProjectScreen(store: store)));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        // the new cut, once: in the conversation on a phone (a card, with Send back and Keep, that opens it full
-        // screen), under the film beside it on a wide screen
-        final card = find.byKey(const ValueKey('proposal-card'));
-        final bar = find.byKey(const ValueKey('proposal-bar'));
-        expect(card.evaluate().length + bar.evaluate().length, 1);
-        if (card.evaluate().isNotEmpty) {
-          // the conversation has the screen: no film playing in it, the chip at the top says a cut waits
-          expect(find.byType(RemotePlayer), findsNothing);
-          expect(find.text('A new cut is waiting'), findsOneWidget);
+        // the new cut, once: on a phone, decided on the film (the film is the screen); on a wide screen, under the
+        // film beside the conversation
+        if (find.byType(FilmEditor).evaluate().isNotEmpty) {
+          expect(find.byKey(const ValueKey('editor-keep')), findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('editor-send-back')),
+            findsOneWidget,
+          );
+          expect(find.byKey(const ValueKey('proposal-bar')), findsNothing);
+          // the conversation, one tap away, over the film
+          await tester.tap(find.byKey(const ValueKey('editor-activity')));
+          await tester.pumpAndSettle();
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: 'The conversation over the film',
+          );
+        } else {
+          // beside the film on a wide screen; in the conversation when large text leaves no room for both
+          expect(
+            find.byKey(const ValueKey('proposal-bar')).evaluate().length +
+                find.byKey(const ValueKey('proposal-card')).evaluate().length,
+            1,
+          );
         }
         // a quiet composer: the field, the + and the mic (hold to talk); the model and credits wait in the tray
         expect(find.byKey(const ValueKey('model')), findsNothing);
@@ -295,7 +311,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: 'The tray');
         // the model's long name cut short
-        expect(tester.getRect(find.byKey(const ValueKey('model'))).width, lessThanOrEqualTo(200));
+        expect(
+          tester.getRect(find.byKey(const ValueKey('model'))).width,
+          lessThanOrEqualTo(200),
+        );
         // picking a model works: the picker closes cleanly with no error
         // (with very large text on a short screen the composer scrolls)
         await tester.ensureVisible(find.byKey(const ValueKey('model')));
@@ -330,6 +349,11 @@ void main() {
             await tester.pump(const Duration(milliseconds: 100));
           }
           expect(tester.takeException(), isNull, reason: label);
+        }
+        // the conversation over the film closes first, as it would before leaving the project
+        if (find.byType(FilmEditor).evaluate().isNotEmpty) {
+          Navigator.of(tester.element(find.byType(FilmEditor))).pop();
+          await tester.pumpAndSettle();
         }
         await tester.pumpWidget(
           host(
