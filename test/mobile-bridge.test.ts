@@ -172,6 +172,14 @@ describe('mobile TLS bridge', () => {
     expect(JSON.parse(hello.body).urls).toEqual(f.status.addresses)
   })
 
+it('takes several notes given together, and no more than a batch', () => {
+  const notes = [{ text: 'Blur this', anchor: { t0: 4, box: { x: .1, y: .1, w: .2, h: .2 } } }, { text: 'Make it shorter' }]
+  expect(() => mobileArgs('agent:send', ['/p', { text: '', notes }])).not.toThrow()
+  expect(() => mobileArgs('agent:send', ['/p', { text: '', notes: [] }])).toThrow()
+  expect(() => mobileArgs('agent:send', ['/p', { text: '', notes: Array(21).fill({ text: 'x' }) }])).toThrow()
+  expect(() => mobileArgs('agent:send', ['/p', { text: '', notes: [{ text: 'x', extra: 1 }] }])).toThrow()
+})
+
 it('validates anchors and rejects path-bearing or unknown fields', () => {
   expect(() => mobileArgs('agent:send', ['/project', { text: 'Blur', anchor: { t0: 2, t1: 1 } }])).toThrow()
   expect(() => mobileArgs('agent:send', ['/project', { text: 'Blur', anchor: { t0: 2, box: { x: .8, y: 0, w: .5, h: .2 } } }])).toThrow()

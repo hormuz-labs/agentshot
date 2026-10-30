@@ -28,7 +28,7 @@ export const mobileSchemas = {
   'project:createMotion': z.tuple([z.object({ title: text.optional(), aspect: z.enum(['16:9', '9:16', '1:1']), length: time.optional(), example: id.optional(), walkthrough: z.boolean().optional(), model: model.optional() }).strict()]),
   'project:decide': z.tuple([dir, z.boolean()]), 'project:current': z.tuple([dir, id]), 'project:removeFiles': z.tuple([dir, z.array(rel).max(1000)]),
   'agent:ready': z.tuple([]), 'agent:attach': z.tuple([dir]), 'agent:stop': z.tuple([dir]),
-  'agent:send': z.tuple([dir, z.object({ text, anchor: anchor.optional(), files: z.array(rel).max(100).optional() }).strict()]),
+  'agent:send': z.tuple([dir, z.object({ text, anchor: anchor.optional(), files: z.array(rel).max(100).optional(), notes: z.array(z.object({ text, anchor: anchor.optional() }).strict()).min(1).max(20).optional() }).strict()]),
   'agent:models': z.tuple([dir]).or(z.tuple([])), 'agent:setModel': z.tuple([dir, model.nullable()]),
   'agent:newConversation': z.tuple([dir]), 'agent:switch': z.tuple([dir, id]), 'agent:rename': z.tuple([dir, id, text]),
   'timeline:edit': z.tuple([dir, z.array(edit).min(1).max(1000)]), 'timeline:undo': z.tuple([dir, z.boolean()]), 'timeline:render': z.tuple([dir]),
