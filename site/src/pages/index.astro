@@ -137,10 +137,10 @@ const faqs = [
         <p class="lede">The video editor you talk to. Say what you want, point at the frame, and keep the cut or send it back.</p>
         <div class="hero-cta" data-hero-cta>
           <Cta />
-          <button class="btn ghost" type="button" data-film>Watch the film <span class="mono dur">1:28</span></button>
         </div>
         <p class="reassure for-computer">Free and open source. Your footage stays on your computer.</p>
-        <p class="reassure for-phone">It runs on your computer, so send yourself the link. Free and open source.</p>
+        <p class="reassure for-phone">It runs on Mac, Windows and Linux, so send yourself the link. Free and open source.</p>
+        <button class="film-link" type="button" data-film>Watch the film <span class="mono dur">1:28</span></button>
       </div>
       <div class="stage" id="try">
         <Demo />
@@ -362,8 +362,10 @@ const faqs = [
   h1 { font-size: min(10vw, 19vh, 160px); line-height: .92; font-weight: 800; font-stretch: 72%; letter-spacing: -.015em; }
   h1 mark { display: inline-block; padding: 0 .1em .03em; }
   .lede { font-size: clamp(19px, 1.65vw, 23px); line-height: 1.35; }
-  .hero-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
-  .dur { margin-left: 10px; font-size: 14px; color: var(--ink-3); }
+  .hero-cta { margin-top: 18px; }
+  .film-link { margin-top: 10px; padding: 4px 0; border: 0; background: none; font-size: 16px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); cursor: pointer; }
+  .film-link:hover { text-decoration-color: currentColor; }
+  .dur { margin-left: 6px; font-size: 14px; color: var(--ink-3); }
   .reassure { margin-top: 12px; font-size: 15px; color: var(--ink-2); }
   .for-phone { display: none; }
   :global([data-os='phone']) .for-phone { display: block; }
@@ -476,7 +478,7 @@ const faqs = [
   .last-film video { width: 100%; height: clamp(380px, 62vh, 680px); object-fit: cover; object-position: center 18%; }
   .caption { position: absolute; inset: auto 16px 8%; text-align: center; font-size: clamp(26px, 5vw, 64px); font-weight: 800; font-stretch: 78%; line-height: 1.2; }
   .last-cta { display: flex; justify-content: center; padding-top: 28px; }
-  :global(main) + :global(.foot) { margin-top: 56px; }
+  :global([data-os='phone']) .last-cta { display: none; }
 
   .player { width: min(1120px, 100% - 24px); max-height: 92vh; padding: 0; border: 0; background: #000; color: var(--ink); overflow: auto; }
   .player::backdrop { background: rgba(0, 0, 0, .86); }
@@ -513,8 +515,8 @@ const faqs = [
     :global([data-os='win']) [data-os-col='win'], :global([data-os='linux']) [data-os-col='linux'] { border-top: 0; }
     :global([data-os='win']) [data-os-col='mac'], :global([data-os='linux']) [data-os-col='mac'] { border-left: 0; border-top: 1px solid var(--line); }
     .source { grid-template-columns: 1fr; }
-    .hero-cta :global(.btn) { flex: 1 1 100%; }
-    .phone-get :global(.btn), .last-cta :global(.btn) { width: 100%; }
+    .hero-cta :global([data-send]), .phone-get :global([data-send]), .last-cta :global([data-send]) { width: 100%; }
+    .last-cta :global(.dl-set) { width: 100%; }
     .last-cta { padding-inline: 16px; }
     :global([data-os='phone']) :global(.foot) { padding-bottom: 96px; }
   }

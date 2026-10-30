@@ -2,7 +2,7 @@
 
 The website for [AgentShot](https://github.com/hormuz-labs/agentshot), the video editor you talk to. Astro, static, no framework JS.
 
-The page has one job: get the visitor to install AgentShot. So it is built around one button (`src/components/Cta.astro`). On a computer it starts the installer for that system; on a phone, where the app can't install, it sends the link to the visitor's computer. A small script in `<head>` sets `html[data-os]` before first paint, so the button never shows the wrong system.
+The page has one job: get the visitor to install AgentShot. So it is built around one set of buttons (`src/components/Cta.astro`): Mac, Windows and Linux, with the visitor's own system first and in yellow. On a phone, where the app can't install, they give way to one button that sends the link to the visitor's computer. A small script in `<head>` sets `html[data-os]` before first paint, so the buttons never flash in the wrong order.
 
 The look is a screening room: a black page so film looks right, hard edges, and one colour, burned-in caption yellow. Yellow means "act here", so keep it rare. Type is Archivo, condensed for headlines through its width axis, with IBM Plex Mono for commands and timecodes.
 

@@ -1,10 +1,15 @@
 # Every merge to main ships: tag the next version and release it (release.yml), with notes generated from the merged
 # pull requests. A patch release by default; label the pull request release:minor or release:major for a bigger step,
 # or release:skip to merge without releasing. A commit that already has a version tag (tagged by hand) is left alone.
+# A merge only to the website ships through site.yml instead, so it doesn't release the app.
 name: Tag
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'site/**'
+      - '.github/workflows/site.yml'
+      - '.github/workflows/site-release.yml'
 
 permissions:
   contents: write

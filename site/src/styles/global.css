@@ -53,13 +53,18 @@ mark { padding: 0 .12em; background: var(--yellow); color: var(--on-yellow); box
 .btn.ghost { border-color: var(--line); background: var(--bg-2); color: var(--ink); }
 .btn.ghost:hover { background: var(--bg-3); }
 
-/* what the button says, and which button it is, follows the visitor's system */
-.btn [class^='for-'] { display: none; }
-html:not([data-os]) .for-any, [data-os='any'] .for-any, [data-os='phone'] .for-any { display: inline; }
-[data-os='mac'] .for-mac, [data-os='win'] .for-win, [data-os='linux'] .for-linux { display: inline; }
+/* all three systems. When we know the visitor's, it goes first, says what it does, and is the only yellow one */
+.dl-set { display: flex; flex-wrap: wrap; gap: 8px; }
+.dl-set .btn { flex: 1 1 auto; padding: 0 22px; background: var(--yellow); color: var(--on-yellow); }
+.dl-set .btn:hover { background: #fff; color: var(--on-yellow); }
+.dl-set .pre { display: none; }
+[data-os='mac'] [data-dl='mac'], [data-os='win'] [data-dl='win'], [data-os='linux'] [data-dl='linux'] { order: -1; }
+[data-os='mac'] [data-dl='mac'] .pre, [data-os='win'] [data-dl='win'] .pre, [data-os='linux'] [data-dl='linux'] .pre { display: inline; }
+[data-os='mac'] .dl-set .btn:not([data-dl='mac']), [data-os='win'] .dl-set .btn:not([data-dl='win']), [data-os='linux'] .dl-set .btn:not([data-dl='linux']) { border-color: var(--line); background: var(--bg-2); color: var(--ink); }
+[data-os='mac'] .dl-set .btn:not([data-dl='mac']):hover, [data-os='win'] .dl-set .btn:not([data-dl='win']):hover, [data-os='linux'] .dl-set .btn:not([data-dl='linux']):hover { background: var(--bg-3); color: var(--ink); }
 [data-send] { display: none; }
 [data-os='phone'] [data-send] { display: inline-flex; }
-[data-os='phone'] a[data-dl] { display: none; }
+[data-os='phone'] .dl-set { display: none; }
 
 .copy { flex: none; min-height: 40px; padding: 0 14px; border: 0; border-left: 1px solid var(--line); background: none; color: var(--ink); font: 700 14px/1 var(--sans); cursor: pointer; }
 .copy:hover { background: var(--bg-3); }
@@ -72,7 +77,9 @@ html:not([data-os]) .for-any, [data-os='any'] .for-any, [data-os='phone'] .for-a
   @keyframes play { to { transform: scaleX(1); } }
 }
 
-.top { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); transition: transform .2s ease; }
+.top.away { transform: translateY(-100%); }
+@media (prefers-reduced-motion: reduce) { .top { transition: none; } }
 .top-in { display: flex; align-items: center; gap: 28px; height: 60px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font: 800 19px/1 var(--sans); font-stretch: 88%; text-decoration: none; }
 .top nav { display: flex; gap: 24px; margin-left: auto; font-size: 15px; font-weight: 500; }
@@ -82,13 +89,17 @@ html:not([data-os]) .for-any, [data-os='any'] .for-any, [data-os='phone'] .for-a
 @media (max-width: 860px) { .top nav .wide { display: none; } }
 @media (max-width: 560px) { .top-cta { display: none; } }
 
-.foot { margin-top: var(--gap); border-top: 1px solid var(--line); padding: 36px 0 44px; font-size: 15px; color: var(--ink-2); }
-.foot-in { display: grid; gap: 20px; }
+.foot { margin-top: 40px; border-top: 1px solid var(--line); padding: 20px 0 22px; font-size: 15px; color: var(--ink-2); }
+.foot-in { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 32px; align-items: center; }
 .foot .brand { color: var(--ink); }
-.foot nav { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.foot nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 22px; }
 .foot nav a { text-decoration: none; }
 .foot nav a:hover { color: var(--ink); }
-.foot p { font-size: 14px; color: var(--ink-3); }
+.foot p { grid-column: 1 / -1; font-size: 13.5px; color: var(--ink-3); }
+@media (max-width: 760px) {
+  .foot-in { grid-template-columns: minmax(0, 1fr); }
+  .foot nav { justify-content: flex-start; }
+}
 
 .dock { position: fixed; inset: auto 0 0; z-index: 25; display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); }
 .dock .btn { min-height: 48px; padding: 0 10px; font-size: 16px; }
