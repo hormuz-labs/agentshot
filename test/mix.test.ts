@@ -45,6 +45,22 @@ describe('ducking envelope', () => {
 })
 
 describe('the mix in a render', () => {
+  it('places trimmed voiceover at its start, stops without looping, and preserves music', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-voiceover-mix-'))
+    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=160x120:r=25:d=6', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo:d=6', '-c:v', 'libx264', '-c:a', 'aac', '-shortest', join(dir, 'film.mp4')])
+    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=1000:d=3:sample_rate=48000', join(dir, 'voice.wav')])
+    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=200:d=1:sample_rate=48000', join(dir, 'music.wav')])
+    for (const withMusic of [false, true]) {
+      execFileSync(FFMPEG, ['-y', '-loglevel', 'error', ...mixArgs({ dry: 'film.mp4', duration: 6, mix: { filmDb: 0, ...(withMusic ? { music: { src: 'music.wav', db: -15, duckDb: 0 } } : {}), voiceovers: [{ id: 'take', src: 'voice.wav', start: 2, in: 1, out: 2, db: -3 }] }, out: 'out.mp4' })], { cwd: dir })
+      const db = (at: number) => {
+        const result = spawnSync(FFMPEG, ['-hide_banner', '-ss', String(at), '-t', '0.4', '-i', join(dir, 'out.mp4'), '-af', 'bandpass=f=1000:w=100,volumedetect', '-f', 'null', '-'], { encoding: 'utf8' })
+        expect(result.status, result.stderr).toBe(0)
+        return Number(/mean_volume: (-?[\d.]+) dB/.exec(result.stderr)![1])
+      }
+      expect(db(2.2) - db(.8)).toBeGreaterThan(20)
+      expect(db(2.2) - db(3.5)).toBeGreaterThan(20)
+    }
+  })
   it('ducks the music under speech by the chosen amount', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'agentshot-mix-'))
     // film with a silent track (the speech regions are given directly); music: a constant 1 kHz tone

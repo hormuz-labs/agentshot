@@ -4,6 +4,7 @@
 import type { FileKind, Project } from '../../../shared/types'
 import { kindByName } from '../../../shared/file-kinds'
 import { rank } from './commands'
+import { voiceoverName } from '../../../shared/voiceover'
 
 export type Mention = {
   /** what's attached: the file's path, the version's render, or clips/<id> */
@@ -22,7 +23,10 @@ const versionsOf = (p: Project) => p.versions.filter(v => v.id !== p.proposal)
 /** Everything in the project that can be mentioned: files, then versions (newest first), then motion clips. */
 export function mentionables(p: Project): Mention[] {
   const files = Object.entries(p.files || {}).sort(([a], [b]) => a.localeCompare(b))
-    .map(([rel, f]): Mention => ({ id: rel, title: rel.split('/').slice(1).join('/'), keywords: f.kind, detail: f.summary, kind: f.kind }))
+    .map(([rel, f]): Mention => {
+      const voice = p.voiceovers?.find(v => v.src === rel)
+      return { id: rel, title: voice ? voiceoverName(p.voiceovers!, rel) : rel.split('/').slice(1).join('/'), keywords: `${f.kind} ${rel}${voice ? ' voiceover recording narration microphone' : ''}`, detail: voice ? `Recorded voice · ${voice.duration.toFixed(2)} s · ${voice.conversation === p.conversation ? 'This conversation' : 'Project recording'}` : f.summary, kind: f.kind }
+    })
   const versions = versionsOf(p).map((v, i): Mention => ({
     id: v.path, title: `v${i + 1} · ${v.title}`, keywords: 'version', kind: 'video',
     detail: v.id === p.current ? 'Version on screen' : `Version ${i + 1}`,
@@ -51,6 +55,7 @@ export function insertMention(text: string, at: { start: number; query: string }
 
 /** A chip's name and icon for something attached: a file by its name, a version as "v2 · title", a clip by title. */
 export function refChip(p: Project, rel: string): { label: string; kind: FileKind | 'clip' } {
+  if (p.voiceovers?.some(v => v.src === rel)) return { label: voiceoverName(p.voiceovers, rel), kind: 'audio' }
   if (p.files?.[rel]) return { label: rel.split('/').slice(1).join('/'), kind: p.files[rel].kind }
   const k = versionsOf(p).findIndex(v => v.path === rel)
   if (k >= 0) return { label: `v${k + 1} · ${versionsOf(p)[k].title}`, kind: 'video' }

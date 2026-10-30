@@ -127,6 +127,12 @@ const api = {
     /** Where speech is on a version's timeline ('edit': the edit by hand). */
     speech: (dir: string, versionId?: string) => ipcRenderer.invoke('mix:speech', dir, versionId) as Promise<[number, number][]>,
   },
+  voiceover: {
+    access: () => ipcRenderer.invoke('voiceover:access') as Promise<boolean>,
+    begin: (dir: string, start: number) => ipcRenderer.invoke('voiceover:begin', dir, start) as Promise<string>,
+    cancel: (token: string) => ipcRenderer.invoke('voiceover:cancel', token) as Promise<void>,
+    save: (token: string, audio: Uint8Array, peaks: number[]) => ipcRenderer.invoke('voiceover:save', token, audio, peaks) as Promise<{ project: Project; src: string }>,
+  },
   history: {
     log: (dir: string) => ipcRenderer.invoke('history:log', dir) as Promise<{ id: string; message: string; at: number }[]>,
     restore: (dir: string, id: string) => ipcRenderer.invoke('history:restore', dir, id) as Promise<Project>,

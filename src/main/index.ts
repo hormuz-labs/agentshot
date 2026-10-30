@@ -46,6 +46,8 @@ import { BskCapture, ScreencastCapture, type Capture } from './take'
 import { composeWalkthrough, takeDir, Takes, type ComposeRequest } from './walkthrough'
 import { generate } from './generate'
 import { randomUUID } from 'node:crypto'
+import { validateVoiceover } from '../shared/voiceover'
+import { voiceoverAccess } from './account'
 import { agentEnv, browserPrompt, BskDaemon, BSK_BIN, bskScript, chromeBsk, extensionStorage, HALTED, findUserBsk, privateHome, userBskEnv, userBskHome } from './bsk'
 import { homedir, hostname, tmpdir } from 'node:os'
 import * as Projects from './projects'
@@ -661,6 +663,7 @@ async function mixInto(p: Project, tl: Timeline, dryRel: string, outRel: string)
 
 /** The film's mix changed only: reuse the version on screen as the dry film and mix it (fast: audio only). */
 async function applyMix(p: Project, mix: Mix) {
+  mix = { ...mix, voiceovers: mix.voiceovers ?? p.timeline?.mix?.voiceovers }
   const cur = p.versions.find(v => v.id === p.current)!
   const tl = { ...(cur.timeline || p.timeline!), mix }
   const dry = cur.dry || cur.path
@@ -689,7 +692,7 @@ const proposeTimeline = (p: Project, tl: Timeline, title: string, by: 'agent' | 
   timelineRenders.request(p, tl, title, by, propose, signal)
 
 async function renderTimeline(p: Project, tl: Timeline, title: string, signal?: AbortSignal) {
-  const mixed = !!tl.mix && (!!tl.mix.music || tl.mix.filmDb !== 0)
+  const mixed = !!tl.mix && (!!tl.mix.music || !!tl.mix.voiceovers?.length || tl.mix.filmDb !== 0)
   const rendered = (id: string) => p.clips?.[id]?.video && existsSync(join(p.dir, p.clips[id].video))
   for (const id of new Set([...tl.items.flatMap(it => (it.kind === 'clip' ? [it.clip] : [])), ...(tl.overlays || []).map(o => o.clip)])) if (!rendered(id)) await bakeClip(p, id)
   return renderOutput(p.dir, 'timeline', mixed, async ({ final, out }) => {
@@ -840,6 +843,11 @@ async function editTimeline(p: Project, edits: Edit[]) {
   const before = p.timeline!
   let tl = before
   for (const e of edits) {
+    if (e.op === 'voiceover' && e.track) {
+      if (e.id !== e.track.id || !p.voiceovers?.some(v => v.src === e.track!.src)) throw new Error('Choose a voiceover recorded in this project.')
+      validateVoiceover(e.track, p.media[e.track.src]?.duration, timelineDuration(tl))
+    }
+    if (e.op === 'mix') e.mix = { ...e.mix, voiceovers: tl.mix?.voiceovers }
     if (e.op === 'insert' && !(p.media[e.src]?.width && p.media[e.src].duration > 0)) throw new Error(`${e.src.split('/').pop()} isn't footage that can go in the film.`)
     tl = applyEdit(tl, e, maxOf)
   }
@@ -1249,6 +1257,51 @@ function wire() {
   })
 
   ipcMain.handle('agent:send', (_e, dir: string, msg: AgentMessage) => sendToAgent(dir, msg))
+  // A main-process authorization is required before asking for the microphone. It also binds the take to its thread.
+  const voiceoverSessions = new Map<string, { dir: string; conversation: string; start: number; expires: number; saving?: boolean }>()
+  ipcMain.handle('voiceover:access', () => voiceoverAccess())
+  ipcMain.handle('voiceover:begin', async (_e, dir: string, start: number) => {
+    const p = projectOf(dir)
+    if (!await voiceoverAccess()) throw new Error('Voiceover requires an active Pro or Max plan.')
+    if (p.proposal || !p.conversation || !Number.isFinite(start) || start < 0 || start >= timelineDuration(p.timeline!)) throw new Error('Choose a point before the end of the current film, in an open conversation.')
+    for (const [id, s] of voiceoverSessions) if (s.expires < Date.now() || s.dir === dir) voiceoverSessions.delete(id)
+    const token = randomUUID()
+    voiceoverSessions.set(token, { dir, conversation: p.conversation, start, expires: Date.now() + 30 * 60_000 })
+    return token
+  })
+  ipcMain.handle('voiceover:cancel', (_e, token: string) => { voiceoverSessions.delete(token) })
+  ipcMain.handle('voiceover:save', async (_e, token: string, audio: Uint8Array, peaks: number[]) => {
+    const s = voiceoverSessions.get(token)
+    if (!s || s.expires < Date.now()) throw new Error('Recording session expired. Please record a new take.')
+    if (s.saving) throw new Error('This voiceover is already being saved.')
+    if (!(audio instanceof Uint8Array) || !audio.length || audio.length > 100 * 1024 * 1024 || !Array.isArray(peaks) || peaks.length > 10000 || peaks.some(n => !Number.isFinite(n) || n < 0 || n > 1)) throw new Error('Invalid voiceover recording.')
+    const p = projectOf(s.dir)
+    if (p.proposal || s.start >= timelineDuration(p.timeline!)) throw new Error('Restore the recording position in the current edit before saving your take.')
+    const id = randomUUID(), rel = `media/Voiceover-${id}.wav`
+    const folder = await mkdtemp(join(tmpdir(), 'agentshot-voiceover-'))
+    s.saving = true
+    try {
+      const input = join(folder, 'recording.webm')
+      await writeFile(input, audio)
+      await run(FFMPEG, ['-y', '-loglevel', 'error', '-i', input, '-vn', '-t', '900', '-ar', '48000', '-ac', '1', join(p.dir, rel)])
+      if (p.proposal || s.start >= timelineDuration(p.timeline!)) throw new Error('The film changed while saving. Restore the recording position and retry.')
+      await Projects.register(p, rel)
+      const duration = p.media[rel]?.duration
+      if (!Number.isFinite(duration) || duration < .1) throw new Error('The recording is too short. Please try again.')
+      p.voiceovers = [...(p.voiceovers || []), { id, src: rel, conversation: s.conversation, createdAt: Date.now(), duration, peaks }]
+      p.files![rel].summary = `Your recorded voiceover (${duration.toFixed(1)} s), starting at ${s.start.toFixed(1)} s. Available for reuse and changes in chat.`
+      await editTimeline(p, [{ op: 'voiceover', id, track: { id, src: rel, start: s.start, in: 0, out: Math.min(duration, timelineDuration(p.timeline!) - s.start), db: 0 } }])
+      voiceoverSessions.delete(token)
+      return { project: p, src: rel }
+    } finally {
+      s.saving = false
+      if (!p.voiceovers?.some(v => v.src === rel)) {
+        delete p.files?.[rel]; delete p.media[rel]
+        await rm(join(p.dir, rel), { force: true })
+      }
+      await rm(folder, { recursive: true, force: true })
+    }
+  })
   // a voice note recorded in this window: kept only while it's heard
   ipcMain.handle('voice:note', async (_e, dir: string, audio: Uint8Array) => {
     const folder = await mkdtemp(join(tmpdir(), 'agentshot-voice-'))

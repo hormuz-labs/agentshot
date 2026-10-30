@@ -24,6 +24,18 @@ const p = {
 } as unknown as Project
 
 describe('mentioning things in the project', () => {
+  it('finds recorded voiceovers by readable name and retains the source in sent attachments', () => {
+    const src = 'media/Voiceover-unique-id.wav'
+    const project: Project = { ...p, conversation: 'thread', files: { ...p.files, [src]: { kind: 'audio', summary: 'Recorded narration', size: 100, addedAt: 1 } }, voiceovers: [{ id: 'take', src, conversation: 'thread', duration: 3.9, createdAt: 1, peaks: [] }] }
+    const match = matches(mentionables(project), 'voiceover')[0]
+    expect(match).toMatchObject({ id: src, title: 'Voiceover 01', kind: 'audio' })
+    expect(match.detail).toContain('This conversation')
+    expect(matches(mentionables(project), 'unique-id')[0].id).toBe(src)
+    expect(refChip(project, src)).toEqual({ label: 'Voiceover 01', kind: 'audio' })
+    const text = insertMention('@voice', { start: 0, query: 'voice' }, match).text
+    expect(text).toBe('@Voiceover 01 ')
+    expect(splitAttached(joinAttached(text, refLines([match.id], project))).files).toEqual([src])
+  })
   it('lists files, then versions (newest first, not the proposal, not the imported file twice), then clips', () => {
     expect(mentionables(p).map(m => [m.id, m.title])).toEqual([
       ['media/Brand Kit/logo.png', 'Brand Kit/logo.png'], ['media/song.mp3', 'song.mp3'], ['media/talk.mp4', 'talk.mp4'],

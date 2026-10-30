@@ -79,6 +79,8 @@ export type Project = {
   media: Record<string, MediaInfo>
   /** Every file the user (or the agent) added, under media/: what each is. */
   files?: Record<string, FileInfo>
+  /** Original microphone takes, retained in the conversation even after removal from the film. */
+  voiceovers?: import('./voiceover').VoiceoverAsset[]
   /** What the film is made of (media segments and motion clips); rendering it makes a version. */
   timeline?: Timeline
   /** Motion clips by id. */
@@ -137,7 +139,7 @@ export type RecentProject = { id: string; title: string; dir: string; openedAt: 
 
 export type KeyInfo = { env: string; label: string; unlocks: string[]; hint: string; set: boolean }
 /** Who is signed in to AgentShot (never their key), and whether this build can sign in at all. */
-export type AccountStatus = { email?: string; available: boolean }
+export type AccountStatus = { email?: string; available: boolean; localPro?: boolean }
 /** The signed-in person's credits and plan (shared with Pitch), from the account service. */
 export type AccountPlan = { key: string; name: string; every: 'month' | 'year'; credits: number; renews: boolean; until: string }
 export type Offer = { key: string; name: string; price: number; credits: number; every?: 'month' | 'year'; buyable: boolean }

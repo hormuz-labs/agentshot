@@ -12,6 +12,7 @@
   },
   "scripts": {
     "dev": "node scripts/run-electron.mjs dev",
+    "dev:pro": "node scripts/run-electron.mjs dev --local-pro",
     "build": "electron-vite build",
     "build:ml": "sh scripts/build-ml.sh",
     "setup:native": "node scripts/fetch-models.mjs && sh scripts/build-whisper.sh && sh scripts/build-beats.sh && sh scripts/build-ml.sh && sh scripts/build-mesh.sh && node scripts/check-native.mjs",
@@ -32,6 +33,7 @@
     "smoke": "electron-vite build && node scripts/smoke.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:voiceover": "electron-vite build && node test/e2e/voiceover.e2e.mjs",
     "test:delivery": "electron-vite build && node test/e2e/delivery.e2e.mjs && node test/e2e/files.e2e.mjs && node test/e2e/tabs.e2e.mjs",
     "test:mascot": "electron-vite build && node test/e2e/mascot.e2e.mjs",
     "test:mascot-performance": "electron-vite build && node test/e2e/mascot-performance.e2e.mjs",

@@ -50,6 +50,12 @@ export async function prepareElectron() {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const localPro = process.argv.indexOf('--local-pro')
+  if (localPro !== -1) {
+    process.argv.splice(localPro, 1)
+    process.env.MANUL_LOCAL_PRO = '1'
+    console.info('Local Pro testing enabled for this development session.')
+  }
   process.env.ELECTRON_EXEC_PATH = await prepareElectron()
   const vite = dirname(require.resolve('electron-vite/package.json'))
   await import(pathToFileURL(join(vite, 'bin/electron-vite.js')).href)
