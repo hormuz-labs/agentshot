@@ -105,6 +105,7 @@ const TITLES: Record<string, (a: Args) => string> = {
   name_speakers: () => 'Named the speakers',
   browser: () => 'Used the browser',
   ask_user: () => 'Asked you',
+  suggest_next: () => 'Suggested what’s next',
   memory: () => 'Checked what it remembers',
   remember: () => 'Remembered something for next time',
   forget: () => 'Forgot something',

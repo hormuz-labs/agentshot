@@ -29,6 +29,12 @@ class FilmEditor extends StatefulWidget {
 
   /// A note: its words, and where it points (`t0`, `t1`, `box`), or none for the whole film.
   final Future<void> Function(String text, Json? anchor) onNote;
+
+  /// Several notes given together (the batch): each its words and where it points; one piece of work for the agent.
+  final Future<void> Function(List<(String, Json?)> notes) onBatch;
+
+  /// What the agent offers to do next, following on from what was asked: a tap sends one as the next note.
+  final List<String> suggestions;
   final VoidCallback onActivity, onKeep, onSendBack, onBack;
 
   /// The project's ⋯ menu (key, name, icon); a key chosen comes back through [onAction].
@@ -47,6 +53,8 @@ class FilmEditor extends StatefulWidget {
     this.working,
     this.connected = true,
     required this.onNote,
+    required this.onBatch,
+    this.suggestions = const [],
     required this.onActivity,
     required this.onKeep,
     required this.onSendBack,
@@ -58,6 +66,14 @@ class FilmEditor extends StatefulWidget {
 
   @override
   State<FilmEditor> createState() => _FilmEditorState();
+}
+
+/// A box belongs to its moment: shown there, across its range for a note on one, and gone a frame away (a frame is a
+/// tenth of a second at the very slowest; [position] lands within one of where it was asked to).
+bool atItsMoment(Json anchor, double position) {
+  final t0 = (anchor['t0'] as num?)?.toDouble() ?? 0;
+  final t1 = (anchor['t1'] as num?)?.toDouble() ?? t0;
+  return position >= t0 - .08 && position <= t1 + .08;
 }
 
 /// What's being pointed at while its note is written: a moment, a box at a moment, a range, or the whole film.
@@ -82,6 +98,12 @@ class _FilmEditorState extends State<FilmEditor> {
 
   /// Notes sent but not yet back in the project: pinned already.
   final sent = <Json>[];
+
+  /// Notes kept to send together: pinned, and not with the agent yet.
+  final batch = <Json>[];
+
+  /// A suggestion tapped: gone at once (the agent's answer brings the next ones).
+  final tapped = <String>{};
 
   /// A pin tapped: its note shown, with the agent's reply.
   Json? open;
@@ -204,24 +226,55 @@ class _FilmEditorState extends State<FilmEditor> {
     });
   }
 
-  Future<void> send() async {
+  /// The note in the bubble kept for the batch: pinned, and the bubble closes for the next one.
+  void keep() {
     final text = words.text.trim();
     if (text.isEmpty) return;
     final at = anchor;
-    final note = {'text': text, 'anchor': ?at, 'status': 'sending'};
     words.clear();
-    setState(() => sent.add(note));
+    setState(() => batch.add({'text': text, 'anchor': ?at, 'status': 'batch'}));
+    cancel();
+  }
+
+  /// Sends what's kept, with the note in the bubble if there is one: together, as one piece of work.
+  Future<void> send() async {
+    final text = words.text.trim();
+    final at = anchor;
+    final notes = [
+      ...batch,
+      if (text.isNotEmpty) {'text': text, 'anchor': ?at, 'status': 'batch'},
+    ];
+    if (notes.isEmpty) return;
+    final going = [
+      for (final n in notes) {...n, 'status': 'sending'},
+    ];
+    words.clear();
+    setState(() {
+      batch.clear();
+      sent.addAll(going);
+    });
     cancel();
     try {
-      await widget.onNote(text, at);
+      if (going.length == 1) {
+        await widget.onNote(
+          going.single['text'] as String,
+          going.single['anchor'] as Json?,
+        );
+      } else {
+        await widget.onBatch([
+          for (final n in going) (n['text'] as String, n['anchor'] as Json?),
+        ]);
+      }
+      // a note for the whole film has no pin to come back as
+      if (mounted) {
+        setState(() => sent.removeWhere((n) => n['anchor'] == null));
+      }
     } catch (e) {
       if (!mounted) return;
-      // it didn't go: back in the bubble as it was
+      // it didn't go: kept, to send again
       setState(() {
-        sent.remove(note);
-        words.text = text;
-        anchor = at;
-        writing = true;
+        sent.removeWhere(going.contains);
+        batch.addAll(notes);
       });
       ScaffoldMessenger.of(
         context,
@@ -229,14 +282,33 @@ class _FilmEditorState extends State<FilmEditor> {
     }
   }
 
-  /// Every note to pin: the project's, then those on their way.
-  List<Json> get pins => [...widget.notes, ...sent];
+  /// A suggestion tapped: the next note, for the whole film.
+  Future<void> suggest(String words) async {
+    setState(() => tapped.add(words));
+    try {
+      await widget.onNote(words, null);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => tapped.remove(words));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(plain(e))));
+    }
+  }
+
+  /// Every note to pin: the project's, those on their way, those kept for the batch.
+  List<Json> get pins => [...widget.notes, ...sent, ...batch];
+
+  bool here(Json note) =>
+      identical(note, open) ||
+      atItsMoment(object(note['anchor'] ?? {}), position);
 
   /// Where a note stands, in a word and a colour: on its way, being worked on, done, or waiting its turn.
   (String, Color, IconData) standing(Json note, Studio studio) =>
       switch (note['status']) {
         'resolved' => ('Done', studio.success, Icons.check_rounded),
         'sending' => ('Sending', studio.text3, Icons.arrow_upward_rounded),
+        'batch' => ('Not sent yet', studio.info, Icons.edit_outlined),
         _ when widget.working != null => (
           'Working',
           studio.accent,
@@ -280,6 +352,8 @@ class _FilmEditorState extends State<FilmEditor> {
             ),
             if (!keyboard) ...[
               strip(studio),
+              if (batch.isNotEmpty && !writing) tray(studio),
+              if (batch.isEmpty && !writing) offers(studio),
               if (deciding) decide(studio) else tools(studio),
             ],
           ],
@@ -405,14 +479,11 @@ class _FilmEditorState extends State<FilmEditor> {
               (p.dy / size.maxHeight).clamp(0, 1),
             );
             final boxing = pointing == Pointing.box && !writing;
-            // a box pinned while the film is near its moment (a beat before, a couple of seconds after)
+            // the boxes of this very moment; the next frame has its own
             final near = [
               for (final (i, n) in pins.indexed)
                 if (object(n['anchor'] ?? {})['box'] case final Map box)
-                  if ((position - ((object(n['anchor'])['t0'] as num?) ?? 0))
-                          .abs() <
-                      2)
-                    (i, n, object(box)),
+                  if (here(n)) (i, n, object(box)),
             ];
             return GestureDetector(
               key: const ValueKey('editor-picture'),
@@ -591,6 +662,18 @@ class _FilmEditorState extends State<FilmEditor> {
                 style: text.bodySmall?.copyWith(color: studio.text2),
               ),
             ],
+            if (batch.contains(note))
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const ValueKey('editor-remove-note'),
+                  onPressed: () => setState(() {
+                    batch.remove(note);
+                    open = null;
+                  }),
+                  child: const Text('Remove'),
+                ),
+              ),
           ],
         ),
       ),
@@ -678,6 +761,13 @@ class _FilmEditorState extends State<FilmEditor> {
                     ].where((s) => s.isNotEmpty).join(' ');
                     setState(() {});
                   },
+                ),
+                // keep this one and add another: they go together
+                IconButton(
+                  key: const ValueKey('editor-add'),
+                  tooltip: 'Add another note',
+                  onPressed: keep,
+                  icon: Icon(Icons.add_rounded, color: studio.text2),
                 ),
                 IconButton(
                   key: const ValueKey('editor-send'),
@@ -928,6 +1018,61 @@ class _FilmEditorState extends State<FilmEditor> {
             Pointing.film,
             const ValueKey('editor-ask-tool'),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// The notes kept so far, ready to go together.
+  Widget tray(Studio studio) => Padding(
+    key: const ValueKey('editor-tray'),
+    padding: const EdgeInsets.fromLTRB(Space.md, 0, Space.md, Space.xs),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            batch.length == 1 ? '1 note ready' : '${batch.length} notes ready',
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: Colors.white),
+          ),
+        ),
+        FilledButton(
+          key: const ValueKey('editor-send-all'),
+          onPressed: widget.connected ? send : null,
+          child: const Text('Send'),
+        ),
+      ],
+    ),
+  );
+
+  /// What the agent offers next, in a row to swipe; a tap sends it.
+  Widget offers(Studio studio) {
+    final left = widget.working != null
+        ? const <String>[]
+        : widget.suggestions.where((s) => !tapped.contains(s)).toList();
+    if (left.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      key: const ValueKey('editor-suggestions'),
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: Space.md),
+        children: [
+          for (final s in left)
+            Padding(
+              padding: const EdgeInsets.only(right: Space.sm),
+              child: ActionChip(
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(
+                  Icons.auto_awesome,
+                  size: 14,
+                  color: studio.accent,
+                ),
+                label: Text(s),
+                onPressed: widget.connected ? () => suggest(s) : null,
+              ),
+            ),
         ],
       ),
     );

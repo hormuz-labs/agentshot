@@ -15,6 +15,7 @@ import { ManulCompanion } from '@/components/mascot/ManulCompanion'
 import { ChatMarkdown } from '@/components/ChatMarkdown'
 import { toolErrorHint } from '../../../shared/tool-errors'
 import { runProblem } from '../../../shared/run-problem'
+import { NOTES_TOGETHER } from '../../../shared/range-notes'
 import { mascotActivity } from '@/lib/mascot'
 import type { Project } from '../../../shared/types'
 import { cn, timecode } from '@/lib/utils'
@@ -168,7 +169,7 @@ type Block = { kind: 'msg'; m: Message; i: number; specials: Call[] } | { kind: 
 
 /** Calls that are their own card in the chat (a question, a demo's questions or summary), not a step of the work. */
 function special(c: Call, results: Results) {
-  if (c.name === 'ask_user') return true
+  if (c.name === 'ask_user' || c.name === 'suggest_next') return true
   if (c.name !== 'demo_layout' && c.name !== 'compose_demo') return false
   const r = parse(results[c.id]?.content || '{}')
   return !!(r.questions?.length || r.summary)
@@ -242,13 +243,15 @@ function RunProblem({ message }: { message: string }) {
 // ---------------------------------------------------------------- the panel
 const NOTE = /^\[note \S+ ([^\]]*)\] /
 const EDITOR = /^\[editor\] /
+const NOTES_FROM_PHONE = new RegExp(`^${NOTES_TOGETHER}\\n`)
 
 function Item({ m, project, results, specials, onAnswer, laterUser }: { m: Message; project: Project; results: Results; specials: Call[]; onAnswer: (s: string) => void; laterUser: boolean }) {
   if (m.role === 'user') {
     const text = String(m.content ?? '')
     if (EDITOR.test(text)) return <div className="text-center text-[11px] text-faint">{text.replace(EDITOR, '')}</div>
     const note = NOTE.exec(text)
-    const msg = splitAttached(text.replace(NOTE, ''))
+    // several notes given together: each on its line, by where it points
+    const msg = splitAttached(text.replace(NOTE, '').replace(NOTES_FROM_PHONE, '').replace(/\[note \S+ @? ?([^\]]*)\] /g, '$1: '))
     return (
       <div className="ml-auto w-fit max-w-[85%] rounded-2xl bg-raised px-4 py-2.5 text-[14px]" data-selectable>
         {note && <div className="mb-1 inline-flex items-center gap-1 rounded bg-note/15 px-1.5 py-0.5 text-[10.5px] text-note"><MessageSquareText className="size-3" />{note[1].replace(/^@ /, '').replace(/, box [\d.,]+/, ' · box').replace(/, clip (\S+) element (\S+)/, ' · $1 · $2')}</div>}
@@ -267,6 +270,16 @@ function Item({ m, project, results, specials, onAnswer, laterUser }: { m: Messa
       <div className="space-y-1.5">
         {specials.map(call => {
           if (call.name === 'ask_user') return <AskCard key={call.id} call={call} answered={laterUser} onAnswer={onAnswer} />
+          if (call.name === 'suggest_next') {
+            if (laterUser) return null
+            return (
+              <div key={call.id} data-suggestions className="flex flex-wrap gap-1.5">
+                {((call.args as { suggestions?: string[] }).suggestions || []).map(s => (
+                  <button key={s} className="rounded-full border border-line px-3 py-1 text-[13px] text-dim hover:border-amber/60 hover:text-fg" onClick={() => onAnswer(s)}>{s}</button>
+                ))}
+              </div>
+            )
+          }
           const result = parse(results[call.id]?.content || '{}')
           if (result.questions?.length) return <AskCard key={call.id} call={{ ...call, args: { questions: result.questions } }} answered={laterUser} onAnswer={onAnswer} />
           return <div key={call.id} className="space-y-2 rounded-lg border border-ok/30 bg-ok/10 p-3" data-demo-summary>

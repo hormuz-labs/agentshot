@@ -24,3 +24,6 @@ export function parseRangeNotes(text: string): RangeNote[] {
     text: text.slice(m.index! + m[0].length, markers[i + 1]?.index ?? text.length).trim(),
   }))
 }
+
+/** Opens a message of several notes given together (the phone's batch), for the agent and for showing it back. */
+export const NOTES_TOGETHER = 'These notes go together: make all of them, then one new cut.'

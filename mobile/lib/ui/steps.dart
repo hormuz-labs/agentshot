@@ -78,6 +78,8 @@ List<ChatItem> fold(List<Json> messages) {
         for (final c in objects(m['toolCalls'])) {
           final f = object(c['function'] ?? {});
           final name = '${f['name'] ?? 'step'}';
+          // what's next: buttons of their own (see [suggestionsOf]), not a step of the work
+          if (name == 'suggest_next') continue;
           if (name == 'ask_user') {
             flush();
             out.add(Asked('${c['id']}', Question.of(_json(f['arguments']))));
@@ -505,3 +507,25 @@ class _RunProblemState extends State<RunProblem> {
     );
   }
 }
+
+/// What the agent offers next, from its latest turn: nothing once the person has said something since.
+List<String> suggestionsOf(List<Json> messages) {
+  for (final m in messages.reversed) {
+    if (m['role'] == 'user') return const [];
+    for (final c in objects(m['toolCalls'])) {
+      final f = object(c['function'] ?? {});
+      if (f['name'] != 'suggest_next') continue;
+      final list = _json(f['arguments'])['suggestions'];
+      if (list is List) return [for (final s in list) '$s'];
+    }
+  }
+  return const [];
+}
+
+/// A person's message as it reads: notes given together under the agent's heading, each by where it points.
+String asSaid(String text) => text
+    .replaceFirst(RegExp(r'^These notes go together[^\n]*\n'), '')
+    .replaceAllMapped(
+      RegExp(r'\[note \S+ @? ?([^\]]*)\] '),
+      (m) => '${m[1]}: ',
+    );

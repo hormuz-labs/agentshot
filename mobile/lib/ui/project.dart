@@ -601,6 +601,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
       connected: store.connected,
       onNote: (text, at) =>
           sendToAgent(context, store, dir, {'text': text, 'anchor': ?at}),
+      onBatch: sendBatch,
+      suggestions: suggestionsOf(state.messages),
       onActivity: openActivity,
       onKeep: keep,
       onSendBack: sendBack,
@@ -609,6 +611,21 @@ class _ProjectScreenState extends State<ProjectScreen> {
       onAction: action,
       onPosition: (at) => position = at,
     );
+  }
+
+  /// Several notes given together: one piece of work. A computer from before batches takes them one at a time.
+  Future<void> sendBatch(List<(String, Json?)> notes) async {
+    final all = [
+      for (final (text, at) in notes) {'text': text, 'anchor': ?at},
+    ];
+    try {
+      await sendToAgent(context, store, dir, {'text': '', 'notes': all});
+    } on BridgeException catch (e) {
+      if (e.status != 400) rethrow;
+      for (final note in all) {
+        if (mounted) await sendToAgent(context, store, dir, note);
+      }
+    }
   }
 
   /// The conversation, over the film: everything the agent did and said, its questions, the cuts it made.
@@ -874,7 +891,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                                         ),
                                       ),
                                       child: Text(
-                                        '${m['content'] ?? ''}',
+                                        asSaid('${m['content'] ?? ''}'),
                                         style: text.bodyLarge,
                                       ),
                                     ),
@@ -983,6 +1000,24 @@ class _ProjectScreenState extends State<ProjectScreen> {
                               wide ? const SizedBox.shrink() : proposalCard()
                             else if (!state.busy && messages.isNotEmpty)
                               ?latestCutCard(chat),
+                            // what the agent offers next: a tap is the next note
+                            if (!state.busy)
+                              Wrap(
+                                spacing: Space.sm,
+                                children: [
+                                  for (final s in suggestionsOf(messages))
+                                    ActionChip(
+                                      visualDensity: VisualDensity.compact,
+                                      label: Text(s),
+                                      onPressed: () => guard(
+                                        context,
+                                        () => sendToAgent(context, store, dir, {
+                                          'text': s,
+                                        }),
+                                      ),
+                                    ),
+                                ],
+                              ),
                           ],
                         ),
                       ),

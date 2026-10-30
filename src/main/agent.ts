@@ -281,6 +281,7 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       `Fonts the user added are in the project's fonts/ folder with Inter: then use fontsdir=fonts (never fontsdir=media).\n` +
       `- Prefer one well-built ffmpeg command over many small ones. Keep codecs sensible: libx264 -crf 18 -preset veryfast, aac 192k, -movflags +faststart.\n` +
       `- When you need a decision from the user, call ask_user with 2–5 options and stop.\n` +
+      `- When you've finished what was asked, call suggest_next once, just before your final reply: 2–3 next steps for this film, following on from what they just asked. Not after ask_user, and not when you stopped on a problem.\n` +
       `API keys the user saved in AgentShot are already in your shell's environment (e.g. $ELEVENLABS_API_KEY, $GEMINI_API_KEY): use them in commands as they are; ` +
       `never print, echo, measure or log a key or any part of it, and never look for keys elsewhere (other shells, files).\n` +
       `Your files and shell are fenced to the project folder (plus temp folders and AgentShot's bundled tools, skills, models and fonts, ` +
@@ -768,6 +769,13 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
         description: 'Mark a note as handled, with a one-line reply the user sees on the note.',
         parameters: Type.Object({ id: Type.String(), reply: Type.String() }),
         execute: async (args: Any, api: Any) => { await bridge.resolveNote(proj(api).dir, args.id, args.reply); return text('resolved') },
+      }),
+      defineTool({
+        name: 'suggest_next',
+        description: 'Offer 2–3 next steps as buttons under your reply; a tap sends one as the user\'s next note. Each a few words, in their terms, ' +
+          'about this film and following on from what they just asked (after cutting the ums: "Tighten the long pauses too"), never generic ("Add music" only if it fits).',
+        parameters: Type.Object({ suggestions: Type.Array(Type.String({ maxLength: 48 }), { minItems: 1, maxItems: 3 }) }),
+        execute: async () => text('offered'),
       }),
       defineTool({
         name: 'seek',

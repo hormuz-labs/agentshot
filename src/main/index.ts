@@ -4,7 +4,7 @@ import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, po
 import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
 import { projectArgument } from './mobile-contract'
 import { rangeNotesContent } from './range-notes'
-import { parseRangeNotes } from '../shared/range-notes'
+import { NOTES_TOGETHER, parseRangeNotes } from '../shared/range-notes'
 import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
 import { startMeshNode, stopAllMesh, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
@@ -937,7 +937,8 @@ const describe = (a: Anchor) =>
   `@ ${fmt(a.t0)}${a.t1 != null ? `–${fmt(a.t1)}` : ''}${a.box ? `, box ${[a.box.x, a.box.y, a.box.w, a.box.h].map(n => n.toFixed(3)).join(',')}` : ''}` +
   (a.clip ? `, clip ${a.clip.id}${a.clip.element ? ` element ${a.clip.element}` : ''}` : '')
 
-type AgentMessage = { text: string; anchor?: Anchor; still?: string; files?: string[] }
+/** [notes]: several notes given together (the phone's batch), done as one piece of work. */
+type AgentMessage = { text: string; anchor?: Anchor; still?: string; files?: string[]; notes?: { text: string; anchor?: Anchor }[] }
 
 // A message to the agent, optionally anchored (time / range / box) with a frame still (JPEG data URL).
 // What the user attached (files in media/, versions of the film, motion clips) follows the text, each with what it is.
@@ -955,6 +956,16 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
     content = [{ type: 'text', text: `[note ${n.id} ${describe(msg.anchor)}] ${body}` }]
     if (jpeg) content.push({ type: 'image', data: jpeg.toString('base64'), mimeType: 'image/jpeg' })
   }
+  if (msg.notes?.length) {
+    const lines: string[] = []
+    for (const note of msg.notes) {
+      if (!note.anchor) { lines.push(note.text); continue }
+      const n = await Projects.addNote(p, { anchor: note.anchor, text: note.text })
+      lines.push(`[note ${n.id} ${describe(note.anchor)}] ${note.text}`)
+    }
+    await checkpoint(p, `Notes: ${msg.notes.length}`)
+    content = [{ type: 'text', text: `${NOTES_TOGETHER}\n${lines.join('\n')}` }]
+  }
   if (ranges) {
     await checkpoint(p, `Range notes: ${selections.length}`)
     if (typeof content === 'string') content = [content, ranges].filter(Boolean).join('\n\n')
@@ -962,7 +973,7 @@ async function sendToAgent(dir: string, msg: AgentMessage) {
   }
   // a new conversation is named after its first message
   const rec = p.conversations?.find(c => c.id === p.conversation)
-  if (rec && rec.title === 'New conversation') { rec.title = (msg.text || (msg.files || []).map(f => f.split('/').pop()).join(', ')).replace(/\s+/g, ' ').trim().slice(0, 48) || rec.title; await publish(p) }
+  if (rec && rec.title === 'New conversation') { rec.title = (msg.text || msg.notes?.[0]?.text || (msg.files || []).map(f => f.split('/').pop()).join(', ')).replace(/\s+/g, ' ').trim().slice(0, 48) || rec.title; await publish(p) }
   rmSync(haltFile(), { force: true }) // the user replied: the browser is the agent's again
   await agent!.send(dir, content)
 }

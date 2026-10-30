@@ -5,15 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:agentshot_mobile/bridge/client.dart';
 import 'package:agentshot_mobile/ui/film_editor.dart';
+import 'package:agentshot_mobile/ui/steps.dart';
 
 void main() {
   late List<(String, Json?)> notes;
+  late List<List<(String, Json?)>> batches;
   late List<String> did;
 
   Widget editor({
     bool newCut = false,
     List<Json> given = const [],
     String? working,
+    List<String> suggestions = const [],
   }) => MaterialApp(
     home: Scaffold(
       body: FilmEditor(
@@ -25,7 +28,9 @@ void main() {
             : null,
         notes: given,
         working: working,
+        suggestions: suggestions,
         onNote: (text, at) async => notes.add((text, at)),
+        onBatch: (all) async => batches.add(all),
         onActivity: () => did.add('activity'),
         onKeep: () => did.add('keep'),
         onSendBack: () => did.add('sendBack'),
@@ -45,6 +50,7 @@ void main() {
 
   setUp(() {
     notes = [];
+    batches = [];
     did = [];
   });
 
@@ -133,4 +139,138 @@ void main() {
       expect(did, ['activity']);
     },
   );
+
+  test(
+    'a box is at its moment only: gone a frame on, and across its range',
+    () {
+      expect(atItsMoment({'t0': 4}, 4.0), isTrue);
+      expect(
+        atItsMoment({'t0': 4}, 4.04),
+        isTrue,
+        reason: 'where the seek landed',
+      );
+      expect(atItsMoment({'t0': 4}, 4.2), isFalse, reason: 'the next frames');
+      expect(atItsMoment({'t0': 4}, 3.8), isFalse);
+      expect(atItsMoment({'t0': 4, 't1': 6}, 5.0), isTrue);
+      expect(atItsMoment({'t0': 4, 't1': 6}, 6.2), isFalse);
+    },
+  );
+
+  testWidgets('notes kept with + wait in the tray, and go together', (
+    tester,
+  ) async {
+    await tester.pumpWidget(editor());
+    await settle(tester);
+    expect(find.byKey(const ValueKey('editor-tray')), findsNothing);
+
+    Future<void> note(String words) async {
+      await tester.tap(find.byKey(const ValueKey('editor-note-tool')));
+      await settle(tester);
+      await tester.enterText(find.byKey(const ValueKey('editor-words')), words);
+      await tester.tap(find.byKey(const ValueKey('editor-add')));
+      await settle(tester);
+    }
+
+    await note('Hold this shot');
+    await note('Brighter here');
+    expect(find.text('2 notes ready'), findsOneWidget);
+    expect(notes, isEmpty, reason: 'nothing sent yet');
+    // each is pinned already, and can be taken out
+    await tester.tap(find.byKey(const ValueKey('editor-pin-1')));
+    await settle(tester);
+    expect(find.text('Brighter here'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('editor-remove-note')));
+    await settle(tester);
+    expect(find.text('1 note ready'), findsOneWidget);
+
+    await note('Warmer colours');
+    await tester.tap(find.byKey(const ValueKey('editor-send-all')));
+    await settle(tester);
+    expect(batches.single.map((n) => n.$1), [
+      'Hold this shot',
+      'Warmer colours',
+    ]);
+    expect(find.byKey(const ValueKey('editor-tray')), findsNothing);
+  });
+
+  testWidgets('a note sent with some kept goes with them', (tester) async {
+    await tester.pumpWidget(editor());
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('editor-note-tool')));
+    await settle(tester);
+    await tester.enterText(find.byKey(const ValueKey('editor-words')), 'One');
+    await tester.tap(find.byKey(const ValueKey('editor-add')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('editor-ask-tool')));
+    await settle(tester);
+    await tester.enterText(find.byKey(const ValueKey('editor-words')), 'Two');
+    await tester.tap(find.byKey(const ValueKey('editor-send')));
+    await settle(tester);
+    expect(batches.single.map((n) => n.$1), ['One', 'Two']);
+  });
+
+  testWidgets('what the agent offers: a tap sends it, and it goes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(editor(suggestions: ['Tighten the long pauses']));
+    await settle(tester);
+    await tester.tap(find.text('Tighten the long pauses'));
+    await settle(tester);
+    expect(notes.single, ('Tighten the long pauses', null));
+    expect(find.text('Tighten the long pauses'), findsNothing);
+  });
+
+  testWidgets('nothing offered while the agent works', (tester) async {
+    await tester.pumpWidget(
+      editor(suggestions: ['Add captions'], working: 'Rendering'),
+    );
+    await settle(tester);
+    expect(find.text('Add captions'), findsNothing);
+  });
+
+  test(
+    'offers come from the agent\'s latest turn, until the person speaks',
+    () {
+      Json offered(List<String> s) => {
+        'role': 'assistant',
+        'toolCalls': [
+          {
+            'id': 'c1',
+            'function': {
+              'name': 'suggest_next',
+              'arguments': '{"suggestions":${s.map((x) => '"$x"').toList()}}',
+            },
+          },
+        ],
+      };
+      final turn = offered(['Tighten the pauses', 'Add captions']);
+      expect(suggestionsOf([turn]), ['Tighten the pauses', 'Add captions']);
+      expect(
+        suggestionsOf([
+          turn,
+          {'role': 'assistant', 'content': 'Done.'},
+        ]),
+        ['Tighten the pauses', 'Add captions'],
+        reason: 'the reply after it',
+      );
+      expect(
+        suggestionsOf([
+          turn,
+          {'role': 'user', 'content': 'Keep the first one'},
+        ]),
+        isEmpty,
+      );
+    },
+  );
+
+  test('notes given together read as they were written', () {
+    expect(
+      asSaid(
+        'These notes go together: make all of them, then one new cut.\n'
+        '[note ab1 @ 0:04, box 0.1,0.1,0.2,0.2] Blur this\nMake it shorter',
+      ),
+      '0:04, box 0.1,0.1,0.2,0.2: Blur this\nMake it shorter',
+    );
+    expect(asSaid('Plain words'), 'Plain words');
+  });
 }
