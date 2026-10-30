@@ -90,13 +90,8 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
     const toast = document.getElementById('toast')!
     toast.querySelector('button')!.addEventListener('click', () => (toast.hidden = true))
 
-    // a direct download on Mac and Windows; Linux has several packages, so it goes to the install section
-    document.querySelectorAll<HTMLAnchorElement>('a[data-dl]').forEach(a => {
-      const href = os === 'mac' ? a.dataset.mac : os === 'win' ? a.dataset.win : null
-      if (!href) return
-      a.href = href
-      a.addEventListener('click', () => (toast.hidden = false))
-    })
+    // Mac and Windows download straight away; Linux has several packages, so it goes to the install section
+    document.querySelectorAll<HTMLAnchorElement>('a[data-dl]:not([data-dl="linux"])').forEach(a => a.addEventListener('click', () => (toast.hidden = false)))
 
     // a phone can't run the app: hand the link to the visitor's computer
     document.querySelectorAll<HTMLButtonElement>('[data-send]').forEach(b => b.addEventListener('click', async () => {
@@ -117,6 +112,20 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
       try { await navigator.clipboard.writeText(b.dataset.copy!); b.textContent = 'Copied' } catch { b.textContent = 'Select and copy' }
       setTimeout(() => (b.textContent = was), 1800)
     }))
+
+    // the header gets out of the way going down and comes back going up; small jitters of the finger don't count
+    const top = document.querySelector<HTMLElement>('.top')!
+    let last = scrollY, queued = false
+    addEventListener('scroll', () => {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(() => {
+        queued = false
+        if (Math.abs(scrollY - last) < 6) return
+        top.classList.toggle('away', scrollY > last && scrollY > 120 && !top.matches(':focus-within'))
+        last = scrollY
+      })
+    }, { passive: true })
 
     // the phone's bar comes in once the hero's button has scrolled away
     const hero = document.querySelector('[data-hero-cta]'), dock = document.getElementById('dock')!
