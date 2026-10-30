@@ -4,6 +4,7 @@
 # that those builds lack:
 #   vid.stab     vidstabdetect / vidstabtransform (measure and remove camera shake)
 #   Rubber Band  rubberband (speed changes without pitch change)
+#   NVENC        h264_nvenc on Linux x64 (only headers: the NVIDIA driver is loaded when it's used, so nothing is linked)
 # Static; on macOS for 12.0+. Output: dist/ffmpeg/<target>/ffmpeg.zip and ffprobe.zip, the files
 # scripts/fetch-ffmpeg.mjs downloads from the GitHub release and pins by SHA-256 (.github/workflows/ffmpeg.yml).
 #   scripts/ffmpeg/build.sh            build for this machine
@@ -14,6 +15,7 @@ FFMPEG=9.0.2
 SCRIPT_COMMIT=f63b8aab8f5ce1a067da86ba69e34a36a7e217e5 # git.martin-riedl.de/ffmpeg/build-script (main)
 VIDSTAB=1.1.2
 RUBBERBAND=4.0.0
+NVCODEC=13.0.19.0
 
 cd "$(dirname "$0")/../.."
 REPO=$(pwd)
@@ -36,11 +38,12 @@ git -C "$WORK" init -q script
 git -C "$WORK/script" fetch -q --depth 1 https://git.martin-riedl.de/ffmpeg/build-script.git $SCRIPT_COMMIT
 git -C "$WORK/script" checkout -q FETCH_HEAD
 S=$WORK/script
-cp scripts/ffmpeg/build-vidstab.sh scripts/ffmpeg/build-rubberband.sh "$S/script/"
-chmod +x "$S/script/build-vidstab.sh" "$S/script/build-rubberband.sh"
+cp scripts/ffmpeg/build-vidstab.sh scripts/ffmpeg/build-rubberband.sh scripts/ffmpeg/build-nvcodec.sh "$S/script/"
+chmod +x "$S/script/build-vidstab.sh" "$S/script/build-rubberband.sh" "$S/script/build-nvcodec.sh"
 printf %s "$FFMPEG" > "$S/version/ffmpeg"
 printf %s "$VIDSTAB" > "$S/version/vidstab"
 printf %s "$RUBBERBAND" > "$S/version/rubberband"
+printf %s "$NVCODEC" > "$S/version/nvcodec"
 
 # libvorbis 1.3.7's configure passes -force_cpusubtype_ALL to the linker on macOS, which Xcode 15+'s linker rejects
 # (Homebrew strips it the same way)
@@ -85,7 +88,7 @@ swap build-ffmpeg.sh 'EXTRA_VERSION="https://www.martin-riedl.de"' 'EXTRA_VERSIO
 
 # build.sh decides the GPL flags right after the last library: add ours just before that
 grep -q '^# check other ffmpeg flags$' "$S/build.sh" || { echo "build.sh changed: no '# check other ffmpeg flags' line to insert AgentShot's libraries before"; exit 1; }
-awk '
+awk -v nvenc="$([ "$TARGET" = linux-x64 ] && echo 1)" '
 /^# check other ffmpeg flags$/ {
   for (n = split("vidstab rubberband", lib, " "); i < n;) {
     l = lib[++i]
@@ -96,6 +99,12 @@ awk '
     print "echoDurationInSections $START_TIME"
     print "FFMPEG_LIB_FLAGS=\"$FFMPEG_LIB_FLAGS --enable-lib" l "\""
     print "REQUIRES_GPL=\"YES\""
+    print ""
+  }
+  if (nvenc) {
+    print "$SCRIPT_DIR/build-nvcodec.sh \"$SCRIPT_DIR\" \"$SOURCE_DIR\" \"$TOOL_DIR\" \"$CPUS\" > \"$LOG_DIR/build-nvcodec.log\" 2>&1"
+    print "checkStatus $? \"build nvcodec\""
+    print "FFMPEG_LIB_FLAGS=\"$FFMPEG_LIB_FLAGS --enable-ffnvcodec --enable-nvenc\""
     print ""
   }
 }
@@ -144,6 +153,9 @@ done
 for enc in libx264 aac; do
   "$BIN/ffmpeg" -hide_banner -encoders 2>/dev/null | grep -q " $enc " || { echo "ffmpeg is missing the $enc encoder"; exit 1; }
 done
+if [ "$TARGET" = linux-x64 ]; then
+  "$BIN/ffmpeg" -hide_banner -encoders 2>/dev/null | grep -q " h264_nvenc " || { echo "ffmpeg is missing the h264_nvenc encoder"; exit 1; }
+fi
 if [ "$(uname -s)" = Darwin ]; then
   otool -L "$BIN/ffmpeg" | tail -n +2 | grep -vE '^[[:space:]]*(/usr/lib/|/System/Library/)' && { echo "ffmpeg links non-system libraries (above)"; exit 1; }
 else

@@ -16,6 +16,8 @@ import { explain, forPhone } from './explain'
 import { voiceText } from './voice'
 import { startAgent, type AgentHandle } from './agent'
 import { renderCuts } from './cuts'
+import { videoEncoder } from './encoders'
+import { renderPieces } from './pieces'
 import { renderOutput, TimelineRenders } from './timeline-renders'
 import { planDemo, type DemoOptions } from './demo'
 import { demoHint } from '../shared/demo'
@@ -53,7 +55,7 @@ import { homedir, hostname, tmpdir } from 'node:os'
 import * as Projects from './projects'
 import * as Gallery from './gallery'
 import * as Files from './files'
-import { addOverlay, applyEdit, composeArgs, describeEdit, duration as timelineDuration, insertAt, sameCut, type Edit, type Item } from '../shared/timeline'
+import { addOverlay, applyEdit, composeArgs, describeEdit, duration as timelineDuration, insertAt, sameCut, type Edit, type Item, type Overlay } from '../shared/timeline'
 import { moveElement, prepareClipHtml } from '../shared/clip-html'
 import { captionCues, exportArgs, toSrt, type ExportOptions } from '../shared/export'
 import { PreviewCopies } from './proxies'
@@ -696,21 +698,22 @@ async function renderTimeline(p: Project, tl: Timeline, title: string, signal?: 
   const rendered = (id: string) => p.clips?.[id]?.video && existsSync(join(p.dir, p.clips[id].video))
   for (const id of new Set([...tl.items.flatMap(it => (it.kind === 'clip' ? [it.clip] : [])), ...(tl.overlays || []).map(o => o.clip)])) if (!rendered(id)) await bakeClip(p, id)
   return renderOutput(p.dir, 'timeline', mixed, async ({ final, out }) => {
-    const args = composeArgs(tl, {
-      inputOf: it => (it.kind === 'media' ? it.src : p.clips![it.clip].video),
-      hasAudio: it => it.kind === 'media' && !!p.media[it.src]?.hasAudio,
-      overlayOf: o => p.clips![o.clip].video,
-      out,
-    })
+    const inputOf = (it: Item) => (it.kind === 'media' ? it.src : p.clips![it.clip].video)
+    const hasAudio = (it: Item) => it.kind === 'media' && !!p.media[it.src]?.hasAudio
+    const overlayOf = (o: Overlay) => p.clips![o.clip].video
+    const args = composeArgs(tl, { inputOf, hasAudio, overlayOf, out })
     await asJob(`Rendering “${title}”`, 'render', async j => {
       j.progress(null, `${timelineDuration(tl).toFixed(1)} s`)
       // only cuts of one file: most of the picture is copied as it is (fast); anything else, or if that fails, in full
       const cut = await renderCuts({ ffmpeg: FFMPEG, ffprobe: FFPROBE, cwd: p.dir, tl, out, progress: f => j.progress(f) })
         .catch(e => ({ ok: false as const, why: `it failed: ${e instanceof Error ? e.message : e}` }))
       if (cut.ok) return cut.copied
-      console.info(`Rendering “${title}” in full: ${cut.why}`)
+      // pieces of the film kept from renders before; anything wrong with that way, in full
+      const pieces = await renderPieces({ ffmpeg: FFMPEG, cwd: p.dir, cache: join(app.getPath('userData'), 'render-pieces'), tl, out, encoder: await videoEncoder(), inputOf, hasAudio, overlayOf, signal, progress: f => j.progress(f) })
+        .catch(e => { if (signal?.aborted) throw e; console.warn(`Rendering “${title}” in full: ${e instanceof Error ? e.message : e}`); return undefined })
+      if (pieces !== undefined) return pieces || undefined
       await new Promise<void>((ok, fail) => execFile(FFMPEG, ['-y', '-loglevel', 'error', ...args], { cwd: p.dir, maxBuffer: 1 << 24, signal, windowsHide: true }, (err, _o, stderr) => (err ? fail(new Error(stderr.slice(-1500) || err.message)) : ok())))
-    }, { project: p.dir, doneTitle: `Rendered “${title}”`, doneDetail: copied => (copied ? `Copied ${Math.round(copied * 100)}% of the picture as it was` : undefined) })
+    }, { project: p.dir, doneTitle: `Rendered “${title}”`, doneDetail: copied => (copied ? `Reused ${Math.round(copied * 100)}% of the picture as it was` : undefined) })
     if (mixed) await asJob('Mixing', 'render', () => mixInto(p, tl, out, final), { project: p.dir, doneTitle: 'Mixed' })
     signal?.throwIfAborted()
     if (tl.demo) {
@@ -1413,6 +1416,7 @@ function createWindow() {
 }
 
 const startup = app.whenReady().then(async () => {
+  void videoEncoder() // tried now, so the agent's first command knows it
   if (quitting) return
   if (process.platform === 'darwin' && WORKER_MODE) app.dock?.hide()
   else if (process.platform === 'darwin' && !app.isPackaged && existsSync(ICON)) app.dock?.setIcon(ICON)

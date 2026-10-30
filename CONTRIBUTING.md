@@ -117,6 +117,25 @@ flowchart LR
 | `resources` | Bundled skills, clip runtime, fonts; `bin/` and `bsk-ext/` are fetched on install |
 | `test` | Vitest tests; `test/e2e` drives the real app |
 
+## GPU encoders
+
+Working cuts are encoded on the graphics chip when the machine has one that works. [`src/shared/encoders.ts`](src/shared/encoders.ts)
+lists each encoder's flags and which platforms try it, best first. [`src/main/encoders.ts`](src/main/encoders.ts) tries them on a
+few frames at startup, and anything that fails falls back to libx264, so a missing driver is never an error. Final exports stay on libx264.
+
+| | Encoders tried | Tested on real hardware |
+| --- | --- | --- |
+| macOS | VideoToolbox | Yes (Apple Silicon) |
+| Windows | NVENC, Quick Sync, AMF | Not yet |
+| Linux x64 | NVENC | Not yet |
+| Linux, other GPUs | None yet: libx264 | Wanted |
+
+Help is welcome, especially:
+
+- **Testing:** run a render on your GPU and compare it with libx264. Tune the quality flags if the picture is softer, and say what you tested on.
+- **Linux on Intel and AMD:** needs VAAPI or Vulkan in [our static ffmpeg build](scripts/ffmpeg/build.sh). VAAPI links libva, which that build doesn't allow yet, so the first step is finding a way to load it when it's used, as NVENC does.
+- **Anything else:** add its flags and platform to `encoders.ts`. If the bundled ffmpeg lacks the encoder, add it to the build too.
+
 ## Tests
 
 AgentShot is **test-driven**: every change comes with tests, and the suites run before each commit.

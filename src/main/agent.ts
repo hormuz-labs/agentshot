@@ -21,6 +21,7 @@ import { liveEnv } from './bsk'
 import { isWithinDir } from './paths'
 import { chooseModel, describeModels } from './models'
 import { buildProviders, listProviders } from './providers'
+import { encoderNow } from './encoders'
 import { agentshotProvider } from './gateway'
 import type { Memory } from './memory'
 import type { Skills } from './skills'
@@ -279,7 +280,7 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       `- Voice and music: generate_voice and generate_music (they use the user's own key or their AgentShot key; never call voice or music APIs with curl).\n` +
       `- Fonts for text you draw with ffmpeg: ${FONTS_DIR} (Inter-Regular.ttf, Inter-Bold.ttf; drawtext fontfile=…, subtitles fontsdir=…). ` +
       `Fonts the user added are in the project's fonts/ folder with Inter: then use fontsdir=fonts (never fontsdir=media).\n` +
-      `- Prefer one well-built ffmpeg command over many small ones. Keep codecs sensible: libx264 -crf 18 -preset veryfast, aac 192k, -movflags +faststart.\n` +
+      `- Prefer one well-built ffmpeg command over many small ones. Keep codecs sensible: ${encoderNow().flags.join(' ')}, aac 192k, -movflags +faststart.\n` +
       `- When you need a decision from the user, call ask_user with 2–5 options and stop.\n` +
       `API keys the user saved in AgentShot are already in your shell's environment (e.g. $ELEVENLABS_API_KEY, $GEMINI_API_KEY): use them in commands as they are; ` +
       `never print, echo, measure or log a key or any part of it, and never look for keys elsewhere (other shells, files).\n` +
