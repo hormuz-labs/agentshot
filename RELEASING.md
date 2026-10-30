@@ -1,7 +1,7 @@
 # Releasing AgentShot
 
 Merge to `main` and CI does the rest. `.github/workflows/tag.yml` tags the next version, a patch release unless the merged
-pull request is labelled `release:minor` or `release:major` (or `release:skip` to merge without releasing), and the
+pull request is labelled `release:minor` or `release:major` (or `release:skip` to merge without releasing; a merge only to `site/` never releases), and the
 release notes are generated from the pull requests merged since the last release. Windows support is configured, but has not
 yet been validated on a native runner or published; missing Windows signing configuration intentionally blocks the entire
 public release (there is no unsigned Windows fallback). To release by hand, push a tag:
