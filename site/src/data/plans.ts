@@ -17,7 +17,6 @@ export interface Plan {
   monthly?: { price: number; credits: number }
   cta: { label: string; href: string }
   note?: string
-  popular?: boolean
 }
 
 const fmt = (n: number) => n.toLocaleString('en-US')
@@ -55,7 +54,6 @@ export const PLANS: Plan[] = [
     ],
     cta: { label: 'Get Pro', href: '/#get' },
     note: 'Subscribe in the app: Settings → Keys → AgentShot key',
-    popular: true,
   },
   {
     key: 'max',
@@ -113,7 +111,7 @@ export const OFFERS = [
 
 /** Questions about plans and credits: on the home page FAQ and on /pricing (HTML allowed in answers). */
 export const PRICING_FAQS = [
-  { q: 'Is it really free?', a: `Yes. AgentShot is open source under the <a href="https://github.com/hormuz-labs/agentshot/blob/main/LICENSE">Apache License 2.0</a> and runs on your computer. Bring your own Claude, Gemini or OpenAI key (or any compatible endpoint) and AgentShot costs nothing, for good: you pay your model provider directly, usually cents per edit. No account needed.` },
+  { q: 'Is it really free?', a: `Yes. AgentShot is open source under the <a href="https://github.com/hormuz-labs/agentshot/blob/main/LICENSE">GNU GPL v3 or later</a> and runs on your computer. Bring your own Claude, Gemini or OpenAI key (or any compatible endpoint) and AgentShot costs nothing, for good: you pay your model provider directly, usually cents per edit. No account needed.` },
   { q: 'What are credits?', a: `Credits are how the AgentShot key is paid for. Each agent run, voice line or music cue draws down credits by what it actually used: the model, the tokens, the minutes of audio. A quick cut uses a little; a long motion film on an Ultra model uses more. New AgentShot accounts get ${fmt(STARTER_CREDITS)} starter credits, and credits never expire once they’re granted.` },
   { q: 'What do Pro and Max add?', a: `A monthly credit allowance (Pro ${fmt(10_000)}, Max ${fmt(30_000)}) and the Max and Ultra tiers in the AgentShot key’s model picker: the strongest models. Low, Medium and High are open to everyone. Paying yearly grants the whole year’s credits upfront (${fmt(120_000)} or ${fmt(360_000)}) for 20% less. Need more mid-month? A Flex top-up adds ${fmt(5_000)} credits for $20.` },
   { q: 'Where do I subscribe?', a: `In the app: open AgentShot, sign in, and go to <b>Settings → Keys → AgentShot key</b>. Billing is handled by Dodo Payments, and you can change or cancel there any time. Your own keys keep working alongside a plan and are used first.` },

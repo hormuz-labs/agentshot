@@ -87,10 +87,8 @@
   }
   .win {
     background: var(--panel);
-    border: 1px solid var(--paper-3, #d8d0bf);
-    border-radius: 16px;
+    border-radius: 4px;
     overflow: hidden;
-    box-shadow: 0 40px 80px -40px rgba(40,25,10,.45), 0 2px 6px rgba(40,25,10,.12);
   }
 
   .lights { display: flex; gap: 7px; margin-right: 6px; }
@@ -111,7 +109,7 @@
   /* the conversation first, the film beside it */
   .body { flex: 1; display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); }
   .stage-col { padding: 12px 14px 12px 16px; background: var(--canvas); min-width: 0; }
-  .stage { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .stage { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
   .stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .after { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--cut, 50%)); }
   .after .v-blur { filter: blur(26px) brightness(.55) saturate(1.2); transform: scale(1.15); }
@@ -125,7 +123,7 @@
   .tag { position: absolute; top: 12px; padding: 5px 9px; border-radius: 7px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); color: #fff; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
   .tag.l { left: 12px; } .tag.r { right: 12px; color: #f2a541; }
 
-  .boxlayer { position: absolute; inset: 0; cursor: crosshair; background: rgba(0,0,0,.18); }
+  .boxlayer { position: absolute; inset: 0; touch-action: none; cursor: crosshair; background: rgba(0,0,0,.18); }
   .hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); padding: 9px 14px; border-radius: 10px; background: rgba(14,13,12,.82); backdrop-filter: blur(8px); color: #f3ece3; font-size: 14px; white-space: nowrap; animation: rise .4s ease both; }
   .hint button { margin-left: 8px; background: none; border: 0; padding: 0; color: #f2a541; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
   .box { position: absolute; border: 2px solid #f2a541; border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35), 0 0 24px rgba(242,165,65,.45); }
@@ -349,6 +347,8 @@
     const e = EDITS[edit]
     asks.hidden = true; decide.hidden = true
     hideAfter()
+    // on a phone the notes sit under the film: bring it back, the edit happens there
+    if (innerWidth <= 900) stage.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' })
     // start fetching the edit while the agent "works"
     va.src = `/demo/${edit}.mp4`; va.poster = `/demo/${edit}.webp`; va.preload = 'auto'; va.load()
     if (e.vertical) { vblur.src = `/demo/${edit}.mp4`; vblur.preload = 'auto'; vblur.load() }
@@ -406,7 +406,7 @@
     offerNext()
   }
   // every request stays open, in any order: the ones kept are ticked, and any of them can be tried again
-  let toldAll = false
+  let told = false
   function offerNext() {
     current = null; demo.dataset.state = 'idle'
     asks.querySelectorAll<HTMLButtonElement>('.ask').forEach(b => {
@@ -414,15 +414,15 @@
       b.classList.toggle('done', done); b.title = done ? 'Kept. Try it again' : ''
     })
     $('restart').hidden = kept.size === 0
-    if (kept.size === Object.keys(EDITS).length && !toldAll) {
-      toldAll = true
+    if (kept.size && !told) {
+      told = true
       say('That\'s the whole idea. Now try it on your own footage. <a href="#get" style="color:var(--amber);font-weight:600">Get AgentShot →</a>')
     }
     asks.hidden = false
   }
   $('restart').onclick = () => {
     if (busy) return
-    kept.clear(); version = 1; toldAll = false
+    kept.clear(); version = 1
     ver.querySelector('b')!.textContent = 'v1'; verLabel.textContent = 'Original'
     vb.src = '/demo/before.mp4'; vb.poster = '/demo/before.webp'; vb.style.objectFit = 'cover'; vb.play().catch(() => {})
     hideAfter(); decide.hidden = true

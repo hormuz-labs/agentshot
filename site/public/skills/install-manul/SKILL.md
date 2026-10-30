@@ -13,7 +13,7 @@ AgentShot is an open-source video agent for macOS 12+, Windows 10/11 (x64), and 
 brew install hormuz-labs/tap/manul
 ```
 
-No Homebrew: download the `.dmg` for this Mac (`arm64` for Apple silicon, `x64` for Intel) from https://github.com/hormuz-labs/agentshot/releases/latest. Until notarization is done, the first launch needs right-click → Open.
+No Homebrew: download the `.dmg` for this Mac (`arm64` for Apple silicon, `x64` for Intel) from https://github.com/hormuz-labs/agentshot/releases/latest. Builds are signed and notarized, so it opens normally.
 
 ## Windows (x64)
 

@@ -1,0 +1,127 @@
+---
+import '@fontsource-variable/archivo/wdth.css'
+import '@fontsource/ibm-plex-mono/500.css'
+import '../styles/global.css'
+import Cta from '../components/Cta.astro'
+import { GH } from '../data/download'
+import { STARTER_CREDITS, fmt } from '../data/plans'
+
+interface Props {
+  title: string
+  description: string
+  noindex?: boolean
+}
+const { title, description, noindex = false } = Astro.props
+const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <meta name="theme-color" content="#0b0b0a" />
+  {noindex && <meta name="robots" content="noindex" />}
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png" />
+  <link rel="icon" href="/favicon.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="canonical" href={canonical} />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={canonical} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:image" content="https://agentshot.si/og.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <!-- before first paint, so the button never shows the wrong system -->
+  <script is:inline>(() => {
+    const u = navigator.userAgent, phone = /iPhone|iPad|Android/.test(u) || (/Mac/.test(u) && navigator.maxTouchPoints > 1)
+    document.documentElement.dataset.os = phone ? 'phone' : /Mac/.test(u) ? 'mac' : /Win/.test(u) ? 'win' : /Linux|X11/.test(u) ? 'linux' : 'any'
+  })()</script>
+  <slot name="head" />
+</head>
+<body>
+  <div class="playhead" aria-hidden="true"></div>
+  <header class="top">
+    <div class="wrap top-in">
+      <a class="brand" href="/" aria-label="AgentShot home"><img src="/icon-56.png" width="28" height="28" alt="" /><span>AgentShot</span></a>
+      <nav aria-label="Site">
+        <a href="/#make" class="wide">What it makes</a>
+        <a href="/#how" class="wide">How it works</a>
+        <a href="/#pricing">Pricing</a>
+        <a href={GH}>GitHub</a>
+      </nav>
+      <div class="top-cta"><Cta small /></div>
+    </div>
+  </header>
+
+  <slot />
+
+  <footer class="foot">
+    <div class="wrap foot-in">
+      <a class="brand" href="/" aria-label="AgentShot home"><img src="/icon-56.png" width="28" height="28" alt="" /><span>AgentShot</span></a>
+      <nav aria-label="Footer">
+        <a href="/#get">Install</a>
+        <a href="/pricing/">Pricing</a>
+        <a href={GH}>GitHub</a>
+        <a href={`${GH}/blob/main/ROADMAP.md`}>Roadmap</a>
+        <a href={`${GH}/releases`}>Releases</a>
+        <a href="/privacy/">Privacy</a>
+        <a href="/terms/">Terms</a>
+        <a href="mailto:support@agentshot.si">support@agentshot.si</a>
+      </nav>
+      <p>© 2026 Hormuz Labs. Free and open source under the <a href={`${GH}/blob/main/LICENSE`}>GNU GPL v3 or later</a>. Demo clip: “Manul Timofey”, Moscow Zoo, <a href="https://commons.wikimedia.org/wiki/File:%D0%9C%D0%B0%D0%BD%D1%83%D0%BB_%D0%A2%D0%B8%D0%BC%D0%BE%D1%84%D0%B5%D0%B9_%D0%BD%D0%B0_%D1%80%D0%B0%D0%B7%D0%B6%D0%B8%D1%80%D0%BE%D0%B2%D0%BA%D0%B5.webm">CC BY 4.0</a>, edited.</p>
+    </div>
+  </footer>
+
+  <div class="dock" id="dock" hidden>
+    <Cta />
+    <a class="btn ghost" href={GH}>Star on GitHub</a>
+  </div>
+  <div class="toast" id="toast" role="status" hidden>
+    <p><b>Your download has started.</b> Open it, sign in for {fmt(STARTER_CREDITS)} free credits, and drop in a video.</p>
+    <a href="/#get">Install help</a>
+    <button type="button" aria-label="Dismiss">×</button>
+  </div>
+
+  <script>
+    const os = document.documentElement.dataset.os
+    const toast = document.getElementById('toast')!
+    toast.querySelector('button')!.addEventListener('click', () => (toast.hidden = true))
+
+    // a direct download on Mac and Windows; Linux has several packages, so it goes to the install section
+    document.querySelectorAll<HTMLAnchorElement>('a[data-dl]').forEach(a => {
+      const href = os === 'mac' ? a.dataset.mac : os === 'win' ? a.dataset.win : null
+      if (!href) return
+      a.href = href
+      a.addEventListener('click', () => (toast.hidden = false))
+    })
+
+    // a phone can't run the app: hand the link to the visitor's computer
+    document.querySelectorAll<HTMLButtonElement>('[data-send]').forEach(b => b.addEventListener('click', async () => {
+      const url = 'https://agentshot.si/#get', text = 'AgentShot, the video editor you talk to. Install it on my computer.'
+      const was = b.textContent
+      try {
+        if (navigator.share) { await navigator.share({ title: 'AgentShot', text, url }); return }
+        await navigator.clipboard.writeText(url)
+        b.textContent = 'Link copied'
+        setTimeout(() => (b.textContent = was), 2200)
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') location.href = `mailto:?subject=${encodeURIComponent('AgentShot')}&body=${encodeURIComponent(`${text} ${url}`)}`
+      }
+    }))
+
+    document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+      const was = b.textContent
+      try { await navigator.clipboard.writeText(b.dataset.copy!); b.textContent = 'Copied' } catch { b.textContent = 'Select and copy' }
+      setTimeout(() => (b.textContent = was), 1800)
+    }))
+
+    // the phone's bar comes in once the hero's button has scrolled away
+    const hero = document.querySelector('[data-hero-cta]'), dock = document.getElementById('dock')!
+    if (os === 'phone' && hero) new IntersectionObserver(([e]) => (dock.hidden = e.isIntersecting || e.boundingClientRect.top > 0)).observe(hero)
+    else if (os === 'phone') dock.hidden = false
+  </script>
+</body>
+</html>

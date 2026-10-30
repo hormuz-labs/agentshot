@@ -1,44 +1,19 @@
 ---
-import '@fontsource-variable/albert-sans'
-import '@fontsource/ibm-plex-mono/400.css'
-import '@fontsource/ibm-plex-mono/500.css'
-import '@fontsource/ibm-plex-mono/600.css'
-import '../styles/global.css'
+import Base from '../layouts/Base.astro'
+import Cta from '../components/Cta.astro'
 import Demo from '../components/Demo.astro'
-import release from '../release.json'
-import motion from '../data/motion.json'
 import Pricing from '../components/Pricing.astro'
+import motion from '../data/motion.json'
 import { OFFERS, PRICING_FAQS, PLAN_SUMMARY, STARTER_CREDITS, fmt } from '../data/plans'
+import { GH as gh, version, MAC_ARM, MAC_INTEL, WINDOWS, DEB, DEB_ARM, APPIMAGE, APPIMAGE_ARM, BREW, APT, AGENT_PROMPT } from '../data/download'
 
-// the latest release; .github/workflows/release.yml refreshes src/release.json when AgentShot ships
-const version = release.version
-const dl = (f: string) => `https://github.com/hormuz-labs/agentshot/releases/download/v${version}/${f}`
-const apt = `curl -fsSL https://apt.agentshot.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &&
-echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.agentshot.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &&
-sudo apt update && sudo apt install manul`
-const winPs = `iwr ${dl(`AgentShot-${version}-windows-x64-Setup.exe`)} -OutFile $env:TEMP\\AgentShot.exe; & $env:TEMP\\AgentShot.exe`
-const brew = 'brew install hormuz-labs/tap/manul'
-const agentPrompt = `Install AgentShot from https://github.com/hormuz-labs/agentshot and launch it (or run manul --worker on a headless machine):
-
-  macOS:   ${brew}
-  Windows: ${winPs}
-  Linux:   ${apt.replaceAll('\n', ' ')}
-
-Or download the .dmg, .exe, .deb or .AppImage for this machine from https://github.com/hormuz-labs/agentshot/releases/latest.`
-const agentHtml = `<span class="c"># Install AgentShot and launch it (or run manul --worker on a headless machine):</span>
-
-<span class="l">macOS</span>    <span class="p">$</span> ${brew}
-<span class="l">Windows</span>  <span class="p">PS&gt;</span> iwr ${dl(`AgentShot-${version}-windows-x64-Setup.exe`)} -OutFile $env:TEMP\\AgentShot.exe; &amp; $env:TEMP\\AgentShot.exe
-<span class="l">Linux</span>    <span class="p">$</span> ${apt.replaceAll('&', '&amp;').replaceAll('\n', '\n           ')}
-
-<span class="c"># Or grab the .dmg, .exe, .deb or .AppImage from https://github.com/hormuz-labs/agentshot/releases/latest</span>`
-const title = 'AgentShot: the open-source AI video agent — make and edit any video'
-const description = 'AgentShot is an open-source video agent you talk to. Start from a blank canvas, a live web app or your own footage: it makes motion graphics, product walkthroughs, screen + facecam demos, voice and music, and edits on the word. For macOS, Windows and Linux, with a mobile companion and cloud or home workers.'
-const gh = 'https://github.com/hormuz-labs/agentshot'
+const title = 'AgentShot: the video editor you talk to. Free and open source.'
+const description = 'Give notes, get cuts. Say what you want, point at the frame, and keep the cut or send it back. AgentShot runs on your computer, for macOS, Windows and Linux. Free with your own model key.'
 // motion examples from the gallery inside AgentShot: made by the people credited, with Claude; collected by prompt-motion.com.
 // Videos and posters stream from AgentShot's bucket (scripts/publish-motion-gallery.mjs in the app's repo).
 const media = 'https://storage.googleapis.com/manul-gallery/v1'
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
+
 // a trace under each line of the readout, drawn here so the page ships no script for it (600 × 28, seeded so it never changes)
 let seed = 7
 const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
@@ -65,8 +40,8 @@ function shotsTrace() {
       let d = `M${a + 3} 14`
       for (let x = a + 3; x < b - 3; x += 4) d += ` L${x} ${f1(14 + (rnd() - .5) * 14)}`
       out += `<path d="${d}" class="rl"/>`
-    } else out += `<rect x="${a + 2}" y="${frozen ? 6 : 12}" width="${b - a - 4}" height="${frozen ? 16 : 4}" class="${frozen ? 'h' : 'p'}"/>`
-    if (i) out += `<rect x="${a - 1}" y="2" width="2" height="24" class="p"/>`
+    } else out += `<rect x="${a + 2}" y="${frozen ? 6 : 12}" width="${b - a - 4}" height="${frozen ? 16 : 4}" class="${frozen ? 'r' : 'p'}"/>`
+    if (i) out += `<rect x="${a - 1}" y="2" width="2" height="24" class="q"/>`
   })
   return out
 }
@@ -75,7 +50,7 @@ function subjectTrace() {
   for (let x = 0; x <= W; x += 10) {
     const y = 14 + Math.sin(x / 70) * 7 + Math.sin(x / 23) * 2
     d += `${x ? 'L' : 'M'}${x} ${f1(y)} `
-    if (x % 60 === 0) band += `<rect x="${x - 4}" y="${f1(y - 10)}" width="8" height="20" class="h"/>`
+    if (x % 60 === 0) band += `<rect x="${x - 4}" y="${f1(y - 10)}" width="8" height="20" class="b"/>`
   }
   return band + `<path d="${d}" class="rl"/>`
 }
@@ -94,1312 +69,521 @@ function soundTrace() {
     d += ` L${f1(x)} ${quiet ? 26 : f1(26 - 6 - rnd() * 18)}`
     x += w
   }
-  return `<path d="${d} L${W} 26 Z" class="pf"/>`
+  return `<path d="${d} L${W} 26 Z" class="p"/>`
 }
 const svg = (inner: string) => `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${inner}</svg>`
 // the readout: what the agent reads about a film before it cuts (one 6-minute interview, with a song under it)
 const log = [
-  { k: 'Words', trace: svg(wordsTrace()), found: '2,417 words, each with its start and end; cut points moved into the quiet between them', say: 'cut the ums' },
-  { k: 'Voices', trace: svg(voicesTrace()), found: 'two speakers, told apart by voice <i>A 61% · B 39%</i>', say: 'keep only Ravi’s answers' },
-  { k: 'Shots', trace: svg(shotsTrace()), found: '38 shots <i>shaky at 00:52 and 02:10</i> <i>frozen 03:31–03:35</i> and the exposure and colour of each', say: 'lose the shaky bits' },
-  { k: 'Subject', trace: svg(subjectTrace()), found: 'a face, followed through 37 of 38 shots, with a crop that keeps it in frame at 9:16, 1:1 and 4:5', say: 'now a vertical one for Reels' },
-  { k: 'Music', trace: svg(musicTrace()), found: 'low-light.mp3 <i>92 BPM · 64 bars</i> builds at 01:08, drops at 01:24', say: 'cut to the beat after the drop' },
-  { k: 'Sound', trace: svg(soundTrace()), found: '<i>−19 LUFS</i> 14 pauses over half a second, the loudest at 04:12', say: 'tighten the pauses' },
+  { k: 'Words', trace: svg(wordsTrace()), found: '2,417 words, each with its start and end', say: 'cut the ums' },
+  { k: 'Voices', trace: svg(voicesTrace()), found: 'Two speakers, told apart by voice', say: 'keep only Ravi’s answers' },
+  { k: 'Shots', trace: svg(shotsTrace()), found: '38 shots, shaky at 00:52 and 02:10', say: 'lose the shaky bits' },
+  { k: 'Subject', trace: svg(subjectTrace()), found: 'A face, followed through 37 of 38 shots', say: 'now a vertical one for Reels' },
+  { k: 'Music', trace: svg(musicTrace()), found: '92 BPM, builds at 01:08, drops at 01:24', say: 'cut to the beat after the drop' },
+  { k: 'Sound', trace: svg(soundTrace()), found: '−19 LUFS, 14 pauses over half a second', say: 'tighten the pauses' },
 ]
-const faqs = [
-  ...PRICING_FAQS,
-  { q: 'Does my video get uploaded anywhere?', a: `No, not by default. Cutting, rendering and transcription happen on your computer. The model only receives text (your notes, the transcript) and, when it needs to look, a few still frames. If you pair the mobile app, it talks directly to your computer over Wi-Fi or Tailscale pinned to your desktop’s TLS certificate. If you choose a home or cloud worker, only the active project delta-syncs over the encrypted manul-mesh tunnel.` },
-  { q: 'Can I use it from my phone, or on a remote worker?', a: `Yes. Open Settings → Mobile to pair the iOS or Android companion app with a 6-digit code over Wi-Fi or Tailscale: send clips from your camera roll, browse projects, draw boxes on the frame, chat live, and share exports. For heavy renders or working from a light laptop, run <code>manul --worker</code> on a home machine or lease a cloud worker on your AgentShot key — built-in userspace WireGuard (manul-mesh) links them without needing Tailscale installed.` },
-  { q: 'Which AI does it use?', a: `Your pick, per project. Sign in for the AgentShot key and choose a tier (Low, Medium, High, and on Pro or Max, Max and Ultra), or bring your own Claude, Gemini or OpenAI key, or any OpenAI- or Anthropic-compatible endpoint. Your keys stay in your system’s keychain and are used first.` },
-  { q: 'Do I need to know video editing?', a: `No. If you can describe what you want to a person, you can direct AgentShot. If you do know editing, you’ll get there faster: it understands “J-cut”, “punch in” and “duck the music”.` },
-  { q: 'Do I have to type everything into the chat?', a: `No. Draw a box on the picture, drag across the timeline, or press N at a moment, and a message box opens right there: say what should change and press Enter. It goes to AgentShot with what you pointed at, and shows in the conversation so you can look back over it. Light by default, with a dark theme in Settings.` },
-  { q: 'Does AgentShot generate video from scratch?', a: `Yes. Without any camera footage, it builds 60fps motion graphics from a blank canvas or 233 gallery examples, films narrated product walkthroughs in Chrome, and generates voiceover and music. Generated AI camera shots (b-roll on the fly, extending a frame, filling in a spot you box) are next — placed only where you ask, never swapping out your own footage.` },
-  { q: 'What can’t it do yet?', a: `Generated AI camera shots, multi-camera sync beyond screen + facecam, handing the cut to Premiere, Resolve or Final Cut, publishing straight to YouTube, and a public API and MCP server. All are on the <a href="${gh}/blob/main/ROADMAP.md">roadmap</a>, in the open.` },
-  { q: 'How is it different from CapCut, Descript, Motion or HyperFrames?', a: `CapCut, Premiere Pro, Final Cut Pro and DaVinci Resolve hand you a timeline to operate. Descript edits transcripts. HyperFrames and Remotion turn video into code in a terminal. Hosted video agents run only in someone else’s cloud. AgentShot is one open-source video agent for the whole job: make motion graphics, record product walkthroughs, sync screen + facecam, or cut footage on your own computer, from your phone, or on a worker.` },
-  { q: 'Who makes it?', a: `Hormuz Labs, in the open. Issues, ideas and pull requests are welcome on <a href="${gh}">GitHub</a>. For teams and business, write to <a href="mailto:support@agentshot.si">support@agentshot.si</a>.` },
-]
-// the hero's prompt box: one example per kind of film; the chips swap it
-const chips = [
-  { k: 'Edit footage', p: 'Cut the ums and the restarts, keep only Ravi’s answers, and put quiet music under it.' },
-  { k: 'Motion design', p: 'A 20-second logo reveal for @logo.png, in our colours, on a track with a clear beat.' },
-  { k: 'Product walkthrough', p: 'Open app.example.com in Chrome, sign up and make a first project: film it at 60fps, zoom into clicks and add a voiceover.' },
-  { k: 'Screen + facecam', p: 'Sync @screen.mp4 and @facecam.mp4, put me in a round corner PiP, and cut the dead air while keeping every click.' },
-  { k: 'Clip highlights', p: 'Find the five best moments in this 40-minute podcast and make each a vertical Short with captions.' },
-  { k: 'Article to video', p: 'Turn this blog post into a 60-second explainer with kinetic type, a voiceover and music.' },
-  { k: 'Launch film', p: 'A 15-second launch film for our new feature, in the style of @reference.mp4.' },
-]
-// many kinds of films, one agent: what you say, what AgentShot does, what comes out
+
+// what you say, what AgentShot does, what comes out. Each caption says what the clip really is.
 const ex = (id: string) => motion.find(m => m.id === id)!
 const films = [
-  { k: 'Edit footage', prompt: 'Make it cinematic, and put his name on screen.', steps: ['Measured the clip: one shot, one face, followed in every frame', 'Graded it and set it in a widescreen letterbox', 'Set his name in real type, in on the look', 'Rendered on your computer with ffmpeg', 'Before and after ready: keep it or send it back'], video: '/demo/cinema.mp4', poster: '/demo/cinema.webp', shape: 'wide', cap: 'The after, rendered by the same engine AgentShot drives' },
-  { k: 'Motion design', prompt: `Use the “${ex('tdinh-me-815acb').title}” example, but reveal @logo.png in our colours.`, steps: ['Read the example’s prompt and studied the film', 'Asked for what it needed: the logo, two colours, a track', 'Showed a storyboard, one line per scene, before a frame', 'Built each scene as real motion graphics you can edit on the picture', 'Rendered 21 seconds at 1080p'], video: `/motion/tdinh-me-815acb.mp4`, poster: '/motion/tdinh-me-815acb.jpg', shape: 'wide', cap: `The example it starts from, by @${ex('tdinh-me-815acb').handle}` },
-  { k: 'Product walkthrough', prompt: 'Walk through our web app in Chrome: filter the analytics, open a report, zoom into each click and narrate it.', steps: ['Explored the live web app in Chrome and proposed a step-by-step storyboard', 'Filmed a clean 60fps take with smooth cursor travel and click ripples', 'Zoomed into each interaction and wrote the narration per step', 'Generated the voiceover and paced the cut to match every sentence'], video: `/motion/robj3d3-b18fad.mp4`, poster: '/motion/robj3d3-b18fad.jpg', shape: 'wide', cap: `A product film from the gallery, by @${ex('robj3d3-b18fad').handle}` },
-  { k: 'Screen + facecam', prompt: 'Sync my screen recording and facecam, put me in the corner, and cut the pauses.', steps: ['Aligned screen and camera recordings automatically by matching their audio', 'Placed the facecam in a rounded corner picture-in-picture overlay', 'Cut the dead air and hesitations while keeping all speech and screen action', 'Balanced the mic and rendered the composite at 60fps'], video: '/demo/zoom.mp4', poster: '/demo/zoom.webp', shape: 'wide', cap: 'The after, rendered by the same engine AgentShot drives' },
-  { k: 'Shorts & Reels', prompt: 'Make it a Short with a caption.', steps: ['Found the subject and tracked him through the shot', 'Reframed 16:9 to 9:16 so he never leaves the frame', 'Timed the caption to the moment and burned it in', 'Exported 1080 × 1920, ready for Shorts, Reels and TikTok'], video: '/demo/short.mp4', poster: '/demo/short.webp', shape: 'tall', cap: 'The after, rendered by the same engine AgentShot drives' },
-  { k: 'Launch video', prompt: 'A 15-second launch film for dub.co, like the Dub promo example. Go all out.', steps: ['Opened dub.co in its own browser for the product, colours and copy', 'Wrote the beats and a storyboard for you to approve', 'Cut every scene on the beat of the track', 'Made the voiceover and the music through your key', 'Exported 16:9 and a 9:16 cut for socials'], video: `/motion/steventey-0d20e4.mp4`, poster: '/motion/steventey-0d20e4.jpg', shape: 'wide', cap: `The example it starts from, by @${ex('steventey-0d20e4').handle}` },
+  { k: 'Your footage', prompt: 'Make it cinematic, and put his name on screen.', steps: ['Measured the clip: one shot, one face, followed in every frame', 'Graded it and set it in a widescreen letterbox', 'Set his name in real type you can still drag and retype', 'Came back as a before and after, to keep or send back'], video: '/demo/cinema.mp4', poster: '/demo/cinema.webp', shape: 'wide', cap: 'The after, rendered by the engine AgentShot drives' },
+  { k: 'A vertical Short', prompt: 'Make it a Short with a caption.', steps: ['Found the subject and tracked him through the shot', 'Reframed 16:9 to 9:16 so he never leaves the frame', 'Timed the caption to the moment and burned it in', 'Exported 1080 × 1920 for Shorts, Reels and TikTok'], video: '/demo/short.mp4', poster: '/demo/short.webp', shape: 'tall', cap: 'The after, rendered by the engine AgentShot drives' },
+  { k: 'Your product’s URL', prompt: 'A walkthrough of app.example.com: sign up and make a first project.', steps: ['Tried the product first, without filming', 'Showed a storyboard: each step and what the voice will say', 'Filmed one take in your Chrome, where you’re already signed in', 'Cut the waiting, zoomed into each click, held each step for its line'], video: `/motion/robj3d3-b18fad.mp4`, poster: '/motion/robj3d3-b18fad.jpg', shape: 'wide', cap: `A product film from the gallery, by @${ex('robj3d3-b18fad').handle}` },
+  { k: 'Nothing at all', prompt: `Use the “${ex('tdinh-me-815acb').title}” example, but reveal @logo.png in our colours.`, steps: ['Read the example’s prompt and studied the film', 'Asked for what it needed: the logo, two colours, a track', 'Showed a storyboard before making a frame', 'Built real motion graphics, so a note changes one scene, not all of them'], video: `/motion/tdinh-me-815acb.mp4`, poster: '/motion/tdinh-me-815acb.jpg', shape: 'wide', cap: `The example it starts from, by @${ex('tdinh-me-815acb').handle}` },
 ]
-// the line that fills in, letter by letter, as you scroll past it (split here so the page ships it ready)
-const say = 'Start from raw footage, a live web app, or a blank canvas. Say what you want and point at the frame — AgentShot builds or cuts the film and hands every change back as a before and after.'
-let sayN = 0
-const sayWords = say.split(' ').map(w => [...w].map(c => ({ c, i: sayN++ })))
-// a painting behind a panel: the image loads when the panel comes near (see .paint in the styles)
-const paint = (name: string, pos = 'center', tint = '#e9e6da') => `--img:url(/paint/${name}.webp);--pos:${pos};--tint:${tint}`
+
+const notes = [
+  { you: 'cut the ums, and the bit where I lose my train of thought', did: 'Cut 9 fillers and the restart at 0:42, each in the quiet before the next word.', at: '2:31 → 2:12' },
+  { you: 'blur this number plate', did: 'Blurred that box from 0:18 to 0:24. The rest of the shot is untouched.', at: 'box · 0:18' },
+  { you: 'put my name on screen when I introduce myself', did: 'Lower third at 0:04, in real type you can drag or retype on the picture.', at: 'on the word “I’m”' },
+  { you: 'quiet music under the whole thing', did: 'The music loops to 2:12 and dips under every sentence. You hear the mix before it renders.', at: '0:00 → end' },
+  { you: 'now a vertical one for Shorts, captions burned in', did: 'Same film at 9:16, the crop following whoever’s in frame.', at: '9:16' },
+]
+
+const faqs = [
+  { q: 'Does my video get uploaded anywhere?', a: `No. Editing, transcription and analysis run on your computer. The AI model reads text and a few still frames it asks to look at. It never gets the video file. AgentShot Cloud and cloud workers are there if you choose them, and only then does a project leave your computer.` },
+  PRICING_FAQS[0],
+  { q: 'Do I need to know video editing?', a: `No. If you can describe what you want to a person, you can direct AgentShot. If you do know editing, you’ll get there faster: it understands “J-cut”, “punch in” and “duck the music”.` },
+  { q: 'Which AI does it use?', a: `Your pick, per project. Bring a Claude, Gemini or OpenAI key, or any OpenAI- or Anthropic-compatible endpoint, or sign in for the AgentShot key. Your keys stay in your system’s keychain, and the agent’s sandbox can’t read them.` },
+  { q: 'Can I still edit by hand?', a: `Yes. It edits a timeline, not your pixels. Cuts, titles, captions and music stay editable, so you can drag, resize or retype anything on the picture afterwards.` },
+  { q: 'Will it mess up my film?', a: `It can’t. Nothing is overwritten. Every change comes back as a new version to compare, and every version you keep is one click away.` },
+  PRICING_FAQS[1],
+  { q: 'What can’t it do yet?', a: `Hand the cut to Premiere, Resolve or Final Cut, publish straight to YouTube, or generate camera shots. Those are on the <a href="${gh}/blob/main/ROADMAP.md">public roadmap</a>.` },
+  { q: 'Who makes it?', a: `Hormuz Labs, in the open. Issues and pull requests are welcome on <a href="${gh}">GitHub</a>. For anything else, write to <a href="mailto:support@agentshot.si">support@agentshot.si</a>.` },
+]
 ---
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{title}</title>
-  <meta name="description" content={description} />
-  <meta name="theme-color" content="#fdfdf6" />
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png" />
-  <link rel="icon" href="/favicon.png" sizes="32x32" type="image/png" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  <link rel="canonical" href="https://agentshot.si/" />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://agentshot.si/" />
-  <meta property="og:title" content={title} />
-  <meta property="og:description" content={description} />
-  <meta property="og:image" content="https://agentshot.si/og.jpg" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <link rel="preload" href="/paint/steppe.webp" as="image" type="image/webp" />
-  <!-- before first paint: "js" turns on the lazy paintings and reveals, "move" the scroll motion (not for reduced motion) -->
-  <script is:inline>document.documentElement.classList.add('js'); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('move')</script>
-  <script type="application/ld+json" set:html={JSON.stringify({
-    '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'AgentShot', applicationCategory: 'MultimediaApplication',
-    operatingSystem: 'macOS, Windows, Linux', offers: OFFERS, url: 'https://agentshot.si/', description: PLAN_SUMMARY,
-    downloadUrl: `${gh}/releases/latest`, softwareVersion: version, license: `${gh}/blob/main/LICENSE`,
-  })} />
-  <script type="application/ld+json" set:html={JSON.stringify({
-    '@context': 'https://schema.org', '@type': 'VideoObject', name: 'AgentShot: you direct, it makes and edits the film',
-    description: 'An 88-second film about AgentShot, the open-source video agent: start from footage or a blank canvas, say what you want, point at the frame, keep or send back each edit.',
-    thumbnailUrl: 'https://agentshot.si/film/poster.jpg', contentUrl: 'https://agentshot.si/film/manul.mp4', uploadDate: '2026-10-07', duration: 'PT1M28S',
-  })} />
-  <script type="application/ld+json" set:html={JSON.stringify({
-    '@context': 'https://schema.org', '@type': 'FAQPage',
-    mainEntity: faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a.replace(/<[^>]+>/g, '') } })),
-  })} />
-</head>
-<body>
-  <header class="top" id="top">
-    <div class="top-in">
-      <nav aria-label="On this page">
-        <a href="#films">Make &amp; Edit</a>
-        <a href="#anywhere">Everywhere</a>
-        <a href="#build">Developers</a>
-        <a href="#pricing">Pricing</a>
-        <a href="#fits" class="more">Compare</a>
-        <a href="#faq" class="more">FAQ</a>
-      </nav>
-      <a class="brand" href="/" aria-label="AgentShot home"><img src="/icon-56.png" width="28" height="28" alt="" /><span>AgentShot</span></a>
-      <div class="acts">
-        <a class="gh" href={gh} aria-label="AgentShot on GitHub">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
-          <span>Star</span>
-        </a>
-        <a href="#get" class="btn sm">Download</a>
-      </div>
-    </div>
-    <nav class="mob-nav" aria-label="Quick jump">
-      <a href="#try">Try it</a>
-      <a href="#films">Make &amp; Edit</a>
-      <a href="#anywhere">Phone &amp; Cloud</a>
-      <a href="#motion">233 Examples</a>
-      <a href="#pricing">Pricing</a>
-      <a href="#get">Install</a>
-      <a href="#faq">FAQ</a>
-    </nav>
-  </header>
+<Base title={title} description={description}>
+  <Fragment slot="head">
+    <link rel="preload" href="/demo/before.webp" as="image" type="image/webp" />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'AgentShot', applicationCategory: 'MultimediaApplication',
+      operatingSystem: 'macOS, Windows, Linux', offers: OFFERS, url: 'https://agentshot.si/', description: PLAN_SUMMARY,
+      downloadUrl: `${gh}/releases/latest`, softwareVersion: version, license: `${gh}/blob/main/LICENSE`,
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'VideoObject', name: 'AgentShot: give notes, get cuts',
+      description: 'An 88-second film about AgentShot, the open-source video editor you talk to.',
+      thumbnailUrl: 'https://agentshot.si/film/poster.jpg', contentUrl: 'https://agentshot.si/film/manul.mp4', uploadDate: '2026-10-07', duration: 'PT1M28S',
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'FAQPage',
+      mainEntity: faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a.replace(/<[^>]+>/g, '') } })),
+    })} />
+  </Fragment>
 
   <main>
-    <section class="hero" aria-label="AgentShot">
-      <div class="sky paint seen" style={paint('steppe', 'center 30%', '#bcd6ef')}>
-        <div class="hero-copy">
-          <a class="eyebrow" href="#get"><span class="dot-live" aria-hidden="true"></span><span>v<span data-version>{version}</span> · open source · macOS, Windows &amp; Linux</span></a>
-          <h1 class="slate" aria-label="AgentShot, the open-source video agent.">
-            <span class="w" style="--i:0" aria-hidden="true">AgentShot,</span> <span class="w" style="--i:1" aria-hidden="true">the</span> <span class="w ringed" style="--i:2" aria-hidden="true">open-source<svg viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M150 14C96 0 22 8 9 46c-11 34 58 50 114 47 56-3 76-26 70-52-5-20-40-31-82-28"/></svg></span> <span class="w" style="--i:3" aria-hidden="true">video</span> <span class="w" style="--i:4" aria-hidden="true">agent.</span>
-          </h1>
-          <p class="lede">Make any video from scratch, or edit the footage you have. Motion graphics, narrated product walkthroughs, screen + facecam demos, Shorts, voice and music — on your own computer, from your phone, or on a cloud worker.</p>
-          <div class="prompt" role="group" aria-label="An example of what you can ask">
-            <p class="prompt-text" id="prompt-text" aria-live="polite">{chips[0].p}</p>
-            <a class="prompt-go" href="#get" aria-label="Download AgentShot to try this"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5m0 0-6 6m6-6 6 6"/></svg></a>
-          </div>
-          <ul class="chips" role="list" aria-label="Kinds of video">
-            {chips.map((c, i) => <li><button type="button" data-prompt={c.p} aria-pressed={i === 0 ? 'true' : 'false'}>{c.k}</button></li>)}
-          </ul>
-          <div class="cta-row">
-            <a href="#get" class="btn dot" data-os-cta>
-              <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></span>
-              <span data-os-label>Download AgentShot</span>
-            </a>
-            <button class="btn light" type="button" data-film><i class="play" aria-hidden="true"></i>Watch the film <span class="mono dur">1:28</span></button>
-          </div>
-          <button class="brew mono" data-copy={brew} aria-label="Copy the Homebrew install command"><span>$ {brew}</span><em>copy</em></button>
+    <section class="hero wrap" aria-label="AgentShot">
+      <h1>Give notes. <mark>Get cuts.</mark></h1>
+      <div class="hero-side">
+        <p class="lede">The video editor you talk to. Say what you want, point at the frame, and keep the cut or send it back.</p>
+        <div class="hero-cta" data-hero-cta>
+          <Cta />
+          <button class="btn ghost" type="button" data-film>Watch the film <span class="mono dur">1:28</span></button>
         </div>
-
-        <div class="stage" id="try" aria-label="Try AgentShot">
-          <div class="glass"><Demo /></div>
-          <ol class="steps" aria-hidden="true">
-            <li><b>1</b>Give it a note</li>
-            <li><b>2</b>Drag across the frame to compare</li>
-            <li><b>3</b>Keep it, or send it back</li>
-          </ol>
-        </div>
+        <p class="reassure for-computer">Free and open source. Your footage stays on your computer.</p>
+        <p class="reassure for-phone">It runs on your computer, so send yourself the link. Free and open source.</p>
       </div>
-      <!-- size the editor to the window, so all of it is on the first screen -->
-      <script is:inline>(() => {
-        const st = document.getElementById('try'), g = st.firstElementChild
-        const fit = () => {
-          if (innerWidth < 900) { st.style.maxWidth = ''; return }
-          let w = 1104
-          for (let k = 0; k < 4; k++) {
-            st.style.maxWidth = w + 'px'
-            // layout sizes, not the bounding box: the editor is mid rise-in (shifted and scaled) when this first runs
-            let top = 0
-            for (let el = g; el; el = el.offsetParent) top += el.offsetTop
-            const room = innerHeight - top - 18
-            w = Math.round(Math.max(760, Math.min(1104, room * g.offsetWidth / g.offsetHeight)))
-          }
-          st.style.maxWidth = w + 'px'
-        }
-        fit(); addEventListener('resize', fit); document.fonts && document.fonts.ready.then(fit)
-      })()</script>
-      <p class="credit wrap">Clip: Timofey the Pallas’s cat, Moscow Zoo, CC BY 4.0. Each “after” was rendered by the same engine AgentShot drives. <span class="phone-only">Desktop app for macOS, Windows and Linux, with a companion app for iPhone and Android.</span></p>
+      <div class="stage" id="try">
+        <Demo />
+        <p class="credit">Try it. Each after is a real render of one clip. Timofey the Pallas’s cat, Moscow Zoo, CC BY 4.0.</p>
+      </div>
     </section>
 
-    <section class="say" id="say" aria-label={say}>
-      <div class="say-pin">
-        <div class="paint say-card" style={paint('mist', 'center', '#e4ebe2')}>
-          <p class="kicker">From a blank canvas or raw footage to a finished film</p>
-          <p class="say-text" aria-hidden="true">{sayWords.map(w => <><span class="sw">{w.map(ch => <span class="ch" data-i={ch.i}>{ch.c}</span>)}</span> </>)}</p>
+    <ul class="facts wrap" role="list">
+      <li><b>$0</b><span>with your own Claude, Gemini or GPT key</span></li>
+      <li><b>0 uploads</b><span>editing and transcription run on your computer</span></li>
+      <li><b>Every version</b><span>kept. Nothing is ever overwritten</span></li>
+      <li><b>All the code</b><span>on GitHub under the GPL</span></li>
+    </ul>
+
+    <section class="sec wrap" id="notes">
+      <div class="sec-head">
+        <h2>Talk to it like an editor in the room.</h2>
+        <p>Every word you recorded is timed, so a note lands exactly where you meant it. A real session reads like this.</p>
+      </div>
+      <ol class="session" role="list">
+        {notes.map(n => (
+          <li>
+            <q>{n.you}</q>
+            <p>{n.did}</p>
+            <span class="mono">{n.at}</span>
+          </li>
+        ))}
+      </ol>
+      <div class="point">
+        <figure><img src="/shots/inline.webp" width="1600" height="955" loading="lazy" alt="AgentShot: a note boxed on the frame says “make the name bigger”, with the conversation on the left and the proposed cut, Before / After, Reject and Accept above the film" /></figure>
+        <div>
+          <h3>Point instead of describing.</h3>
+          <dl>
+            <div><dt><kbd>B</kbd></dt><dd>Box anything on the picture</dd></div>
+            <div><dt><kbd>N</kbd></dt><dd>Mark a moment</dd></div>
+            <div><dt>Drag</dt><dd>Across the timeline for a range</dd></div>
+          </dl>
+          <p>A message box opens right there, already tied to that spot and time.</p>
         </div>
       </div>
     </section>
 
-    <section class="films" id="films">
-      <div class="wrap sh" data-r>
-        <h2 class="slate">Video anything. One agent.</h2>
-        <p>Start with raw camera clips, a live URL, a screen recording, or nothing at all. Brief AgentShot the way you’d brief a creative director or an editor — it plans the scenes, builds or cuts the film, and hands back a before and after.</p>
+    <section class="sec wrap" id="make">
+      <div class="sec-head">
+        <h2>Bring footage. Or a URL. Or nothing.</h2>
       </div>
-      <div class="panel paint" style={paint('dusk', 'center 40%', '#f1c79d')}>
-        <div class="film-tabs" role="tablist" aria-label="Kinds of film">
-          {films.map((f, i) => <button role="tab" id={`ft-${i}`} aria-controls={`fp-${i}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1} data-ftab={i}>{f.k}</button>)}
+      <div class="tabs" role="tablist" aria-label="What you start from">
+        {films.map((f, i) => <button role="tab" id={`ft-${i}`} aria-controls={`fp-${i}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1} data-ftab={i}>{f.k}</button>)}
+      </div>
+      {films.map((f, i) => (
+        <div class="film" role="tabpanel" id={`fp-${i}`} aria-labelledby={`ft-${i}`} hidden={i !== 0}>
+          <div class="film-copy">
+            <q>{f.prompt}</q>
+            <ol>{f.steps.map(st => <li>{st}</li>)}</ol>
+          </div>
+          <figure class={f.shape}>
+            <video data-src={f.video} poster={f.poster} muted loop playsinline preload="none" aria-label={`Result: ${f.k}`}></video>
+            <figcaption>{f.cap}</figcaption>
+          </figure>
         </div>
-        {films.map((f, i) => (
-          <div class="film-panel sheet" role="tabpanel" id={`fp-${i}`} aria-labelledby={`ft-${i}`} hidden={i !== 0}>
-            <div class="fp-flow">
-              <div class="fp-block">
-                <p class="lbl">You say</p>
-                <q class="fp-prompt">{f.prompt}</q>
-              </div>
-              <div class="fp-block">
-                <p class="lbl">AgentShot</p>
-                <ol class="fp-steps">{f.steps.map(st => <li>{st}</li>)}</ol>
-              </div>
-            </div>
-            <figure class:list={['fp-result', f.shape]}>
-              <video data-src={f.video} poster={f.poster} muted loop playsinline preload="none" aria-label={`Result: ${f.k}`}></video>
-              <figcaption>{f.cap}</figcaption>
-            </figure>
+      ))}
+
+      <div class="gallery-head" id="examples">
+        <h3>233 examples ship in the app, each with the prompt that made it.</h3>
+        <p>Pick one, say what yours is about, and AgentShot makes it the same way. Click to see the prompt.</p>
+      </div>
+      <ul class="reels" role="list">
+        {motion.map((m, i) => (
+          <li>
+            <button type="button" data-ex={i} aria-label={`Play “${m.title}” by @${m.handle}`}>
+              <video data-src={`/motion/${m.id}.mp4`} poster={`/motion/${m.id}.jpg`} muted loop playsinline preload="none" width="768" height="432" aria-hidden="true"></video>
+              <span><span>@{m.handle}</span><span class="mono">{clock(m.duration)}</span></span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p class="fine">Made with Claude by the people credited, collected by <a href="https://prompt-motion.com">prompt-motion.com</a>.</p>
+    </section>
+
+    <section class="sec wrap" id="how">
+      <div class="sec-head">
+        <h2>It reads your film before it touches it.</h2>
+        <p>A language model can’t watch video. So AgentShot measures your footage on your computer, and the model reads the result. That’s why “drop the second take” lands on the right syllable.</p>
+      </div>
+      <div class="tracks" role="table" aria-label="What AgentShot measures in a 6-minute interview, and what that lets you say">
+        <div class="track head" role="row">
+          <span role="columnheader">Track</span>
+          <span role="columnheader">One 6-minute interview</span>
+          <span role="columnheader">So you can say</span>
+        </div>
+        {log.map(r => (
+          <div class="track" role="row">
+            <span class="k" role="rowheader">{r.k}</span>
+            <div role="cell"><span class="trace" set:html={r.trace} /><p class="mono">{r.found}</p></div>
+            <q role="cell">{r.say}</q>
           </div>
         ))}
-        <p class="note">Also: talking heads, tutorials, article-to-video explainers, custom voiceover &amp; music, and audio/video cleanup.</p>
       </div>
     </section>
 
-    <section class="motion" id="motion">
-      <div class="wrap sh" data-r>
-        <h2 class="slate">No footage? Start from these.</h2>
-        <p>Pick any of 233 motion videos in AgentShot, each with the prompt that made it. Say what yours is about; AgentShot makes it the same way.</p>
+    <section class="sec wrap" id="compare">
+      <div class="sec-head">
+        <h2>Not a timeline to operate. Not a slot machine.</h2>
       </div>
-      <div class="panel paint" style={paint('bluehour', 'center', '#d9d3e6')}>
-        <ul class="reels" role="list">
-          {motion.map((m, i) => (
-            <li data-r style={`--d:${i % 3}`}>
-              <button type="button" class="reel-tile" data-ex={i} aria-label={`Play “${m.title}” by @${m.handle}`}>
-                <video data-src={`/motion/${m.id}.mp4`} poster={`/motion/${m.id}.jpg`} muted loop playsinline preload="none" width="768" height="432" aria-hidden="true"></video>
-                <span class="slug"><span>@{m.handle}</span><span class="mono">{clock(m.duration)}</span></span>
-              </button>
-            </li>
-          ))}
+      <div class="cmp" role="table" aria-label="AgentShot compared with timeline editors, video as code, and AI generators">
+        <div class="row th" role="row"><span role="columnheader"></span><span role="columnheader">Timeline editors<small>Premiere, Final Cut, Resolve, CapCut</small></span><span role="columnheader">Video as code<small>HyperFrames, Remotion</small></span><span role="columnheader">AI generators<small>Runway, Sora, Veo</small></span><span role="columnheader" class="us">AgentShot</span></div>
+        <div class="row" role="row"><span role="rowheader">You</span><span role="cell" data-h="Timeline editors">operate it, cut by cut</span><span role="cell" data-h="Video as code">describe it, read code</span><span role="cell" data-h="AI generators">prompt, hope, re-roll</span><span role="cell" data-h="AgentShot" class="us">say it, point at it</span></div>
+        <div class="row" role="row"><span role="rowheader">You look at</span><span role="cell" data-h="Timeline editors">a timeline</span><span role="cell" data-h="Video as code">a terminal</span><span role="cell" data-h="AI generators">a prompt box</span><span role="cell" data-h="AgentShot" class="us">your film, before and after</span></div>
+        <div class="row" role="row"><span role="rowheader">Your footage</span><span role="cell" data-h="Timeline editors">yours</span><span role="cell" data-h="Video as code">yours, plus coded layers</span><span role="cell" data-h="AI generators">swapped for generated frames</span><span role="cell" data-h="AgentShot" class="us">yours, on your computer</span></div>
+        <div class="row" role="row"><span role="rowheader">Undo</span><span role="cell" data-h="Timeline editors">Ctrl-Z, until it isn’t</span><span role="cell" data-h="Video as code">git, if you use it</span><span role="cell" data-h="AI generators">start over</span><span role="cell" data-h="AgentShot" class="us">every version, kept</span></div>
+        <div class="row" role="row"><span role="rowheader">Costs</span><span role="cell" data-h="Timeline editors">a subscription, mostly</span><span role="cell" data-h="Video as code">free, plus your agent</span><span role="cell" data-h="AI generators">credits</span><span role="cell" data-h="AgentShot" class="us">free with your key</span></div>
+      </div>
+    </section>
+
+    <section class="sec wrap yours" id="yours">
+      <div>
+        <h2>Your footage stays yours.</h2>
+        <ul role="list">
+          <li><b>No upload queue, no cloud project.</b> Editing, transcription and analysis run on your computer.</li>
+          <li><b>The AI model sees text and still frames.</b> It never sees the video file.</li>
+          <li><b>Your keys stay in your system’s keychain.</b> The agent’s sandbox can’t read them.</li>
+          <li><b>Crash reports and usage statistics are off</b> until you tick them. <a href={`${gh}/blob/main/telemetry/README.md`}>See exactly what is sent.</a></li>
         </ul>
-        <p class="note">Made with Claude by the people credited, collected by <a href="https://prompt-motion.com">prompt-motion.com</a>. Click one for sound and the prompt.</p>
       </div>
-    </section>
-
-    <section class="notes" id="notes">
-      <div class="wrap sh" data-r>
-        <h2 class="slate">Say it like there’s an editor in the room.</h2>
-        <p>Every word you recorded is transcribed with its timing, and every box you draw is pinned to a spot and a moment. So a note lands exactly where you meant it.</p>
-      </div>
-      <div class="panel paint" style={paint('peaks', 'center 70%', '#e3e6e6')}>
-        <div class="edl sheet" role="table" aria-label="Notes and what AgentShot did with them">
-          <div class="row th" role="row"><span role="columnheader">#</span><span role="columnheader">Your note</span><span role="columnheader">Where</span><span role="columnheader">What AgentShot did</span></div>
-          <div class="row" role="row">
-            <span class="n mono" role="cell">01</span>
-            <q role="cell">cut <s>the ums</s>, and the bit where I lose my train of thought</q>
-            <span class="at mono" role="cell">02:31 → 02:12</span>
-            <span class="did" role="cell">Cut on the word, not near it. Nineteen seconds gone, no jump in the audio.</span>
-          </div>
-          <div class="row" role="row">
-            <span class="n mono" role="cell">02</span>
-            <q role="cell"><i class="boxed">box</i> blur this <span class="circled">number plate</span></q>
-            <span class="at mono" role="cell">00:18 · box</span>
-            <span class="did" role="cell">Blurred only what’s inside your box, from 00:18 to 00:24. The rest of the shot is untouched.</span>
-          </div>
-          <div class="row" role="row">
-            <span class="n mono" role="cell">03</span>
-            <q role="cell">put my name on screen when I introduce myself</q>
-            <span class="at mono" role="cell">00:06 “I’m”</span>
-            <span class="did" role="cell">A lower third in real type, in on the word. Drag it somewhere else after if you like.</span>
-          </div>
-          <div class="row" role="row">
-            <span class="n mono" role="cell">04</span>
-            <q role="cell">quiet music under the whole thing</q>
-            <span class="at mono" role="cell">00:00 → end</span>
-            <span class="did" role="cell">Looped to the length of the film and dipped under every sentence. You hear the mix before anything renders.</span>
-          </div>
-          <div class="row" role="row">
-            <span class="n mono" role="cell">05</span>
-            <q role="cell">now a vertical one for Shorts, captions burned in</q>
-            <span class="at mono" role="cell">9:16</span>
-            <span class="did" role="cell">Same film, the crop following whoever’s in frame, with captions timed to the word.</span>
-          </div>
-          <div class="row" role="row">
-            <span class="n mono" role="cell">06</span>
-            <q role="cell">put <span class="ref">@logo.png</span> bottom right, and <span class="ref">@song.mp3</span> under the intro</q>
-            <span class="at mono" role="cell">your files</span>
-            <span class="did" role="cell">Type @ and pick anything you dropped in, a version you kept or a title it made. The note points at it by name.</span>
-          </div>
+      <div class="phones">
+        <div class="phone-copy">
+          <h3>Direct it from your phone.</h3>
+          <p>A remote for the editor on your computer. Mark a moment, box the picture, say the change, and keep it with your thumb. In Google Play testing now.</p>
         </div>
-      </div>
-    </section>
-
-    <section class="anywhere" id="anywhere">
-      <div class="wrap sh" data-r>
-        <h2 class="slate">On your desk, from your phone, or on a cloud worker.</h2>
-        <p>Run everything locally on macOS, Windows and Linux — or pair your phone and offload heavy renders to a home machine or cloud worker over an encrypted mesh.</p>
-      </div>
-      <div class="panel paint" style={paint('steppe', 'center 65%', '#c7d8e8')}>
-        <div class="any-grid">
-          <article class="any-card sheet" data-r style="--d:0">
-            <div class="any-head">
-              <span class="any-pill"><span class="dot-live" aria-hidden="true"></span>Mobile companion · iOS &amp; Android</span>
-              <h3 class="slate">Direct from the couch. Or walk in with the shot.</h3>
-              <p>Pair your phone in <b>Settings → Mobile</b> with a 6-digit code over Wi-Fi or Tailscale, pinned to your desktop’s TLS certificate. Send clips straight from your camera roll, draw a box on the frame, chat live as AgentShot cuts, and share the finished export.</p>
-            </div>
-            <div class="phone-mock" aria-label="AgentShot mobile companion preview">
-              <div class="pm-top">
-                <span class="pm-host mono"><i aria-hidden="true"></i>manul-desk · TLS pinned</span>
-                <span class="pm-code mono">Pair 482 · 910</span>
-              </div>
-              <div class="pm-stage">
-                <div class="pm-frame">
-                  <span class="pm-time mono">00:14.2</span>
-                  <div class="pm-box"><span>00:14 · box</span></div>
-                  <p class="pm-caption">“Zoom into the metric card when I mention conversion”</p>
-                </div>
-                <div class="pm-upload">
-                  <span class="pm-badge mono">+ Camera Roll</span>
-                  <span>IMG_4821.MOV · 4K 60fps added to project</span>
-                </div>
-              </div>
-              <div class="pm-bar">
-                <span class="pm-keep">✓ Keep edit</span>
-                <span class="pm-undo">Send back</span>
-                <span class="pm-share">Share ↗</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="any-card sheet" data-r style="--d:1">
-            <div class="any-head">
-              <span class="any-pill"><span class="dot-live" aria-hidden="true"></span>Cloud &amp; home workers · manul-mesh</span>
-              <h3 class="slate">Edit on a light laptop. Render on heavy iron.</h3>
-              <p>Lease a cloud worker on your AgentShot key, or run <code>manul --worker</code> on a desktop or GPU box at home. Built-in userspace WireGuard (<code>manul-mesh</code>) connects your devices without installing Tailscale and delta-syncs only the active project.</p>
-            </div>
-            <div class="mesh-mock" aria-label="Cloud and home worker architecture">
-              <div class="mm-nodes">
-                <div class="mm-node">
-                  <b>Your laptop or phone</b>
-                  <span>UI, timeline &amp; preview</span>
-                </div>
-                <div class="mm-link mono" aria-hidden="true">
-                  <span>⇄ manul-mesh ⇄</span>
-                  <small>TLS + WireGuard delta-sync</small>
-                </div>
-                <div class="mm-node active">
-                  <b>Cloud or Home Worker</b>
-                  <span>Whisper, GSAP &amp; FFmpeg</span>
-                </div>
-              </div>
-              <div class="mm-term">
-                <div class="mm-term-bar"><span class="mono">worker · headless</span><span class="mm-live mono">● Connected</span></div>
-                <pre class="mono"><code><span class="c"># run on any Mac, Windows or Linux box you own</span>
-<span class="p">$</span> manul --worker
-Worker ready · pair with 6-digit code or join manul-mesh
-Syncing project delta (3 clips, 18.4 MB) … done</code></pre>
-              </div>
-            </div>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="reads" id="reads">
-      <div class="wrap sh" data-r>
-        <h2 class="slate">The model is your pick. The harness is the work.</h2>
-        <p>Claude, Gemini and GPT all cut well once they know what’s in the film. So AgentShot puts its effort around the model: it measures your footage before it touches it, checks each change against the picture, and keeps every version. Swap the model per project; the harness stays.</p>
-      </div>
-      <ul class="harness wrap" role="list">
-        <li data-r style="--d:0"><b>Measures first</b><span>Words, voices, shots, the subject, the beat, loudness. On your computer or worker.</span></li>
-        <li data-r style="--d:1"><b>Knows the craft</b><span>12 skills for motion design, walkthroughs, screen + facecam, Shorts, voice and music.</span></li>
-        <li data-r style="--d:2"><b>Checks its work</b><span>Every change comes back as a before and after, never over your footage.</span></li>
-      </ul>
-      <div class="scrolly" style={`--n:${log.length}`}>
-        <div class="pin">
-          <div class="panel paint" style={paint('grass', 'center', '#d6dfcc')}>
-            <div class="paper sheet">
-              <div class="tracks" aria-hidden="true">
-                {log.map((r, i) => <button type="button" tabindex="-1" data-step={i}><span>{r.k}</span><i></i></button>)}
-              </div>
-              <div class="views" role="table" aria-label="What AgentShot measures, and what that lets you say">
-                {log.map((r, i) => (
-                  <div class="view" role="row" data-i={i}>
-                    <span class="k" role="rowheader">{r.k}</span>
-                    <div class="found" role="cell"><p class="lbl">What it found</p><p class="mono" set:html={r.found} /><span class="trace" set:html={r.trace} /></div>
-                    <div class="say-it" role="cell"><p class="lbl">So you can say</p><q>{r.say}</q></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <p class="craft">And it knows the craft of the film you’re making: motion graphics, product walkthroughs, screen + facecam demos, talking heads, Shorts and Reels, promos and cleanup.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="fits" id="fits">
-      <div class="wrap sh" data-r>
-        <h2 class="slate">Not a slot machine. Not code. A timeline only if you want it.</h2>
-        <p>Where AgentShot sits next to the editors, code-to-video tools and generators you already know.</p>
-      </div>
-      <div class="panel paint" style={paint('rocks', 'center 40%', '#eadfcf')}>
-        <div class="cmp sheet" role="table" aria-label="AgentShot compared with timeline editors, code-to-video tools and AI video generators">
-          <div class="row th" role="row"><span role="columnheader"></span><span role="columnheader">Timeline editors<small>Premiere Pro, Final Cut Pro, DaVinci Resolve, CapCut</small></span><span role="columnheader">Video as code<small>HyperFrames, Remotion</small></span><span role="columnheader">AI generators<small>Runway, Sora, Veo</small></span><span role="columnheader" class="us">AgentShot<small>open-source video agent</small></span></div>
-          <div class="row" role="row"><span role="rowheader">You</span><span role="cell" data-h="Timeline editors">operate it, cut by cut</span><span role="cell" data-h="Video as code">describe it; an agent writes HTML</span><span role="cell" data-h="AI generators">prompt, hope, re-roll</span><span role="cell" data-h="AgentShot" class="us">say it, point at it</span></div>
-          <div class="row" role="row"><span role="rowheader">You look at</span><span role="cell" data-h="Timeline editors">a timeline</span><span role="cell" data-h="Video as code">a terminal and code</span><span role="cell" data-h="AI generators">a prompt box</span><span role="cell" data-h="AgentShot" class="us">your film, before and after</span></div>
-          <div class="row" role="row"><span role="rowheader">Makes from scratch</span><span role="cell" data-h="Timeline editors">by hand, keyframe by keyframe</span><span role="cell" data-h="Video as code">coded motion graphics</span><span role="cell" data-h="AI generators">synthetic clips</span><span role="cell" data-h="AgentShot" class="us">motion, walkthroughs, voice &amp; music</span></div>
-          <div class="row" role="row"><span role="rowheader">Your footage</span><span role="cell" data-h="Timeline editors">yours</span><span role="cell" data-h="Video as code">yours, plus coded layers</span><span role="cell" data-h="AI generators">swapped for generated frames</span><span role="cell" data-h="AgentShot" class="us">yours, untouched</span></div>
-          <div class="row" role="row"><span role="rowheader">Runs on</span><span role="cell" data-h="Timeline editors">your computer</span><span role="cell" data-h="Video as code">your computer</span><span role="cell" data-h="AI generators">their cloud</span><span role="cell" data-h="AgentShot" class="us">your computer, phone or worker</span></div>
-          <div class="row" role="row"><span role="rowheader">Undo</span><span role="cell" data-h="Timeline editors">Ctrl-Z, until it isn’t</span><span role="cell" data-h="Video as code">git, if you use it</span><span role="cell" data-h="AI generators">start over</span><span role="cell" data-h="AgentShot" class="us">every version, kept</span></div>
-          <div class="row" role="row"><span role="rowheader">Costs</span><span role="cell" data-h="Timeline editors">a subscription, mostly</span><span role="cell" data-h="Video as code">free, plus your agent</span><span role="cell" data-h="AI generators">credits</span><span role="cell" data-h="AgentShot" class="us">free with your keys, or a plan</span></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="next wrap" id="workflow">
-      <div class="sh" data-r>
-        <h2 class="slate">It fits the way you already work.</h2>
-        <p>Your files, your style, your devices. And where it isn’t there yet, the <a href={`${gh}/blob/main/ROADMAP.md`}>roadmap</a> says so, in public.</p>
-      </div>
-      <ol class="cards">
-        <li data-r style="--d:0"><span class="band paint" style={paint('dusk', '30% 20%', '#f1c79d')}><span class="num">01</span><span class="tag">Now</span></span><h3>Skills and taste</h3><p>12 craft skills as plain <code>SKILL.md</code> files in the repo. Say <q>captions are always yellow</q> once and every project after knows it.</p></li>
-        <li data-r style="--d:1"><span class="band paint" style={paint('peaks', '50% 30%', '#e3e6e6')}><span class="num">02</span><span class="tag">Now</span></span><h3>Browser &amp; screen studio</h3><p>Researches in its own browser, films 60fps product walkthroughs in your Chrome, and syncs screen + facecam recordings by audio.</p></li>
-        <li data-r style="--d:2"><span class="band paint" style={paint('mist', '70% 60%', '#e4ebe2')}><span class="num">03</span><span class="tag">Now</span></span><h3>Phone &amp; cloud workers</h3><p>Pair iOS or Android with a 6-digit code to send clips and review edits, or run heavy jobs on <code>manul --worker</code> or a cloud worker.</p></li>
-        <li data-r style="--d:3"><span class="band paint" style={paint('bluehour', '20% 40%', '#d9d3e6')}><span class="num">04</span><span class="tag">Now</span></span><h3>Export anywhere</h3><p>16:9, 9:16, 4:5 and 1:1 from one project, captions burned in or as a file. Premiere, Resolve, Final Cut and direct YouTube publishing are next.</p></li>
-      </ol>
-    </section>
-
-    <section class="build" id="build">
-      <div class="panel paint" style={paint('bluehour', 'center 30%', '#d9d3e6')}>
-        <div class="build-in">
-          <div class="build-copy">
-            <p class="kicker">For developers</p>
-            <h2 class="slate">Build with AgentShot.</h2>
-            <p>The whole agent is on GitHub under Apache-2.0: the harness, the tools, the skills, the editor, and the headless worker. Read how it works, change it, run your fork, or point it at your own model server.</p>
-            <ul class="build-list" role="list">
-              <li><b>Any endpoint</b><span>Claude, Gemini, OpenAI, or anything that speaks the OpenAI or Anthropic API, local servers included.</span></li>
-              <li><b>Headless worker</b><span>Run <code>manul --worker</code> on a home server or GPU box and connect from your laptop or phone over <code>manul-mesh</code>.</span></li>
-              <li><b>Agent-installable</b><span>An <a href="/skills/install-manul/SKILL.md">install skill</a> and <a href="/llms.txt">llms.txt</a>, so Claude Code, Cursor or Codex can set it up for you.</span></li>
-              <li><b>API &amp; MCP</b> <span class="tag">Coming</span><span>Drive AgentShot from your own agent or scripts: hand it a folder and a brief, get a film back.</span></li>
-            </ul>
-            <div class="cta-row left">
-              <a class="btn" href={gh}>Star on GitHub</a>
-              <a class="btn light" href={`${gh}/blob/main/CONTRIBUTING.md`}>Run it from source</a>
-            </div>
-          </div>
-          <div class="term" aria-label="Running AgentShot from source">
-            <div class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span class="mono">agentshot</span></div>
-            <pre class="mono"><code><span class="c"># the agent, the editor, the worker, the skills</span>
-<span class="p">$</span> git clone https://github.com/hormuz-labs/agentshot
-<span class="p">$</span> cd agentshot &amp;&amp; npm install
-<span class="p">$</span> npm run setup:native
-<span class="p">$</span> npm run dev
-
-<span class="c"># or run headless as a remote render worker</span>
-<span class="p">$</span> manul --worker
-
-<span class="c"># 12 craft skills in plain markdown</span>
-<span class="p">$</span> ls resources/skills
-talking-head   short-form    motion-design
-product-walkthrough   tutorials   voiceover  …</code></pre>
-          </div>
-        </div>
+        <img src="/phone/film.webp" width="415" height="801" loading="lazy" alt="The film full screen on the phone, with Note, Box, Range and Timeline down the right" />
+        <img src="/phone/conversation.webp" width="415" height="801" loading="lazy" alt="A project on the phone: the conversation, with the agent’s question as buttons" />
       </div>
     </section>
 
     <Pricing />
 
-    <section class="get" id="get">
-      <div class="wrap sh" data-r>
-        <h2 class="slate">Free to start. One line to install.</h2>
-        <p>Version <span data-version>{version}</span>, for macOS 12+, Windows 10/11 (x64) and Debian or Ubuntu. Free with your own keys; plans and cloud workers are in the app, under Settings → Keys → AgentShot key.</p>
+    <section class="sec wrap" id="get">
+      <div class="sec-head">
+        <h2>Install it. Give it a note.</h2>
+        <p class="for-phone">AgentShot runs on a computer. Send yourself the link and open it there.</p>
+        <p class="for-computer">Open it, sign in for {fmt(STARTER_CREDITS)} free credits or paste your own key, and drop in a video. A short guided start takes you to your first note.</p>
       </div>
-      <div class="panel paint" style={paint('mist', 'center 80%', '#e4ebe2')}>
-        <ol class="first">
-          <li class="sheet" data-r style="--d:0"><span class="num">01</span><h3>Open AgentShot</h3><p>Drop in footage, point at a URL, or start from a motion example.</p></li>
-          <li class="sheet" data-r style="--d:1"><span class="num">02</span><h3>Sign in, or add a key</h3><p>Sign in for {fmt(STARTER_CREDITS)} starter credits, or paste a Claude, Gemini or OpenAI key. Keys stay in your system’s keychain.</p></li>
-          <li class="sheet" data-r style="--d:2"><span class="num">03</span><h3>Direct the film</h3><p>Give a note, pair your phone in Settings → Mobile, or keep/send back each cut.</p></li>
-        </ol>
-
-        <div class="dl">
-          <article class="dl-col sheet" data-os="mac">
-            <header class="dl-head">
-              <div class="dl-os">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.1 1.7-3.1 1.8-3.2-1-1.5-2.5-1.7-3.1-1.7-1.3-.1-2.6.8-3.2.8-.7 0-1.7-.8-2.8-.7-1.4 0-2.7.8-3.5 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7 1.3 0 1.7.7 2.8.7 1.2 0 1.9-1 2.6-2.1.8-1.2 1.2-2.4 1.2-2.4-.1 0-2.4-.9-2.4-3.5M14.2 6.3c.6-.7 1-1.7.9-2.8-.9 0-2 .6-2.6 1.3-.6.7-1.1 1.7-.9 2.7 1 .1 2-.5 2.6-1.2"/></svg>
-                <h3>macOS</h3>
-                <span class="dl-tag">Your system</span>
-              </div>
-              <span class="dl-req">macOS 12+ · Apple silicon &amp; Intel</span>
-            </header>
-            <a class="btn dot dl-main" href={dl(`AgentShot-${version}-arm64.dmg`)}>
-              <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></span>
-              <span>Download .dmg</span>
-              <small>Apple silicon</small>
-            </a>
-            <div class="dl-more">
-              <p>Or install with Homebrew</p>
-              <div class="dl-row">
-                <code>{brew}</code>
-                <button class="copy" data-copy={brew}>Copy</button>
-              </div>
-            </div>
-            <p class="dl-foot"><a href={dl(`AgentShot-${version}-x64.dmg`)}>Intel Mac (.dmg)</a> · First open: right-click → Open.</p>
-          </article>
-
-          <article class="dl-col sheet" data-os="win">
-            <header class="dl-head">
-              <div class="dl-os">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h8.5v8.5H3V3m9.5 0H21v8.5h-8.5V3M3 12.5h8.5V21H3v-8.5m9.5 0H21V21h-8.5v-8.5"/></svg>
-                <h3>Windows</h3>
-                <span class="dl-tag">Your system</span>
-              </div>
-              <span class="dl-req">Windows 10 &amp; 11 · 64-bit</span>
-            </header>
-            <a class="btn dot dl-main" href={dl(`AgentShot-${version}-windows-x64-Setup.exe`)}>
-              <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></span>
-              <span>Download .exe</span>
-              <small>64-bit</small>
-            </a>
-            <div class="dl-more">
-              <p>Or install in PowerShell</p>
-              <div class="dl-row">
-                <code>iwr …/AgentShot-{version}-windows-x64-Setup.exe</code>
-                <button class="copy" data-copy={winPs}>Copy</button>
-              </div>
-            </div>
-            <p class="dl-foot">If SmartScreen asks: More info → Run anyway.</p>
-          </article>
-
-          <article class="dl-col sheet" data-os="linux">
-            <header class="dl-head">
-              <div class="dl-os">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" d="m5 8 5 4-5 4m7 0h7"/></svg>
-                <h3>Linux</h3>
-                <span class="dl-tag">Your system</span>
-              </div>
-              <span class="dl-req">Debian, Ubuntu &amp; AppImage</span>
-            </header>
-            <a class="btn dot dl-main" href={dl(`manul_${version}_amd64.deb`)}>
-              <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></span>
-              <span>Download .deb</span>
-              <small>x64</small>
-            </a>
-            <div class="dl-more">
-              <p>Or add the signed apt repository</p>
-              <div class="dl-row">
-                <code>curl -fsSL https://apt.agentshot.si/… &amp;&amp; sudo apt install manul</code>
-                <button class="copy" data-copy={apt}>Copy</button>
-              </div>
-            </div>
-            <p class="dl-foot">
-              <a href={dl(`manul_${version}_arm64.deb`)}>.deb ARM</a> ·
-              <a href={dl(`manul_${version}_x86_64.AppImage`)}>AppImage x64</a> ·
-              <a href={dl(`manul_${version}_arm64.AppImage`)}>AppImage ARM</a>
-            </p>
-          </article>
-        </div>
-
-        <div class="ask sheet">
-          <div class="ask-head">
-            <div>
-              <h3>Ask your agent</h3>
-              <p>Using Claude Code, Cursor or Codex? Paste this and let it install AgentShot (or start a headless worker with <code>manul --worker</code>); pair your phone in <b>Settings → Mobile</b>.</p>
-            </div>
-            <button class="copy" data-copy={agentPrompt}>Copy prompt</button>
-          </div>
-          <pre class="agent"><code set:html={agentHtml} /></pre>
-        </div>
+      <div class="phone-get for-phone"><Cta /></div>
+      <div class="oses">
+        <article data-os-col="mac">
+          <h3>macOS</h3>
+          <p class="req">macOS 12+. Signed and notarized.</p>
+          <a class="btn get" href={MAC_ARM}>Apple silicon .dmg</a>
+          <div class="line"><code>{BREW}</code><button class="copy" data-copy={BREW}>Copy</button></div>
+          <p class="more"><a href={MAC_INTEL}>Intel Mac .dmg</a></p>
+        </article>
+        <article data-os-col="win">
+          <h3>Windows</h3>
+          <p class="req">Windows 10 (1903+) and 11, 64-bit.</p>
+          <a class="btn get" href={WINDOWS}>Setup .exe</a>
+          <p class="more">No Node, Python, FFmpeg or developer tools needed. It updates itself. If SmartScreen asks once: More info, then Run anyway.</p>
+        </article>
+        <article data-os-col="linux">
+          <h3>Linux</h3>
+          <p class="req">Debian, Ubuntu and AppImage.</p>
+          <a class="btn get" href={DEB}>x64 .deb</a>
+          <div class="line"><code>curl -fsSL https://apt.agentshot.si/… &amp;&amp; sudo apt install manul</code><button class="copy" data-copy={APT}>Copy</button></div>
+          <p class="more"><a href={DEB_ARM}>ARM .deb</a> · <a href={APPIMAGE}>AppImage x64</a> · <a href={APPIMAGE_ARM}>AppImage ARM</a></p>
+        </article>
       </div>
-    </section>
-
-    <section class="oss wrap" id="oss">
-      <div class="oss-head" data-r>
+      <div class="agent">
         <div>
-          <h2 class="slate">Open source</h2>
-          <p>Built in public under Apache-2.0.</p>
+          <h3>Or let your coding agent install it.</h3>
+          <p>Paste this into Claude Code, Cursor or Codex.</p>
         </div>
-        <a class="btn" href={gh}>Star us on GitHub</a>
-      </div>
-      <div class="bento">
-        <a class="tile t1 paint" data-r style={`${paint('steppe', 'center 70%', '#c9d3d6')};--d:0`} href={`${gh}/blob/main/LICENSE`}><span class="big">Apache-2.0</span><span class="what">Use it, change it, make paid work with it</span><span class="go" aria-hidden="true">↗</span></a>
-        <a class="tile t2 paint" data-r style={`${paint('dusk', '70% center', '#f1c79d')};--d:1`} href={`${gh}/releases/latest`}><span class="big">Free</span><span class="what">The whole app, with your own keys, for good</span><span class="go" aria-hidden="true">↗</span></a>
-        <a class="tile t3 paint" data-r style={`${paint('grass', '20% 60%', '#d6dfcc')};--d:2`} href="#motion"><span class="big">233</span><span class="what">Motion examples, each with its prompt</span><span class="go" aria-hidden="true">↗</span></a>
-        <a class="tile t4 paint" data-r style={`${paint('rocks', '30% 70%', '#eadfcf')};--d:3`} href="#anywhere"><span class="big">Mesh</span><span class="what">Local by default, or synced to your phone &amp; worker</span><span class="go" aria-hidden="true">↗</span></a>
-        <a class="tile t5 paint" style={paint('peaks', 'center 60%', '#e3e6e6')} href={`${gh}/blob/main/ROADMAP.md`}><span class="big">Roadmap</span><span class="what">In the open, ideas welcome</span><span class="go" aria-hidden="true">↗</span></a>
+        <button class="btn ghost sm" data-copy={AGENT_PROMPT}>Copy the prompt</button>
       </div>
     </section>
 
-    <section class="cat">
-      <div class="panel paint" style={paint('rocks', 'center 60%', '#eadfcf')}>
-        <figure data-r>
-          <video id="cat" src="/timofey.mp4" poster="/timofey.webp" width="960" height="720" muted loop playsinline preload="none" aria-label="Timofey, a Pallas's cat, sitting in a doorway and staring flatly at the camera"><track kind="captions" src="/captions/silent.vtt" srclang="en" label="No sound" /></video>
-          <figcaption>Timofey. Unimpressed.</figcaption>
-        </figure>
-        <div class="cat-copy sheet" data-r style="--d:1">
-          <p class="label"><b>●</b> Why a cat</p>
-          <h2 class="slate">Our mascot: the manul.</h2>
-          <p>The manul, or Pallas’s cat, lives alone on the cold steppe of Central Asia. It doesn’t chase; it waits, then moves once, exactly. And it looks at everything with the same flat, faintly disappointed stare.</p>
-          <p>That’s the editor we wanted in the room: patient, hard to impress, and precise when it counts.</p>
-        </div>
+    <section class="sec wrap source" id="source">
+      <div>
+        <h2>Read the whole thing.</h2>
+        <p>The agent, the editor and its 12 craft skills are on GitHub under the GPL. Skills are plain files you can change. Point it at any OpenAI- or Anthropic-compatible endpoint, local servers included. If you like where it’s going, a star helps other people find it.</p>
       </div>
+      <a class="btn ghost" href={gh}>Star on GitHub</a>
     </section>
 
-    <section class="faq wrap" id="faq">
-      <div class="faq-side paint" data-r style={paint('bluehour', '40% center', '#d9d3e6')}>
-        <h2 class="slate">FAQs</h2>
-        <p>Something else? Ask on <a href={`${gh}/issues`}>GitHub</a>.</p>
-      </div>
-      <div class="qs" data-r style="--d:1">
-        {faqs.map(f => <details><summary>{f.q}</summary><p set:html={f.a} /></details>)}
-      </div>
+    <section class="sec wrap faq" id="faq">
+      <h2>Questions</h2>
+      <div class="qs">{faqs.map(f => <details><summary>{f.q}</summary><p set:html={f.a} /></details>)}</div>
     </section>
 
-    <section class="cta">
-      <div class="paint dusk" style={paint('dusk', 'center', '#f1c79d')}>
-        <img src="/icon.png" width="116" height="116" alt="" loading="lazy" data-r />
-        <h2 class="slate" data-r style="--d:1">Download AgentShot.</h2>
-        <p data-r style="--d:2">The open-source video agent for macOS, Windows and Linux — on your desk, phone or cloud worker.</p>
-        <div class="cta-row" data-r style="--d:3">
-          <a href="#get" class="btn dot">
-            <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></span>
-            <span data-os-label>Download AgentShot</span>
-          </a>
-          <a href={gh} class="btn">Star on GitHub</a>
-        </div>
+    <section class="last">
+      <div class="last-film">
+        <video id="cat" src="/timofey.mp4" poster="/timofey.webp" width="960" height="720" muted loop playsinline preload="none" aria-label="Timofey, a Pallas's cat, staring flatly at the camera"><track kind="captions" src="/captions/silent.vtt" srclang="en" label="No sound" /></video>
+        <p class="caption"><mark>He’s waiting for your notes.</mark></p>
       </div>
+      <div class="last-cta"><Cta /></div>
     </section>
   </main>
 
-  <dialog class="film" id="film" aria-label="AgentShot, the film">
+  <dialog class="player" id="film" aria-label="AgentShot, the film">
     <video id="film-v" controls playsinline preload="none" poster="/film/poster.jpg" width="1920" height="1080">
       <source src="/film/manul.mp4" type="video/mp4" />
       <track kind="captions" src="/captions/film.vtt" srclang="en" label="English" />
     </video>
-    <button class="film-close" type="button" aria-label="Close the film">×</button>
+    <button class="close" type="button" aria-label="Close the film">×</button>
   </dialog>
 
-  <dialog class="film ex" id="ex" aria-label="A motion example">
+  <dialog class="player ex" id="ex" aria-label="A motion example">
     <video id="ex-v" controls playsinline preload="none" width="1920" height="1080"></video>
     <div class="ex-info">
-      <div><p class="ex-title" id="ex-title"></p><p class="ex-by">by <a id="ex-who"></a> · <a id="ex-post">View post ↗</a></p></div>
+      <div><p class="ex-title" id="ex-title"></p><p class="ex-by">by <a id="ex-who"></a> · <a id="ex-post">View post</a></p></div>
       <details><summary>The prompt that made it</summary><pre id="ex-prompt"></pre></details>
     </div>
-    <button class="film-close" type="button" aria-label="Close">×</button>
+    <button class="close" type="button" aria-label="Close">×</button>
   </dialog>
   <script type="application/json" id="ex-data" set:html={JSON.stringify(motion.map(m => ({ ...m, video: `${media}/${m.id}.mp4`, poster: `/motion/${m.id}.jpg` })))} />
+</Base>
 
-  <footer class="foot">
-    <div class="wrap">
-      <div class="foot-top">
-        <div class="foot-brand">
-          <a class="brand" href="/" aria-label="AgentShot home"><img src="/icon-56.png" width="32" height="32" alt="" /><span>AgentShot</span></a>
-          <p>The open-source video agent you talk to — for macOS, Windows and Linux, with a mobile companion and cloud workers.</p>
-        </div>
-        <nav class="cols" aria-label="Footer">
-          <div><h3>Product</h3><a href="#try">Try it</a><a href="#films">Make &amp; Edit</a><a href="#anywhere">Phone &amp; Cloud</a><a href="#motion">Motion</a><a href="#fits">Compare</a><a href="/pricing/">Pricing</a><a href="#get">Install</a></div>
-          <div><h3>Project</h3><a href={gh}>GitHub</a><a href={`${gh}/blob/main/ROADMAP.md`}>Roadmap</a><a href="#build">Developers</a><a href={`${gh}/blob/main/CONTRIBUTING.md`}>Contributing</a><a href={`${gh}/releases`}>Releases</a><a href="https://apt.agentshot.si">apt.agentshot.si</a></div>
-          <div><h3>Company</h3><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href={`${gh}/blob/main/LICENSE`}>License</a><a href="#faq">FAQ</a><a href="mailto:support@agentshot.si">Contact</a></div>
-        </nav>
-      </div>
-      <div class="foot-base">
-        <span>© 2026 Hormuz Labs · Apache-2.0 · Paintings made for this site</span>
-        <span>Demo clip: “Manul Timofey”, Moscow Zoo, <a href="https://commons.wikimedia.org/wiki/File:%D0%9C%D0%B0%D0%BD%D1%83%D0%BB_%D0%A2%D0%B8%D0%BC%D0%BE%D1%84%D0%B5%D0%B9_%D0%BD%D0%B0_%D1%80%D0%B0%D0%B7%D0%B6%D0%B8%D1%80%D0%BE%D0%B2%D0%BA%D0%B5.webm">CC BY 4.0</a>, edited.</span>
-      </div>
-    </div>
-  </footer>
+<style>
+  /* the hero: the promise, the button, and the product itself, all in the first screen */
+  .hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px 48px; align-items: end; padding-top: clamp(24px, 4vh, 44px); }
+  h1 { font-size: min(10vw, 19vh, 160px); line-height: .92; font-weight: 800; font-stretch: 72%; letter-spacing: -.015em; }
+  h1 mark { display: inline-block; padding: 0 .1em .03em; }
+  .lede { font-size: clamp(19px, 1.65vw, 23px); line-height: 1.35; }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .dur { margin-left: 10px; font-size: 14px; color: var(--ink-3); }
+  .reassure { margin-top: 12px; font-size: 15px; color: var(--ink-2); }
+  .for-phone { display: none; }
+  :global([data-os='phone']) .for-phone { display: block; }
+  :global([data-os='phone']) .for-computer { display: none; }
+  .stage { grid-column: 1 / -1; width: min(100%, max(800px, (100vh - 370px) * 2.25)); margin: 6px auto 0; }
+  .credit { margin-top: 10px; font-size: 13.5px; color: var(--ink-3); }
 
-  <script>
-    const root = document.documentElement
-    const move = root.classList.contains('move')
+  .facts { list-style: none; margin-top: 44px; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid var(--line); }
+  .facts li { display: grid; gap: 2px; padding: 20px 20px 20px 0; }
+  .facts li + li { padding-left: 20px; border-left: 1px solid var(--line); }
+  .facts b { font-size: 25px; line-height: 1.1; font-weight: 800; font-stretch: 82%; }
+  .facts span { font-size: 15px; line-height: 1.35; color: var(--ink-2); }
 
-    // mark the card for this computer, and wire the download buttons to its installer
-    const ua = navigator.userAgent
-    const os = /Mac/.test(ua) && !/iPhone|iPad/.test(ua) ? 'mac' : /Win/.test(ua) ? 'win' : /Linux|X11/.test(ua) && !/Android/.test(ua) ? 'linux' : null
-    const label = os === 'mac' ? 'Download for Mac' : os === 'win' ? 'Download for Windows' : os === 'linux' ? 'Download for Linux' : 'Download AgentShot'
-    document.querySelectorAll('[data-os-label]').forEach(el => (el.textContent = label))
-    const col = os && document.querySelector<HTMLElement>(`.dl-col[data-os=${os}]`)
-    if (col) {
-      col.classList.add('here')
-      const href = col.querySelector<HTMLAnchorElement>('.dl-main')!.href
-      document.querySelectorAll<HTMLAnchorElement>('.cta .btn.dot').forEach(a => (a.href = href))
-    }
+  /* a session: what you said, large, because that's the product */
+  .session { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .session li { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 130px; gap: 8px 36px; align-items: baseline; padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .session q { font-size: clamp(22px, 2.3vw, 30px); line-height: 1.15; font-weight: 700; font-stretch: 88%; }
+  .session p { color: var(--ink-2); }
+  .session span { font-size: 13.5px; color: var(--ink-3); text-align: right; }
 
-    document.querySelectorAll<HTMLButtonElement>('[data-copy], [data-copy-from]').forEach(b => b.addEventListener('click', async () => {
-      const text = b.dataset.copy ?? b.previousElementSibling!.textContent!
-      const out = b.querySelector('em') ?? b
-      const was = out.textContent
-      try { await navigator.clipboard.writeText(text); out.textContent = 'copied'; b.classList.add('ok') } catch { out.textContent = 'select & copy' }
-      setTimeout(() => { out.textContent = was; b.classList.remove('ok') }, 1800)
-    }))
+  .point { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 40px; align-items: center; margin-top: 48px; }
+  .point figure { margin: 0; }
+  .point img { border-radius: 4px; }
+  .point dl { margin: 18px 0; border-top: 1px solid var(--line); }
+  .point dl div { display: flex; gap: 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
+  .point dt { flex: none; min-width: 52px; font-weight: 700; }
+  .point dd { margin: 0; color: var(--ink-2); }
+  kbd { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--ink-3); border-radius: 2px; font: 500 15px/1 var(--mono); }
+  .point p { color: var(--ink-2); }
 
-    // the hero's prompt box: each chip swaps in an example of that kind of film
-    const promptText = document.getElementById('prompt-text')!
-    const chipBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-prompt]')]
-    chipBtns.forEach(b => b.addEventListener('click', () => {
-      chipBtns.forEach(c => c.setAttribute('aria-pressed', String(c === b)))
-      promptText.textContent = b.dataset.prompt!
-      promptText.classList.remove('swap'); void promptText.offsetWidth; promptText.classList.add('swap')
-    }))
+  /* where you start */
+  .tabs { display: flex; gap: 0; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .tabs button { flex: none; padding: 14px 22px 14px 0; margin-right: 8px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--ink-3); font-size: 19px; font-weight: 700; font-stretch: 88%; cursor: pointer; }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--yellow); }
+  .film { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 40px; padding-top: 32px; }
+  .film-copy q { display: block; font-size: clamp(24px, 2.6vw, 34px); line-height: 1.12; font-weight: 700; font-stretch: 88%; }
+  .film-copy ol { margin: 22px 0 0; padding: 0; list-style: none; }
+  .film-copy li { padding: 9px 0; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 16px; line-height: 1.4; }
+  .film figure { margin: 0; }
+  .film video { width: 100%; background: #000; }
+  .film .tall video { width: auto; max-height: 520px; margin-inline: auto; }
+  .film figcaption { margin-top: 8px; font-size: 14px; color: var(--ink-3); }
+  .gallery-head { margin: 64px 0 20px; max-width: 760px; }
+  .gallery-head p { margin-top: 10px; color: var(--ink-2); }
+  .reels { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .reels button { position: relative; display: block; width: 100%; padding: 0; border: 0; background: #000; cursor: pointer; }
+  .reels video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+  .reels button > span { position: absolute; inset: auto 0 0; display: flex; justify-content: space-between; padding: 7px 10px; background: rgba(0, 0, 0, .78); font-size: 13.5px; color: var(--ink); text-align: left; }
+  .fine { margin-top: 12px; font-size: 14px; color: var(--ink-3); }
 
-    // many kinds of film: tabs, and the shown result plays while it's on screen
-    const ftabs = [...document.querySelectorAll<HTMLButtonElement>('[data-ftab]')]
-    const fpanels = ftabs.map(t => document.getElementById(t.getAttribute('aria-controls')!)!)
-    let filmsOn = false
-    const fvideo = (i: number) => fpanels[i].querySelector('video') as HTMLVideoElement
-    const fplay = (i: number) => { const v = fvideo(i); if (!v.src) v.src = v.dataset.src!; if (filmsOn && move) v.play().catch(() => {}) }
-    const fshow = (n: number) => ftabs.forEach((t, i) => {
-      const on = i === n
-      t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1
-      fpanels[i].hidden = !on
-      if (on) fplay(i); else fvideo(i).pause()
+  /* the measurements, drawn as the tracks of a timeline */
+  .tracks { border-top: 1px solid var(--line); }
+  .track { display: grid; grid-template-columns: 100px minmax(0, 1.6fr) minmax(0, 1fr); gap: 8px 28px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .track.head { padding: 10px 0; font: 500 13px/1.2 var(--mono); color: var(--ink-3); }
+  .k { font-weight: 700; font-size: 18px; }
+  .trace { display: block; height: 28px; }
+  .trace :global(svg) { display: block; width: 100%; height: 100%; }
+  .trace :global(.p) { fill: var(--ink-3); }
+  .trace :global(.q) { fill: var(--ink); }
+  .trace :global(.r) { fill: var(--yellow); }
+  .trace :global(.b) { fill: var(--bg-3); }
+  .trace :global(.rl) { fill: none; stroke: var(--ink); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+  .track p { margin-top: 6px; font-size: 13.5px; color: var(--ink-2); }
+  .track q { font-size: 20px; line-height: 1.2; font-weight: 700; font-stretch: 88%; }
+
+  .cmp { border-top: 1px solid var(--line); }
+  .row { display: grid; grid-template-columns: 120px repeat(3, minmax(0, 1fr)) minmax(0, 1.1fr); border-bottom: 1px solid var(--line); }
+  .row > span { padding: 15px 16px 15px 0; line-height: 1.3; color: var(--ink-2); }
+  .row > [role='rowheader'] { color: var(--ink-3); font-size: 15px; }
+  .row .us { padding-left: 16px; background: var(--bg-2); color: var(--ink); font-weight: 700; }
+  .th .us { background: var(--yellow); color: var(--on-yellow); }
+  .th > span { font-weight: 700; color: var(--ink); }
+  .th small { display: block; margin-top: 3px; font-size: 13px; font-weight: 400; color: var(--ink-3); }
+
+  .yours { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; }
+  .yours ul { list-style: none; margin: 28px 0 0; padding: 0; border-top: 1px solid var(--line); }
+  .yours li { padding: 14px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+  .yours b { color: var(--ink); }
+  .phones { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .phone-copy { grid-column: 1 / -1; }
+  .phone-copy p { margin-top: 10px; color: var(--ink-2); }
+  .phones img { width: 100%; border-radius: 4px; }
+
+  .phone-get { margin-bottom: 28px; }
+  .oses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); }
+  .oses article { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 24px; }
+  .oses article + article { border-left: 1px solid var(--line); }
+  .req { font-size: 15px; color: var(--ink-3); }
+  .get { width: 100%; background: var(--bg-3); color: var(--ink); }
+  .get:hover { background: var(--ink); color: var(--bg); }
+  :global([data-os='mac']) [data-os-col='mac'] .get, :global([data-os='win']) [data-os-col='win'] .get, :global([data-os='linux']) [data-os-col='linux'] .get { background: var(--yellow); color: var(--on-yellow); }
+  :global([data-os='win']) [data-os-col='win'], :global([data-os='linux']) [data-os-col='linux'] { order: -1; border-left: 0; }
+  :global([data-os='win']) [data-os-col='mac'], :global([data-os='linux']) [data-os-col='mac'] { border-left: 1px solid var(--line); }
+  .more { font-size: 14.5px; line-height: 1.45; color: var(--ink-3); }
+  .agent { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; padding: 20px 24px; border: 1px solid var(--line); border-top: 0; }
+  .agent p { margin-top: 4px; color: var(--ink-2); font-size: 15.5px; }
+
+  .source { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 48px; align-items: end; }
+  .source p { margin-top: 16px; max-width: 700px; color: var(--ink-2); }
+
+  .faq h2 { margin-bottom: 32px; }
+  .qs { max-width: 900px; border-top: 1px solid var(--line); }
+  .qs details { border-bottom: 1px solid var(--line); }
+  .qs summary { padding: 18px 0; font-size: 19px; font-weight: 600; cursor: pointer; }
+  .qs p { padding-bottom: 20px; color: var(--ink-2); }
+
+  .last { padding-top: var(--gap); }
+  .last-film { position: relative; overflow: hidden; background: #000; }
+  .last-film video { width: 100%; height: clamp(380px, 62vh, 680px); object-fit: cover; object-position: center 18%; }
+  .caption { position: absolute; inset: auto 16px 8%; text-align: center; font-size: clamp(26px, 5vw, 64px); font-weight: 800; font-stretch: 78%; line-height: 1.2; }
+  .last-cta { display: flex; justify-content: center; padding-top: 28px; }
+  :global(main) + :global(.foot) { margin-top: 56px; }
+
+  .player { width: min(1120px, 100% - 24px); max-height: 92vh; padding: 0; border: 0; background: #000; color: var(--ink); overflow: auto; }
+  .player::backdrop { background: rgba(0, 0, 0, .86); }
+  .player video { width: 100%; }
+  .close { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border: 0; background: rgba(0, 0, 0, .75); color: #fff; font-size: 26px; cursor: pointer; }
+  .ex-info { padding: 14px 16px 16px; }
+  .ex-title { font-size: 20px; font-weight: 700; }
+  .ex-by { font-size: 15px; color: var(--ink-2); }
+  .ex-info details { margin-top: 10px; }
+  .ex-info summary { font-weight: 600; cursor: pointer; }
+  .ex-info pre { margin: 10px 0 0; white-space: pre-wrap; font: 500 13.5px/1.5 var(--mono); color: var(--ink-2); }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; }
+    .stage { width: 100%; }
+    h1 { font-size: min(21vw, 132px); }
+    .facts { grid-template-columns: 1fr 1fr; }
+    .facts li:nth-child(3) { padding-left: 0; border-left: 0; }
+    .facts li:nth-child(n+3) { border-top: 1px solid var(--line); }
+    .session li { grid-template-columns: 1fr; }
+    .session span { text-align: left; }
+    .point, .film, .yours { grid-template-columns: 1fr; }
+    .reels { grid-template-columns: 1fr 1fr; }
+    .track { grid-template-columns: 1fr; }
+    .track.head { display: none; }
+    .row:not(.th) { grid-template-columns: 1fr; padding-bottom: 12px; }
+    .row.th { display: none; }
+    .row > span { padding: 4px 0; }
+    .row > [role='rowheader'] { padding-top: 14px; font-weight: 700; color: var(--ink); font-size: 18px; }
+    .row > [role='cell']::before { content: attr(data-h) ': '; color: var(--ink-3); }
+    .row .us { padding: 8px 10px; }
+    .oses { grid-template-columns: 1fr; }
+    .oses article + article { border-left: 0; border-top: 1px solid var(--line); }
+    :global([data-os='win']) [data-os-col='win'], :global([data-os='linux']) [data-os-col='linux'] { border-top: 0; }
+    :global([data-os='win']) [data-os-col='mac'], :global([data-os='linux']) [data-os-col='mac'] { border-left: 0; border-top: 1px solid var(--line); }
+    .source { grid-template-columns: 1fr; }
+    .hero-cta :global(.btn) { flex: 1 1 100%; }
+    .phone-get :global(.btn), .last-cta :global(.btn) { width: 100%; }
+    .last-cta { padding-inline: 16px; }
+    :global([data-os='phone']) :global(.foot) { padding-bottom: 96px; }
+  }
+</style>
+
+<script>
+  // where you start: tabs, and the shown result plays while it's on screen
+  const move = !matchMedia('(prefers-reduced-motion: reduce)').matches
+  const ftabs = [...document.querySelectorAll<HTMLButtonElement>('[data-ftab]')]
+  const fpanels = ftabs.map(t => document.getElementById(t.getAttribute('aria-controls')!)!)
+  let filmsOn = false
+  const fvideo = (i: number) => fpanels[i].querySelector('video') as HTMLVideoElement
+  const fplay = (i: number) => { const v = fvideo(i); if (!v.src) v.src = v.dataset.src!; if (filmsOn && move) v.play().catch(() => {}) }
+  const fshow = (n: number) => ftabs.forEach((t, i) => {
+    const on = i === n
+    t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1
+    fpanels[i].hidden = !on
+    if (on) fplay(i); else fvideo(i).pause()
+  })
+  ftabs.forEach((t, i) => {
+    t.addEventListener('click', () => fshow(i))
+    t.addEventListener('keydown', e => {
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+      if (d) { const n = (i + d + ftabs.length) % ftabs.length; fshow(n); ftabs[n].focus() }
     })
-    ftabs.forEach((t, i) => {
-      t.addEventListener('click', () => fshow(i))
-      t.addEventListener('keydown', e => {
-        const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
-        if (d) { const n = (i + d + ftabs.length) % ftabs.length; fshow(n); ftabs[n].focus() }
-      })
-    })
-    new IntersectionObserver(([e]) => {
-      filmsOn = e.isIntersecting
-      const i = ftabs.findIndex(t => t.getAttribute('aria-selected') === 'true')
-      if (filmsOn) fplay(i); else fvideo(i).pause()
-    }, { rootMargin: '200px' }).observe(document.getElementById('films')!)
+  })
+  new IntersectionObserver(([e]) => {
+    filmsOn = e.isIntersecting
+    const i = ftabs.findIndex(t => t.getAttribute('aria-selected') === 'true')
+    if (filmsOn) fplay(i); else fvideo(i).pause()
+  }, { rootMargin: '200px' }).observe(document.getElementById('make')!)
 
-    // the film opens in a player over the page
-    const film = document.getElementById('film') as HTMLDialogElement, filmV = document.getElementById('film-v') as HTMLVideoElement
-    document.querySelectorAll('[data-film]').forEach(b => b.addEventListener('click', () => { film.showModal(); filmV.play().catch(() => {}) }))
-    film.querySelector('.film-close')!.addEventListener('click', () => film.close())
-    film.addEventListener('click', e => { if (e.target === film) film.close() })
-    film.addEventListener('close', () => filmV.pause())
+  // the film opens in a player over the page
+  const film = document.getElementById('film') as HTMLDialogElement, filmV = document.getElementById('film-v') as HTMLVideoElement
+  document.querySelectorAll('[data-film]').forEach(b => b.addEventListener('click', () => { film.showModal(); filmV.play().catch(() => {}) }))
+  film.querySelector('.close')!.addEventListener('click', () => film.close())
+  film.addEventListener('click', e => { if (e.target === film) film.close() })
+  film.addEventListener('close', () => filmV.pause())
 
-    // paintings load when their panel is a screen away
-    const paints = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('seen'); paints.unobserve(e.target) } }), { rootMargin: '100% 0px' })
-    document.querySelectorAll('.paint:not(.seen)').forEach(el => paints.observe(el))
+  // motion examples: small silent previews from this site, fetched a screen early, playing while on screen;
+  // a click opens the full one with sound and the prompt behind it
+  const warm = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return
+    const v = e.target as HTMLVideoElement
+    v.preload = 'auto'; v.src = v.dataset.src!; warm.unobserve(v)
+  }), { rootMargin: '120% 60%' })
+  const reels = new IntersectionObserver(es => es.forEach(e => {
+    const v = e.target as HTMLVideoElement
+    if (e.isIntersecting && move) { if (!v.src) v.src = v.dataset.src!; v.play().catch(() => {}) } else v.pause()
+  }), { threshold: 0.15 })
+  document.querySelectorAll<HTMLVideoElement>('.reels video').forEach(v => { warm.observe(v); reels.observe(v) })
+  const exs = JSON.parse(document.getElementById('ex-data')!.textContent!)
+  const ex = document.getElementById('ex') as HTMLDialogElement, exV = document.getElementById('ex-v') as HTMLVideoElement
+  document.querySelectorAll<HTMLButtonElement>('[data-ex]').forEach(b => b.addEventListener('click', () => {
+    const m = exs[Number(b.dataset.ex)]
+    exV.src = m.video; exV.poster = m.poster
+    document.getElementById('ex-title')!.textContent = m.title
+    const who = document.getElementById('ex-who') as HTMLAnchorElement
+    who.textContent = '@' + m.handle; who.href = 'https://x.com/' + m.handle
+    ;(document.getElementById('ex-post') as HTMLAnchorElement).href = m.post
+    document.getElementById('ex-prompt')!.textContent = m.prompt
+    ex.querySelector('details')!.open = false
+    ex.showModal(); exV.play().catch(() => {})
+  }))
+  ex.querySelector('.close')!.addEventListener('click', () => ex.close())
+  ex.addEventListener('click', e => { if (e.target === ex) ex.close() })
+  ex.addEventListener('close', () => exV.pause())
 
-    // motion examples: small silent previews from this site, fetched a screen early, playing while on screen;
-    // a click opens the full one with sound and the prompt behind it
-    const warm = new IntersectionObserver(es => es.forEach(e => {
-      if (!e.isIntersecting) return
-      const v = e.target as HTMLVideoElement
-      v.preload = 'auto'; v.src = v.dataset.src!; warm.unobserve(v)
-    }), { rootMargin: '120% 60%' })
-    const reels = new IntersectionObserver(es => es.forEach(e => {
-      const v = e.target as HTMLVideoElement
-      if (e.isIntersecting && move) { if (!v.src) v.src = v.dataset.src!; v.play().catch(() => {}) } else v.pause()
-    }), { threshold: 0.15 })
-    document.querySelectorAll<HTMLVideoElement>('.reel-tile video').forEach(v => { warm.observe(v); reels.observe(v) })
-    const exs = JSON.parse(document.getElementById('ex-data')!.textContent!)
-    const ex = document.getElementById('ex') as HTMLDialogElement, exV = document.getElementById('ex-v') as HTMLVideoElement
-    document.querySelectorAll<HTMLButtonElement>('[data-ex]').forEach(b => b.addEventListener('click', () => {
-      const m = exs[Number(b.dataset.ex)]
-      exV.src = m.video; exV.poster = m.poster
-      document.getElementById('ex-title')!.textContent = m.title
-      const who = document.getElementById('ex-who') as HTMLAnchorElement
-      who.textContent = '@' + m.handle; who.href = 'https://x.com/' + m.handle
-      ;(document.getElementById('ex-post') as HTMLAnchorElement).href = m.post
-      document.getElementById('ex-prompt')!.textContent = m.prompt
-      ex.querySelector('details')!.open = false
-      ex.showModal(); exV.play().catch(() => {})
-    }))
-    ex.querySelector('.film-close')!.addEventListener('click', () => ex.close())
-    ex.addEventListener('click', e => { if (e.target === ex) ex.close() })
-    ex.addEventListener('close', () => exV.pause())
-
-    // things rise in as they come on screen; the ring and the strike-through draw themselves
-    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } }), { threshold: 0.15, rootMargin: '0px 0px -6% 0px' })
-    document.querySelectorAll('[data-r], .ringed, .edl .row').forEach(el => io.observe(el))
-
-    // the cat plays only while he's on screen, and not at all for people who'd rather nothing moved
-    const cat = document.getElementById('cat') as HTMLVideoElement
-    if (move) new IntersectionObserver(([e]) => { if (e.isIntersecting) cat.play().catch(() => {}); else cat.pause() }, { rootMargin: '200px' }).observe(cat)
-
-    // scroll-driven parts: the line that fills in, the readout that steps through its tracks, the paintings' drift
-    const say = document.getElementById('say')!, chars = [...say.querySelectorAll<HTMLElement>('.ch')]
-    const scrolly = document.querySelector<HTMLElement>('.scrolly')!, views = [...scrolly.querySelectorAll<HTMLElement>('.view')], steps = [...scrolly.querySelectorAll<HTMLButtonElement>('.tracks button')]
-    const pinnable = () => move && innerWidth >= 900 && innerHeight >= 620
-    let live = false, filled = -1, step = -1
-    const setLive = () => {
-      live = pinnable()
-      say.classList.toggle('live', live); scrolly.classList.toggle('live', live)
-      filled = -1; step = -1
-    }
-    const progress = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return Math.min(1, Math.max(0, -r.top / (r.height - innerHeight))) }
-    steps.forEach((b, i) => b.addEventListener('click', () => {
-      const r = scrolly.getBoundingClientRect(), span = r.height - innerHeight
-      scrollTo({ top: scrollY + r.top + span * (i + .5) / steps.length, behavior: 'smooth' })
-    }))
-    const drift = [...document.querySelectorAll<HTMLElement>('.panel.paint, .sky, .dusk, .say-card, .faq-side')]
-    const top = document.getElementById('top')!
-    let queued = false
-    const frame = () => {
-      queued = false
-      top.classList.toggle('on', scrollY > 8)
-      if (!move) return
-      if (live) {
-        // the line fills from 15% to 85% of the way through its section, the newest letters in amber
-        const n = Math.round(Math.min(1, Math.max(0, (progress(say) - .15) / .7)) * chars.length)
-        if (n !== filled) { chars.forEach((c, i) => { c.classList.toggle('on', i < n); c.classList.toggle('lead', i < n && i >= n - 6) }); filled = n }
-        const p = progress(scrolly) * views.length, s = Math.min(views.length - 1, Math.floor(p))
-        if (s !== step) { views.forEach((v, i) => v.classList.toggle('on', i === s)); steps.forEach((b, i) => { b.classList.toggle('on', i === s); b.classList.toggle('done', i < s) }); step = s }
-        scrolly.style.setProperty('--t', String(Math.min(1, (p - s) * 1.6)))
-      }
-      for (const el of drift) {
-        const r = el.getBoundingClientRect()
-        if (r.bottom < -200 || r.top > innerHeight + 200) continue
-        el.style.setProperty('--py', `${((r.top + r.height / 2 - innerHeight / 2) * -.07).toFixed(1)}px`)
-      }
-    }
-    const queue = () => { if (!queued) { queued = true; requestAnimationFrame(frame) } }
-    setLive(); frame()
-    addEventListener('scroll', queue, { passive: true })
-    addEventListener('resize', () => { setLive(); queue() })
-  </script>
-
-  <style>
-    /* the ring and the strike: Manul's notes on the page, drawn in amber */
-    .ringed { position: relative; display: inline-block; }
-    .ringed svg { position: absolute; left: -5%; top: -16%; width: 113%; height: 132%; overflow: visible; pointer-events: none; }
-    .ringed svg path { fill: none; stroke: var(--amber); stroke-width: 6px; stroke-linecap: round; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-dashoffset: 1; }
-    .ringed.in svg path { transition: stroke-dashoffset .9s cubic-bezier(.6,.1,.3,1) .6s; stroke-dashoffset: 0; }
-    s { text-decoration: line-through transparent .1em; text-decoration-skip-ink: none; transition: text-decoration-color .5s ease .2s; }
-    .in s { text-decoration-color: var(--amber); }
-    @media (prefers-reduced-motion: reduce) {
-      .ringed svg path { stroke-dashoffset: 0; }
-      s { text-decoration-color: var(--amber); transition: none; }
-    }
-
-    /* header: links left, the cat in the middle, GitHub and Download right */
-    .top { position: sticky; top: 0; z-index: 30; background: rgba(253, 253, 246, .84); backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); transition: box-shadow .2s; }
-    .top.on { box-shadow: 0 1px 0 var(--line-2); }
-    .top-in { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; height: 60px; padding: 0 20px; }
-    .top-in nav { display: flex; gap: 2px; }
-    .top-in nav a { padding: 8px 11px; border-radius: 8px; font: 500 14px/1 var(--sans); text-decoration: none; color: var(--ink); white-space: nowrap; }
-    .top-in nav a:hover { background: rgba(38, 38, 38, .06); }
-    .mob-nav { display: none; }
-    .brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; font: 800 19px/1 var(--sans); letter-spacing: -.02em; }
-    .brand img { border-radius: 7px; }
-    .acts { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
-    .gh { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); font: 600 14px/1 var(--sans); text-decoration: none; }
-    .gh:hover { background: rgba(38, 38, 38, .05); }
-    .gh svg { width: 16px; height: 16px; }
-
-    /* the hero: a painted sky with the whole editor in the first screen */
-    .hero { padding: 0 8px; }
-    .sky { border-radius: var(--r-lg); padding: clamp(28px, 4.2vh, 60px) clamp(12px, 4vw, 56px) clamp(16px, 3vw, 40px); }
-    .hero-copy { display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 860px; margin: 0 auto; }
-    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: rgba(255, 255, 255, .6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font: 600 13.5px/1.2 var(--sans); text-decoration: none; }
-    .dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); animation: pulse-dot 2.4s ease-in-out infinite; }
-    @keyframes pulse-dot { 0%, 100% { box-shadow: 0 0 0 3px var(--amber-soft); } 50% { box-shadow: 0 0 0 6px rgba(242, 165, 65, .12); } }
-    h1 { margin: 16px 0 0; font-size: clamp(42px, min(6vw, 8.4vh), 76px); line-height: 1.02; letter-spacing: -.035em; }
-    h1 .w { display: inline-block; }
-    .move h1 .w { animation: blur-in .8s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i) * 90ms + 80ms); }
-    @keyframes blur-in { from { opacity: 0; filter: blur(12px); transform: translateY(14px); } }
-    .lede { margin: 14px 0 0; max-width: 800px; font-size: clamp(16.5px, 1.4vw, 18.5px); line-height: 1.5; color: #2f2f2c; }
-    .cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 22px; }
-    .play { width: 22px; height: 22px; border-radius: 50%; background: var(--ink); position: relative; flex: none; }
-    .play::after { content: ''; position: absolute; left: 8.5px; top: 6.5px; border-left: 8px solid #fff; border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent; }
-    .dur { font-size: 12.5px; font-weight: 500; color: var(--ink-3); }
-    .brew { display: inline-flex; gap: 12px; align-items: center; margin-top: 10px; padding: 6px 14px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .45); cursor: pointer; font-size: 13px; color: var(--ink-2); }
-    .brew:hover { background: rgba(255, 255, 255, .7); }
-    .brew em { font: 600 13px/1 var(--sans); font-style: normal; color: var(--amber-ink); }
-    .stage { max-width: 1104px; margin: clamp(20px, 3.2vh, 40px) auto 0; }
-    .glass { padding: 8px; border-radius: 24px; background: rgba(255, 255, 255, .34); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .6), 0 40px 80px -40px rgba(30, 40, 60, .45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-    .move .glass { animation: rise-in 1s cubic-bezier(.2, .7, .2, 1) .35s both; }
-    @keyframes rise-in { from { opacity: 0; transform: translateY(40px) scale(.97); } }
-    .steps { list-style: none; display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; }
-    .steps li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(32, 32, 32, .86); color: #fff; font: 600 13.5px/1.2 var(--sans); }
-    .steps b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--amber); color: var(--ink); font-size: 12px; }
-    .credit { margin: 14px auto 0; font-size: 13px; color: var(--ink-3); text-align: center; }
-    .credit a { color: inherit; text-underline-offset: 3px; }
-    .phone-only { display: none; }
-    /* short windows: the editor matters more than the eyebrow and the brew line (both are elsewhere on the page) */
-    @media (min-width: 900px) and (max-height: 920px) { .brew { display: none; } }
-    @media (min-width: 900px) and (max-height: 820px) {
-      .eyebrow, .chips { display: none; }
-      h1 { margin-top: 0; }
-      .lede { font-size: 16.5px; }
-      .cta-row { margin-top: 16px; }
-    }
-
-    /* the line that fills in as you scroll */
-    .say { padding: 8px 8px 0; }
-    .say-card { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 64vh; padding: clamp(48px, 8vw, 96px) clamp(20px, 6vw, 96px); border-radius: var(--r-lg); text-align: center; }
-    .kicker { margin: 0 0 22px; padding: 6px 14px; border-radius: 999px; background: rgba(255, 255, 255, .62); font: 650 14px/1.2 var(--sans); }
-    .say-text { margin: 0; max-width: 1040px; font: 800 clamp(30px, 4.4vw, 60px)/1.14 var(--sans); letter-spacing: -.03em; text-wrap: balance; }
-    .sw { display: inline-block; white-space: nowrap; }
-    .say.live { height: 260vh; }
-    .say.live .say-pin { position: sticky; top: 68px; height: calc(100vh - 76px); display: flex; }
-    .say.live .say-card { flex: 1; min-height: 0; }
-    .say.live .ch { color: rgba(38, 38, 38, .2); transition: color .25s ease; }
-    .say.live .ch.on { color: var(--ink); }
-    .say.live .ch.lead { color: #c77a12; }
-
-    main > section:not(.hero):not(.say):not(.cta) { padding-top: clamp(80px, 10vw, 128px); }
-
-    /* motion */
-    .reels { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    .reel-tile { position: relative; display: block; width: 100%; padding: 0; border: 0; background: var(--dark); cursor: pointer; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--r); box-shadow: 0 0 0 4px rgba(255, 255, 255, .5), 0 30px 50px -30px rgba(20, 10, 40, .6); }
-    .reel-tile video { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .5s cubic-bezier(.16, 1, .3, 1); }
-    .reel-tile:hover video, .reel-tile:focus-visible video { transform: scale(1.03); }
-    .slug { position: absolute; inset: auto 0 0; display: flex; justify-content: space-between; padding: 26px 14px 11px; font: 600 13px/1 var(--sans); color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, .6)); pointer-events: none; }
-    .slug .mono { font-weight: 500; font-size: 12.5px; }
-    .note { width: fit-content; margin: 24px auto 0; padding: 8px 16px; border-radius: 999px; background: rgba(32, 32, 32, .82); color: #f1efe8; font-size: 13.5px; text-align: center; }
-    .note a { color: #fff; text-underline-offset: 3px; }
-    @media (prefers-reduced-motion: reduce) { .reel-tile video { transition: none; } }
-
-    /* the notes: one white sheet on the peaks */
-    .edl { border-radius: 20px; overflow: hidden; }
-    .edl .row { display: grid; grid-template-columns: 44px minmax(0, 1.25fr) 140px minmax(0, 1fr); gap: 28px; align-items: baseline; padding: 24px 28px; border-top: 1px solid var(--line-2); }
-    .js.move .edl .row:not(.th) { opacity: 0; transform: translateX(-14px); transition: opacity .6s ease, transform .6s cubic-bezier(.2, .7, .2, 1); }
-    .js.move .edl .row.in { opacity: 1; transform: none; }
-    .edl .th { padding-block: 14px; border: 0; background: rgba(244, 243, 234, .8); font: 600 12.5px/1 var(--sans); color: var(--ink-3); }
-    .edl .n { font-size: 13px; color: var(--ink-3); }
-    .edl q { quotes: '“' '”'; font: 650 clamp(19px, 1.9vw, 23px)/1.3 var(--sans); letter-spacing: -.015em; }
-    .edl .at { font-size: 13px; color: var(--amber-ink); }
-    .edl .did { font-size: 15.5px; color: var(--ink-2); }
-    .boxed { display: inline-block; vertical-align: .2em; margin-right: 8px; padding: 2px 8px; border: 2px dashed var(--amber); border-radius: 6px; color: var(--amber-ink); font: 700 12px/1.3 var(--sans); font-style: normal; }
-    .ref { font: 600 13px/1 var(--mono); color: var(--amber-ink); background: var(--amber-soft); padding: 3px 7px; border-radius: 6px; white-space: nowrap; }
-    .circled { padding: 0 .14em; box-shadow: inset 0 0 0 2.5px var(--amber); border-radius: 6px; }
-
-    /* what it measures: all six tracks as rows; on a big screen the panel pins and scrolling steps through them */
-    .paper { padding: 8px 28px; border-radius: 20px; }
-    .tracks { display: none; }
-    .view { display: grid; grid-template-columns: 96px minmax(0, 1.5fr) minmax(0, 1fr); gap: 28px; align-items: start; padding: 20px 0; border-top: 1px solid var(--line-2); }
-    .view:first-child { border-top: 0; }
-    .lbl { margin: 0 0 6px; font: 600 12.5px/1 var(--sans); color: var(--ink-3); }
-    .view .k { display: inline-flex; justify-self: start; padding: 5px 11px; border-radius: 999px; background: var(--dark); color: #fff; font: 650 13px/1.2 var(--sans); }
-    .found { display: grid; gap: 10px; font-size: 14px; line-height: 1.65; color: var(--ink-2); }
-    .found .mono { margin: 0; }
-    .found :global(i) { font-style: normal; color: var(--ink); background: var(--bg-2); padding: 1px 7px; margin: 0 2px; border-radius: 5px; white-space: nowrap; }
-    .say-it q { quotes: '“' '”'; font: 650 clamp(18px, 1.8vw, 22px)/1.3 var(--sans); letter-spacing: -.01em; }
-    .trace :global(svg) { display: block; width: 100%; height: 28px; }
-    .trace :global(.p) { fill: #d3d0c4; }
-    .trace :global(.q) { fill: #8f8c82; }
-    .trace :global(.r) { fill: var(--amber); }
-    .trace :global(.h) { fill: rgba(242, 165, 65, .28); }
-    .trace :global(.rl) { fill: none; stroke: #e0901f; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
-    .trace :global(.pf) { fill: #e6e3d8; }
-    .craft { width: fit-content; max-width: 640px; margin: 24px auto 0; padding: 12px 20px; border-radius: 16px; background: rgba(32, 32, 32, .86); color: #f1efe8; font-size: 15.5px; text-align: center; }
-
-    .scrolly.live { height: calc(var(--n) * 70vh + 100vh); }
-    .scrolly.live .pin { position: sticky; top: 68px; height: calc(100vh - 76px); display: flex; }
-    .scrolly.live .panel { flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 0; }
-    .scrolly.live .paper { width: 100%; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; padding: 32px 40px; }
-    .scrolly.live .tracks { display: flex; flex-direction: column; gap: 6px; }
-    .tracks button { position: relative; display: flex; align-items: center; justify-content: space-between; height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: none; color: var(--ink-3); font: 650 16px/1 var(--sans); text-align: left; cursor: pointer; transition: background .3s, color .3s; }
-    .tracks button:hover { background: rgba(38, 38, 38, .05); }
-    .tracks button i { width: 8px; height: 8px; border-radius: 50%; background: rgba(38, 38, 38, .15); transition: background .3s; }
-    .tracks button.done { color: var(--ink-2); }
-    .tracks button.done i { background: var(--amber); }
-    .tracks button.on { background: var(--dark); color: #fff; }
-    .tracks button.on i { background: var(--amber); box-shadow: 0 0 0 4px rgba(242, 165, 65, .25); }
-    .scrolly.live .views { display: grid; align-items: center; }
-    .scrolly.live .view { grid-area: 1 / 1; grid-template-columns: minmax(0, 1fr); gap: 26px; padding: 0; border: 0; opacity: 0; transform: translateY(16px); transition: opacity .45s ease, transform .45s cubic-bezier(.2, .7, .2, 1); pointer-events: none; }
-    .scrolly.live .view.on { opacity: 1; transform: none; pointer-events: auto; }
-    .scrolly.live .view .k { display: none; }
-    .scrolly.live .found { font-size: 16px; }
-    .scrolly.live .trace :global(svg) { height: 56px; }
-    .scrolly.live .view.on .trace { clip-path: inset(0 calc((1 - var(--t, 1)) * 100%) 0 0); }
-    .scrolly.live .say-it q { font-size: clamp(28px, 3.2vw, 44px); letter-spacing: -.03em; }
-
-    /* where it fits */
-    .cmp { border-radius: 20px; overflow: hidden; }
-    .cmp .row { display: grid; grid-template-columns: .8fr 1fr 1fr 1fr 1fr; border-top: 1px solid var(--line-2); }
-    .cmp .th { border: 0; background: rgba(244, 243, 234, .8); }
-    .cmp small { display: block; margin-top: 6px; font: 400 12.5px/1.4 var(--sans); color: var(--ink-3); }
-    .cmp .row > span { padding: 18px 20px; font-size: 15.5px; color: var(--ink-2); }
-    .cmp .th > span { font: 700 14px/1.2 var(--sans); color: var(--ink); }
-    .cmp [role=rowheader] { font: 600 14px/1.5 var(--sans); color: var(--ink-3); }
-    .cmp .us { color: var(--ink) !important; font-weight: 650; background: rgba(242, 165, 65, .2); }
-    .cmp .th .us { background: var(--dark); color: #fff !important; }
-    .cmp .th .us small { color: rgba(255, 255, 255, .65); }
-
-
-    /* the hero's prompt box and the kinds of video under it */
-    .prompt { display: flex; align-items: center; gap: 12px; width: min(680px, 100%); margin-top: 20px; padding: 10px 10px 10px 20px; border-radius: 20px; background: rgba(255, 255, 255, .82); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .8), 0 20px 40px -24px rgba(30, 40, 60, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); text-align: left; }
-    .prompt-text { flex: 1; margin: 0; min-height: 3em; display: flex; align-items: center; font: 500 16px/1.5 var(--sans); color: var(--ink); }
-    .prompt-text.swap { animation: fade-in .35s ease both; }
-    @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } }
-    .prompt-go { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--ink); color: #fff; }
-    .prompt-go svg { width: 18px; height: 18px; }
-    .chips { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 980px; margin: 12px 0 0; padding: 0; }
-    .chips button { height: 32px; padding: 0 13px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .5); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .7); font: 600 13.5px/1 var(--sans); color: var(--ink-2); cursor: pointer; }
-    .chips button:hover { background: rgba(255, 255, 255, .8); }
-    .chips button[aria-pressed=true] { background: var(--ink); color: #fff; box-shadow: none; }
-    @media (prefers-reduced-motion: reduce) { .prompt-text.swap { animation: none; } }
-
-    /* many kinds of film: prompt, steps, result */
-    .film-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; width: fit-content; max-width: 100%; margin: 0 auto 16px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, .6); }
-    .film-tabs button { height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: 650 14.5px/1 var(--sans); cursor: pointer; }
-    .film-tabs button[aria-selected=true] { background: var(--ink); color: #fff; }
-    .film-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 32px; align-items: center; padding: 28px; border-radius: 20px; }
-    .fp-flow { display: grid; gap: 22px; }
-    .fp-prompt { display: block; quotes: '“' '”'; font: 700 clamp(20px, 2vw, 25px)/1.3 var(--sans); letter-spacing: -.015em; }
-    .fp-steps { margin: 0; padding: 0; list-style: none; counter-reset: s; }
-    .fp-steps li { position: relative; padding: 7px 0 7px 32px; font-size: 15px; color: var(--ink-2); counter-increment: s; }
-    .fp-steps li::before { content: counter(s); position: absolute; left: 0; top: 7px; display: grid; place-items: center; width: 21px; height: 21px; border-radius: 50%; background: var(--amber-soft); color: var(--amber-ink); font: 700 11.5px/1 var(--mono); }
-    .fp-steps li:last-child::before { content: '✓'; background: var(--amber); color: var(--ink); }
-    .fp-result { margin: 0; }
-    .fp-result video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 14px; background: var(--dark); }
-    .fp-result.tall video { width: auto; height: min(440px, 60vh); aspect-ratio: 9 / 16; margin: 0 auto; }
-    .fp-result figcaption { margin-top: 10px; text-align: center; font-size: 13px; color: var(--ink-3); }
-
-    /* the harness, in three lines */
-    .harness { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 32px; padding: 0; }
-    .harness li { display: grid; gap: 4px; padding: 18px 20px; border-radius: 16px; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px var(--line), 0 18px 36px -28px rgba(25, 20, 10, .35); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: transform .25s ease, box-shadow .25s ease; }
-    .harness li:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(242, 165, 65, .55), 0 22px 42px -26px rgba(25, 20, 10, .45); }
-    .harness b { font: 700 16.5px/1.3 var(--sans); }
-    .harness span { font-size: 14.5px; color: var(--ink-2); }
-
-    /* everywhere: mobile companion + cloud & home workers */
-    .any-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 20px; align-items: stretch; }
-    .any-card { display: flex; flex-direction: column; justify-content: space-between; gap: 22px; padding: clamp(22px, 3vw, 32px); border-radius: 22px; background: rgba(255, 255, 255, .92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 0 0 1px rgba(255, 255, 255, .8), 0 28px 60px -36px rgba(20, 15, 10, .45); transition: transform .25s ease; }
-    .any-card:hover { transform: translateY(-2px); }
-    .any-head { display: grid; gap: 10px; justify-items: start; }
-    .any-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--bg-2); color: var(--ink-2); font: 600 12.5px/1.2 var(--mono); }
-    .any-card h3 { margin: 4px 0 0; font-size: clamp(24px, 2.5vw, 30px); letter-spacing: -.02em; }
-    .any-head p { margin: 0; font-size: 16px; line-height: 1.55; color: var(--ink-2); }
-    .any-head code { font: 500 13.5px var(--mono); padding: 1px 6px; border-radius: 5px; background: var(--bg-2); color: var(--ink); }
-
-    /* phone companion mockup */
-    .phone-mock { display: grid; gap: 10px; padding: 14px; border-radius: 20px; background: #181715; color: #f4f2ec; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 24px 48px -24px rgba(15, 10, 5, .55); }
-    .pm-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font: 600 12.5px/1.3 var(--mono); }
-    .pm-host { display: inline-flex; align-items: center; gap: 7px; color: #e9e7df; }
-    .pm-host i { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 10px rgba(74, 222, 128, .8); }
-    .pm-code { padding: 4px 10px; border-radius: 999px; background: rgba(242, 165, 65, .18); color: var(--amber); font-size: 12px; }
-    .pm-stage { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 10px; align-items: stretch; }
-    .pm-frame { position: relative; display: flex; flex-direction: column; justify-content: space-between; min-height: 118px; padding: 11px 12px; border-radius: 12px; background: radial-gradient(120% 90% at 80% 15%, rgba(242, 165, 65, .28), transparent 60%), linear-gradient(145deg, #2b2722, #1f1d1a); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09); }
-    .pm-time { font: 600 12px/1 var(--mono); color: #b8b5ac; }
-    .pm-box { align-self: flex-start; padding: 4px 9px; border-radius: 6px; border: 1.5px dashed var(--amber); background: rgba(242, 165, 65, .14); color: #fff; font: 600 12px/1.2 var(--sans); }
-    .pm-caption { margin: 0; font: 650 13.5px/1.3 var(--sans); color: #fff; }
-    .pm-upload { display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 12px; border-radius: 12px; background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
-    .pm-badge { width: fit-content; padding: 4px 9px; border-radius: 999px; background: rgba(74, 222, 128, .16); color: #86efac; font: 600 12px/1.2 var(--mono); }
-    .pm-upload span:last-child { font-size: 12.5px; line-height: 1.4; color: #c9c7be; }
-    .pm-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .06); }
-    .pm-bar > span { display: inline-flex; align-items: center; padding: 6px 11px; border-radius: 999px; font: 650 12px/1.2 var(--sans); white-space: nowrap; }
-    .pm-keep { background: var(--amber); color: var(--ink); }
-    .pm-undo, .pm-share { background: rgba(255, 255, 255, .11); color: #e9e7df; }
-    .pm-share { margin-left: auto; }
-
-    /* mesh worker mockup */
-    .mesh-mock { display: grid; gap: 10px; padding: 14px; border-radius: 20px; background: #181715; color: #f4f2ec; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 24px 48px -24px rgba(15, 10, 5, .55); }
-    .mm-nodes { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.1fr); gap: 8px; align-items: stretch; }
-    .mm-node { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 11px 12px; border-radius: 12px; background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
-    .mm-node.active { background: radial-gradient(120% 100% at 100% 0%, rgba(242, 165, 65, .24), transparent 65%), rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(242, 165, 65, .42); }
-    .mm-node b { font: 700 13.5px/1.25 var(--sans); color: #fff; }
-    .mm-node span { font-size: 12.5px; line-height: 1.35; color: #b8b5ac; }
-    .mm-link { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; padding: 4px 6px; text-align: center; }
-    .mm-link span { font: 600 12px/1.2 var(--mono); color: var(--amber); white-space: nowrap; }
-    .mm-link small { font: 500 12px/1.2 var(--sans); color: #9c9990; white-space: nowrap; }
-    .mm-term { border-radius: 12px; overflow: hidden; background: #10100e; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
-    .mm-term-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: rgba(255, 255, 255, .05); font: 600 12px/1.2 var(--mono); color: #a9a8a1; }
-    .mm-live { display: inline-flex; align-items: center; gap: 6px; color: #86efac; }
-    .mm-term pre { margin: 0; padding: 12px 14px; overflow-x: auto; font: 450 12.5px/1.65 var(--mono); color: #e9e7df; }
-    .mm-term .c { color: #8d8c86; }
-    .mm-term .p { color: var(--amber); }
-
-    /* build with: copy beside a terminal */
-    .build-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 48px); align-items: center; }
-    .build-copy { padding: clamp(22px, 3vw, 36px); border-radius: 20px; background: rgba(255, 255, 255, .88); }
-    .build-copy .kicker { display: inline-block; margin: 0; background: var(--amber-soft); color: var(--amber-ink); }
-    .build h2 { margin: 14px 0 0; font-size: clamp(30px, 3.6vw, 44px); }
-    .build-copy > p { margin: 12px 0 0; font-size: 16.5px; color: var(--ink-2); }
-    .build-list { list-style: none; margin: 18px 0 0; padding: 0; }
-    .build-list li { padding: 11px 0; border-top: 1px solid var(--line-2); font-size: 15px; color: var(--ink-2); }
-    .build-list b { color: var(--ink); }
-    .build-list span:not(.tag) { display: block; margin-top: 2px; }
-    .build-list a { color: var(--ink); text-underline-offset: 3px; text-decoration-color: var(--amber); }
-    .build-list .tag { margin-left: 6px; padding: 3px 9px; font-size: 12px; }
-    .cta-row.left { justify-content: flex-start; margin-top: 20px; }
-    .term { border-radius: 18px; overflow: hidden; background: var(--dark); box-shadow: 0 40px 80px -40px rgba(20, 10, 40, .7); }
-    .term-bar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; background: #2a2a2a; }
-    .term-bar i { width: 11px; height: 11px; border-radius: 50%; background: #4a4a48; }
-    .term-bar span { margin-left: 8px; font-size: 12.5px; color: #a9a8a1; }
-    .term pre { margin: 0; padding: 18px 20px 22px; overflow-x: auto; font-size: 13.5px; line-height: 1.75; color: #e9e7df; }
-    .term .c { color: #8d8c86; }
-    .term .p { color: var(--amber); }
-
-    .cards .band { justify-content: space-between; }
-    .cards .num { padding: 5px 9px; border-radius: 999px; background: rgba(255, 255, 255, .85); }
-    .cards code { font: 500 13.5px var(--mono); padding: 1px 5px; border-radius: 5px; background: var(--bg-2); }
-
-    /* coming next: cards with a strip of painting */
-    .cards { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-    .cards li { overflow: hidden; border-radius: 18px; background: var(--card); box-shadow: 0 0 0 1px var(--line); }
-    .band { display: flex; align-items: flex-start; height: 120px; padding: 14px; }
-    .cards h3, .cards p { padding: 0 22px; }
-    .cards p { padding-bottom: 24px; }
-    .cards h3, .first h3 { margin: 18px 0 0; font-size: 19px; letter-spacing: -.015em; }
-    .cards p, .first p { margin: 8px 0 0; font-size: 15.5px; color: var(--ink-2); }
-    .cards q, .first q { quotes: '“' '”'; color: var(--ink); font-weight: 650; }
-    .tag { display: inline-flex; padding: 5px 11px; border-radius: 999px; background: rgba(32, 32, 32, .86); color: #fff; font: 700 12.5px/1.2 var(--sans); }
-    .tag.later { background: rgba(255, 255, 255, .85); color: var(--ink-2); }
-
-    /* install */
-    .first { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-    .first li { padding: 24px; border-radius: 18px; }
-    .num { font: 600 13px/1 var(--mono); color: var(--amber-ink); }
-    .first h3 { margin-top: 14px; }
-    .dl { margin-top: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-    .dl-col { display: flex; flex-direction: column; gap: 16px; padding: 24px; border-radius: 20px; transition: box-shadow .2s, background .2s; }
-    .dl-col.here { background: rgba(255, 255, 255, .97); box-shadow: inset 0 0 0 2px var(--amber), 0 22px 44px -26px rgba(40, 28, 12, .28); }
-    .dl-head { display: flex; flex-direction: column; gap: 4px; }
-    .dl-os { display: flex; align-items: center; gap: 9px; }
-    .dl-os svg { width: 20px; height: 20px; flex: none; }
-    .dl-os h3 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
-    .dl-tag { display: none; margin-left: auto; padding: 4px 10px; border-radius: 999px; background: var(--amber); color: var(--ink); font: 700 12px/1 var(--sans); letter-spacing: .01em; }
-    .dl-col.here .dl-tag { display: inline-flex; }
-    .dl-req { font-size: 13px; color: var(--ink-3); }
-    .dl-main { width: 100%; justify-content: flex-start; padding-right: 16px; }
-    .dl-main small { margin-left: auto; padding-left: 8px; font: 500 12px/1 var(--mono); color: #b8b5ac; }
-    .dl-more { padding-top: 14px; border-top: 1px solid var(--line-2); }
-    .dl-more > p { margin: 0 0 8px; font: 600 12px/1.2 var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
-    .dl-row { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 13px; border-radius: 12px; background: var(--dark); color: #f4f2ec; }
-    .dl-row code { flex: 1; min-width: 0; font: 500 12px/1.5 var(--mono); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-    .dl-row code::-webkit-scrollbar { display: none; }
-    .dl-row code::before { content: '$ '; color: var(--amber); }
-    .dl-col[data-os=win] .dl-row code::before { content: 'PS> '; }
-    .dl-row .copy { height: 30px; min-width: 56px; padding: 0 12px; font-size: 12.5px; }
-    .dl-foot { margin: auto 0 0; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
-    .dl-foot a, .qs a, .credit a, .faq-side a { color: var(--ink-2); text-underline-offset: 3px; }
-    .dl-foot a:hover, .qs a:hover { color: var(--ink); }
-    .ask { margin-top: 16px; padding: 20px 24px; border-radius: 20px; }
-    .ask-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-    .ask h3 { margin: 0; font-size: 16px; letter-spacing: -.015em; }
-    .ask p { margin: 3px 0 0; font-size: 14px; color: var(--ink-2); }
-    .ask .copy { background: var(--ink); color: #fff; }
-    .ask .copy:hover { background: #111; }
-    .ask .copy.ok { background: var(--amber); color: var(--ink); }
-    .agent { margin: 14px 0 0; padding: 14px 18px; border-radius: 14px; background: var(--dark); color: #e9e7df; overflow-x: auto; scrollbar-width: none; }
-    .agent::-webkit-scrollbar { display: none; }
-    .agent code { font: 500 12.5px/1.7 var(--mono); white-space: pre; }
-    .agent .c { color: #8d8c86; }
-    .agent .l { color: #fff; font-weight: 600; }
-    .agent .p { color: var(--amber); }
-    .copy { flex: none; height: 38px; min-width: 76px; padding: 0 16px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .12); color: #fff; font: 600 13.5px/1 var(--sans); cursor: pointer; }
-    .copy:hover { background: rgba(255, 255, 255, .2); }
-    .copy.ok { background: var(--amber); color: var(--ink); }
-
-    /* open source: painted tiles */
-    .oss-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
-    .oss-head h2 { margin: 0; font-size: clamp(28px, 3vw, 36px); }
-    .oss-head p { margin: 6px 0 0; color: var(--ink-2); }
-    .bento { margin-top: 28px; display: grid; grid-template-columns: 1.1fr 1.4fr .9fr; grid-template-rows: 220px 220px; gap: 12px; }
-    .tile { display: flex; flex-direction: column; justify-content: flex-end; padding: 22px 24px; border-radius: 18px; color: #fff; text-decoration: none; }
-    .tile::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 30%, rgba(20, 20, 10, .42)); }
-    .tile .big { font: 800 clamp(34px, 4vw, 54px)/1 var(--sans); letter-spacing: -.035em; text-shadow: 0 2px 18px rgba(0, 0, 0, .25); }
-    .tile .what { margin-top: 8px; font: 600 15px/1.3 var(--sans); }
-    .tile .go { position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: rgba(255, 255, 255, .88); color: var(--ink); font-size: 14px; transition: transform .2s; }
-    .tile:hover .go { transform: translate(2px, -2px); }
-    .tile::before { transition: opacity .7s ease, transform .6s cubic-bezier(.2, .7, .2, 1); }
-    .tile:hover::before { transform: scale(1.05); }
-    .t1 { grid-column: 1 / 3; }
-    .t2 { grid-row: 1 / 3; grid-column: 3; }
-    .t5 { display: none; }
-
-    /* the cat, on his rocks */
-    .cat .panel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 48px); align-items: center; }
-    .cat .panel > * { max-width: none; margin: 0; }
-    .cat figure { margin: 0; }
-    .cat video { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 20px; background: var(--bg-2); box-shadow: 0 0 0 6px rgba(255, 255, 255, .55), 0 40px 80px -40px rgba(40, 25, 10, .6); }
-    .cat figcaption { width: fit-content; margin-top: 14px; padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, .7); font-size: 13px; color: var(--ink-2); }
-    .cat-copy { padding: clamp(22px, 3vw, 36px); border-radius: 20px; }
-    .cat h2 { margin: 12px 0 18px; font-size: clamp(30px, 3.6vw, 44px); }
-    .cat-copy p:not(.label) { margin: 0 0 14px; font-size: 17px; color: var(--ink-2); }
-    .cat-copy p:last-child { margin-bottom: 0; }
-    .cat .label { margin: 0; }
-
-    /* questions, beside a painted card */
-    .faq { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 48px; align-items: start; }
-    .faq-side { position: sticky; top: 84px; display: flex; flex-direction: column; justify-content: flex-end; min-height: 300px; padding: 28px; border-radius: var(--r-lg); }
-    .faq-side h2 { margin: 0; font-size: clamp(36px, 4vw, 52px); }
-    .faq-side p { margin: 8px 0 0; color: var(--ink-2); }
-    .qs details { border-bottom: 1px solid var(--line); }
-    .qs details:first-child { border-top: 1px solid var(--line); }
-    summary { list-style: none; cursor: pointer; padding: 20px 0; font: 600 17.5px/1.35 var(--sans); display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-    summary::-webkit-details-marker { display: none; }
-    summary::after { content: '+'; flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--line); font: 500 18px/1 var(--sans); transition: transform .2s, background .2s; }
-    details[open] summary::after { transform: rotate(45deg); background: var(--ink); color: #fff; box-shadow: none; }
-    details p { margin: 0 0 20px; max-width: 680px; color: var(--ink-2); }
-
-    /* the closing card */
-    .cta { padding: clamp(80px, 10vw, 128px) 8px clamp(80px, 10vw, 128px); }
-    .dusk { display: flex; flex-direction: column; align-items: center; text-align: center; padding: clamp(56px, 8vw, 104px) 20px; border-radius: var(--r-lg); }
-    .dusk img { width: 116px; height: 116px; filter: drop-shadow(0 18px 22px rgba(60, 30, 10, .35)); } /* the PNG has the macOS icon margin; the shadow follows the tile */
-    .dusk h2 { margin: 14px 0 0; font-size: clamp(36px, 5vw, 60px); letter-spacing: -.035em; }
-    .dusk p { margin: 12px 0 0; font-size: 18px; color: #2f2a24; }
-    .dusk .cta-row { margin-top: 28px; }
-
-    /* the film and the motion examples open over the page */
-    .film { width: min(1200px, 100vw - 32px); max-width: none; max-height: none; padding: 0; border: 0; border-radius: 16px; background: #000; color: #fff; overflow: visible; }
-    .film::backdrop { background: rgba(20, 20, 18, .82); backdrop-filter: blur(4px); }
-    .film video { display: block; width: 100%; height: auto; border-radius: 16px; }
-    .film-close { position: absolute; right: 0; top: -50px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: #fff; color: var(--ink); font-size: 24px; line-height: 1; cursor: pointer; }
-    .ex { width: min(1100px, 100vw - 32px, 108vh); } /* the video ≤ 61vh tall, so it and the prompt fit the window */
-    .ex video { border-radius: 16px 16px 0 0; }
-    .ex-info { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 18px 22px 20px; border-radius: 0 0 16px 16px; background: var(--dark); }
-    .ex-title { margin: 0; font: 800 24px/1.1 var(--sans); letter-spacing: -.02em; }
-    .ex-by { margin: 8px 0 0; font-size: 13.5px; color: #b9b7af; }
-    .ex-by a { color: #fff; }
-    .ex .film-close { top: 10px; right: 10px; z-index: 1; background: rgba(0, 0, 0, .5); color: #fff; }
-    .ex-info summary { padding: 0; font: 600 13.5px/1.4 var(--sans); color: var(--amber); }
-    .ex-info summary::after { content: none; }
-    .ex-info pre { margin: 10px 0 0; max-height: 22vh; overflow: auto; white-space: pre-wrap; font: 400 12.5px/1.55 var(--mono); color: #d9d7cf; }
-
-    /* footer */
-    .foot { background: var(--dark); color: #f4f3ee; padding: 64px 0 32px; }
-    .foot-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 48px; }
-    .foot .brand { font-size: 22px; }
-    .foot-brand p { margin: 16px 0 0; max-width: 300px; font-size: 15px; color: #a9a8a1; }
-    .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
-    .cols h3 { margin: 0 0 14px; font: 600 12.5px/1 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: #8d8c86; }
-    .cols a { display: block; padding: 5px 0; font-size: 15px; color: #f4f3ee; text-decoration: none; }
-    .cols a:hover { color: var(--amber); }
-    .foot-base { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px; margin-top: 56px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, .1); font-size: 13.5px; color: #8d8c86; }
-    .foot-base a { color: #c9c8c1; text-underline-offset: 3px; }
-
-    /* wide screens: the painted panels stop growing */
-    @media (min-width: 1700px) { .panel, .sky, .say-card, .dusk { max-width: 1680px; margin-inline: auto; } .say.live .say-pin { justify-content: center; } }
-
-    @media (max-width: 1100px) {
-      .top nav a.more { display: none; }
-      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (max-width: 980px) {
-      .reels { grid-template-columns: repeat(2, 1fr); }
-      .ex-info { grid-template-columns: 1fr; }
-      .edl .row { grid-template-columns: 36px minmax(0, 1fr); gap: 8px 14px; padding: 20px; }
-      .edl .row > :nth-child(n+3) { grid-column: 2; }
-      .edl .th { display: none; }
-      .view { grid-template-columns: 1fr; gap: 10px; padding: 18px 0; }
-      .cat .panel { grid-template-columns: 1fr; }
-      .faq { grid-template-columns: 1fr; gap: 20px; }
-      .film-panel { grid-template-columns: 1fr; gap: 22px; padding: 20px; }
-      .any-grid { grid-template-columns: 1fr; }
-      .build-in { grid-template-columns: 1fr; }
-      .harness { grid-template-columns: 1fr; }
-      .faq-side { position: relative; top: auto; min-height: 180px; } /* not static: the painting layer is positioned against it */
-      .first, .dl { grid-template-columns: 1fr; }
-      .bento { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-auto-rows: 180px; }
-      .t1 { grid-column: 1 / 3; }
-      .t2 { grid-row: auto; grid-column: auto; }
-      .t5 { display: flex; grid-column: 1 / 3; }
-      .foot-top { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 820px) {
-      .top-in { grid-template-columns: auto 1fr; height: 56px; padding: 0 14px; }
-      .top-in nav { display: none; }
-      .mob-nav { display: flex; align-items: center; gap: 6px; padding: 0 14px 10px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-      .mob-nav::-webkit-scrollbar { display: none; }
-      .mob-nav a { flex: none; padding: 7px 13px; border-radius: 999px; background: rgba(38, 38, 38, .055); box-shadow: inset 0 0 0 1px rgba(38, 38, 38, .07); color: var(--ink-2); font: 600 13px/1 var(--sans); text-decoration: none; white-space: nowrap; transition: background .18s, color .18s; }
-      .mob-nav a:hover, .mob-nav a:active { background: var(--ink); color: #fff; }
-    }
-    @media (max-width: 760px) {
-      .hero, .cta, .say { padding-inline: 6px; }
-      .panel { margin-inline: 6px; margin-top: 28px; }
-      .sky, .say-card, .dusk, .panel { border-radius: 22px; }
-      /* phones: the copy tightens so the video frame is on the first screen */
-      .sky { padding-top: 22px; }
-      .eyebrow { font-size: 12.5px; padding: 5px 12px; }
-      h1 { margin-top: 12px; font-size: clamp(36px, 10.5vw, 44px); }
-      .lede { margin-top: 10px; font-size: 15.5px; line-height: 1.45; }
-      .cta-row { margin-top: 16px; gap: 8px; }
-      .hero .btn { height: 44px; font-size: 14px; }
-      .hero .btn.dot { padding-left: 5px; }
-      .hero .btn .ic { width: 32px; height: 32px; }
-      .hero .btn.light { padding: 0 14px; }
-      .hero .btn.light .dur { display: none; }
-      .stage { margin-top: 18px; }
-      .glass { padding: 5px; border-radius: 18px; }
-      .hero .brew, .gh span, .steps { display: none; }
-      .gh { width: 38px; padding: 0; justify-content: center; }
-      .phone-only { display: inline; }
-      .say-card { min-height: 0; }
-      .paper { padding: 4px 16px; }
-      .cmp .row.th { display: none; }
-      .cmp .row { display: block; padding: 14px 0 10px; }
-      .cmp .row > span { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 5px 16px; font-size: 15px; background: none; }
-      .cmp .row > span::before { content: attr(data-h); font: 600 12px/1.4 var(--sans); color: var(--ink-3); }
-      .cmp .row > .us::before { color: var(--amber-ink); }
-      .cmp .row > .us { background: rgba(242, 165, 65, .2); padding-block: 8px; margin-top: 4px; }
-      .cmp .row > [role=rowheader] { display: block; padding: 0 16px 6px; color: var(--ink); font-weight: 700; }
-      .cmp .row > [role=rowheader]::before { content: none; }
-      .cards { grid-template-columns: 1fr; }
-      .band { height: 96px; }
-      .any-card { padding: 18px; border-radius: 18px; }
-      .pm-stage { grid-template-columns: 1fr; }
-      .mm-nodes { grid-template-columns: 1fr; }
-      .mm-link { flex-direction: row; justify-content: center; padding: 2px 0; }
-      .mm-line { width: 22px; }
-      .dl-col, .ask { padding: 18px; }
-      .agent code { font-size: 12px; }
-      .prompt { margin-top: 14px; padding: 8px 8px 8px 14px; border-radius: 16px; }
-      .prompt-text { font-size: 14.5px; min-height: 4.5em; }
-      .chips { flex-wrap: nowrap; justify-content: flex-start; width: calc(100% + 24px); margin-inline: -12px; padding: 2px 12px; overflow-x: auto; scrollbar-width: none; }
-      .chips::-webkit-scrollbar { display: none; }
-      .chips li { flex: none; }
-      .film-tabs { flex-wrap: nowrap; justify-content: flex-start; width: auto; overflow-x: auto; scrollbar-width: none; border-radius: 16px; }
-      .film-tabs::-webkit-scrollbar { display: none; }
-      .film-tabs button { flex: none; padding: 0 14px; font-size: 13.5px; }
-      .fp-result.tall video { height: 380px; }
-      .term pre { font-size: 12px; }
-      .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (max-width: 560px) {
-      /* the motion tiles: a row you swipe, the next one peeking in, instead of three screens of stacked video */
-      .reels { display: flex; gap: 12px; margin: 0 -10px; padding: 6px 10px 10px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 10px; scrollbar-width: none; overscroll-behavior-x: contain; }
-      .reels::-webkit-scrollbar { display: none; }
-      .reels li { flex: 0 0 84%; scroll-snap-align: start; }
-      .js.move .reels li[data-r] { transform: none; }
-      .bento { grid-template-columns: 1fr; grid-auto-rows: 160px; }
-      .t1, .t5 { grid-column: auto; }
-      .acts .btn { padding: 0 14px; }
-    }
-  </style>
-</body>
-</html>
+  // the cat plays only while he's on screen, and not at all for people who'd rather nothing moved
+  const cat = document.getElementById('cat') as HTMLVideoElement
+  if (move) new IntersectionObserver(([e]) => { if (e.isIntersecting) cat.play().catch(() => {}); else cat.pause() }, { rootMargin: '200px' }).observe(cat)
+</script>

@@ -1,0 +1,15 @@
+---
+// The one button. On a computer it starts the installer for that system; on a phone, where a desktop app can't
+// install, it sends the link to the visitor's computer. The head script sets html[data-os] before first paint.
+import { MAC_ARM, WINDOWS } from '../data/download'
+
+interface Props { small?: boolean }
+const { small = false } = Astro.props
+---
+<a class:list={['btn go', { sm: small }]} href="/#get" data-dl data-mac={MAC_ARM} data-win={WINDOWS}>
+  <span class="for-any">Download free</span>
+  <span class="for-mac">Download for Mac</span>
+  <span class="for-win">Download for Windows</span>
+  <span class="for-linux">Download for Linux</span>
+</a>
+<button type="button" class:list={['btn go', { sm: small }]} data-send>Send to my computer</button>
