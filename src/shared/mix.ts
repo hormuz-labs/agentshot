@@ -5,7 +5,7 @@ import { length, type Timeline } from './timeline'
 import type { Transcript } from './types'
 import { escapeFilterPath } from './ffmpeg'
 
-export type Mix = { filmDb: number; music?: { src: string; db: number; duckDb: number } }
+export type Mix = { filmDb: number; music?: { src: string; db: number; duckDb: number }; voiceovers?: import('./voiceover').Voiceover[] }
 export type Region = [number, number]
 export type Envelope = { t: number; db: number }[]
 
@@ -47,7 +47,15 @@ export function regionsOnTimeline(tl: Timeline, transcripts: Record<string, Tran
     }
     at += length(it)
   }
-  return out.sort((a, b) => a[0] - b[0])
+  for (const v of tl.mix?.voiceovers || []) if (!v.muted) out.push([v.start, v.start + v.out - v.in])
+  // Merge overlapping speech (including voiceover) before building the ducking envelope.
+  const merged: Region[] = []
+  for (const [a, b] of out.sort((a, b) => a[0] - b[0])) {
+    const last = merged.at(-1)
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b)
+    else merged.push([a, b])
+  }
+  return merged
 }
 
 /** Keyframes: 0 dB away from speech, −duckDb during it, linear ramps of `ramp` seconds before and after. */
@@ -101,10 +109,22 @@ export function mixArgs(o: { dry: string; duration: number; mix: Mix; commands?:
   const { mix } = o
   const total = r3(o.duration)
   const film = `[0:a]volume=${mix.filmDb}dB[af]`
-  if (!mix.music) return ['-i', o.dry, '-filter_complex', film, '-map', '0:v', '-map', '[af]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', o.out]
+  const voices = (mix.voiceovers || []).filter(v => !v.muted && v.start < total)
+  if (!mix.music && !voices.length) return ['-i', o.dry, '-filter_complex', film, '-map', '0:v', '-map', '[af]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', o.out]
+  const inputs = ['-i', o.dry], filters = [film], labels = ['[af]']
+  if (mix.music) {
   const music = `[1:a]atrim=0:${total},asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${mix.music.db}dB` +
     `${o.commands ? `,asendcmd=f=${escapeFilterPath(o.commands)},volume@duck=1` : ''},afade=t=in:d=1,afade=t=out:st=${Math.max(0, r3(total - 2))}:d=2[mus]`
-  return ['-i', o.dry, '-stream_loop', '-1', '-i', mix.music.src,
-    '-filter_complex', `${film};${music};[af][mus]amix=inputs=2:duration=first:normalize=0[am]`,
+    inputs.push('-stream_loop', '-1', '-i', mix.music.src)
+    filters.push(music); labels.push('[mus]')
+  }
+  voices.forEach((v, i) => {
+    const k = (mix.music ? 2 : 1) + i, label = `voice${i}`
+    inputs.push('-i', v.src)
+    filters.push(`[${k}:a]atrim=start=${v.in}:end=${v.out},asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${v.db}dB,adelay=${Math.round(v.start * 1000)}:all=1[${label}]`)
+    labels.push(`[${label}]`)
+  })
+  return [...inputs,
+    '-filter_complex', `${filters.join(';')};${labels.join('')}amix=inputs=${labels.length}:duration=first:normalize=0[am]`,
     '-map', '0:v', '-map', '[am]', '-t', String(total), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', o.out]
 }

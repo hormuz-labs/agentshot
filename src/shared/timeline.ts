@@ -11,7 +11,7 @@ export type Item = MediaItem | ClipItem
 export type Format = { width: number; height: number; fps: number }
 /** A clip laid over the film (transparent background) from start for dur seconds: lower thirds, captions, callouts. */
 export type Overlay = { id: string; clip: string; start: number; dur: number }
-export type Timeline = Format & { items: Item[]; overlays?: Overlay[]; demo?: Demo; /** film level, music and ducking (see mix.ts) */ mix?: { filmDb: number; music?: { src: string; db: number; duckDb: number } } }
+export type Timeline = Format & { items: Item[]; overlays?: Overlay[]; demo?: Demo; /** film level, music and ducking (see mix.ts) */ mix?: import('./mix').Mix }
 
 let seq = 0
 const newId = () => `i${Date.now().toString(36)}${(seq++).toString(36)}`
@@ -93,6 +93,7 @@ export type Edit =
   | { op: 'level'; ids: string[]; db?: number; muted?: boolean }
   | { op: 'insert'; at: number; src: string; in: number; out: number }
   | { op: 'mix'; mix: NonNullable<Timeline['mix']> }
+  | { op: 'voiceover'; id: string; track: import('./voiceover').Voiceover | null }
 
 const MIN_DB = -40, MAX_DB = 12
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
@@ -270,6 +271,7 @@ export function applyEdit(tl: Timeline, e: Edit, maxOf: (it: Item) => number | u
     }; break
     case 'insert': after = insertAt(tl, e.at, { kind: 'media', src: e.src, in: round(e.in), out: round(e.out) }).timeline; break
     case 'mix': return { ...tl, mix: e.mix }
+    case 'voiceover': return { ...tl, mix: { filmDb: 0, ...tl.mix, voiceovers: [...(tl.mix?.voiceovers || []).filter(v => v.id !== e.id), ...(e.track ? [e.track] : [])] } }
   }
   if (!after.items.length) throw new Error('The film needs at least one piece: that would take out all of it.')
   return { ...after, ...(after.demo ? { demo: refreshDemoSummary(after.demo, duration(after)) } : {}), overlays: keepOverlays(tl, after) }
@@ -289,6 +291,7 @@ export function describeEdit(e: Edit): string {
     case 'level': return e.muted ? 'Muted a piece' : e.db != null ? `Volume ${e.db > 0 ? '+' : ''}${Math.round(e.db)} dB` : 'Unmuted a piece'
     case 'insert': return `Inserted ${e.src.split('/').pop()} at ${clock(e.at)}`
     case 'mix': return 'Mix'
+    case 'voiceover': return e.track ? 'Adjusted voiceover' : 'Removed voiceover'
   }
 }
 
@@ -298,7 +301,7 @@ export function sameCut(a?: Timeline, b?: Timeline) {
     tl.width, tl.height, tl.fps, tl.demo,
     tl.items.map(i => (i.kind === 'media' ? ['m', i.src, round(i.in), round(i.out), i.db || 0, !!i.muted, i.framing] : ['c', i.clip, round(i.dur)])),
     (tl.overlays || []).map(o => [o.clip, round(o.start), round(o.dur)]),
-    tl.mix && (tl.mix.filmDb || tl.mix.music) ? tl.mix : null,
+    tl.mix && (tl.mix.filmDb || tl.mix.music || tl.mix.voiceovers?.length) ? tl.mix : null,
   ])
   return key(a) === key(b)
 }

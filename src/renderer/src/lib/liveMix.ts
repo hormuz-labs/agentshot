@@ -2,7 +2,7 @@
 // (shared/mix.ts previewGains), so moving a slider is heard at once and Apply renders exactly that. The player is a
 // <video>, or the edit playing from its pieces (two <video>s taking turns, each piece at its own loudness).
 import { useEffect, useRef } from 'react'
-import { duckEnvelope, previewGains, type Mix, type Region } from '../../../shared/mix'
+import { dbToGain, duckEnvelope, previewGains, type Mix, type Region } from '../../../shared/mix'
 import { mediaUrl } from './utils'
 
 type Clock = { readonly currentTime: number; readonly duration: number; readonly paused: boolean } & Pick<EventTarget, 'addEventListener' | 'removeEventListener'>
@@ -37,6 +37,31 @@ function graphFor(src: MixSource): Graph {
 }
 
 export function useLiveMix(source: MixSource | null, dir: string, mix: Mix, regions: Region[]) {
+  useEffect(() => {
+    if (!source) return
+    const g = graphFor(source)
+    const voices = (mix.voiceovers || []).map(v => {
+      const audio = new Audio(mediaUrl(`${dir}/${v.src}`))
+      audio.crossOrigin = 'anonymous'
+      const gain = g.ctx.createGain()
+      gain.gain.value = v.muted ? 0 : dbToGain(v.db)
+      g.ctx.createMediaElementSource(audio).connect(gain).connect(g.ctx.destination)
+      return { v, audio, gain }
+    })
+    let raf = 0
+    const sync = () => {
+      const t = source.clock.currentTime
+      for (const { v, audio } of voices) {
+        const at = v.in + t - v.start
+        if (source.clock.paused || v.muted || at < v.in || at >= v.out) { audio.pause(); continue }
+        if (Math.abs(audio.currentTime - at) > .12) audio.currentTime = at
+        if (audio.paused) { void g.ctx.resume(); void audio.play().catch(() => {}) }
+      }
+      raf = requestAnimationFrame(sync)
+    }
+    sync()
+    return () => { cancelAnimationFrame(raf); for (const { audio, gain } of voices) { audio.pause(); audio.removeAttribute('src'); audio.load(); gain.disconnect() } }
+  }, [source, dir, JSON.stringify(mix.voiceovers)])
   const live = useRef({ mix, regions })
   live.current = { mix, regions }
   useEffect(() => {

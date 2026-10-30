@@ -10,6 +10,11 @@ import { MANUL_KEY } from './gateway'
 import { setKey } from './keys'
 import type { AccountStatus, Balance } from '../shared/types'
 import { brandPage } from '../shared/brand-page'
+import { app } from 'electron'
+import { localProEnabled } from '../shared/local-pro'
+import { hasVoiceoverAccess } from '../shared/voiceover'
+
+const localPro = () => localProEnabled(app.isPackaged, process.env.MANUL_LOCAL_PRO)
 
 /** Clerk's Frontend API (the OAuth issuer, production), the "AgentShot desktop" OAuth app's client id (public, PKCE), and the
  *  account service. For the development instance: MANUL_AUTH_ISSUER=https://good-wildcat-5360.clerk.accounts.dev
@@ -23,7 +28,7 @@ export const AUTH = {
 export const CALLBACK_PORT = 47619
 const REDIRECT = `http://127.0.0.1:${CALLBACK_PORT}/oauth/callback`
 
-export const accountStatus = (): AccountStatus => ({ email: getConfig().account?.email, available: !!AUTH.clientId() })
+export const accountStatus = (): AccountStatus => ({ email: getConfig().account?.email, available: !!AUTH.clientId(), ...(localPro() ? { localPro: true } : {}) })
 
 const b64url = (b: Buffer) => b.toString('base64url')
 const PAGE = brandPage
@@ -88,7 +93,7 @@ async function asKeyRaw(path: string, init: RequestInit = {}) {
   const keyId = getConfig().account?.keyId
   const key = process.env[MANUL_KEY]
   if (!keyId || !key) throw new Error('Sign in to AgentShot first.')
-  const r = await fetch(`${AUTH.account()}${path}`, { ...init, headers: { authorization: `Bearer ${key}`, 'x-manul-key-id': keyId, 'content-type': 'application/json' } })
+  const r = await fetch(`${AUTH.account()}${path}`, { ...init, signal: init.signal ?? AbortSignal.timeout(15000), headers: { authorization: `Bearer ${key}`, 'x-manul-key-id': keyId, 'content-type': 'application/json' } })
   if (!r.ok) {
     const body = await r.json().catch(() => ({})) as Record<string, unknown>
     throw new Error((body.error as string) || 'Could not reach AgentShot. Try again in a moment.')
@@ -105,7 +110,17 @@ export async function agentshotMedia(kind: 'voice' | 'music', body: unknown, sig
 }
 
 /** The signed-in person's credits, plan, model tiers, and the plans and top-ups on sale. */
-export const balance = async () => (await asKey('/v1/balance')) as unknown as Balance
+export const balance = async (): Promise<Balance> => localPro() ? {
+  credits: 0,
+  plan: { key: 'pro', name: 'Pro · local testing', every: 'month', credits: 0, renews: false, until: '2099-01-01T00:00:00Z' },
+  tiers: [], plans: [], topups: [],
+} : (await asKey('/v1/balance')) as unknown as Balance
+
+export async function voiceoverAccess() {
+  if (localPro()) return true
+  if (!getConfig().account?.keyId || !process.env[MANUL_KEY]) return false
+  return hasVoiceoverAccess((await balance()).plan)
+}
 
 /** A plan (pro, max, pro_annual, max_annual) or a top-up (flex): a Dodo Payments checkout in the browser. */
 export async function checkout(open: (url: string) => Promise<void> | void, what: { plan: string } | { topup: string }) {

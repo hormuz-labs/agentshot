@@ -81,6 +81,7 @@ export async function load(dir: string): Promise<Project> {
       if (!tl) return
       for (const item of tl.items) if (item.kind === 'media') item.src = toPortablePath(item.src)
       if (tl.mix?.music) tl.mix.music.src = toPortablePath(tl.mix.music.src)
+      for (const v of tl.mix?.voiceovers || []) v.src = toPortablePath(v.src)
     }
     p.media = Object.fromEntries(Object.entries(p.media).map(([key, value]) => [toPortablePath(key), value]))
     for (const version of p.versions) {
@@ -197,7 +198,7 @@ export async function createMotion(o: { title?: string; aspect: Aspect; length?:
 }
 
 /** Record what a file in media/ is (and its probe, for footage, audio and images). */
-async function register(p: Project, rel: string) {
+export async function register(p: Project, rel: string) {
   const r = await Files.inspect(p.dir, rel, probe)
   p.files = { ...p.files, [rel]: r.info }
   if (r.media) p.media[rel] = r.media
@@ -280,7 +281,7 @@ export async function addNote(p: Project, note: Omit<Note, 'id' | 'createdAt' | 
 export function usedBy(p: Project, rel: string): string | null {
   const v = p.versions.find(x => x.path === rel)
   if (v) return `it is the version “${v.title}”`
-  const inEdit = (tl?: Project['timeline']) => !!tl && (tl.items.some(i => i.kind === 'media' && i.src === rel) || tl.mix?.music?.src === rel || tl.demo?.camera === rel || tl.demo?.screen === rel)
+  const inEdit = (tl?: Project['timeline']) => !!tl && (tl.items.some(i => i.kind === 'media' && i.src === rel) || tl.mix?.music?.src === rel || tl.mix?.voiceovers?.some(v => v.src === rel) || tl.demo?.camera === rel || tl.demo?.screen === rel)
   if (inEdit(p.timeline)) return 'the edit uses it'
   const ver = p.versions.find(x => inEdit(x.timeline))
   if (ver) return `the version “${ver.title}” uses it`

@@ -384,12 +384,14 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
               ...(editedOf(p) ? { edited: 'changed since the current version was rendered (by the user by hand, or edit_timeline): the version\'s file does not have these changes yet' } : {}),
               pieces: piecesOf(p.timeline),
               demo: p.timeline.demo,
+              voiceovers: p.timeline.mix?.voiceovers || [],
               overlays: (p.timeline.overlays || []).map(o => `overlay ${o.clip} at ${o.start}s for ${o.dur}s`) },
             clips: Object.values(p.clips || {}).map(c => ({ id: c.id, title: c.title, duration: c.duration })),
             versions: p.versions.map(v => ({ id: v.id, title: v.title, path: v.path, by: v.by })),
             notes: p.notes.filter(n => n.status === 'open').map(n => ({ id: n.id, at: `${fmt(n.anchor.t0)}${n.anchor.t1 != null ? `–${fmt(n.anchor.t1)}` : ''}`, box: n.anchor.box, text: n.text })),
             files: Object.keys(p.files || {}).map(rel => fileLine(rel, p.files!, p.subtitles)),
             media: p.media,
+            voiceoverRecordings: (p.voiceovers || []).map(({ peaks, ...v }) => v),
           })
         },
       }),
@@ -702,6 +704,20 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
         description: 'Render the current timeline (the edit) and propose it: after a clip in it changed, or to turn an edit not rendered yet (timeline.edited) into a version.',
         parameters: Type.Object({ title: Type.String() }),
         execute: async (args: Any, api: Any) => text(`Proposed as version ${await bridge.rerenderTimeline(proj(api).dir, args.title)}.`),
+      }),
+      defineTool({
+        name: 'edit_voiceover',
+        description: 'Adjust a recorded voiceover: move it (start in film seconds), trim source in/out, set volume (-40 to +12 dB), mute, or remove. Use project_state for voiceovers and voiceoverRecordings. Reuse removed takes by recording id. Changes play live, are undoable and included on export. Preserve the recorded voice.',
+        parameters: Type.Object({ id: Type.String(), start: Type.Optional(Type.Number()), in: Type.Optional(Type.Number()), out: Type.Optional(Type.Number()), db: Type.Optional(Type.Number()), muted: Type.Optional(Type.Boolean()), remove: Type.Optional(Type.Boolean()) }),
+        execute: async (args: Any, api: Any) => {
+          const p = proj(api), asset = p.voiceovers?.find(v => v.id === args.id)
+          if (!asset) throw new Error('Choose an existing voiceover recording from project_state.')
+          const current = p.timeline?.mix?.voiceovers?.find(v => v.id === args.id)
+          const track = { id: asset.id, src: asset.src, start: 0, in: 0, out: asset.duration, db: 0, ...current }
+          for (const k of ['start', 'in', 'out', 'db', 'muted'] as const) if (args[k] !== undefined) Object.assign(track, { [k]: args[k] })
+          await bridge.editTimeline(p.dir, [{ op: 'voiceover', id: asset.id, track: args.remove ? null : track }])
+          return text('Voiceover updated. The original recording is still available in its conversation files.')
+        },
       }),
       defineTool({
         name: 'set_mix',

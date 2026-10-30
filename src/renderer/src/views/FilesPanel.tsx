@@ -7,6 +7,7 @@ import { cn, timecode } from '@/lib/utils'
 import { attachFiles, detachFiles, useAttached } from '@/lib/attach'
 import { kindByName } from '../../../shared/file-kinds'
 import type { FileKind, Project } from '../../../shared/types'
+import { ConversationVoiceovers } from './VoiceoverPanel'
 
 const ICON: Record<FileKind | 'folder' | 'clip', typeof File> = {
   folder: Folder, clip: Sparkles, video: Film, audio: Music, image: ImageIcon, subtitles: Captions, text: ScrollText, font: Type, lut: Palette, other: File,
@@ -107,6 +108,8 @@ export function FilesTree({ project }: { project: Project }) {
   }
   if (!rows.length) return <p className="px-2 py-1 text-[11.5px] leading-snug text-faint">Drop footage, music, logos or subtitles anywhere in the window.</p>
   return (
+    <>
+    <ConversationVoiceovers project={project} onAttach={src => attachFiles(project.dir, [src])} />
     <ul data-files-tree>
       {rows.map(row => {
         if (row.kind === 'folder') {
@@ -150,5 +153,6 @@ export function FilesTree({ project }: { project: Project }) {
         )
       })}
     </ul>
+    </>
   )
 }

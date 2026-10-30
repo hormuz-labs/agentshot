@@ -1,7 +1,10 @@
 // A project on screen: the conversation first, the film beside it (the proposal to decide on, the picture, the timeline).
 // Point at the film (a box, a range, N for the moment) and say what should change, right there or in the chat.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Clapperboard, Globe, Images, MessagesSquare, PanelRight, Loader2, Upload, Check, FolderOpen, MessageSquarePlus, Pause, Play, SquareDashed, X, SplitSquareHorizontal, MoveHorizontal } from 'lucide-react'
+import { Clapperboard, Globe, Images, MessagesSquare, PanelRight, Loader2, Upload, Check, FolderOpen, MessageSquarePlus, Pause, Play, SquareDashed, X, SplitSquareHorizontal, MoveHorizontal, Mic } from 'lucide-react'
+import { VoiceoverRecorder } from './VoiceoverPanel'
+import type { LiveVoiceover } from './VoiceoverTimeline'
+import { voiceoverName } from '../../../shared/voiceover'
 import { JobsTray } from '@/components/JobsTray'
 import { HistoryButton } from '@/components/HistoryButton'
 import { Conversations } from '@/components/Conversations'
@@ -46,6 +49,10 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const [moveMode, setMoveMode] = useState(false)
   const [duration, setDuration] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [voiceoverOpen, setVoiceoverOpen] = useState(false)
+  const [recordingVoiceover, setRecordingVoiceover] = useState(false)
+  const [liveVoiceover, setLiveVoiceover] = useState<LiveVoiceover | null>(null)
+  const [voiceoverNotice, setVoiceoverNotice] = useState('')
   const [anchor, setAnchor] = useState<Anchor | undefined>()
   const [draft, setDraft] = useState('')
   const focusRange = useRef(false)
@@ -137,7 +144,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   // keyboard: Space play/pause · N note · B box · ←/→ ±1 s (⇧ ±5 s) · Esc clears
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!active || (e.target as HTMLElement).closest('textarea, input')) return
+      if (!active || recordingVoiceover || (e.target as HTMLElement).closest('textarea, input')) return
       const v = stage.current?.video
       if (e.key === ' ') { e.preventDefault(); playPause() }
       else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); noteHere() }
@@ -180,9 +187,9 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   }, [live, tl, p.dir, p.proxies, p.clips, cameraMode])
   // the mix the version on screen was rendered with (or the edit's), heard live over its dry film
   const mix: Mix = (live ? tl.mix : onScreen.timeline?.mix) || { filmDb: 0 }
-  const speechKey = live ? JSON.stringify(tl.items) : onScreen.id
+  const speechKey = live ? JSON.stringify([tl.items, tl.mix?.voiceovers]) : onScreen.id
   useEffect(() => { window.agentshot.mix.speech(p.dir, live ? 'edit' : onScreen.id).then(setRegions).catch(() => setRegions([])) }, [p.dir, speechKey, p.transcripts]) // eslint-disable-line react-hooks/exhaustive-deps
-  useLiveMix(source, p.dir, mix, regions)
+  useLiveMix(source, p.dir, recordingVoiceover ? { filmDb: -100 } : mix, regions)
 
   /** Change the edit by hand (a piece moved, footage dropped in): it plays at once, ⌘Z undoes it. */
   const doEdit = async (edits: Edit[], then?: number) => {
@@ -343,6 +350,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
       <div data-contextual-tools className="max-h-[34vh] shrink-0 space-y-2 overflow-auto">
       {!tl.demo && selectedVideo?.kind === 'media' && !proposal && <VideoControls item={selectedVideo} onEdit={doEdit} editing={videoEditing} onEditing={v => { stage.current?.video?.pause(); setVideoEditing(v); if (v) setCameraMode(null) }} />}
       </div>
+      <div className="max-h-[42vh] shrink-0 space-y-2 overflow-y-auto">
       <Scrubber
         dir={p.dir}
         revision={onScreen.createdAt}
@@ -354,12 +362,20 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         ranges={parseRangeNotes(draft).map(n => n.anchor)}
         track={track}
         clips={p.clips || {}}
+        voiceoverAssets={p.voiceovers}
+        liveVoiceover={liveVoiceover}
+        onAttachVoiceover={src => {
+          attachFiles(p.dir, [src])
+          const mention = `@${voiceoverName(p.voiceovers || [], src)}`
+          setDraft(text => text.includes(mention) ? text : `${text.trimEnd()}${text.trim() ? ' ' : ''}${mention} `)
+          ask()
+        }}
         selected={selectedPiece ?? editing?.itemId ?? null}
         onSelect={id => { stage.current?.video?.pause(); setSelectedPiece(id) }}
         moveMode={moveMode}
         onExitMove={() => setMoveMode(false)}
         status={edited && !proposal ? <EditStatus saving={saving} onSave={saveVersion} /> : null}
-        onSeek={seek}
+        onSeek={t => { if (!recordingVoiceover) seek(t) }}
         onRange={r => { setAnchor(r ? { ...r, box: anchor?.box } : undefined); if (r) setChatShut(false) }}
         onRangeEnd={r => {
           stage.current?.video?.pause()
@@ -369,7 +385,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         }}
         ask={anchor && !anchor.box && !anchor.clip ? inlineAsk : undefined}
         onNote={n => seek(n.anchor.t0)}
-        movable={!proposal}
+        movable={!proposal && !recordingVoiceover}
         onEdit={async edits => { stage.current?.video?.pause(); setP(await window.agentshot.timeline.edit(p.dir, edits)) }}
         onMove={(id, before) => doEdit([{ op: 'move', id, ...(before ? { before } : {}) }])}
         onInsert={insertFootage}
@@ -381,27 +397,38 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
       />
 
       <div data-timeline-transport className="flex flex-wrap items-center gap-1">
-        <Button size="iconSm" variant="ghost" onClick={playPause}>
+        <Button size="iconSm" variant="ghost" disabled={recordingVoiceover} onClick={playPause}>
           {playing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
         </Button>
         <span className="tabular text-xs text-dim">{timecode(time)} <span className="text-faint">/ {timecode(duration)}</span></span>
         <span className="flex-1" />
-        <div data-manual-tools className="flex items-center gap-1">
-          <Tip label="Split the selected clip at the playhead">
-            <Button size="sm" variant="ghost" aria-label="Split" disabled={!!proposal || !canSplit} onClick={() => { stage.current?.video?.pause(); doEdit([{ op: 'split', at: time }]) }}><SplitSquareHorizontal />Split</Button>
-          </Tip>
+        <div data-manual-tools className="flex flex-wrap items-center gap-1">
           <Tip label={moveMode ? 'Move mode is on. Click Move clip again to turn it off, or press Esc.' : 'Click to enable moving, then grab a clip and drag it to a new position.'}>
-            <Button size="sm" variant="ghost" className={cn('border border-transparent', moveMode && 'border-amber bg-amber-soft text-amber hover:bg-amber-soft hover:text-amber')} aria-label="Move clip" aria-pressed={moveMode} aria-describedby={moveMode ? 'move-clip-hint' : undefined} disabled={!!proposal || track.items.length < 2} onClick={() => { stage.current?.video?.pause(); setMoveMode(v => !v) }}><MoveHorizontal />Move clip</Button>
+            <Button size="sm" variant="ghost" className={cn('border border-transparent', moveMode && 'border-amber bg-amber-soft text-amber hover:bg-amber-soft hover:text-amber')} aria-label="Move clip" aria-pressed={moveMode} aria-describedby={moveMode ? 'move-clip-hint' : undefined} disabled={!!proposal || recordingVoiceover || track.items.length < 2} onClick={() => { stage.current?.video?.pause(); setMoveMode(v => !v) }}><MoveHorizontal />Move clip</Button>
           </Tip>
-        </div>
         <Tip label={<>Note at the playhead <Kbd>N</Kbd></>}>
-          <Button size="sm" variant="ghost" onClick={noteHere}><MessageSquarePlus />Note</Button>
+          <Button size="sm" variant="ghost" disabled={recordingVoiceover} onClick={noteHere}><MessageSquarePlus />Note</Button>
         </Tip>
         <Tip label={<>Draw a box on the picture <Kbd>B</Kbd></>}>
-          <Button data-tour="box" size="sm" variant={drawing ? 'secondary' : 'ghost'} onClick={() => { stage.current?.video?.pause(); setDrawing(d => !d) }}><SquareDashed />Box</Button>
+          <Button data-tour="box" size="sm" variant={drawing ? 'secondary' : 'ghost'} disabled={recordingVoiceover} onClick={() => { stage.current?.video?.pause(); setDrawing(d => !d) }}><SquareDashed />Box</Button>
         </Tip>
+          <Tip label="Split the selected clip at the playhead">
+            <Button size="sm" variant="ghost" aria-label="Split" disabled={!!proposal || recordingVoiceover || !canSplit} onClick={() => { stage.current?.video?.pause(); doEdit([{ op: 'split', at: time }]) }}><SplitSquareHorizontal />Split</Button>
+          </Tip>
+        </div>
+        <Button size="sm" variant={voiceoverOpen ? 'secondary' : 'ghost'} disabled={!!proposal || voiceoverOpen || agent.busy || duration <= 0} onClick={() => { stage.current?.video?.pause(); setVoiceoverOpen(true); setMoveMode(false) }}><Mic />Voiceover <span className="text-[10px] font-semibold text-amber">PRO</span></Button>
       </div>
       {moveMode && <p id="move-clip-hint" className="text-right text-xs text-amber">Drag a clip to move it · Click Move clip again to turn off · Esc also exits</p>}
+      {voiceoverNotice && <p role="status" className="flex items-center gap-2 rounded-lg bg-ok/10 px-3 py-2 text-xs"><Check className="size-4 text-ok" /><span className="flex-1">{voiceoverNotice}</span><button aria-label="Dismiss voiceover notification" onClick={() => setVoiceoverNotice('')}><X className="size-3" /></button></p>}
+      {voiceoverOpen && <VoiceoverRecorder key={p.conversation} project={p} time={time} duration={duration} active={active} onLive={setLiveVoiceover} onClose={() => setVoiceoverOpen(false)} onRecording={(on, paused) => {
+        setRecordingVoiceover(on)
+        const v = stage.current?.video
+        if (v) { if (on && !paused) void v.play().catch(() => {}); else { v.pause(); setTime(v.currentTime) } }
+      }} onSaved={(next, src) => {
+        setP(next); attachFiles(p.dir, [src]); setChatShut(false)
+        setVoiceoverNotice('Voiceover added to your video and conversation files. You can trim, move, adjust the volume, or ask for changes in chat.')
+      }} />}
+      </div>
     </div>
   )
 

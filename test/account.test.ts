@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { accountStatus, accountWorkers, balance, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, workerHeartbeat } from '../src/main/account'
+import { accountStatus, accountWorkers, balance, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, voiceoverAccess, workerHeartbeat } from '../src/main/account'
 import { getConfig } from '../src/main/config'
 import { friendly } from '../src/main/agui'
 
@@ -132,5 +132,16 @@ describe('signing in to AgentShot', () => {
     expect(signOut()).toEqual({ email: undefined, available: true })
     expect(process.env.MANUL_KEY).toBeUndefined()
     expect(accountStatus().email).toBeUndefined()
+  })
+  it('treats signed-out access as a normal locked state rather than an error', async () => {
+    expect(await voiceoverAccess()).toBe(false)
+  })
+  it('supplies a local testing plan and microphone access without a sign-in or billing request', async () => {
+    process.env.MANUL_LOCAL_PRO = '1'
+    try {
+      expect(accountStatus().localPro).toBe(true)
+      expect((await balance()).plan?.name).toBe('Pro · local testing')
+      expect(await voiceoverAccess()).toBe(true)
+    } finally { delete process.env.MANUL_LOCAL_PRO }
   })
 })

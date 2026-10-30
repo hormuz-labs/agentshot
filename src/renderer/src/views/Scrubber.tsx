@@ -12,6 +12,9 @@ import { DRAG_FILE, dragKind } from './FilesPanel'
 import type { ClipInfo, Note } from '../../../shared/types'
 import { Filmstrip } from './Filmstrip'
 import { frameZoom } from '@/lib/timelineScale'
+import { VoiceoverControls, VoiceoverLanes, type LiveVoiceover } from './VoiceoverTimeline'
+import type { VoiceoverAsset } from '../../../shared/voiceover'
+import { voiceoverName } from '../../../shared/voiceover'
 
 type Props = {
   dir: string
@@ -26,6 +29,9 @@ type Props = {
   /** what the film is made of */
   track: Timeline
   clips: Record<string, ClipInfo>
+  voiceoverAssets?: VoiceoverAsset[]
+  liveVoiceover?: LiveVoiceover | null
+  onAttachVoiceover?(src: string): void
   /** the motion clip open on the picture, outlined */
   selected?: string | null
   onSelect?(id: string): void
@@ -54,7 +60,7 @@ type Props = {
 type Move = { id: string; x0: number; y0: number; x: number; y: number; moved: boolean; before: string | null;
   width: number; height: number; grabX: number; grabY: number; frames: { src: string; left: string; width: string }[] }
 
-export function Scrubber({ dir, revision, fps: rate, duration, time, notes, range, ranges = [], track, clips, selected = null, onSelect, moveMode = false, onExitMove, status, onSeek, onRange, onRangeEnd, ask, onNote, onOpenClip, movable = false, onMove, onInsert, onEdit }: Props) {
+export function Scrubber({ dir, revision, fps: rate, duration, time, notes, range, ranges = [], track, clips, voiceoverAssets = [], liveVoiceover, onAttachVoiceover, selected = null, onSelect, moveMode = false, onExitMove, status, onSeek, onRange, onRangeEnd, ask, onNote, onOpenClip, movable = false, onMove, onInsert, onEdit }: Props) {
   const bar = useRef<HTMLDivElement>(null)
   const root = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
@@ -66,6 +72,9 @@ export function Scrubber({ dir, revision, fps: rate, duration, time, notes, rang
   const [drop, setDrop] = useState<number | null>(null)
   const [hover, setHover] = useState<number | null>(null)
   const [actions, setActions] = useState<string | null>(null)
+  const [selectedVoice, setSelectedVoice] = useState<string | null>(null)
+  const voiceTrack = track.mix?.voiceovers?.find(v => v.id === selectedVoice)
+  useEffect(() => { setSelectedVoice(null) }, [revision])
   const actionItem = track.items.find(it => it.id === actions)
   useEffect(() => { if (moveMode) setActions(null) }, [moveMode])
   useEffect(() => { setActions(null); setMove(null) }, [track, movable])
@@ -235,12 +244,13 @@ export function Scrubber({ dir, revision, fps: rate, duration, time, notes, rang
           ))}
         </div>
       )}
+      <div className="relative" data-timeline-lanes>
       <div
         ref={bar}
         data-testid="timeline-scrubber"
         aria-label="Video timeline — click to seek, drag to select a range"
         className="relative h-[72px] touch-none cursor-crosshair rounded border border-amber/40 bg-raised shadow-sm"
-        onPointerDown={e => { if (e.button !== 0) return; setActions(null); e.currentTarget.setPointerCapture(e.pointerId); const t = at(e.clientX); const it = itemAt(track, t).item; if (it) onSelect?.(it.id); setDrag({ start: t, moved: false }); onSeek(t) }}
+        onPointerDown={e => { if (e.button !== 0) return; setSelectedVoice(null); setActions(null); e.currentTarget.setPointerCapture(e.pointerId); const t = at(e.clientX); const it = itemAt(track, t).item; if (it) onSelect?.(it.id); setDrag({ start: t, moved: false }); onSeek(t) }}
         onContextMenu={e => { e.preventDefault(); if (movable && onEdit) { const t = at(e.clientX); onSeek(t); setActions(itemAt(track, t).item?.id ?? null) } }}
         onPointerMove={e => {
           const t = at(e.clientX)
@@ -335,11 +345,14 @@ export function Scrubber({ dir, revision, fps: rate, duration, time, notes, rang
         {hover != null && !drag && !move && (
           <div className="pointer-events-none absolute inset-y-0 border-l border-fg/50" style={{ left: pct(hover) }}><span className="absolute -top-6 -translate-x-1/2 whitespace-nowrap rounded bg-raised px-1.5 py-0.5 text-[10px] text-fg tabular">{rulerTime(hover)}</span></div>
         )}
-        {/* playhead */}
-        <div className="pointer-events-none absolute -inset-y-1 z-[6] w-0.5 -translate-x-1/2 bg-amber shadow-[0_0_3px_#000]" style={{ left: pct(Math.max(0, Math.min(time, d))) }}><span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-b-sm bg-amber" /></div>
+      </div>
+        <VoiceoverLanes tracks={track.mix?.voiceovers || []} assets={voiceoverAssets} duration={d} fps={fps} selected={selectedVoice} disabled={!movable} live={liveVoiceover} onSelect={id => { setSelectedVoice(id); setActions(null) }} onSeek={onSeek} onEdit={onEdit} />
+        {/* One playhead spans all video and audio lanes inside the shared zoom/scroll surface. */}
+        <div data-timeline-playhead className="pointer-events-none absolute -inset-y-1 z-[6] w-0.5 -translate-x-1/2 bg-amber shadow-[0_0_3px_#000]" style={{ left: pct(Math.max(0, Math.min(time, d))) }}><span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-b-sm bg-amber" /></div>
       </div>
       </div>
       </div>
+      {voiceTrack && onEdit && <VoiceoverControls key={voiceTrack.id} name={voiceoverName(voiceoverAssets, voiceTrack.src)} track={voiceTrack} sourceDuration={voiceoverAssets.find(a => a.src === voiceTrack.src)?.duration || voiceTrack.out} duration={d} disabled={!movable} onEdit={onEdit} onAttach={onAttachVoiceover} onClose={() => setSelectedVoice(null)} />}
     </div>
   )
 }
