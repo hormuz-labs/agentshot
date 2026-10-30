@@ -1,14 +1,16 @@
 # agentshot.si
 
-The website for [AgentShot](https://github.com/hormuz-labs/agentshot), the agentic video editor. Astro, static, no framework JS: the only script is the hero demo (`src/components/Demo.astro`), a working miniature of AgentShot's editor.
+The website for [AgentShot](https://github.com/hormuz-labs/agentshot), the video editor you talk to. Astro, static, no framework JS.
 
-The look is the steppe the manul lives on: a cream page where every section sits on its own painting (seven in `public/paint/`, made for this site, each loaded only when its panel comes near and drifting a little slower than the page), white sheets over them for reading, dark pill buttons, and the app's amber for what Manul does. Type is Albert Sans, with IBM Plex Mono for commands and timecodes.
+The page has one job: get the visitor to install AgentShot. So it is built around one button (`src/components/Cta.astro`). On a computer it starts the installer for that system; on a phone, where the app can't install, it sends the link to the visitor's computer. A small script in `<head>` sets `html[data-os]` before first paint, so the button never shows the wrong system.
 
-Scrolling tells part of the story: the line under the hero fills in letter by letter, and the readout pins and steps through its six tracks. That happens only on screens at least 900 × 620 and never with reduced motion, where both are plain static sections. The hero sizes the editor to the window so all of it is on the first screen.
+The look is a screening room: a black page so film looks right, hard edges, and one colour, burned-in caption yellow. Yellow means "act here", so keep it rare. Type is Archivo, condensed for headlines through its width axis, with IBM Plex Mono for commands and timecodes.
 
-The motion tiles play small silent previews from `public/motion/` (768 px, 30 fps, about 0.5 MB each), made from the gallery's full videos with `ffmpeg -i in.mp4 -an -vf fps=30,scale=768:-2 -c:v libx264 -crf 27 -preset slow -movflags +faststart out.mp4`; clicking one opens the full video, with sound, from Manul's bucket.
+Proof is real or it isn't on the page: the demo plays real renders, the screenshots are the app, and captions say what each clip is. No invented testimonials, logos or user counts.
 
-The demo inside keeps the app's own look (warm paper, amber, a serif for the agent's replies) and its project tree, so it looks and works like Manul really does.
+The hero demo (`src/components/Demo.astro`) keeps the app's own look, so it looks and works like AgentShot really does.
+
+The motion tiles play small silent previews from `public/motion/` (768 px, 30 fps, about 0.5 MB each), made from the gallery's full videos with `ffmpeg -i in.mp4 -an -vf fps=30,scale=768:-2 -c:v libx264 -crf 27 -preset slow -movflags +faststart out.mp4`; clicking one opens the full video, with sound, from AgentShot's bucket.
 
 ```bash
 # From the Manul repository root:
