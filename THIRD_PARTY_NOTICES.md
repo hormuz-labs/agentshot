@@ -30,6 +30,7 @@ AgentShot runs FFmpeg as separate programs; it does not link against it.
   https://github.com/georgmartius/vid.stab.
 - **Rubber Band 4.0.0** (librubberband, time-stretching and pitch-shifting): GPL-2.0-or-later,
   https://breakfastquay.com/rubberband/.
+- **nv-codec-headers** (NVENC headers, Linux x64 build): MIT, https://github.com/FFmpeg/nv-codec-headers.
 
 ## aubio (agentshot-beats)
 

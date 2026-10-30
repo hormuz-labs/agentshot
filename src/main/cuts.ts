@@ -184,7 +184,7 @@ export function badJoin(pk: Packet[], frames: number): string | undefined {
 }
 
 /** Run tasks, k at a time; after a failure no more start, and it throws once the running ones have finished. */
-async function pool(tasks: (() => Promise<unknown>)[], k: number) {
+export async function pool(tasks: (() => Promise<unknown>)[], k: number) {
   let next = 0
   const failed: unknown[] = []
   await Promise.all(Array.from({ length: Math.min(k, tasks.length) }, async () => {

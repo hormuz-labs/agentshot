@@ -3,6 +3,7 @@
 // being done, a cursor gliding into each click with a ripple, and the voice. Everything is kept in
 // walkthroughs/<take>/ (take.mp4, take.json, walkthrough.json), so a walkthrough can be made again with other words,
 // pacing or zoom without recording it again, and lines that did not change keep their voice.
+import { videoEncoder } from './encoders'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -187,7 +188,7 @@ export async function renderWalkthrough(j: RenderJob) {
       graph += `;[${k}:a]anull[a]`
     }
     await ff([...inputs, '-filter_complex', graph, '-map', '[v]', '-map', '[a]', '-t', dur,
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-r', String(fps), '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', join(j.project, j.out)])
+      ...(await videoEncoder()).flags, '-r', String(fps), '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', join(j.project, j.out)])
     j.progress?.(1)
   } finally {
     await rm(work, { recursive: true, force: true })

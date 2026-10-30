@@ -336,36 +336,60 @@ export function soundOf(k: number, it: Item, a: number, b: number, fades: boolea
  * 48 kHz track (silence for items without audio), then concatenated. Paths are as the caller gives them (usually
  * project-relative, run with cwd = project folder).
  */
-export function composeArgs(tl: Timeline, o: { inputOf(i: Item): string; hasAudio(i: Item): boolean; overlayOf?(ov: Overlay): string; out: string }): string[] {
+export function composeArgs(tl: Timeline, o: {
+  inputOf(i: Item): string; hasAudio(i: Item): boolean; overlayOf?(ov: Overlay): string; out: string
+  /** encoder flags, instead of libx264 */ video?: string[]
+  /** a piece of a film (main/pieces.ts): picture only, exactly this many frames, its files read from where it starts */ piece?: { frames: number }
+  /** the film's sound alone */ soundOnly?: boolean
+}): string[] {
   const { width: W, height: H, fps } = tl
-  const inputs: string[] = []
-  const inputIndex = (path: string) => { let k = inputs.indexOf(path); if (k < 0) { inputs.push(path); k = inputs.length - 1 } return k }
+  const picture = !o.soundOnly, sound = !o.piece
+  const inputs: { path: string; ss: number }[] = []
+  const inputIndex = (path: string, ss = 0) => {
+    let k = inputs.findIndex(i => i.path === path && i.ss === ss)
+    if (k < 0) { inputs.push({ path, ss }); k = inputs.length - 1 }
+    return k
+  }
   const parts: string[] = []
   const norm = `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p`
   tl.items.forEach((it, n) => {
-    const k = inputIndex(o.inputOf(it))
-    const len = round(length(it))
     const [a, b] = it.kind === 'media' ? [it.in, it.out] : [0, it.dur]
+    const from = o.piece ? a : 0 // where the file is opened: a long film's last piece shouldn't decode all that's before it
+    const k = inputIndex(o.inputOf(it), from)
+    const len = round(length(it))
     const demo = it.kind === 'media' && it.src === tl.demo?.screen ? tl.demo : undefined
     const cam = demo && cameraRange(demo, a, b)
     const showCamera = demo && cam && !demo.layout.hidden
     const videoLabel = showCamera ? `screen${n}` : `v${n}`
     const screenLabel = `${videoLabel}bounded`
-    if (it.kind === 'media' && it.framing) {
-      parts.push(`[${k}:v]trim=start=${round(a)}:end=${round(b)},setpts=PTS-STARTPTS,fps=${fps}[raw${n}]`)
-      parts.push(...framingGraph(`raw${n}`, screenLabel, W, H, fps, len, it.framing))
-    } else parts.push(`[${k}:v]trim=start=${round(a)}:end=${round(b)},setpts=PTS-STARTPTS,${norm}[${screenLabel}]`)
-    parts.push(`[${screenLabel}]trim=duration=${len},setpts=PTS-STARTPTS[${videoLabel}]`)
-    if (showCamera) {
-      const ck = inputIndex(demo.camera), l = demo.layout
+    if (picture) {
+      if (it.kind === 'media' && it.framing) {
+        parts.push(`[${k}:v]trim=start=${round(a - from)}:end=${round(b - from)},setpts=PTS-STARTPTS,fps=${fps}[raw${n}]`)
+        parts.push(...framingGraph(`raw${n}`, screenLabel, W, H, fps, len, it.framing))
+      } else parts.push(`[${k}:v]trim=start=${round(a - from)}:end=${round(b - from)},setpts=PTS-STARTPTS,${norm}[${screenLabel}]`)
+      parts.push(`[${screenLabel}]trim=duration=${len},setpts=PTS-STARTPTS[${videoLabel}]`)
+    }
+    if (picture && showCamera) {
+      const camFrom = o.piece ? cam.in : 0
+      const ck = inputIndex(demo.camera, camFrom), l = demo.layout
       const crop = l.crop ? `crop=iw*${l.crop.w}:ih*${l.crop.h}:iw*${l.crop.x}:ih*${l.crop.y},` : ''
-      const alpha = l.shape === 'circle' ? `,geq=r='if(gte(hypot(X-W/2,Y-H/2),min(W,H)/2-${l.border}),255,r(X,Y))':g='if(gte(hypot(X-W/2,Y-H/2),min(W,H)/2-${l.border}),255,g(X,Y))':b='if(gte(hypot(X-W/2,Y-H/2),min(W,H)/2-${l.border}),255,b(X,Y))':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(min(W,H)/2,2)),255,0)'`
-        : l.shape === 'rounded' ? `,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(max(abs(X-W/2)-(W/2-16),0),2)+pow(max(abs(Y-H/2)-(H/2-16),0),2),256),255,0)'` : ''
-      parts.push(`[${ck}:v]trim=start=${cam.in}:end=${cam.out},setpts=${demo.sync.rate}*(PTS-STARTPTS),${crop}setsar=1,fps=${fps}[craw${n}]`)
+      // the shape's mask (and the circle's ring) drawn once, on one frame that stays: drawing them on every frame took 8× as long
+      const sheet = `color=c=white:s=${l.width}x${l.height}:r=1:d=1`
+      const inside = (r: string) => `if(lte(hypot(X-W/2,Y-H/2),${r}),255,0)`
+      const disc = `min(W,H)/2`
+      const shape = l.shape === 'circle' ? `lum='${inside(disc)}'`
+        : l.shape === 'rounded' ? `lum='if(lte(pow(max(abs(X-W/2)-(W/2-16),0),2)+pow(max(abs(Y-H/2)-(H/2-16),0),2),256),255,0)'` : ''
+      if (l.shape === 'circle' && l.border) parts.push(`${sheet},format=rgba,geq=r=255:g=255:b=255:a='255-${inside(`${disc}-${l.border}`)}'[ring${n}]`)
+      if (shape) parts.push(`${sheet},format=gray,geq=${shape}[mask${n}]`)
+      parts.push(`[${ck}:v]trim=start=${cam.in - camFrom}:end=${cam.out - camFrom},setpts=${demo.sync.rate}*(PTS-STARTPTS),${crop}setsar=1,fps=${fps}[craw${n}]`)
       parts.push(...framingGraph(`craw${n}`, `cframed${n}`, l.width, l.height, fps, cam.e - cam.s, l.framing || framing({}, 'cover')))
-      parts.push(`[cframed${n}]setpts=PTS-STARTPTS+${cam.s - a}/TB,format=rgba${l.border && l.shape !== 'circle' ? `,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.85:t=${l.border}` : ''}${alpha}[cam${n}]`)
+      const ringed = l.shape === 'circle' && l.border
+      parts.push(`[cframed${n}]setpts=PTS-STARTPTS+${cam.s - a}/TB,format=rgba${l.border && l.shape !== 'circle' ? `,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.85:t=${l.border}` : ''}[${ringed || shape ? `bare${n}` : `cam${n}`}]`)
+      if (ringed) parts.push(`[bare${n}][ring${n}]overlay=format=rgb[ringed${n}]`)
+      if (shape) parts.push(`[${ringed ? `ringed${n}` : `bare${n}`}][mask${n}]alphamerge[cam${n}]`)
       parts.push(`[screen${n}][cam${n}]overlay=x=${l.x}:y=${l.y}:eof_action=pass:repeatlast=0:enable='gte(t,${cam.s - a})*lt(t,${cam.e - a})',format=yuv420p[v${n}]`)
     }
+    if (!sound) return
     if (demo?.audio === 'camera' && cam) {
       const ck = inputIndex(demo.camera), offset = cam.s - a
       const level = it.kind === 'media' && it.muted ? ',volume=0' : it.kind === 'media' && it.db ? `,volume=${it.db}dB` : ''
@@ -380,22 +404,26 @@ export function composeArgs(tl: Timeline, o: { inputOf(i: Item): string; hasAudi
       }
     } else parts.push(o.hasAudio(it) ? soundOf(k, it, a, b, tl.items.length > 1, `a${n}`) : `anullsrc=r=48000:cl=stereo,atrim=0:${len},${A_NORM}[a${n}]`)
   })
-  parts.push(`${tl.items.map((_, n) => `[v${n}][a${n}]`).join('')}concat=n=${tl.items.length}:v=1:a=1[v][a]`)
+  const pads = (n: number) => `${picture ? `[v${n}]` : ''}${sound ? `[a${n}]` : ''}`
+  parts.push(`${tl.items.map((_, n) => pads(n)).join('')}concat=n=${tl.items.length}:v=${picture ? 1 : 0}:a=${sound ? 1 : 0}${picture ? '[v]' : ''}${sound ? '[a]' : ''}`)
   // overlays on top, each shifted to its start and shown only during its time; the footage shows through transparency
   let video = 'v'
   ;(tl.overlays || []).forEach((ov, n) => {
-    if (!o.overlayOf) return
+    if (!o.overlayOf || !picture) return
     const k = inputIndex(o.overlayOf(ov))
-    parts.push(`[${k}:v]scale=${W}:${H},format=yuva420p,setpts=PTS-STARTPTS+${round(ov.start)}/TB[ov${n}]`)
+    // a piece can begin part way through an overlay: its start is before 0 then
+    const skip = ov.start < 0 ? `trim=start=${round(-ov.start)},` : ''
+    parts.push(`[${k}:v]${skip}scale=${W}:${H},format=yuva420p,setpts=PTS-STARTPTS+${round(Math.max(0, ov.start))}/TB[ov${n}]`)
     parts.push(`[${video}][ov${n}]overlay=eof_action=pass:enable='between(t,${round(ov.start)},${round(ov.start + ov.dur)})',format=yuv420p[vo${n + 1}]`)
     video = `vo${n + 1}`
   })
-  return [
-    ...inputs.flatMap(p => ['-i', p]),
-    '-filter_complex', parts.join(';'),
-    '-map', `[${video}]`, '-map', '[a]',
-    '-c:v', 'libx264', '-crf', tl.demo ? '16' : '18', '-preset', tl.demo ? 'medium' : 'veryfast', '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart',
-    o.out,
-  ]
+  const opened = inputs.flatMap(i => [...(i.ss ? ['-ss', String(i.ss)] : []), '-i', i.path])
+  const audio = ['-c:a', 'aac', '-b:a', '192k']
+  if (o.soundOnly) return [...opened, '-filter_complex', parts.join(';'), '-map', '[a]', ...audio, o.out]
+  const encoder = o.video || ['-c:v', 'libx264', '-crf', tl.demo ? '16' : '18', '-preset', tl.demo ? 'medium' : 'veryfast', '-pix_fmt', 'yuv420p']
+  // a piece starts on a keyframe, has no B-frames and keeps the same clock as the others, so pieces join without encoding;
+  // it holds its last frame if the source falls a frame short
+  if (o.piece) return [...opened, '-filter_complex', [...parts, `[${video}]tpad=stop=-1:stop_mode=clone[piece]`].join(';'), '-map', '[piece]', '-frames:v', String(o.piece.frames),
+    ...encoder, '-bf', '0', '-video_track_timescale', '90000', o.out]
+  return [...opened, '-filter_complex', parts.join(';'), '-map', `[${video}]`, '-map', '[a]', ...encoder, ...audio, '-movflags', '+faststart', o.out]
 }

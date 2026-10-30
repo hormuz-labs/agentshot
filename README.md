@@ -219,6 +219,8 @@ Install AgentShot from https://github.com/hormuz-labs/agentshot. On macOS run `b
 | [`gateway/`](gateway/README.md) | the AI gateway behind AgentShot's credits |
 | [`site/`](site/README.md) | [agentshot.si](https://agentshot.si) |
 
+Renders use your graphics chip when they can: Apple's on a Mac, NVIDIA, Intel or AMD on Windows, NVIDIA on Linux. Everything else falls back to the CPU. **Got a GPU we don't cover?** [Adding one is a small change](CONTRIBUTING.md#gpu-encoders), and we'd love the help.
+
 To run it from source, see **[CONTRIBUTING.md](CONTRIBUTING.md)**. For how the services are hosted, see [workspace and hosting](docs/workspace.md). For what's next (handing the cut to Premiere, Resolve or Final Cut, publishing to YouTube, notes from clients on the frame), see the **[roadmap](ROADMAP.md)**.
 
 ---
