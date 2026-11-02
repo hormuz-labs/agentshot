@@ -22,7 +22,7 @@ void main() {
     await shot(tester, '1-pair');
     await enterCode(tester, pairLink);
     await waitFor(tester, home);
-    await reveal(tester, projectCard.first);
+    await reveal(tester, projectCard);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, 2000));
     await shot(tester, '2-projects');
 
@@ -83,7 +83,7 @@ void main() {
     );
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('nav-Projects')));
-    await reveal(tester, projectCard.first);
+    await reveal(tester, projectCard);
     await openProject(tester);
     await waitFor(tester, find.text(reply));
     await tester.drag(find.byType(ListView).first, const Offset(0, 260));

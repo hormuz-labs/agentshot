@@ -333,12 +333,12 @@ double area(ScrollableState s) {
 Future<void> launch(WidgetTester tester) async {
   expect(pairLink, isNotEmpty, reason: 'Run through test/e2e/mobile.e2e.mjs');
   app.main();
-  // the welcome screen, home's Refresh (its heading may be scrolled away), or the signed-in computers list
+  // the welcome screen, home's + (its heading may be scrolled away), or the signed-in computers list
   await waitFor(
     tester,
     find.byWidgetPredicate(
       (w) =>
-          (w is Tooltip && w.message == 'Refresh') ||
+          (w is Tooltip && w.message == 'Start something new') ||
           (w is Text &&
               (w.data == 'Continue with Google' || w.data == 'Your computers')),
     ),
@@ -443,7 +443,7 @@ Future<void> launchPaired(WidgetTester tester) async {
   }
   await waitFor(tester, home);
   // the desktop's projects have loaded (below the fold on a small phone)
-  await reveal(tester, projectCard.first);
+  await reveal(tester, projectCard);
 }
 
 /// Opens the desktop's test project from the Projects list.

@@ -99,7 +99,7 @@ void main() {
 
         await tester.ensureVisible(find.byKey(const ValueKey('nav-Projects')));
         await tester.tap(find.byKey(const ValueKey('nav-Projects')));
-        await reveal(tester, projectCard.first);
+        await reveal(tester, projectCard);
         await openProject(tester);
         await visit(tester, '$where, project conversation');
         // Wide screens show the conversation and the film side by side; narrow ones switch between them.

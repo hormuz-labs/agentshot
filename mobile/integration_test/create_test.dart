@@ -41,7 +41,7 @@ void main() {
 
     await tester.pageBack();
     await waitFor(tester, home);
-    await reveal(tester, projectCard.first);
+    await reveal(tester, projectCard);
     await reveal(tester, find.text('Mobile e2e motion title card'));
   });
 
