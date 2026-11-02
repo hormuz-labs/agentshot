@@ -14,7 +14,10 @@ void main() {
     final search = find.byKey(const ValueKey('search-examples'));
     await waitFor(tester, search);
     final tiles = find.byWidgetPredicate(
-      (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('example-'),
+      (w) =>
+          w.key is ValueKey<String> &&
+          (w.key! as ValueKey<String>).value.startsWith('example-') &&
+          w.key != const ValueKey('example-tags'),
     );
     await waitFor(tester, tiles);
     String titleOf(Finder tile) => tester
@@ -74,13 +77,9 @@ void main() {
     await describe(tester, 'Mobile e2e from an example', format: '1:1');
     await waitFor(
       tester,
-      find.widgetWithText(AppBar, 'Mobile e2e from an example'),
+      projectOpen('Mobile e2e from an example'),
       timeout: const Duration(minutes: 2),
     );
-    await waitFor(
-      tester,
-      find.text(reply),
-      timeout: const Duration(minutes: 2),
-    );
+    await waitInConversation(tester, find.text(reply));
   });
 }

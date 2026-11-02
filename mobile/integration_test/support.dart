@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:agentshot_mobile/bridge/pick.dart';
 import 'package:agentshot_mobile/main.dart' as app;
+import 'package:agentshot_mobile/ui/film_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,6 +55,23 @@ Future<void> press(WidgetTester tester, Finder finder) async {
   await settle(tester, const Duration(milliseconds: 500));
 }
 
+/// Holds a finger on what [finder] finds, as long as a long press takes, then lets go.
+///
+/// What the hold opens (a sheet) cancels the pointer, as the app's Navigator does with every pointer down when a route
+/// comes. The test binding drops that cancel as a device event, which would leave the long press waiting for this
+/// pointer forever and deaf to the next hold: let it through meanwhile (an emulator has no other touches).
+Future<void> hold(WidgetTester tester, Finder finder) async {
+  final binding = tester.binding as LiveTestWidgetsFlutterBinding;
+  binding.shouldPropagateDevicePointerEvents = true;
+  try {
+    final finger = await tester.startGesture(tester.getCenter(finder));
+    await settle(tester, const Duration(milliseconds: 800));
+    await finger.up();
+  } finally {
+    binding.shouldPropagateDevicePointerEvents = false;
+  }
+}
+
 /// Home: the projects page, known by its + button (the heading "Projects" is also a tab's name).
 final home = find.byTooltip('Start something new');
 
@@ -62,22 +80,91 @@ final projectCard = find.byWidgetPredicate(
   (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('project-'),
 );
 
-/// Opens the project's Edit: a sheet from the title bar on a phone (a wide screen has it beside the film already).
-Future<void> openEdit(WidgetTester tester) async {
-  final open = find.byKey(const ValueKey('open-edit'));
-  if (open.evaluate().isEmpty) return;
-  await tester.tap(open);
-  await settle(tester);
+/// The composer: in the project's screen, or in the conversation's sheet over the film ([openConversation]).
+final composer = find.byKey(const ValueKey('composer'));
+
+/// The chip at the top of the film that opens the conversation: there only when the film is the screen (a phone).
+final filmActivity = find.byKey(const ValueKey('editor-activity'));
+
+/// The film as a phone shows it, once it can play.
+final filmPicture = find.byKey(const ValueKey('editor-picture'));
+
+/// The project called [title], open: its name over the film on a phone, in the bar on a wide screen, on the film chip
+/// over the conversation until there is a film.
+Finder projectOpen(String title) => find.descendant(
+  of: find.byWidgetPredicate(
+    (w) =>
+        w is FilmEditor ||
+        w is AppBar ||
+        w.key == const ValueKey('film-chip'),
+  ),
+  matching: find.text(title),
+);
+
+/// Gets to the conversation of the open project: a sheet over the film on a phone, on the screen itself otherwise.
+Future<void> openConversation(WidgetTester tester) async {
+  await waitFor(
+    tester,
+    find.byWidgetPredicate(
+      (w) =>
+          w.key == const ValueKey('composer') ||
+          w.key == const ValueKey('editor-activity'),
+    ),
+  );
+  if (composer.evaluate().isEmpty) {
+    await tester.tap(filmActivity);
+    await waitFor(tester, composer);
+    await settle(tester); // the sheet slides up
+  }
+  // the conversation has loaded: either its messages or the empty-chat hint, no longer "Loading…"
+  final end = DateTime.now().add(const Duration(seconds: 30));
+  while (find.text('Loading conversation…').evaluate().isNotEmpty) {
+    if (DateTime.now().isAfter(end)) fail('The conversation never loaded');
+    await tester.pump(const Duration(milliseconds: 200));
+  }
 }
 
-/// A choice in the project's Edit ([openEdit]); from the sheet, it closes as the choice is made.
-Future<void> editTool(WidgetTester tester, String item) async {
-  await openEdit(tester);
-  await press(tester, find.text(item));
+/// Closes the conversation's sheet, back to the film, when it's over the film.
+Future<void> backToFilm(WidgetTester tester) async {
+  if (filmActivity.evaluate().isEmpty || composer.evaluate().isEmpty) return;
+  await closeSheet(tester);
+  await waitGone(tester, composer);
+}
+
+/// Waits for [finder] in the conversation, however it comes: the agent's first cut turns the screen into the film,
+/// taking the conversation into its sheet.
+Future<void> waitInConversation(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(minutes: 2),
+}) async {
+  final end = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(end)) {
+    await tester.pump(const Duration(milliseconds: 200));
+    if (composer.evaluate().isEmpty && filmActivity.evaluate().isNotEmpty) {
+      await openConversation(tester);
+    }
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  throw TestFailure(
+    'Timed out after $timeout waiting for $finder in the conversation\nOn screen: ${visibleText().join(' | ')}',
+  );
+}
+
+/// Leaves the open project for home by its back button, closing whatever sheet is over it first.
+Future<void> leaveProject(WidgetTester tester) async {
+  while (find.byType(BottomSheet).evaluate().isNotEmpty) {
+    await closeSheet(tester);
+  }
+  // the keyboard down, and with it the film's bar on a short screen
+  FocusManager.instance.primaryFocus?.unfocus();
+  await waitFor(tester, find.byTooltip('Back'));
+  await tester.pageBack();
 }
 
 /// Opens the project's Files (a sheet from the project menu, ⋯).
 Future<void> openFiles(WidgetTester tester) async {
+  await backToFilm(tester);
   await tester.tap(find.byTooltip('Project actions').last);
   await settle(tester);
   await tester.tap(find.text('Files').last);
@@ -165,6 +252,7 @@ Future<void> closeSheet(WidgetTester tester) async {
 
 /// Opens [item] in the project's ⋮ menu.
 Future<void> projectMenu(WidgetTester tester, String item) async {
+  await backToFilm(tester);
   final entry = find.descendant(
     of: find.byWidgetPredicate((w) => w is PopupMenuItem),
     matching: find.text(item),
@@ -178,17 +266,27 @@ Future<void> projectMenu(WidgetTester tester, String item) async {
     }
   }
   await settle(tester, const Duration(milliseconds: 300));
+  // a short screen scrolls the menu
+  await tester.ensureVisible(entry.last);
+  await settle(tester, const Duration(milliseconds: 300));
   await tester.tap(entry.last);
   await settle(tester);
 }
 
 /// Types [text] in the composer and sends it.
 Future<void> sendNote(WidgetTester tester, String text) async {
-  final composer = find.byKey(const ValueKey('composer'));
+  await openConversation(tester);
   // a snack bar over the composer would take the tap instead of Send
   await waitGone(tester, find.byType(SnackBar));
   await tester.enterText(composer, text);
-  await tester.pump(); // Send turns on once there is text
+  // Send turns on once there is text, and the computer is there to take it
+  await waitFor(
+    tester,
+    find.descendant(
+      of: find.byTooltip('Send'),
+      matching: find.byWidgetPredicate((w) => w is InkWell && w.onTap != null),
+    ),
+  );
   await tester.tap(find.byTooltip('Send'));
   await settle(tester, const Duration(milliseconds: 300));
   // sent: the composer is empty again (a tap that missed Send would leave the note there, and the test go on)
@@ -208,7 +306,10 @@ Future<void> sendNote(WidgetTester tester, String text) async {
 Future<void> agentDone(
   WidgetTester tester, {
   Duration timeout = const Duration(minutes: 1),
-}) => waitFor(tester, find.byKey(const ValueKey('mic')), timeout: timeout);
+}) async {
+  await openConversation(tester);
+  await waitFor(tester, find.byKey(const ValueKey('mic')), timeout: timeout);
+}
 
 /// Pumps real frames until [finder] matches, or fails after [timeout]. The app talks to a real desktop over the
 /// network, so pumpAndSettle can't be used: progress indicators never settle.
@@ -446,28 +547,22 @@ Future<void> launchPaired(WidgetTester tester) async {
   await reveal(tester, projectCard);
 }
 
-/// Opens the desktop's test project from the Projects list.
+/// Opens the desktop's test project from the Projects list, and its conversation ([backToFilm] for the film).
 Future<void> openProject(WidgetTester tester) async {
   await reveal(tester, find.text(project));
   await tester.tap(find.text(project));
-  await waitFor(tester, find.byKey(const ValueKey('composer')));
-  // the conversation has loaded: either its messages or the empty-chat hint, no longer "Loading…"
-  final end = DateTime.now().add(const Duration(seconds: 30));
-  while (find.text('Loading conversation…').evaluate().isNotEmpty) {
-    if (DateTime.now().isAfter(end)) fail('The conversation never loaded');
-    await tester.pump(const Duration(milliseconds: 200));
-  }
+  await waitFor(tester, projectOpen(project));
+  await openConversation(tester);
 }
 
 /// Starts a new, empty conversation in the open project (earlier tests may have talked in it).
 Future<void> newConversation(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('Project actions').last);
-  await settle(tester);
-  await tester.tap(find.text('Conversations').last);
-  await settle(tester);
+  await projectMenu(tester, 'Conversations');
   await tester.tap(find.text('New conversation').first);
   await settle(tester);
   await tester.tap(find.byTooltip('Close'));
+  await settle(tester);
+  await openConversation(tester);
   await waitFor(tester, find.text('Give notes. Get cuts.'));
 }
 

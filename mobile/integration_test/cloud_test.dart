@@ -69,29 +69,14 @@ void main() {
     // an idea becomes a project on the worker, and its agent answers
     await start(tester, 'Describe it');
     await describe(tester, 'Mobile e2e in the cloud', format: '16:9');
-    // the worker has no AI of its own: this person's AgentShot credits, handed over from the phone
+    // the worker has no AI of its own: this person's AgentShot credits, handed over from the phone without asking
     await waitFor(
       tester,
-      find.text('Use AgentShot credits'),
+      projectOpen('Mobile e2e in the cloud'),
       timeout: const Duration(minutes: 2),
     );
-    await settle(tester);
-    await tester.tap(find.text('Use AgentShot credits'));
-    await waitFor(
-      tester,
-      find.text('Your computer now uses your AgentShot credits.'),
-      timeout: const Duration(minutes: 1),
-    );
-    await waitFor(
-      tester,
-      find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
-      timeout: const Duration(minutes: 2),
-    );
-    await waitFor(
-      tester,
-      find.text(reply),
-      timeout: const Duration(minutes: 2),
-    );
+    await waitInConversation(tester, find.text(reply));
+    expect(find.text('Use AgentShot credits'), findsNothing);
 
     // work running keeps the spot, however short the idle time: a slow turn outlasts it
     final first = await leasedNow();
@@ -101,10 +86,10 @@ void main() {
     // short from now on: only the turn running keeps it
     cloudCue('idle');
     // and leaving while it runs asks first: Cancel keeps it
-    await tester.pageBack();
+    await leaveProject(tester);
     await waitGone(
       tester,
-      find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
+      projectOpen('Mobile e2e in the cloud'),
     );
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     await waitFor(tester, find.text('AgentShot Cloud'));
@@ -119,7 +104,8 @@ void main() {
     await settle(tester);
     await reveal(tester, find.text('Mobile e2e in the cloud'));
     await tester.tap(find.text('Mobile e2e in the cloud'));
-    await waitFor(tester, find.byKey(const ValueKey('composer')));
+    await waitFor(tester, projectOpen('Mobile e2e in the cloud'));
+    await openConversation(tester);
     await agentDone(tester, timeout: const Duration(minutes: 1));
     expect(await leasedNow(), first, reason: 'the turn kept the same spot');
 
@@ -127,7 +113,7 @@ void main() {
     // back in the same project with the person's credits: the next note just works
     await waitFor(
       tester,
-      find.byKey(const ValueKey('composer')),
+      composer,
       timeout: const Duration(seconds: 5),
     );
     final end = DateTime.now().add(const Duration(minutes: 4));
@@ -142,7 +128,7 @@ void main() {
     expect(find.text('Your computers'), findsNothing);
     await waitFor(
       tester,
-      find.byKey(const ValueKey('composer')),
+      composer,
       timeout: const Duration(minutes: 2),
     );
     // connected again: no banner saying it's opening the space or reconnecting
@@ -157,14 +143,20 @@ void main() {
       ),
       timeout: const Duration(minutes: 2),
     );
+    // the film's chip says it's connected (offline it shows a cloud crossed out)
+    await waitFor(
+      tester,
+      find.byIcon(Icons.forum_outlined),
+      timeout: const Duration(minutes: 2),
+    );
     await sendNote(tester, 'Mobile e2e after the break');
     await waitFor(tester, find.text('Mobile e2e after the break'));
     await agentDone(tester, timeout: const Duration(minutes: 2));
     expect(find.text('Use AgentShot credits'), findsNothing);
-    await tester.pageBack();
+    await leaveProject(tester);
     await waitGone(
       tester,
-      find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
+      projectOpen('Mobile e2e in the cloud'),
     );
 
     // Settings names the worker; switching computer gives it back (free again for the next person)
@@ -197,7 +189,7 @@ void main() {
     cloudCue('roomy');
     // the worker counts again within a minute
     final roomBy = DateTime.now().add(const Duration(minutes: 2));
-    final made = find.widgetWithText(AppBar, 'Mobile e2e room again');
+    final made = projectOpen('Mobile e2e room again');
     for (;;) {
       await waitGone(tester, find.byType(SnackBar));
       await newIdea();
@@ -216,10 +208,10 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 10));
     }
-    await tester.pageBack();
+    await leaveProject(tester);
     await waitGone(
       tester,
-      find.widgetWithText(AppBar, 'Mobile e2e room again'),
+      projectOpen('Mobile e2e room again'),
     );
     await giveBack();
 
@@ -238,16 +230,17 @@ void main() {
     print('CLOUD_REOPENED_IN ${DateTime.now().difference(again).inMilliseconds} ms');
     await reveal(tester, find.text('Mobile e2e in the cloud'));
     await tester.tap(find.text('Mobile e2e in the cloud'));
-    await waitFor(tester, find.byKey(const ValueKey('composer')));
+    await waitFor(tester, projectOpen('Mobile e2e in the cloud'));
+    await openConversation(tester);
     await waitFor(
       tester,
       find.text(reply),
       timeout: const Duration(minutes: 1),
     );
-    await tester.pageBack();
+    await leaveProject(tester);
     await waitGone(
       tester,
-      find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
+      projectOpen('Mobile e2e in the cloud'),
     );
 
     // the longest run: however it's used, the spot goes to someone else, and the phone says when it's free again

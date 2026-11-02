@@ -46,10 +46,20 @@ void main() {
     if (error != null) fail('$where: $error $culprit');
   }
 
+  // A place in the app: an icon in the bar at the bottom of a phone, its name in the side bar of a wide screen.
+  Finder place(String name) {
+    final icon = find.byKey(ValueKey('nav-$name'));
+    return icon.evaluate().isNotEmpty ? icon : find.text(name).last;
+  }
+
   // The section chips scroll sideways when they don't fit (large text on a phone), as a person would swipe them.
   Future<void> sheet(WidgetTester tester, String menu, String where) async {
+    await backToFilm(tester);
     await tester.tap(find.byTooltip('Project actions').last);
     await settle(tester, const Duration(milliseconds: 500));
+    // a short screen scrolls the menu
+    await tester.ensureVisible(find.text(menu).last);
+    await settle(tester, const Duration(milliseconds: 300));
     await tester.tap(find.text(menu).last);
     await visit(tester, '$where, $menu');
     if (find.byTooltip('Close').evaluate().isNotEmpty) {
@@ -75,13 +85,13 @@ void main() {
 
         for (final tab in ['Examples', 'Activity', 'Settings']) {
           // on wide screens the side bar scrolls when the text is large
-          await tester.ensureVisible(find.text(tab).last);
-          await tester.tap(find.text(tab).last);
+          await tester.ensureVisible(place(tab));
+          await tester.tap(place(tab));
           await visit(tester, '$where, $tab');
         }
         for (final panel in [
           'Model providers',
-          'AI models',
+          'AI',
           'Skills & profiles',
           'Memory',
         ]) {
@@ -97,16 +107,15 @@ void main() {
           await settle(tester);
         }
 
-        await tester.ensureVisible(find.byKey(const ValueKey('nav-Projects')));
-        await tester.tap(find.byKey(const ValueKey('nav-Projects')));
+        await tester.ensureVisible(place('Projects'));
+        await tester.tap(place('Projects'));
         await reveal(tester, projectCard);
         await openProject(tester);
         await visit(tester, '$where, project conversation');
-        // Wide screens show the conversation and the film side by side; narrow ones switch between them.
-        if (find.byKey(const ValueKey('open-edit')).evaluate().isNotEmpty) {
-          await openEdit(tester);
-          await visit(tester, '$where, project edit');
-          await closeSheet(tester);
+        // Wide screens show the conversation and the film side by side; narrow ones have the conversation over the film.
+        if (filmActivity.evaluate().isNotEmpty) {
+          await backToFilm(tester);
+          await visit(tester, '$where, project film');
           await openFiles(tester);
           await visit(tester, '$where, project files');
           await closeSheet(tester);
@@ -121,12 +130,13 @@ void main() {
         ]) {
           await sheet(tester, menu, where);
         }
+        await openConversation(tester);
         await tester.enterText(
-          find.byKey(const ValueKey('composer')),
+          composer,
           'A long note that wraps over several lines on a small phone with very large text',
         );
         await visit(tester, '$where, typing a note');
-        await tester.pageBack();
+        await leaveProject(tester);
         await waitFor(tester, find.byTooltip('Start something new')); // home again
       });
     }

@@ -16,7 +16,7 @@ void main() {
   testWidgets('works every settings panel', (tester) async {
     await launchPaired(tester);
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
-    await waitFor(tester, find.text('Connected'));
+    await waitFor(tester, find.text('Disconnect'));
 
     Future<void> open(String panel, String title) async {
       await press(tester, find.text(panel));
@@ -56,7 +56,7 @@ void main() {
       tester,
       find.descendant(of: ai, matching: find.text('Your Scripted')),
     );
-    await open('AI models', 'Your own keys');
+    await open('AI', 'Your own keys');
     await reveal(tester, find.text('Your providers'));
     expect(find.byKey(const ValueKey('ai-credits')), findsOneWidget);
     final tile = find.byKey(const ValueKey('key-OPENAI_API_KEY'));

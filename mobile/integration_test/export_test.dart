@@ -13,6 +13,7 @@ void main() {
   ) async {
     await launchPaired(tester);
     await openProject(tester);
+    await backToFilm(tester);
     // Export is in the project's ⋯ menu
     Future<void> export() async {
       await tester.tap(find.byTooltip('Project actions'));

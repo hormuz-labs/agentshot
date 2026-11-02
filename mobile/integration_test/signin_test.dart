@@ -92,7 +92,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('nav-Settings')));
       await waitFor(tester, find.text(computer));
       expect(find.textContaining('https://'), findsNothing);
-      await reveal(tester, find.text('Signed in as maya@example.com'));
+      await reveal(tester, find.text('maya@example.com'));
       final switching = find.text('Switch');
       await reveal(tester, switching);
       await tester.tap(switching);
