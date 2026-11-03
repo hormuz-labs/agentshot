@@ -843,7 +843,12 @@ class StorageTile extends StatefulWidget {
 class _StorageTileState extends State<StorageTile> {
   late Future<int> size = widget.store.client.cache.size();
   late final changes = widget.store.client.cache.changes.listen((_) {
-    if (mounted) setState(() => size = widget.store.client.cache.size());
+    // (a block: an arrow would hand setState the Future it assigns)
+    if (mounted) {
+      setState(() {
+        size = widget.store.client.cache.size();
+      });
+    }
   });
 
   @override

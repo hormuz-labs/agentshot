@@ -5,7 +5,6 @@
 // with music; restoring a checkpoint; choosing a version; and transcribing, which asks to download speech
 // recognition: declined in the conversation, accepted from Activity (the runner makes that download fail at once).
 import 'package:agentshot_mobile/bridge/pick.dart';
-import 'package:agentshot_mobile/ui/player.dart';
 import 'package:agentshot_mobile/ui/project.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +17,9 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final pieces = find.byWidgetPredicate(
-    (w) => w.key is ValueKey && '${(w.key as ValueKey).value}'.startsWith('piece-'),
+    (w) =>
+        w.key is ValueKey &&
+        '${(w.key as ValueKey).value}'.startsWith('piece-'),
   );
   Future<void> files(WidgetTester tester) async {
     await openFiles(tester);
@@ -64,7 +65,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('pick-videos')));
     await waitFor(
       tester,
-      find.widgetWithText(AppBar, title),
+      projectOpen(title),
       timeout: const Duration(minutes: 2),
     );
 
@@ -74,7 +75,7 @@ void main() {
       expect(kind, Pick.files);
       return media(['Theme music.m4a', 'Shot list.txt', 'Dunes 1.jpg']);
     };
-    await press(tester, find.text('Import files'));
+    await press(tester, find.text('Import'));
     await waitFor(tester, find.byKey(const ValueKey('pick-videos')));
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('pick-files')));
@@ -86,7 +87,7 @@ void main() {
       );
     }
     await closeSheet(tester);
-    await settle(tester);
+    await openConversation(tester);
     while (find.byTooltip('Delete').evaluate().isNotEmpty) {
       await tester.tap(find.byTooltip('Delete').first);
       await settle(tester, const Duration(milliseconds: 300));
@@ -96,27 +97,42 @@ void main() {
     await files(tester);
     await press(tester, find.text('Gull flyby.mp4'));
     await waitFor(tester, find.text('Point at parts'));
-    await waitFor(tester, find.byIcon(Icons.play_arrow), timeout: const Duration(seconds: 30));
-    await tester.tap(find.byKey(const ValueKey('mark'))); // Start here, at the start
+    await waitFor(
+      tester,
+      find.byTooltip('Play'),
+      timeout: const Duration(seconds: 30),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('mark')),
+    ); // Start here, at the start
     await settle(tester);
-    await tester.tap(find.byIcon(Icons.play_arrow));
+    await tester.tap(find.byTooltip('Play'));
     await settle(tester, const Duration(milliseconds: 1500));
     await tester.tap(find.byKey(const ValueKey('mark'))); // End here
     await settle(tester);
     expect(find.byKey(const ValueKey('part-0')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('add-to-chat')));
     await settle(tester);
+    await closeSheet(tester);
+    await openConversation(tester);
     final part = find.ancestor(
-      of: find.textContaining(RegExp(r'^Gull flyby\.mp4 · 0:00\.\d–0:0\d\.\d$')),
+      of: find.textContaining(
+        RegExp(r'^Gull flyby\.mp4 · 0:00\.\d–0:0\d\.\d$'),
+      ),
       matching: find.byType(InputChip),
     );
     await waitFor(tester, part);
-    await tester.tap(find.descendant(of: part, matching: find.byTooltip('Delete')));
+    await tester.tap(
+      find.descendant(of: part, matching: find.byTooltip('Delete')),
+    );
     await settle(tester);
     await files(tester);
     await press(tester, find.text('Gull flyby.mp4'));
     await waitFor(tester, find.byKey(const ValueKey('add-to-chat')));
     await tester.tap(find.byKey(const ValueKey('add-to-chat')));
+    await settle(tester);
+    await closeSheet(tester);
+    await openConversation(tester);
     await waitFor(tester, find.widgetWithText(InputChip, 'Gull flyby.mp4'));
     await tester.tap(find.byTooltip('Delete'));
     await settle(tester);
@@ -132,7 +148,7 @@ void main() {
     // Download / share: the file comes to the phone and the share sheet opens over the app (the runner closes it)
     await fileMenu(tester, 'Dunes 1.jpg', 'Download / share');
     cue('back');
-    await settle(tester, const Duration(seconds: 8));
+    await shareSheetGone(tester);
     expect(find.byType(SnackBar), findsNothing);
 
     // Remove: Cancel keeps it, Confirm removes it; a clip the film uses stays
@@ -155,19 +171,11 @@ void main() {
       tester.element(find.byType(SnackBar).first),
     ).clearSnackBars();
 
-    // the playhead into the film, for splitting there (the timeline is in Edit)
-    await waitFor(
-      tester,
-      find.byTooltip('Play'),
-      timeout: const Duration(seconds: 60),
-    );
-    final bar = tester.getRect(
-      find.descendant(
-        of: find.byType(RemotePlayer),
-        matching: find.byType(Slider),
-      ),
-    );
-    await tester.tapAt(Offset(bar.left + bar.width * .2, bar.center.dy));
+    // the playhead into the film, for splitting there (on the strip under it)
+    await closeSheet(tester);
+    await waitFor(tester, filmPicture, timeout: const Duration(seconds: 60));
+    final bar = tester.getRect(find.byKey(const ValueKey('editor-strip')));
+    await tester.tapAt(Offset(bar.left + bar.width * .2, bar.bottom - 10));
     await settle(tester);
 
     // the timeline
@@ -193,17 +201,24 @@ void main() {
     await count(tester, n + 1);
 
     // a piece's own actions, in its menu
-    String name(int i) => (tester
-                .widget<ListTile>(
-                  find.descendant(of: pieces.at(i), matching: find.byType(ListTile)),
-                )
-                .title!
-            as Text)
-        .data!;
+    String name(int i) =>
+        (tester
+                    .widget<ListTile>(
+                      find.descendant(
+                        of: pieces.at(i),
+                        matching: find.byType(ListTile),
+                      ),
+                    )
+                    .title!
+                as Text)
+            .data!;
     Future<void> open(int i) async {
       await reveal(tester, pieces.at(i));
       await tester.tap(
-        find.descendant(of: pieces.at(i), matching: find.byTooltip('Piece actions')),
+        find.descendant(
+          of: pieces.at(i),
+          matching: find.byTooltip('Piece actions'),
+        ),
       );
       await settle(tester);
     }
@@ -211,7 +226,9 @@ void main() {
     Future<void> first(String piece) async {
       final end = DateTime.now().add(const Duration(seconds: 30));
       while (name(0) != piece) {
-        if (DateTime.now().isAfter(end)) fail('expected $piece first, found ${name(0)}');
+        if (DateTime.now().isAfter(end)) {
+          fail('expected $piece first, found ${name(0)}');
+        }
         await tester.pump(const Duration(milliseconds: 200));
       }
     }
@@ -227,13 +244,19 @@ void main() {
     await button('Mute');
     await waitFor(
       tester,
-      find.descendant(of: pieces.at(0), matching: find.byIcon(Icons.volume_off_rounded)),
+      find.descendant(
+        of: pieces.at(0),
+        matching: find.byIcon(Icons.volume_off_rounded),
+      ),
     );
     await open(0);
     await button('Unmute');
     await waitGone(
       tester,
-      find.descendant(of: pieces.at(0), matching: find.byIcon(Icons.volume_off_rounded)),
+      find.descendant(
+        of: pieces.at(0),
+        matching: find.byIcon(Icons.volume_off_rounded),
+      ),
     );
     await open(0);
     await press(tester, find.text('Trim…').first);
@@ -327,18 +350,18 @@ void main() {
       await closeSheet(tester);
     }
 
-    await closeSheet(tester);
     await transcribe();
     // as on the desktop: at the end of the conversation, where the agent waits, in view without scrolling
+    await openConversation(tester);
     await waitFor(tester, find.text('Not now').hitTestable());
     await tester.tap(find.text('Not now'));
     await waitGone(tester, find.text('Not now'));
 
     // yes, from Activity: the card goes and the download starts (and here fails at once)
     await transcribe();
-    await tester.pageBack();
+    await leaveProject(tester);
     // home (scrolled as it was left, so its heading may be out of view)
-    await waitFor(tester, find.text('Search projects'));
+    await waitFor(tester, home);
     // the question waits in Activity: its tab says so
     await waitFor(
       tester,

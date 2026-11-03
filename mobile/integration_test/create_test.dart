@@ -18,7 +18,7 @@ void main() {
     await describe(tester, 'Mobile e2e motion title card', format: '9:16');
 
     // The new project opens on the conversation; the agent makes the clip and puts it in the film.
-    await waitFor(
+    await waitInConversation(
       tester,
       find.text(reply),
       timeout: const Duration(minutes: 5),
@@ -28,20 +28,21 @@ void main() {
       findsNothing,
     ); // the runner checks the agent's tools on the desktop
 
-    // the new cut, playing in its card under the reply
+    // the new cut, in its card under the reply; it waits on the film, to compare and keep
     await waitFor(tester, find.text('New cut'));
-    await tester.tap(find.widgetWithText(ChoiceChip, 'After'));
-    await waitFor(
-      tester,
-      find.byTooltip('Play'),
-      timeout: const Duration(seconds: 60),
-    );
-    await tester.tap(find.widgetWithText(FilledButton, 'Keep'));
+    await backToFilm(tester);
+    await waitFor(tester, filmPicture, timeout: const Duration(seconds: 60));
+    await tester.tap(find.text('After'));
+    await settle(tester);
+    await waitFor(tester, filmPicture, timeout: const Duration(seconds: 60));
+    await tester.tap(find.byKey(const ValueKey('editor-keep')));
+    await waitGone(tester, find.byKey(const ValueKey('editor-keep')));
+    await openConversation(tester);
     await waitFor(tester, find.text('Opening title added'));
 
-    await tester.pageBack();
+    await leaveProject(tester);
     await waitFor(tester, home);
-    await reveal(tester, projectCard.first);
+    await reveal(tester, projectCard);
     await reveal(tester, find.text('Mobile e2e motion title card'));
   });
 
@@ -59,15 +60,12 @@ void main() {
     await describe(tester, idea);
     await waitFor(
       tester,
-      find.widgetWithText(AppBar, idea),
+      projectOpen(idea),
       // after the motion clip above, the desktop may still be rendering
       timeout: const Duration(minutes: 5),
     );
+    await openConversation(tester);
     await waitFor(tester, find.text(idea));
-    await waitFor(
-      tester,
-      find.text(reply),
-      timeout: const Duration(minutes: 2),
-    );
+    await waitInConversation(tester, find.text(reply));
   });
 }

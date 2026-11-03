@@ -28,20 +28,17 @@ void main() {
     await reveal(tester, find.text(project));
 
     await openProject(tester);
-    expect(find.widgetWithText(AppBar, project), findsOneWidget);
+    expect(projectOpen(project), findsOneWidget);
 
-    // the film, above the conversation
-    await waitFor(
-      tester,
-      find.byTooltip('Play'),
-      timeout: const Duration(seconds: 60),
-    );
+    // the film, under the conversation's sheet
+    await backToFilm(tester);
+    await waitFor(tester, filmPicture, timeout: const Duration(seconds: 60));
 
     await openFiles(tester);
     await waitFor(tester, find.text('Files'));
     await waitFor(tester, find.textContaining('.mp4'));
 
-    await tester.pageBack();
+    await leaveProject(tester);
     await waitFor(tester, home);
   });
 
@@ -61,12 +58,7 @@ void main() {
     await tester.tap(find.byTooltip('Start something new'));
     await waitFor(tester, find.text('Create'));
     final sheet = find.byKey(const ValueKey('start-sheet'));
-    for (final option in [
-      'Import',
-      'Record',
-      'Describe it',
-      'Walkthrough',
-    ]) {
+    for (final option in ['Import', 'Record', 'Describe it', 'Walkthrough']) {
       expect(
         find.descendant(of: sheet, matching: find.text(option)),
         findsOneWidget,
@@ -83,11 +75,11 @@ void main() {
     await describe(tester, throwaway, format: '16:9');
     await waitFor(
       tester,
-      find.widgetWithText(AppBar, throwaway),
+      projectOpen(throwaway),
       timeout: const Duration(minutes: 2),
     );
     await tester.pageBack();
-    await waitGone(tester, find.widgetWithText(AppBar, throwaway));
+    await waitGone(tester, projectOpen(throwaway));
     await settle(tester);
 
     // Move to Trash (held: the project's actions) asks first: Cancel keeps it, Move to Trash removes it
@@ -101,7 +93,8 @@ void main() {
         await settle(tester);
       }
       await reveal(tester, row);
-      await tester.longPress(row);
+      await hold(tester, row);
+      await waitFor(tester, find.text('Move to Trash'));
       await settle(tester);
       await tester.tap(find.text('Move to Trash'));
       await waitFor(tester, find.text('Delete project?'));

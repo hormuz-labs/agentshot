@@ -117,6 +117,38 @@ void main() {
     },
   );
 
+  testWidgets('over the film, the conversation\'s message box still sends', (
+    tester,
+  ) async {
+    final c = Quiet();
+    final store = storeWith(c, talk(1));
+    store.project = {
+      ...store.project!,
+      'versions': [
+        {
+          'id': 'v1',
+          'title': 'Original',
+          'path': 'media/a.mp4',
+          'by': 'import',
+        },
+      ],
+      'current': 'v1',
+    };
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(app(ProjectScreen(store: store)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('editor-activity')));
+    await tester.pumpAndSettle();
+    // the mic gives way to Send as soon as there is text, though the sheet isn't under the screen that holds it
+    await tester.enterText(find.byKey(const ValueKey('composer')), 'Warmer');
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(c.sent, hasLength(1));
+  });
+
   testWidgets('swiping sideways shows when each was said', (tester) async {
     final store = storeWith(Quiet(), talk(1));
     await tester.pumpWidget(app(ProjectScreen(store: store)));

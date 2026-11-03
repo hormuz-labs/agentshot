@@ -16,7 +16,8 @@ void main() {
     await openProject(tester);
 
     Future<void> note(String text) async {
-      await tester.enterText(find.byKey(const ValueKey('composer')), text);
+      await openConversation(tester);
+      await tester.enterText(composer, text);
       await tester.pump(); // Send turns on once there is text
       await tester.tap(find.byTooltip('Send'));
       await waitFor(tester, find.text('Set up AI on your computer'));
@@ -89,7 +90,7 @@ void main() {
     await agentDone(tester, timeout: const Duration(minutes: 1));
 
     // and removed again, in Settings → AI models, which says what the computer uses now
-    await tester.pageBack();
+    await leaveProject(tester);
     await waitFor(tester, find.byKey(const ValueKey('nav-Settings')));
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     final ai = find.byKey(const ValueKey('settings-ai'));

@@ -28,12 +28,12 @@ void main() {
       home,
       timeout: const Duration(minutes: 1),
     );
-    await reveal(tester, projectCard.first);
+    await reveal(tester, projectCard);
     await reveal(tester, find.text(project));
 
     // The connection survives a restart: the app comes back paired, not on the pair screen.
     await launch(tester);
-    await reveal(tester, projectCard.first);
+    await reveal(tester, projectCard);
     expect(find.text('Continue with Google'), findsNothing);
   });
 

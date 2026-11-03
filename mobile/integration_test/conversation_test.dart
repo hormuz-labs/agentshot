@@ -18,7 +18,7 @@ void main() {
     await openProject(tester);
 
     const note = 'Mobile e2e: hello from the phone';
-    await tester.enterText(find.byKey(const ValueKey('composer')), note);
+    await tester.enterText(composer, note);
     await tester.pump(); // Send turns on once there is text
     await tester.tap(find.byTooltip('Send'));
     await waitFor(tester, find.text(note));
@@ -29,26 +29,24 @@ void main() {
     );
     // no tool calls or labels in the conversation: the note, then the reply
 
-    await tester.tap(find.byTooltip('Project actions').last);
-    await settle(tester);
-    await tester.tap(find.text('Conversations').last);
-    await settle(tester);
+    await projectMenu(tester, 'Conversations');
     await tester.tap(find.text('New conversation'));
     // The list keeps both: the new one, and the first one named after its first message.
     await waitFor(tester, find.text('New conversation').at(1));
     expect(find.widgetWithText(ListTile, note), findsOneWidget);
     await tester.tap(find.byTooltip('Close'));
+    await settle(tester);
+    await openConversation(tester);
     await waitFor(tester, find.text('Give notes. Get cuts.'));
     expect(find.text(reply), findsNothing);
 
     // Switching back brings that conversation back.
-    await tester.tap(find.byTooltip('Project actions').last);
-    await settle(tester);
-    await tester.tap(find.text('Conversations').last);
-    await settle(tester);
+    await projectMenu(tester, 'Conversations');
     await tester.tap(find.widgetWithText(ListTile, note));
     await settle(tester);
     await tester.tap(find.byTooltip('Close'));
+    await settle(tester);
+    await openConversation(tester);
     await waitFor(tester, find.text(reply));
   });
 
@@ -57,7 +55,6 @@ void main() {
   ) async {
     await launchPaired(tester);
     await openProject(tester);
-    final composer = find.byKey(const ValueKey('composer'));
     final model = find.byKey(const ValueKey('model'));
 
     // rename the conversation
@@ -66,6 +63,7 @@ void main() {
     await answer(tester, 'Renamed on the phone');
     await waitFor(tester, find.text('Renamed on the phone'));
     await closeSheet(tester);
+    await openConversation(tester);
 
     // the model (in the composer's tray): one of the desktop's (the chip then names it), then back to Automatic;
     // each closes the picker
@@ -109,8 +107,10 @@ void main() {
     await settle(tester);
     expect(chip, findsNothing);
 
-    // the same from the + menu, with a version of the film
-    await tester.tap(find.byTooltip('Add'));
+    // the same from the + menu (open since the model), with a version of the film
+    if (find.byKey(const ValueKey('tray')).evaluate().isEmpty) {
+      await tester.tap(find.byTooltip('Add'));
+    }
     await waitFor(tester, find.text('Mention a file, version or clip'));
     await settle(tester);
     await tester.tap(find.text('Mention a file, version or clip'));

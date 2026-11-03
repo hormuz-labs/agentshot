@@ -56,42 +56,25 @@ void main() {
     await tester.tap(cloud);
     // in plain steps: finding a spot, opening the space, then the app
     await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
-    await waitFor(
-      tester,
-      home,
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, home, timeout: const Duration(minutes: 2));
     // ignore: avoid_print
-    print('CLOUD_OPENED_IN ${DateTime.now().difference(tapped).inMilliseconds} ms');
+    print(
+      'CLOUD_OPENED_IN ${DateTime.now().difference(tapped).inMilliseconds} ms',
+    );
     // it keeps only what this person makes there: nothing yet
     await reveal(tester, find.text('No projects yet'));
 
     // an idea becomes a project on the worker, and its agent answers
     await start(tester, 'Describe it');
     await describe(tester, 'Mobile e2e in the cloud', format: '16:9');
-    // the worker has no AI of its own: this person's AgentShot credits, handed over from the phone
+    // the worker has no AI of its own: this person's AgentShot credits, handed over from the phone without asking
     await waitFor(
       tester,
-      find.text('Use AgentShot credits'),
+      projectOpen('Mobile e2e in the cloud'),
       timeout: const Duration(minutes: 2),
     );
-    await settle(tester);
-    await tester.tap(find.text('Use AgentShot credits'));
-    await waitFor(
-      tester,
-      find.text('Your computer now uses your AgentShot credits.'),
-      timeout: const Duration(minutes: 1),
-    );
-    await waitFor(
-      tester,
-      find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
-      timeout: const Duration(minutes: 2),
-    );
-    await waitFor(
-      tester,
-      find.text(reply),
-      timeout: const Duration(minutes: 2),
-    );
+    await waitInConversation(tester, find.text(reply));
+    expect(find.text('Use AgentShot credits'), findsNothing);
 
     // work running keeps the spot, however short the idle time: a slow turn outlasts it
     final first = await leasedNow();
@@ -101,11 +84,8 @@ void main() {
     // short from now on: only the turn running keeps it
     cloudCue('idle');
     // and leaving while it runs asks first: Cancel keeps it
-    await tester.pageBack();
-    await waitGone(
-      tester,
-      find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
-    );
+    await leaveProject(tester);
+    await waitGone(tester, projectOpen('Mobile e2e in the cloud'));
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     await waitFor(tester, find.text('AgentShot Cloud'));
     await press(tester, find.text('Leave'));
@@ -119,17 +99,14 @@ void main() {
     await settle(tester);
     await reveal(tester, find.text('Mobile e2e in the cloud'));
     await tester.tap(find.text('Mobile e2e in the cloud'));
-    await waitFor(tester, find.byKey(const ValueKey('composer')));
+    await waitFor(tester, projectOpen('Mobile e2e in the cloud'));
+    await openConversation(tester);
     await agentDone(tester, timeout: const Duration(minutes: 1));
     expect(await leasedNow(), first, reason: 'the turn kept the same spot');
 
     // then quiet: the lease ends by itself, and the phone takes a spot again on its own (the other worker, here),
     // back in the same project with the person's credits: the next note just works
-    await waitFor(
-      tester,
-      find.byKey(const ValueKey('composer')),
-      timeout: const Duration(seconds: 5),
-    );
+    await waitFor(tester, composer, timeout: const Duration(seconds: 5));
     final end = DateTime.now().add(const Duration(minutes: 4));
     while ((await leasedNow()) == first && DateTime.now().isBefore(end)) {
       await tester.pump(const Duration(seconds: 2));
@@ -140,11 +117,7 @@ void main() {
       reason: 'a new spot, taken by the phone itself',
     );
     expect(find.text('Your computers'), findsNothing);
-    await waitFor(
-      tester,
-      find.byKey(const ValueKey('composer')),
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, composer, timeout: const Duration(minutes: 2));
     // connected again: no banner saying it's opening the space or reconnecting
     await waitGone(
       tester,
@@ -157,15 +130,18 @@ void main() {
       ),
       timeout: const Duration(minutes: 2),
     );
+    // the film's chip says it's connected (offline it shows a cloud crossed out)
+    await waitFor(
+      tester,
+      find.byIcon(Icons.forum_outlined),
+      timeout: const Duration(minutes: 2),
+    );
     await sendNote(tester, 'Mobile e2e after the break');
     await waitFor(tester, find.text('Mobile e2e after the break'));
     await agentDone(tester, timeout: const Duration(minutes: 2));
     expect(find.text('Use AgentShot credits'), findsNothing);
-    await tester.pageBack();
-    await waitGone(
-      tester,
-      find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
-    );
+    await leaveProject(tester);
+    await waitGone(tester, projectOpen('Mobile e2e in the cloud'));
 
     // Settings names the worker; switching computer gives it back (free again for the next person)
     Future<void> giveBack() async {
@@ -181,11 +157,7 @@ void main() {
     // a full space: it opens and reads, but takes nothing new, saying why, until there is room again
     cloudCue('full');
     await tester.tap(cloud);
-    await waitFor(
-      tester,
-      home,
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, home, timeout: const Duration(minutes: 2));
     Future<void> newIdea() async {
       await start(tester, 'Describe it');
       await describe(tester, 'Mobile e2e room again', format: '16:9');
@@ -197,7 +169,7 @@ void main() {
     cloudCue('roomy');
     // the worker counts again within a minute
     final roomBy = DateTime.now().add(const Duration(minutes: 2));
-    final made = find.widgetWithText(AppBar, 'Mobile e2e room again');
+    final made = projectOpen('Mobile e2e room again');
     for (;;) {
       await waitGone(tester, find.byType(SnackBar));
       await newIdea();
@@ -216,11 +188,8 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 10));
     }
-    await tester.pageBack();
-    await waitGone(
-      tester,
-      find.widgetWithText(AppBar, 'Mobile e2e room again'),
-    );
+    await leaveProject(tester);
+    await waitGone(tester, projectOpen('Mobile e2e room again'));
     await giveBack();
 
     // another worker this time (the stand-in account hands out the other one): the same space, so the project
@@ -229,26 +198,22 @@ void main() {
     await tester.tap(cloud);
     // in plain steps: finding a spot, opening the space, then the app
     await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
-    await waitFor(
-      tester,
-      home,
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, home, timeout: const Duration(minutes: 2));
     // ignore: avoid_print
-    print('CLOUD_REOPENED_IN ${DateTime.now().difference(again).inMilliseconds} ms');
+    print(
+      'CLOUD_REOPENED_IN ${DateTime.now().difference(again).inMilliseconds} ms',
+    );
     await reveal(tester, find.text('Mobile e2e in the cloud'));
     await tester.tap(find.text('Mobile e2e in the cloud'));
-    await waitFor(tester, find.byKey(const ValueKey('composer')));
+    await waitFor(tester, projectOpen('Mobile e2e in the cloud'));
+    await openConversation(tester);
     await waitFor(
       tester,
       find.text(reply),
       timeout: const Duration(minutes: 1),
     );
-    await tester.pageBack();
-    await waitGone(
-      tester,
-      find.widgetWithText(AppBar, 'Mobile e2e in the cloud'),
-    );
+    await leaveProject(tester);
+    await waitGone(tester, projectOpen('Mobile e2e in the cloud'));
 
     // the longest run: however it's used, the spot goes to someone else, and the phone says when it's free again
     cloudCue('cap');
@@ -261,11 +226,7 @@ void main() {
     cloudCue('reset');
     await waitFor(tester, ready, timeout: const Duration(minutes: 1));
     await tester.tap(cloud);
-    await waitFor(
-      tester,
-      home,
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, home, timeout: const Duration(minutes: 2));
     await giveBack();
   });
 }

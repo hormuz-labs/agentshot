@@ -22,15 +22,12 @@ void main() {
     await shot(tester, '1-pair');
     await enterCode(tester, pairLink);
     await waitFor(tester, home);
-    await reveal(tester, projectCard.first);
+    await reveal(tester, projectCard);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, 2000));
     await shot(tester, '2-projects');
 
     await openProject(tester);
-    await tester.enterText(
-      find.byKey(const ValueKey('composer')),
-      'Cut the ums and tighten the opening',
-    );
+    await tester.enterText(composer, 'Cut the ums and tighten the opening');
     await tester.pump(); // Send turns on once there is text
     await tester.tap(find.byTooltip('Send'));
     await waitFor(
@@ -45,24 +42,19 @@ void main() {
     await shot(tester, '3-conversation');
 
     // a tablet shows the film beside the conversation, so the shot above has the before and after too
-    if (find.byKey(const ValueKey('open-edit')).evaluate().isNotEmpty) {
+    if (filmActivity.evaluate().isNotEmpty) {
       await waitFor(tester, find.text('New cut'));
-      await tester.tap(find.widgetWithText(ChoiceChip, 'After'));
-      await waitFor(
-        tester,
-        find.byTooltip('Play'),
-        timeout: const Duration(seconds: 60),
-      );
+      await backToFilm(tester);
+      await waitFor(tester, find.byKey(const ValueKey('editor-before-after')));
+      await waitFor(tester, filmPicture, timeout: const Duration(seconds: 60));
       await shot(tester, '4-before-after');
     }
 
-    await tester.tap(find.byTooltip('Project actions').last);
-    await settle(tester);
-    await tester.tap(find.text('Timeline & mix').last);
+    await projectMenu(tester, 'Timeline & mix');
     await shot(tester, '5-timeline');
     await tester.tap(find.byTooltip('Close').last);
     await settle(tester);
-    await tester.pageBack();
+    await leaveProject(tester);
     await waitFor(tester, find.byTooltip('Start something new'));
 
     await start(tester, 'Describe it');
@@ -83,7 +75,7 @@ void main() {
     );
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('nav-Projects')));
-    await reveal(tester, projectCard.first);
+    await reveal(tester, projectCard);
     await openProject(tester);
     await waitFor(tester, find.text(reply));
     await tester.drag(find.byType(ListView).first, const Offset(0, 260));

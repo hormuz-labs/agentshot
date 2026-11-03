@@ -2,10 +2,14 @@
 // computer, and reconnects by itself when it's back. Turned away (the phone removed on the computer): from wherever
 // the person is, back to the connect screen, saying why. On cue, the runner takes the phone offline and back, and
 // removes it on the desktop.
+import 'package:agentshot_mobile/ui/project.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'support.dart';
+
+/// Home says the computer is out of reach: with projects to show, that it's reconnecting.
+final outOfReach = find.textContaining(RegExp('Can’t reach|Reconnecting'));
 
 /// Taps [button] until [done] shows, as a person would once the phone is back online.
 Future<void> retry(WidgetTester tester, String button, Finder done) async {
@@ -29,11 +33,7 @@ void main() {
 
     // a panel that couldn't load says so, and Try again loads it once the computer is back
     cue('stop');
-    await waitFor(
-      tester,
-      find.textContaining('Can’t reach'),
-      timeout: const Duration(seconds: 60),
-    );
+    await waitFor(tester, outOfReach, timeout: const Duration(seconds: 60));
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     await press(tester, find.text('Memory'));
     await waitFor(
@@ -44,22 +44,49 @@ void main() {
     cue('start');
     await retry(tester, 'Try again', find.text('Remember something'));
     await closeSheet(tester);
-    await waitGone(
-      tester,
-      find.textContaining('Can’t reach'),
-      timeout: const Duration(seconds: 90),
-    );
+    await waitGone(tester, outOfReach, timeout: const Duration(seconds: 90));
 
-    // the film's preview couldn't load offline: Retry preview plays it once back
+    // offline on a phone: nothing can be sent or noted, and the chip over the film says why, until it's back
     await tester.tap(find.byKey(const ValueKey('nav-Projects')));
     await openProject(tester);
     cue('stop');
-    await tester.enterText(find.byKey(const ValueKey('composer')), 'offline?');
-    final sendable = find.byWidgetPredicate(
-      (w) => w is IconButton && w.tooltip == 'Send' && w.onPressed != null,
+    await tester.enterText(composer, 'offline?');
+    await waitFor(tester, find.byTooltip('Send'));
+    final sendable = find.descendant(
+      of: find.byTooltip('Send'),
+      matching: find.byWidgetPredicate((w) => w is InkWell && w.onTap != null),
     );
     await waitGone(tester, sendable, timeout: const Duration(seconds: 60));
-    // the film, above the conversation
+    await tester.enterText(composer, '');
+    await tester.pump();
+    await backToFilm(tester);
+    final kept = tester
+        .widget<ProjectScreen>(find.byType(ProjectScreen))
+        .store
+        .client
+        .cache;
+    await waitFor(tester, find.byIcon(Icons.cloud_off_rounded));
+    await tester.tap(find.byKey(const ValueKey('editor-note-tool')));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('editor-bubble')), findsNothing);
+    cue('start');
+    await waitFor(
+      tester,
+      find.byIcon(Icons.forum_outlined),
+      timeout: const Duration(seconds: 90),
+    );
+    await leaveProject(tester);
+    await waitFor(tester, home);
+
+    // the film's preview couldn't load offline (the phone kept nothing of it): Retry preview plays it once back, in
+    // the player beside the conversation on a wide screen
+    tester.view.physicalSize =
+        const Size(1180, 820) * tester.view.devicePixelRatio;
+    addTearDown(tester.view.resetPhysicalSize);
+    cue('stop');
+    await waitFor(tester, outOfReach, timeout: const Duration(seconds: 60));
+    await kept.clear();
+    await openProject(tester);
     await waitFor(
       tester,
       find.text('Retry preview'),
@@ -76,18 +103,10 @@ void main() {
 
       // out of reach: a clear message and a way out, then back by itself
       cue('stop');
-      await waitFor(
-        tester,
-        find.textContaining('Can’t reach'),
-        timeout: const Duration(seconds: 60),
-      );
+      await waitFor(tester, outOfReach, timeout: const Duration(seconds: 60));
       expect(find.text('Change computer'), findsOneWidget);
       cue('start');
-      await waitGone(
-        tester,
-        find.textContaining('Can’t reach'),
-        timeout: const Duration(seconds: 90),
-      );
+      await waitGone(tester, outOfReach, timeout: const Duration(seconds: 90));
 
       // turned away while deep in a project: back to the connect screen, saying why
       await openProject(tester);
@@ -100,7 +119,7 @@ void main() {
         timeout: const Duration(seconds: 60),
       );
       expect(find.text('Continue with Google'), findsOneWidget);
-      expect(find.byKey(const ValueKey('composer')), findsNothing);
+      expect(composer, findsNothing);
     },
   );
 }

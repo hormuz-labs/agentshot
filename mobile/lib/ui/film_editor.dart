@@ -79,7 +79,7 @@ bool atItsMoment(Json anchor, double position) {
 /// What's being pointed at while its note is written: a moment, a box at a moment, a range, or the whole film.
 enum Pointing { none, moment, box, range, film }
 
-class _FilmEditorState extends State<FilmEditor> {
+class _FilmEditorState extends State<FilmEditor> with WidgetsBindingObserver {
   VideoPlayerController? controller;
   String? error;
   late bool after = widget.proposal != null;
@@ -111,7 +111,14 @@ class _FilmEditorState extends State<FilmEditor> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load(0);
+  }
+
+  /// The keyboard came or went: what shows under the film follows (see [build]).
+  @override
+  void didChangeMetrics() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -164,6 +171,7 @@ class _FilmEditorState extends State<FilmEditor> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     controller?.removeListener(_tick);
     controller?.dispose();
     words.dispose();
@@ -322,13 +330,19 @@ class _FilmEditorState extends State<FilmEditor> {
     final studio = Studio.of(context);
     final c = controller;
     final deciding = widget.proposal != null && widget.working == null;
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    // (from the view itself, followed in [didChangeMetrics]: the screen's Scaffold has already taken the keyboard out
+    // of the MediaQuery here)
+    final keyboard =
+        MediaQuery.viewInsetsOf(context).bottom > 0 ||
+        View.of(context).viewInsets.bottom > 0;
     return ColoredBox(
       color: Colors.black,
       child: SafeArea(
         child: Column(
           children: [
-            topBar(studio),
+            // the keyboard up on a phone on its side leaves a sliver: the film, and what's typed over it
+            if (!keyboard || MediaQuery.sizeOf(context).height > 500)
+              topBar(studio),
             Expanded(
               child: Stack(
                 children: [
@@ -888,12 +902,14 @@ class _FilmEditorState extends State<FilmEditor> {
                               ),
                             ),
                           ),
-                      // the playhead
+                      // the playhead (touches go through it, to the pin it's on when the film is at a note)
                       Positioned(
                         left: x(position) - 1,
                         top: 4,
                         bottom: -4,
-                        child: Container(width: 2, color: Colors.white),
+                        child: IgnorePointer(
+                          child: Container(width: 2, color: Colors.white),
+                        ),
                       ),
                     ],
                   ),

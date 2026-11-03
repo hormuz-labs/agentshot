@@ -620,7 +620,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             columns) *
                         10 /
                         16 +
-                    MediaQuery.textScalerOf(context).scale(62) +
+                    MediaQuery.textScalerOf(context).scale(66) +
                     Space.md,
               ),
               // a few projects leave room: the way to the next one fills it
@@ -902,10 +902,15 @@ class ProjectCard extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             if (opened != null)
-              Text(switch (ago(opened)) {
-                'now' => 'Opened just now',
-                final at => 'Opened $at',
-              }, style: text.bodySmall?.copyWith(color: studio.text3)),
+              Text(
+                switch (ago(opened)) {
+                  'now' => 'Opened just now',
+                  final at => 'Opened $at',
+                },
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.bodySmall?.copyWith(color: studio.text3),
+              ),
           ],
         ),
       ),

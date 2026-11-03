@@ -350,11 +350,10 @@ try {
     console.log(`mobile e2e: app built in ${Math.round((Date.now() - started) / 1000)} s${code ? ` (exit ${code}; each test builds it anyway)` : ''}`)
   }
   for (const test of tests) {
-    // Flutter reinstalls the app for each file, so each one pairs as a new phone. Before the last, forget them all
-    // on the desktop: what is left after it disconnects shows whether Disconnect unpaired it there too.
-    if (test === 'settings') {
-      for (const d of (await win.evaluate(() => window.agentshot.mobile.status())).devices) await win.evaluate(id => window.agentshot.mobile.revoke(id), d.id)
-    }
+    // Flutter reinstalls the app for each file, so each one pairs as a new phone, and a computer takes ten at most.
+    // Before each, forget the earlier ones on the desktop: before the last, what is left after it disconnects shows
+    // whether Disconnect unpaired it there too.
+    for (const d of (await win.evaluate(() => window.agentshot.mobile.status())).devices) await win.evaluate(id => window.agentshot.mobile.revoke(id), d.id)
     // the cloud test: a second AgentShot, headless, as a cloud worker (its own profile and projects, the same model)
     if (test === 'cloud' && !cloud) cloud = await startCloudWorkers(2)
     if (test === 'signin' || test === 'setup_ai' || test === 'cloud') {

@@ -96,6 +96,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
   void dispose() {
     message.dispose();
     chatScroll.dispose();
+    changed.dispose();
     super.dispose();
   }
 
@@ -628,6 +629,15 @@ class _ProjectScreenState extends State<ProjectScreen> {
     }
   }
 
+  /// The conversation's sheet isn't under this screen, so this screen's own changes (what's typed, what's attached,
+  /// what went wrong) reach it through here.
+  final changed = ValueNotifier(0);
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    changed.value++;
+  }
+
   /// The conversation, over the film: everything the agent did and said, its questions, the cuts it made.
   bool activityOpen = false;
   Future<void> openActivity() async {
@@ -642,8 +652,10 @@ class _ProjectScreenState extends State<ProjectScreen> {
           type: MaterialType.transparency,
           // built from this screen: once it's gone (the project closed under the sheet), nothing to show
           child: ListenableBuilder(
-            listenable: store,
-            builder: (_, _) => mounted ? chat() : const SizedBox.shrink(),
+            listenable: Listenable.merge([store, changed]),
+            builder: (_, _) => mounted && store.project != null
+                ? chat()
+                : const SizedBox.shrink(),
           ),
         ),
       ),

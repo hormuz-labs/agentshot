@@ -52,7 +52,7 @@ void main() {
       ]);
       await waitFor(
         tester,
-        find.widgetWithText(AppBar, 'Surf session'),
+        projectOpen('Surf session'),
         timeout: const Duration(minutes: 2),
       );
       await filesShow(tester, ['Surf session.mp4', 'Harbour drone.mp4']);
@@ -73,7 +73,7 @@ void main() {
           findsOneWidget,
         );
       }
-      await tester.pageBack();
+      await leaveProject(tester);
       await waitFor(tester, find.byTooltip('Start something new'));
 
       // photos only: a project made from scratch in the chosen format, with the photos in it
@@ -83,14 +83,15 @@ void main() {
         'Dunes 3.jpg',
       ]);
       await waitFor(tester, find.text('Format'));
+      await settle(tester); // the sheet slides up
       await tester.tap(find.text('9:16'));
       await waitFor(
         tester,
-        find.widgetWithText(AppBar, 'From 3 photos'),
+        projectOpen('From 3 photos'),
         timeout: const Duration(minutes: 2),
       );
       await filesShow(tester, ['Dunes 1.jpg', 'Dunes 2.jpg', 'Dunes 3.jpg']);
-      await tester.pageBack();
+      await leaveProject(tester);
       await waitFor(tester, find.byTooltip('Start something new'));
 
       // a mix with a photo first: the project still starts from the video
@@ -100,7 +101,7 @@ void main() {
       ]);
       await waitFor(
         tester,
-        find.widgetWithText(AppBar, 'Sunset walk'),
+        projectOpen('Sunset walk'),
         timeout: const Duration(minutes: 2),
       );
       await filesShow(tester, ['Sunset walk.mp4', 'Dunes 1.jpg']);
@@ -111,6 +112,7 @@ void main() {
         expect(asked, Pick.photos);
         return media(['Dunes 2.jpg', 'Dunes 3.jpg']);
       };
+      await openConversation(tester);
       await waitFor(tester, find.byTooltip('Add'));
       await tester.tap(find.byTooltip('Add'));
       await waitFor(tester, find.text('Attach files'));
@@ -193,11 +195,11 @@ void main() {
       await start(tester, 'Record');
       await waitFor(
         tester,
-        find.widgetWithText(AppBar, 'Recorded clip'),
+        projectOpen('Recorded clip'),
         timeout: const Duration(minutes: 2),
       );
       await tester.pageBack();
-      await waitGone(tester, find.widgetWithText(AppBar, 'Recorded clip'));
+      await waitGone(tester, projectOpen('Recorded clip'));
       await settle(tester);
 
       // a text file alone can't start a film
@@ -207,10 +209,11 @@ void main() {
       // one photo, landscape
       await importing(tester, 'Photos', Pick.photos, ['Dunes 2.jpg']);
       await waitFor(tester, find.text('Format'));
+      await settle(tester); // the sheet slides up
       await tester.tap(find.text('16:9'));
       await waitFor(
         tester,
-        find.widgetWithText(AppBar, 'From a photo'),
+        projectOpen('From a photo'),
         timeout: const Duration(minutes: 2),
       );
     },
