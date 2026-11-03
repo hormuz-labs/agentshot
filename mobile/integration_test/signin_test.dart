@@ -81,11 +81,7 @@ void main() {
       );
 
       await tester.tap(find.text(computer));
-      await waitFor(
-        tester,
-        home,
-        timeout: const Duration(seconds: 60),
-      );
+      await waitFor(tester, home, timeout: const Duration(seconds: 60));
       await reveal(tester, find.text(project));
 
       // Settings names the computer, not an address, and offers switching and signing out
@@ -100,11 +96,7 @@ void main() {
       await waitFor(tester, find.text(computer));
 
       await tester.tap(find.text(computer));
-      await waitFor(
-        tester,
-        home,
-        timeout: const Duration(seconds: 60),
-      );
+      await waitFor(tester, home, timeout: const Duration(seconds: 60));
       await tester.tap(find.byKey(const ValueKey('nav-Settings')));
       final out = find.text('Sign out');
       await reveal(tester, out);

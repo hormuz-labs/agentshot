@@ -33,11 +33,7 @@ void main() {
 
     // a panel that couldn't load says so, and Try again loads it once the computer is back
     cue('stop');
-    await waitFor(
-      tester,
-      outOfReach,
-      timeout: const Duration(seconds: 60),
-    );
+    await waitFor(tester, outOfReach, timeout: const Duration(seconds: 60));
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     await press(tester, find.text('Memory'));
     await waitFor(
@@ -48,11 +44,7 @@ void main() {
     cue('start');
     await retry(tester, 'Try again', find.text('Remember something'));
     await closeSheet(tester);
-    await waitGone(
-      tester,
-      outOfReach,
-      timeout: const Duration(seconds: 90),
-    );
+    await waitGone(tester, outOfReach, timeout: const Duration(seconds: 90));
 
     // offline on a phone: nothing can be sent or noted, and the chip over the film says why, until it's back
     await tester.tap(find.byKey(const ValueKey('nav-Projects')));
@@ -68,7 +60,11 @@ void main() {
     await tester.enterText(composer, '');
     await tester.pump();
     await backToFilm(tester);
-    final kept = tester.widget<ProjectScreen>(find.byType(ProjectScreen)).store.client.cache;
+    final kept = tester
+        .widget<ProjectScreen>(find.byType(ProjectScreen))
+        .store
+        .client
+        .cache;
     await waitFor(tester, find.byIcon(Icons.cloud_off_rounded));
     await tester.tap(find.byKey(const ValueKey('editor-note-tool')));
     await settle(tester);
@@ -88,11 +84,7 @@ void main() {
         const Size(1180, 820) * tester.view.devicePixelRatio;
     addTearDown(tester.view.resetPhysicalSize);
     cue('stop');
-    await waitFor(
-      tester,
-      outOfReach,
-      timeout: const Duration(seconds: 60),
-    );
+    await waitFor(tester, outOfReach, timeout: const Duration(seconds: 60));
     await kept.clear();
     await openProject(tester);
     await waitFor(
@@ -111,18 +103,10 @@ void main() {
 
       // out of reach: a clear message and a way out, then back by itself
       cue('stop');
-      await waitFor(
-        tester,
-        outOfReach,
-        timeout: const Duration(seconds: 60),
-      );
+      await waitFor(tester, outOfReach, timeout: const Duration(seconds: 60));
       expect(find.text('Change computer'), findsOneWidget);
       cue('start');
-      await waitGone(
-        tester,
-        outOfReach,
-        timeout: const Duration(seconds: 90),
-      );
+      await waitGone(tester, outOfReach, timeout: const Duration(seconds: 90));
 
       // turned away while deep in a project: back to the connect screen, saying why
       await openProject(tester);

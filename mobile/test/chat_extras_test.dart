@@ -125,7 +125,12 @@ void main() {
     store.project = {
       ...store.project!,
       'versions': [
-        {'id': 'v1', 'title': 'Original', 'path': 'media/a.mp4', 'by': 'import'},
+        {
+          'id': 'v1',
+          'title': 'Original',
+          'path': 'media/a.mp4',
+          'by': 'import',
+        },
       ],
       'current': 'v1',
     };

@@ -17,7 +17,9 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final pieces = find.byWidgetPredicate(
-    (w) => w.key is ValueKey && '${(w.key as ValueKey).value}'.startsWith('piece-'),
+    (w) =>
+        w.key is ValueKey &&
+        '${(w.key as ValueKey).value}'.startsWith('piece-'),
   );
   Future<void> files(WidgetTester tester) async {
     await openFiles(tester);
@@ -95,8 +97,14 @@ void main() {
     await files(tester);
     await press(tester, find.text('Gull flyby.mp4'));
     await waitFor(tester, find.text('Point at parts'));
-    await waitFor(tester, find.byTooltip('Play'), timeout: const Duration(seconds: 30));
-    await tester.tap(find.byKey(const ValueKey('mark'))); // Start here, at the start
+    await waitFor(
+      tester,
+      find.byTooltip('Play'),
+      timeout: const Duration(seconds: 30),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('mark')),
+    ); // Start here, at the start
     await settle(tester);
     await tester.tap(find.byTooltip('Play'));
     await settle(tester, const Duration(milliseconds: 1500));
@@ -108,11 +116,15 @@ void main() {
     await closeSheet(tester);
     await openConversation(tester);
     final part = find.ancestor(
-      of: find.textContaining(RegExp(r'^Gull flyby\.mp4 · 0:00\.\d–0:0\d\.\d$')),
+      of: find.textContaining(
+        RegExp(r'^Gull flyby\.mp4 · 0:00\.\d–0:0\d\.\d$'),
+      ),
       matching: find.byType(InputChip),
     );
     await waitFor(tester, part);
-    await tester.tap(find.descendant(of: part, matching: find.byTooltip('Delete')));
+    await tester.tap(
+      find.descendant(of: part, matching: find.byTooltip('Delete')),
+    );
     await settle(tester);
     await files(tester);
     await press(tester, find.text('Gull flyby.mp4'));
@@ -136,7 +148,7 @@ void main() {
     // Download / share: the file comes to the phone and the share sheet opens over the app (the runner closes it)
     await fileMenu(tester, 'Dunes 1.jpg', 'Download / share');
     cue('back');
-    await settle(tester, const Duration(seconds: 8));
+    await shareSheetGone(tester);
     expect(find.byType(SnackBar), findsNothing);
 
     // Remove: Cancel keeps it, Confirm removes it; a clip the film uses stays
@@ -189,17 +201,24 @@ void main() {
     await count(tester, n + 1);
 
     // a piece's own actions, in its menu
-    String name(int i) => (tester
-                .widget<ListTile>(
-                  find.descendant(of: pieces.at(i), matching: find.byType(ListTile)),
-                )
-                .title!
-            as Text)
-        .data!;
+    String name(int i) =>
+        (tester
+                    .widget<ListTile>(
+                      find.descendant(
+                        of: pieces.at(i),
+                        matching: find.byType(ListTile),
+                      ),
+                    )
+                    .title!
+                as Text)
+            .data!;
     Future<void> open(int i) async {
       await reveal(tester, pieces.at(i));
       await tester.tap(
-        find.descendant(of: pieces.at(i), matching: find.byTooltip('Piece actions')),
+        find.descendant(
+          of: pieces.at(i),
+          matching: find.byTooltip('Piece actions'),
+        ),
       );
       await settle(tester);
     }
@@ -207,7 +226,9 @@ void main() {
     Future<void> first(String piece) async {
       final end = DateTime.now().add(const Duration(seconds: 30));
       while (name(0) != piece) {
-        if (DateTime.now().isAfter(end)) fail('expected $piece first, found ${name(0)}');
+        if (DateTime.now().isAfter(end)) {
+          fail('expected $piece first, found ${name(0)}');
+        }
         await tester.pump(const Duration(milliseconds: 200));
       }
     }
@@ -223,13 +244,19 @@ void main() {
     await button('Mute');
     await waitFor(
       tester,
-      find.descendant(of: pieces.at(0), matching: find.byIcon(Icons.volume_off_rounded)),
+      find.descendant(
+        of: pieces.at(0),
+        matching: find.byIcon(Icons.volume_off_rounded),
+      ),
     );
     await open(0);
     await button('Unmute');
     await waitGone(
       tester,
-      find.descendant(of: pieces.at(0), matching: find.byIcon(Icons.volume_off_rounded)),
+      find.descendant(
+        of: pieces.at(0),
+        matching: find.byIcon(Icons.volume_off_rounded),
+      ),
     );
     await open(0);
     await press(tester, find.text('Trim…').first);

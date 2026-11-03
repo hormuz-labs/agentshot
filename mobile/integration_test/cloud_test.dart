@@ -56,13 +56,11 @@ void main() {
     await tester.tap(cloud);
     // in plain steps: finding a spot, opening the space, then the app
     await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
-    await waitFor(
-      tester,
-      home,
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, home, timeout: const Duration(minutes: 2));
     // ignore: avoid_print
-    print('CLOUD_OPENED_IN ${DateTime.now().difference(tapped).inMilliseconds} ms');
+    print(
+      'CLOUD_OPENED_IN ${DateTime.now().difference(tapped).inMilliseconds} ms',
+    );
     // it keeps only what this person makes there: nothing yet
     await reveal(tester, find.text('No projects yet'));
 
@@ -87,10 +85,7 @@ void main() {
     cloudCue('idle');
     // and leaving while it runs asks first: Cancel keeps it
     await leaveProject(tester);
-    await waitGone(
-      tester,
-      projectOpen('Mobile e2e in the cloud'),
-    );
+    await waitGone(tester, projectOpen('Mobile e2e in the cloud'));
     await tester.tap(find.byKey(const ValueKey('nav-Settings')));
     await waitFor(tester, find.text('AgentShot Cloud'));
     await press(tester, find.text('Leave'));
@@ -111,11 +106,7 @@ void main() {
 
     // then quiet: the lease ends by itself, and the phone takes a spot again on its own (the other worker, here),
     // back in the same project with the person's credits: the next note just works
-    await waitFor(
-      tester,
-      composer,
-      timeout: const Duration(seconds: 5),
-    );
+    await waitFor(tester, composer, timeout: const Duration(seconds: 5));
     final end = DateTime.now().add(const Duration(minutes: 4));
     while ((await leasedNow()) == first && DateTime.now().isBefore(end)) {
       await tester.pump(const Duration(seconds: 2));
@@ -126,11 +117,7 @@ void main() {
       reason: 'a new spot, taken by the phone itself',
     );
     expect(find.text('Your computers'), findsNothing);
-    await waitFor(
-      tester,
-      composer,
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, composer, timeout: const Duration(minutes: 2));
     // connected again: no banner saying it's opening the space or reconnecting
     await waitGone(
       tester,
@@ -154,10 +141,7 @@ void main() {
     await agentDone(tester, timeout: const Duration(minutes: 2));
     expect(find.text('Use AgentShot credits'), findsNothing);
     await leaveProject(tester);
-    await waitGone(
-      tester,
-      projectOpen('Mobile e2e in the cloud'),
-    );
+    await waitGone(tester, projectOpen('Mobile e2e in the cloud'));
 
     // Settings names the worker; switching computer gives it back (free again for the next person)
     Future<void> giveBack() async {
@@ -173,11 +157,7 @@ void main() {
     // a full space: it opens and reads, but takes nothing new, saying why, until there is room again
     cloudCue('full');
     await tester.tap(cloud);
-    await waitFor(
-      tester,
-      home,
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, home, timeout: const Duration(minutes: 2));
     Future<void> newIdea() async {
       await start(tester, 'Describe it');
       await describe(tester, 'Mobile e2e room again', format: '16:9');
@@ -209,10 +189,7 @@ void main() {
       await tester.pump(const Duration(seconds: 10));
     }
     await leaveProject(tester);
-    await waitGone(
-      tester,
-      projectOpen('Mobile e2e room again'),
-    );
+    await waitGone(tester, projectOpen('Mobile e2e room again'));
     await giveBack();
 
     // another worker this time (the stand-in account hands out the other one): the same space, so the project
@@ -221,13 +198,11 @@ void main() {
     await tester.tap(cloud);
     // in plain steps: finding a spot, opening the space, then the app
     await waitFor(tester, find.byKey(const ValueKey('cloud-step')));
-    await waitFor(
-      tester,
-      home,
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, home, timeout: const Duration(minutes: 2));
     // ignore: avoid_print
-    print('CLOUD_REOPENED_IN ${DateTime.now().difference(again).inMilliseconds} ms');
+    print(
+      'CLOUD_REOPENED_IN ${DateTime.now().difference(again).inMilliseconds} ms',
+    );
     await reveal(tester, find.text('Mobile e2e in the cloud'));
     await tester.tap(find.text('Mobile e2e in the cloud'));
     await waitFor(tester, projectOpen('Mobile e2e in the cloud'));
@@ -238,10 +213,7 @@ void main() {
       timeout: const Duration(minutes: 1),
     );
     await leaveProject(tester);
-    await waitGone(
-      tester,
-      projectOpen('Mobile e2e in the cloud'),
-    );
+    await waitGone(tester, projectOpen('Mobile e2e in the cloud'));
 
     // the longest run: however it's used, the spot goes to someone else, and the phone says when it's free again
     cloudCue('cap');
@@ -254,11 +226,7 @@ void main() {
     cloudCue('reset');
     await waitFor(tester, ready, timeout: const Duration(minutes: 1));
     await tester.tap(cloud);
-    await waitFor(
-      tester,
-      home,
-      timeout: const Duration(minutes: 2),
-    );
+    await waitFor(tester, home, timeout: const Duration(minutes: 2));
     await giveBack();
   });
 }

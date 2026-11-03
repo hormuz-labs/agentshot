@@ -97,7 +97,10 @@ void main() {
         ]) {
           await reveal(tester, find.text(panel));
           // up from under the + and the bar
-          await Scrollable.ensureVisible(find.text(panel).evaluate().first, alignment: .3);
+          await Scrollable.ensureVisible(
+            find.text(panel).evaluate().first,
+            alignment: .3,
+          );
           await settle(tester, const Duration(milliseconds: 300));
           await tester.tap(find.text(panel));
           await visit(tester, '$where, Settings → $panel');
@@ -137,7 +140,10 @@ void main() {
         );
         await visit(tester, '$where, typing a note');
         await leaveProject(tester);
-        await waitFor(tester, find.byTooltip('Start something new')); // home again
+        await waitFor(
+          tester,
+          find.byTooltip('Start something new'),
+        ); // home again
       });
     }
   }

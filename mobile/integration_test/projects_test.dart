@@ -58,12 +58,7 @@ void main() {
     await tester.tap(find.byTooltip('Start something new'));
     await waitFor(tester, find.text('Create'));
     final sheet = find.byKey(const ValueKey('start-sheet'));
-    for (final option in [
-      'Import',
-      'Record',
-      'Describe it',
-      'Walkthrough',
-    ]) {
+    for (final option in ['Import', 'Record', 'Describe it', 'Walkthrough']) {
       expect(
         find.descendant(of: sheet, matching: find.text(option)),
         findsOneWidget,

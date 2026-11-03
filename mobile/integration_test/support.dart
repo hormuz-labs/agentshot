@@ -27,6 +27,27 @@ void cue(String what) {
   print('DESKTOP $what');
 }
 
+/// Waits for the share sheet to come over the app and go again: the runner presses Back once it shows ([cue] back),
+/// and keeps pressing it while anything else is in front, so the next test file must not start before it's gone.
+/// (Plain waits, not frames: the app draws none while the sheet covers it.)
+Future<void> shareSheetGone(
+  WidgetTester tester, {
+  Duration timeout = const Duration(minutes: 3),
+}) async {
+  final end = DateTime.now().add(timeout);
+  bool front() =>
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+  while (front()) {
+    if (DateTime.now().isAfter(end)) fail('The share sheet never came');
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+  }
+  while (!front()) {
+    if (DateTime.now().isAfter(end)) fail('The app never came back');
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+  }
+  await settle(tester);
+}
+
 /// The runner's test media, downloaded to the phone as the picker would have returned them.
 Future<List<Picked>> media(List<String> names) async {
   final dir = await getTemporaryDirectory();
@@ -77,7 +98,9 @@ final home = find.byTooltip('Start something new');
 
 /// A project in the home grid (any).
 final projectCard = find.byWidgetPredicate(
-  (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('project-'),
+  (w) =>
+      w.key is ValueKey<String> &&
+      (w.key! as ValueKey<String>).value.startsWith('project-'),
 );
 
 /// The composer: in the project's screen, or in the conversation's sheet over the film ([openConversation]).
@@ -94,9 +117,7 @@ final filmPicture = find.byKey(const ValueKey('editor-picture'));
 Finder projectOpen(String title) => find.descendant(
   of: find.byWidgetPredicate(
     (w) =>
-        w is FilmEditor ||
-        w is AppBar ||
-        w.key == const ValueKey('film-chip'),
+        w is FilmEditor || w is AppBar || w.key == const ValueKey('film-chip'),
   ),
   matching: find.text(title),
 );
@@ -173,7 +194,11 @@ Future<void> openFiles(WidgetTester tester) async {
 
 /// Pulls the home list down to refresh it.
 Future<void> pullToRefresh(WidgetTester tester) async {
-  await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
+  await tester.fling(
+    find.byType(CustomScrollView).first,
+    const Offset(0, 400),
+    1000,
+  );
   await settle(tester, const Duration(seconds: 1));
 }
 
@@ -195,7 +220,11 @@ Future<void> answer(WidgetTester tester, String? value) async {
 
 /// Describes what to make in the create sheet ([askToCreate]) and makes it, in [format] when given (16:9 otherwise);
 /// closes the sheet without making anything when [idea] is null.
-Future<void> describe(WidgetTester tester, String? idea, {String? format}) async {
+Future<void> describe(
+  WidgetTester tester,
+  String? idea, {
+  String? format,
+}) async {
   final sheet = find.byKey(const ValueKey('create-sheet'));
   await waitFor(tester, sheet);
   await settle(tester);
@@ -207,12 +236,19 @@ Future<void> describe(WidgetTester tester, String? idea, {String? format}) async
   }
   await tester.enterText(find.byKey(const ValueKey('create-idea')), idea);
   await settle(tester);
-  if (format != null) await press(tester, find.descendant(of: sheet, matching: find.text(format)));
+  if (format != null) {
+    await press(
+      tester,
+      find.descendant(of: sheet, matching: find.text(format)),
+    );
+  }
   await press(
     tester,
     find.descendant(
       of: sheet,
-      matching: find.byWidgetPredicate((w) => w is Text && (w.data == 'Create' || w.data == 'Film it')),
+      matching: find.byWidgetPredicate(
+        (w) => w is Text && (w.data == 'Create' || w.data == 'Film it'),
+      ),
     ),
   );
   await settle(tester);

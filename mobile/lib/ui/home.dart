@@ -902,10 +902,15 @@ class ProjectCard extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             if (opened != null)
-              Text(switch (ago(opened)) {
-                'now' => 'Opened just now',
-                final at => 'Opened $at',
-              }, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.bodySmall?.copyWith(color: studio.text3)),
+              Text(
+                switch (ago(opened)) {
+                  'now' => 'Opened just now',
+                  final at => 'Opened $at',
+                },
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.bodySmall?.copyWith(color: studio.text3),
+              ),
           ],
         ),
       ),

@@ -43,6 +43,7 @@ void main() {
     await press(tester, find.text('Render and download'));
     // rendered on the desktop, downloaded, then the share sheet over the app
     cue('back');
+    await shareSheetGone(tester);
     // done: the render and download lines under the header are gone
     bool working() =>
         find.textContaining('Rendering').evaluate().isNotEmpty ||

@@ -41,11 +41,17 @@ void main() {
       );
       await settle(tester);
       expect(
-        find.descendant(of: steps.last, matching: find.textContaining('Edited the cut')),
+        find.descendant(
+          of: steps.last,
+          matching: find.textContaining('Edited the cut'),
+        ),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: steps.last, matching: find.text('Rendered the film')),
+        find.descendant(
+          of: steps.last,
+          matching: find.text('Rendered the film'),
+        ),
         findsOneWidget,
       );
       expect(find.text('edit_timeline'), findsNothing);
@@ -73,6 +79,7 @@ void main() {
       find.descendant(of: card, matching: find.byTooltip('Download')),
     );
     cue('back');
+    await shareSheetGone(tester);
     await waitFor(
       tester,
       find.descendant(of: card, matching: find.byTooltip('Download')),

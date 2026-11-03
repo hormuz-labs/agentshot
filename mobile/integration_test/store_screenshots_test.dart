@@ -27,10 +27,7 @@ void main() {
     await shot(tester, '2-projects');
 
     await openProject(tester);
-    await tester.enterText(
-      composer,
-      'Cut the ums and tighten the opening',
-    );
+    await tester.enterText(composer, 'Cut the ums and tighten the opening');
     await tester.pump(); // Send turns on once there is text
     await tester.tap(find.byTooltip('Send'));
     await waitFor(
