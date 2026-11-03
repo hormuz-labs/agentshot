@@ -12,118 +12,123 @@ import 'support.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'on a phone, plays the film and pins notes on moments, boxes and ranges',
-    (tester) async {
-      await launchPaired(tester);
-      await openProject(tester);
-      await newConversation(tester);
-      await backToFilm(tester);
-      await waitFor(tester, filmPicture, timeout: const Duration(seconds: 60));
+  testWidgets('on a phone, plays the film and pins notes on moments, boxes and ranges', (
+    tester,
+  ) async {
+    await launchPaired(tester);
+    await openProject(tester);
+    await newConversation(tester);
+    await backToFilm(tester);
+    await waitFor(tester, filmPicture, timeout: const Duration(seconds: 60));
 
-      final bubble = find.byKey(const ValueKey('editor-bubble'));
-      final strip = find.byKey(const ValueKey('editor-strip'));
-      final box = find.byKey(const ValueKey('editor-box-tool'));
-      final range = find.byKey(const ValueKey('editor-range-tool'));
-      Offset along(double share) {
-        final bar = tester.getRect(strip);
-        return Offset(bar.left + bar.width * share, bar.bottom - 10);
-      }
+    final bubble = find.byKey(const ValueKey('editor-bubble'));
+    final strip = find.byKey(const ValueKey('editor-strip'));
+    final box = find.byKey(const ValueKey('editor-box-tool'));
+    final range = find.byKey(const ValueKey('editor-range-tool'));
+    // the tools come back once the keyboard is down, which a slow emulator takes a while over: wait, then tap
+    Future<void> press(Finder tool) async {
+      await waitFor(tester, tool);
+      await tester.tap(tool);
+    }
 
-      // play and pause
-      await tester.tap(filmPicture);
-      await waitFor(tester, find.byIcon(Icons.pause_rounded));
-      await tester.tap(filmPicture);
-      await waitFor(tester, find.byIcon(Icons.play_arrow_rounded));
+    Offset along(double share) {
+      final bar = tester.getRect(strip);
+      return Offset(bar.left + bar.width * share, bar.bottom - 10);
+    }
 
-      // seeking moves the playhead
-      await tester.tapAt(along(.05));
-      await waitFor(tester, find.textContaining(RegExp(r'^0:00 / ')));
-      await tester.tapAt(along(.7));
-      await waitFor(tester, find.textContaining(RegExp(r'^0:02 / ')));
+    // play and pause
+    await tester.tap(filmPicture);
+    await waitFor(tester, find.byIcon(Icons.pause_rounded));
+    await tester.tap(filmPicture);
+    await waitFor(tester, find.byIcon(Icons.play_arrow_rounded));
 
-      // Note: a bubble for the moment the film is at; closing it leaves things as they were
-      await tester.tap(find.byKey(const ValueKey('editor-note-tool')));
-      await waitFor(tester, bubble);
-      expect(find.text('At 0:02'), findsOneWidget);
-      await tester.tap(
-        find.descendant(of: bubble, matching: find.byIcon(Icons.close_rounded)),
-      );
-      await settle(tester);
-      expect(bubble, findsNothing);
+    // seeking moves the playhead
+    await tester.tapAt(along(.05));
+    await waitFor(tester, find.textContaining(RegExp(r'^0:00 / ')));
+    await tester.tapAt(along(.7));
+    await waitFor(tester, find.textContaining(RegExp(r'^0:02 / ')));
 
-      // a box on the picture: Box, Box again to change one's mind, then draw one for real
-      await tester.tap(box);
-      await waitFor(tester, find.text('Draw a box on the picture'));
-      await tester.tap(box);
-      await waitGone(tester, find.text('Draw a box on the picture'));
-      await tester.tap(box);
-      await waitFor(tester, find.text('Draw a box on the picture'));
-      final picture = tester.getRect(filmPicture);
-      await tester.dragFrom(
-        picture.topLeft + Offset(picture.width * .3, picture.height * .3),
-        Offset(picture.width * .3, picture.height * .4),
-      );
-      await waitFor(tester, bubble);
-      expect(find.text('0:02 · on this box'), findsOneWidget);
-      await tester.enterText(
-        find.byKey(const ValueKey('editor-words')),
-        'Mobile e2e: soften this corner',
-      );
-      await tester.tap(find.byKey(const ValueKey('editor-send')));
-      await waitGone(tester, bubble);
-      // the agent answers in the conversation; the note is kept with the film, a pin at its moment
-      await openConversation(tester);
-      await waitFor(
-        tester,
-        find.text(reply),
-        timeout: const Duration(minutes: 2),
-      );
-      await backToFilm(tester);
-      final pin = find.byKey(const ValueKey('editor-pin-0'));
-      await waitFor(tester, pin);
-      await tester.tap(pin);
-      final kept = find.byKey(const ValueKey('editor-note'));
-      await waitFor(tester, kept);
-      expect(
-        find.descendant(
-          of: kept,
-          matching: find.text('Mobile e2e: soften this corner'),
-        ),
-        findsOneWidget,
-      );
-      await tester.tap(
-        find.descendant(of: kept, matching: find.byIcon(Icons.close_rounded)),
-      );
-      await settle(tester);
+    // Note: a bubble for the moment the film is at; closing it leaves things as they were
+    await press(find.byKey(const ValueKey('editor-note-tool')));
+    await waitFor(tester, bubble);
+    expect(find.text('At 0:02'), findsOneWidget);
+    await tester.tap(
+      find.descendant(of: bubble, matching: find.byIcon(Icons.close_rounded)),
+    );
+    await settle(tester);
+    expect(bubble, findsNothing);
 
-      // a range on the strip: a touch too short to be one opens nothing, a real one opens the bubble for it, and
-      // Range again leaves things as they were
-      await tester.tap(range);
-      await waitFor(tester, find.text('Drag across the strip'));
-      await tester.dragFrom(along(.3), const Offset(24, 0));
-      await settle(tester);
-      expect(bubble, findsNothing);
-      await tester.dragFrom(along(.1), Offset(along(.6).dx - along(.1).dx, 0));
-      await waitFor(tester, bubble);
-      expect(find.textContaining(RegExp(r'^0:\d\d–0:\d\d$')), findsOneWidget);
-      await tester.tap(
-        find.descendant(of: bubble, matching: find.byIcon(Icons.close_rounded)),
-      );
-      await settle(tester);
-      expect(bubble, findsNothing);
-      await tester.tap(range);
-      await settle(tester);
-      await tester.tap(range);
-      await waitGone(tester, find.text('Drag across the strip'));
-      expect(filmPicture, findsOneWidget); // still on the film
+    // a box on the picture: Box, Box again to change one's mind, then draw one for real
+    await press(box);
+    await waitFor(tester, find.text('Draw a box on the picture'));
+    await press(box);
+    await waitGone(tester, find.text('Draw a box on the picture'));
+    await press(box);
+    await waitFor(tester, find.text('Draw a box on the picture'));
+    final picture = tester.getRect(filmPicture);
+    await tester.dragFrom(
+      picture.topLeft + Offset(picture.width * .3, picture.height * .3),
+      Offset(picture.width * .3, picture.height * .4),
+    );
+    await waitFor(tester, bubble);
+    expect(find.text('0:02 · on this box'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('editor-words')),
+      'Mobile e2e: soften this corner',
+    );
+    await tester.tap(find.byKey(const ValueKey('editor-send')));
+    await waitGone(tester, bubble);
+    // the agent answers in the conversation; the note is kept with the film, a pin at its moment
+    await openConversation(tester);
+    await waitFor(
+      tester,
+      find.text(reply),
+      timeout: const Duration(minutes: 2),
+    );
+    await backToFilm(tester);
+    final pin = find.byKey(const ValueKey('editor-pin-0'));
+    await waitFor(tester, pin);
+    await tester.tap(pin);
+    final kept = find.byKey(const ValueKey('editor-note'));
+    await waitFor(tester, kept);
+    expect(
+      find.descendant(
+        of: kept,
+        matching: find.text('Mobile e2e: soften this corner'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.descendant(of: kept, matching: find.byIcon(Icons.close_rounded)),
+    );
+    await settle(tester);
 
-      // Timeline & mix, from the project's menu
-      await projectMenu(tester, 'Timeline & mix');
-      await waitFor(tester, find.text('Audio mix'));
-      await closeSheet(tester);
-    },
-  );
+    // a range on the strip: a touch too short to be one opens nothing, a real one opens the bubble for it, and
+    // Range again leaves things as they were
+    await press(range);
+    await waitFor(tester, find.text('Drag across the strip'));
+    await tester.dragFrom(along(.3), const Offset(24, 0));
+    await settle(tester);
+    expect(bubble, findsNothing);
+    await tester.dragFrom(along(.1), Offset(along(.6).dx - along(.1).dx, 0));
+    await waitFor(tester, bubble);
+    expect(find.textContaining(RegExp(r'^0:\d\d–0:\d\d$')), findsOneWidget);
+    await tester.tap(
+      find.descendant(of: bubble, matching: find.byIcon(Icons.close_rounded)),
+    );
+    await settle(tester);
+    expect(bubble, findsNothing);
+    await press(range);
+    await settle(tester);
+    await press(range);
+    await waitGone(tester, find.text('Drag across the strip'));
+    expect(filmPicture, findsOneWidget); // still on the film
+
+    // Timeline & mix, from the project's menu
+    await projectMenu(tester, 'Timeline & mix');
+    await waitFor(tester, find.text('Audio mix'));
+    await closeSheet(tester);
+  });
 
   testWidgets(
     'on a wide screen, plays the film and points notes at moments, boxes and ranges',
