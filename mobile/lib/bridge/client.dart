@@ -1229,7 +1229,10 @@ class BridgeClient {
 
     at(0);
     try {
-      await cache.fill(key, () => _fetchWhole('/media', query, key, progress: at));
+      await cache.fill(
+        key,
+        () => _fetchWhole('/media', query, key, progress: at),
+      );
     } finally {
       at(null);
     }
@@ -1305,14 +1308,19 @@ class BridgeClient {
     }
   }
 
+  /// How long leaving waits on the computer to forget this phone.
+  Duration unpairWait = const Duration(seconds: 5);
+
   Future<void> disconnect() async {
     _generation++;
-    // Ask the desktop to forget this phone too; offline, it stays listed there until removed on the desktop.
+    // Ask the desktop to forget this phone too; offline, it stays listed there until removed on the desktop. All of it
+    // under one limit: a cloud worker whose lease was just given back is shutting down, and may take the connection
+    // without ever answering it, which would leave the person on Leave with nothing happening.
     try {
-      final request = await _request('POST', '/unpair');
-      await (await request.close()).drain<void>().timeout(
-        const Duration(seconds: 5),
-      );
+      await () async {
+        final request = await _request('POST', '/unpair');
+        await (await request.close()).drain<void>();
+      }().timeout(unpairWait);
     } catch (_) {}
     _http?.close(force: true);
     _http = null;
