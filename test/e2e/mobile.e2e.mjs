@@ -272,7 +272,9 @@ async function startCloudWorkers(count) {
     const start = () => {
       if (worker.stopped) return
       worker.starts++
-      worker.child = spawn(electronBinary, [root, '--worker', `--user-data-dir=${join(slot, 'profile')}`, ...(process.platform === 'linux' ? ['--password-store=basic'] : [])], {
+      // (--no-sandbox on Linux, as Playwright gives the desktop app it launches: a CI runner that blocks unprivileged user
+      // namespaces, like Ubuntu 24.04's, aborts Electron without it, and a worker that never starts never reports)
+      worker.child = spawn(electronBinary, [root, '--worker', `--user-data-dir=${join(slot, 'profile')}`, ...(process.platform === 'linux' ? ['--password-store=basic', '--no-sandbox'] : [])], {
         // no model key of its own, like a real cloud worker: the phone hands over its AgentShot credits
         env: { ...Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'MANUL_PROVIDER_SCRIPTED_KEY')), MANUL_WORKER: '1', MANUL_POOL_SECRET: poolSecret,
           MANUL_WORKER_ID: worker.id, MANUL_WORKER_NAME: `E2E Cloud ${n}`, MANUL_SHARED_ROOT: shared, MANUL_WORKER_SLOT: slot, MANUL_BRIDGE_PORT: String(47900 + n),
@@ -288,7 +290,13 @@ async function startCloudWorkers(count) {
     start()
     workers.push(worker)
   }
-  await until('the cloud workers to report themselves', () => workers.every(w => pool.workers.has(w.id)), 180_000)
+  try {
+    await until('the cloud workers to report themselves', () => workers.every(w => pool.workers.has(w.id)), 180_000)
+  } catch (e) {
+    // say why: what each worker printed, if it started at all
+    for (const w of workers) console.log(`cloud worker ${w.id}: started ${w.starts}x, reported: ${pool.workers.has(w.id)}\n${existsSync(w.log) ? readFileSync(w.log, 'utf8').split('\n').slice(-30).join('\n') : '(no log)'}`)
+    throw e
+  }
   return {
     shared, workers,
     projectsOf: user => join(shared, 'users', user, 'projects'),
