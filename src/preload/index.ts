@@ -122,6 +122,8 @@ const api = {
     run: (dir: string, req: { preset: 'original' | 'landscape' | 'vertical' | 'square'; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string }) =>
       ipcRenderer.invoke('export:run', dir, req) as Promise<{ file: string; srt?: string } | null>,
     reveal: (file: string) => ipcRenderer.invoke('export:reveal', file),
+    /** For another editor: a folder with the cut as FCPXML, Premiere XML and OTIO, and its files. */
+    editors: (dir: string) => ipcRenderer.invoke('export:editors', dir) as Promise<{ dir: string; files: string[]; notes: string[]; copied: number } | null>,
   },
   mix: {
     /** Where speech is on a version's timeline ('edit': the edit by hand). */

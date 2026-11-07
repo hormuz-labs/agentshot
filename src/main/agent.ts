@@ -85,6 +85,8 @@ export type Bridge = {
   setMix(dir: string, mix: { filmDb: number; music?: { src: string; db: number; duckDb: number } }): Promise<string>
   /** Copy a file, folder or .zip (e.g. a download) into media/ and add it to the project; a line per new file. */
   importFiles(dir: string, absPath: string): Promise<string[]>
+  /** The cut for Premiere / Resolve / Final Cut: a folder with FCPXML, Premiere XML, OTIO and the files it uses. */
+  exportForEditors(dir: string): Promise<{ dir: string; files: string[]; notes: string[] }>
   exportFilm(dir: string, req: { preset: 'original' | 'landscape' | 'vertical' | 'square'; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string }): Promise<{ file: string; srt?: string }>
   /** Start filming the tab the agent's bsk session drives (AgentShot's browser or the user's Chrome, per the setting). */
   startTake(dir: string, o: { session: string }): Promise<Recorder>
@@ -751,6 +753,15 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
         execute: async (args: Any, api: Any) => {
           const r = await bridge.exportFilm(proj(api).dir, { preset: args.preset, fit: args.fit, captions: args.captions, captionColor: args.caption_color })
           return text(`Exported ${r.file}${r.srt ? ` and ${r.srt}` : ''}.`)
+        },
+      }),
+      defineTool({
+        name: 'export_for_editor',
+        description: 'Hand the cut to another editor (Premiere Pro, DaVinci Resolve, Final Cut Pro, or anything that reads OpenTimelineIO): a folder in the user\'s Movies folder with the timeline as FCPXML, Premiere XML and .otio, and every file it uses. Cuts keep their source in and out points, so the editor can still trim them; motion clips and overlays go over as rendered files, music and voiceovers on their own tracks with their levels. Use when the user wants to finish, grade or pass on the edit elsewhere; it renders nothing.',
+        parameters: Type.Object({}),
+        execute: async (_args: Any, api: Any) => {
+          const r = await bridge.exportForEditors(proj(api).dir)
+          return text(`Exported for another editor to ${r.dir} (${r.files.map(f => f.split(/[\\/]/).pop()).join(', ')}, and Media/). Tell the user to open the .fcpxml in Final Cut or Resolve, or the Premiere .xml in Premiere.${r.notes.length ? ` Tell them what looks different: ${r.notes.join(' ')}` : ''}`)
         },
       }),
       defineTool({

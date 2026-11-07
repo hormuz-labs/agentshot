@@ -4,9 +4,10 @@ import { _electron as electron } from 'playwright-core'
 import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { bundledBinary, loadRecordedTranscript, recordedTranscriptEnv, speechFixture } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
@@ -59,6 +60,24 @@ try {
   const burned = frame(join(tmp, 'landscape.mp4')), plain = frame(join(tmp, 'no-captions.mp4'))
   assert.equal(burned.length, plain.length)
   assert.ok(burned.reduce((sum, value, i) => sum + Math.abs(value - plain[i]), 0) / burned.length > 1, 'burned captions change the lower picture')
+
+  // For another editor: a folder with the cut as FCPXML, Premiere XML and OTIO, and the footage it uses
+  const handoff = join(tmp, 'talk for editors')
+  await app.evaluate(({ dialog }, f) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }) }, handoff)
+  await win.getByRole('button', { name: 'Export', exact: true }).click()
+  const dialog = win.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Export for another editor' }).click()
+  await dialog.getByText('Open the .fcpxml in Final Cut or Resolve').waitFor({ timeout: 120000 })
+  if (process.env.E2E_SHOTS) await win.screenshot({ path: join(process.env.E2E_SHOTS, 'handoff.png') })
+  for (const f of ['talk.fcpxml', 'talk (Premiere).xml', 'talk.otio', 'How to open.txt', 'Media/talk.mp4']) assert.ok(existsSync(join(handoff, f)), f)
+  const fcpxml = readFileSync(join(handoff, 'talk.fcpxml'), 'utf8')
+  assert.match(fcpxml, /<asset-clip ref="m1" offset="0s" name="talk.mp4" start="0s" duration="5s"/)
+  // the media URL, read back as a path, is the copy in Media (compared as the system does: Windows ignores case, and
+  // its temp folder can be spelled with a short name such as RUNNER~1)
+  const src = /<media-rep [^>]*src="([^"]+)"/.exec(fcpxml)?.[1] ?? ''
+  const same = (a, b) => process.platform === 'win32' ? realpathSync.native(a).toLowerCase() === realpathSync.native(b).toLowerCase() : realpathSync(a) === realpathSync(b)
+  assert.ok(src.startsWith('file:///') && same(fileURLToPath(src), join(handoff, 'Media', 'talk.mp4')), `the FCPXML points at the copy in Media: ${src}`)
+  await dialog.locator('button:has(svg.lucide-x)').click()
   console.log('export e2e: ok')
 } finally {
   await app.close()

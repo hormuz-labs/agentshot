@@ -140,6 +140,8 @@ Deeper material, read when the step needs it:
   1080×1920 is normal for social. One finished version, not alternates (unless asked).
 - Default: H.264 (`libx264 -crf 18 -preset medium -pix_fmt yuv420p`), AAC 192 kb/s 48 kHz, `-movflags +faststart`.
   Sizes: 1920×1080 (16:9), 1080×1920 (9:16), 1080×1080 (1:1). Use `export_video` for these presets.
+- To finish, grade or pass on the edit in Premiere, Resolve or Final Cut, use `export_for_editor`: it hands over the
+  timeline with its footage, not a rendered file.
 
 ## 9. Check before proposing
 Run references/checks.md on the render (`analyze_video` on it is one pass): duration as planned, no black or frozen

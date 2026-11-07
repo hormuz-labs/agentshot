@@ -67,6 +67,7 @@ import * as Speakers from './speakers'
 import { duckEnvelope, mixArgs, mixCommands, regionsOnTimeline, type Mix } from '../shared/mix'
 import { spawn } from 'node:child_process'
 import { FFMPEG, FFPROBE, probe } from './media'
+import { exportForEditors } from './handoff'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
@@ -935,6 +936,17 @@ async function exportFilm(p: Project, req: ExportRequest, outAbs: string, by: 'u
   }, { project: p.dir, doneTitle: `Exported ${pathBasename(outAbs)}` }).then(r => { done(true); return r }, e => { done(false); throw e })
 }
 
+/** The cut for another editor (shared/handoff.ts) into the folder out: the edit by hand when it changed since the version
+ *  on screen, else that version's timeline. Nothing is rendered but motion clips that have no file yet. */
+async function handOff(p: Project, out: string) {
+  const v = p.versions.find(x => x.id === p.current)!
+  const tl = Projects.edited(p) ? p.timeline! : v.timeline || Projects.timelineOf(v.path, p.media[v.path])
+  return asJob('Exporting for another editor', 'render', async j => {
+    const speech = tl.mix?.music?.duckDb ? regionsOnTimeline(tl, await transcriptsFor(p, tl)) : undefined
+    return exportForEditors({ p, tl, out, ffprobe: FFPROBE, speech, bake: async id => { await bakeClip(p, id) }, progress: (s, d) => j.progress(s, d) })
+  }, { project: p.dir, doneTitle: 'Exported for another editor' })
+}
+
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`
 const describe = (a: Anchor) =>
   `@ ${fmt(a.t0)}${a.t1 != null ? `–${fmt(a.t1)}` : ''}${a.box ? `, box ${[a.box.x, a.box.y, a.box.w, a.box.h].map(n => n.toFixed(3)).join(',')}` : ''}` +
@@ -1254,6 +1266,14 @@ function wire() {
     return exportFilm(p, req, r.filePath, 'user', version)
   })
   ipcMain.handle('export:reveal', (_e, file: string) => shell.showItemInFolder(file))
+  // For another editor: the cut as FCPXML / Premiere XML / OTIO, with its files, in a folder the user names.
+  ipcMain.handle('export:editors', async (_e, dir: string) => {
+    if (workerClient.ownsProject(dir)) throw new Error('This project is on AgentShot Cloud. Exporting for another editor works for projects on this computer.')
+    const p = projectOf(dir)
+    const r = await dialog.showSaveDialog(win!, { title: 'Export for another editor', buttonLabel: 'Export', defaultPath: join(app.getPath('videos'), `${p.title} for editors`), properties: ['createDirectory', 'showOverwriteConfirmation'] })
+    if (r.canceled || !r.filePath) return null
+    return handOff(p, r.filePath.replace(/\.[^./\\]+$/, ''))
+  })
   ipcMain.handle('mix:speech', async (_e, dir: string, versionId?: string) => {
     const p = projectOf(dir)
     // 'edit': the edit by hand, playing from its pieces
@@ -1545,6 +1565,11 @@ const startup = app.whenReady().then(async () => {
           const suffix = { original: '', landscape: '-16x9', vertical: '-9x16', square: '-1x1' }[req.preset]
           const version = await renderEdit(p) // an edit not rendered yet becomes a version first
           return exportFilm(p, req, join(p.dir, 'exports', `${p.title}${suffix}.mp4`), 'agent', version)
+        },
+        async exportForEditors(dir) {
+          const p = projectOf(dir)
+          // next to the user's exports, not in the project: exports/ is listed as the project's files
+          return handOff(p, join(app.getPath('videos'), `${p.title.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'Film'} for editors`))
         },
         async setMix(dir, mix) {
           const p = projectOf(dir)
