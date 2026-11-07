@@ -4,10 +4,10 @@ import { _electron as electron } from 'playwright-core'
 import { dismissOnboarding } from './onboarding.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { bundledBinary, loadRecordedTranscript, recordedTranscriptEnv, speechFixture } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
@@ -72,7 +72,11 @@ try {
   for (const f of ['talk.fcpxml', 'talk (Premiere).xml', 'talk.otio', 'How to open.txt', 'Media/talk.mp4']) assert.ok(existsSync(join(handoff, f)), f)
   const fcpxml = readFileSync(join(handoff, 'talk.fcpxml'), 'utf8')
   assert.match(fcpxml, /<asset-clip ref="m1" offset="0s" name="talk.mp4" start="0s" duration="5s"/)
-  assert.ok(fcpxml.includes(`src="${pathToFileURL(join(handoff, 'Media', 'talk.mp4')).href}"`), 'the FCPXML points at the copy in Media')
+  // the media URL, read back as a path, is the copy in Media (compared as the system does: Windows ignores case, and
+  // its temp folder can be spelled with a short name such as RUNNER~1)
+  const src = /<media-rep [^>]*src="([^"]+)"/.exec(fcpxml)?.[1] ?? ''
+  const same = (a, b) => process.platform === 'win32' ? realpathSync.native(a).toLowerCase() === realpathSync.native(b).toLowerCase() : realpathSync(a) === realpathSync(b)
+  assert.ok(src.startsWith('file:///') && same(fileURLToPath(src), join(handoff, 'Media', 'talk.mp4')), `the FCPXML points at the copy in Media: ${src}`)
   await dialog.locator('button:has(svg.lucide-x)').click()
   console.log('export e2e: ok')
 } finally {
