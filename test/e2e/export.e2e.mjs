@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { bundledBinary, loadRecordedTranscript, recordedTranscriptEnv, speechFixture } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
@@ -71,7 +72,7 @@ try {
   for (const f of ['talk.fcpxml', 'talk (Premiere).xml', 'talk.otio', 'How to open.txt', 'Media/talk.mp4']) assert.ok(existsSync(join(handoff, f)), f)
   const fcpxml = readFileSync(join(handoff, 'talk.fcpxml'), 'utf8')
   assert.match(fcpxml, /<asset-clip ref="m1" offset="0s" name="talk.mp4" start="0s" duration="5s"/)
-  assert.ok(fcpxml.includes(encodeURI(join(handoff, 'Media', 'talk.mp4')).replace(/^/, 'file://')), 'the FCPXML points at the copy in Media')
+  assert.ok(fcpxml.includes(`src="${pathToFileURL(join(handoff, 'Media', 'talk.mp4')).href}"`), 'the FCPXML points at the copy in Media')
   await dialog.locator('button:has(svg.lucide-x)').click()
   console.log('export e2e: ok')
 } finally {
