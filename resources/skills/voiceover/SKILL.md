@@ -1,6 +1,7 @@
 ---
 name: voiceover
-description: Generated voiceover with generate_voice: narration for explainers, promos, tutorials and shorts, a line to fix a mistake, a read for a title card. Writing the script for the ear and to the picture's length, choosing a voice, timing it on the timeline, mixing it over music and the original sound. Read before generating any voice.
+description: >-
+  Generated voiceover with generate_voice: narration for explainers, promos, tutorials and shorts, a line to fix a mistake, a read for a title card. Writing the script for the ear and to the picture's length, choosing a voice, timing it on the timeline, mixing it over music and the original sound. Read before generating any voice.
 ---
 
 # Generated voiceover

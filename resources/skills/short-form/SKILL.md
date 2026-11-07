@@ -1,6 +1,7 @@
 ---
 name: short-form
-description: Vertical short videos for Instagram Reels, TikTok and YouTube Shorts, and cutting clips for them out of long videos (podcasts, streams, talks): picking clip-worthy moments, the hook in the first second, 9:16 reframing on the subject, word-by-word captions, pacing, loops, safe zones and export. Read before making any Reel, TikTok, Short or clip; video-editing comes first.
+description: >-
+  Vertical short videos for Instagram Reels, TikTok and YouTube Shorts, and cutting clips for them out of long videos (podcasts, streams, talks): picking clip-worthy moments, the hook in the first second, 9:16 reframing on the subject, word-by-word captions, pacing, loops, safe zones and export. Read before making any Reel, TikTok, Short or clip; video-editing comes first.
 ---
 
 # Short-form vertical video (Reels, TikTok, Shorts)

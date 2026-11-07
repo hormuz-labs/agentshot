@@ -1,6 +1,7 @@
 ---
 name: motion-design
-description: Making motion clips (title cards, lower thirds, kinetic text, charts, explainers, end cards) with HTML + GSAP that AgentShot renders frame-exact. Read before create_clip or editing a clip.
+description: >-
+  Making motion clips (title cards, lower thirds, kinetic text, charts, explainers, end cards) with HTML + GSAP that AgentShot renders frame-exact. Read before create_clip or editing a clip.
 ---
 
 # Motion design for AgentShot clips

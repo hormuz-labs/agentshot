@@ -1,6 +1,7 @@
 ---
 name: product-walkthrough
-description: Product walkthroughs and demos of a website or web app made from nothing - explore it with bsk, storyboard, film it in one take with walkthrough_record (real scrolling and typing), then compose_walkthrough voices each step, cuts idle time, zooms on actions and draws a cursor. Read before filming any product, site or web app; for an existing screen recording read demo-editor.
+description: >-
+  Product walkthroughs and demos of a website or web app made from nothing - explore it with bsk, storyboard, film it in one take with walkthrough_record (real scrolling and typing), then compose_walkthrough voices each step, cuts idle time, zooms on actions and draws a cursor. Read before filming any product, site or web app; for an existing screen recording read demo-editor.
 ---
 
 # Product walkthrough

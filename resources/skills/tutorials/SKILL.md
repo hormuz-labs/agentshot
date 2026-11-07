@@ -1,6 +1,7 @@
 ---
 name: tutorials
-description: Screen recordings, software demos, product walkthroughs, courses and how-to videos: cutting waiting and mistakes, speeding up typing and loading, zooming into where the action is, keeping text readable, callouts, the webcam overlay, voice, chapters. Read before editing any screen recording or tutorial; video-editing comes first.
+description: >-
+  Screen recordings, software demos, product walkthroughs, courses and how-to videos: cutting waiting and mistakes, speeding up typing and loading, zooming into where the action is, keeping text readable, callouts, the webcam overlay, voice, chapters. Read before editing any screen recording or tutorial; video-editing comes first.
 ---
 
 # Tutorials, demos and screen recordings

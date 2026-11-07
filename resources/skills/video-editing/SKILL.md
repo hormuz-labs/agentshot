@@ -1,6 +1,7 @@
 ---
 name: video-editing
-description: How to edit any video well, step by step: measuring the footage first, structure and the opening seconds, choosing and ordering shots, continuity, pacing, cutting picture to music on the beat, sound and loudness, colour, stabilising, text, export and checking a render. Read before any edit beyond a single trim; talking-head, motion-design and music-generation add to it.
+description: >-
+  How to edit any video well, step by step: measuring the footage first, structure and the opening seconds, choosing and ordering shots, continuity, pacing, cutting picture to music on the beat, sound and loudness, colour, stabilising, text, export and checking a render. Read before any edit beyond a single trim; talking-head, motion-design and music-generation add to it.
 ---
 
 # Editing a video well

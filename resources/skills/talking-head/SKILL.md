@@ -1,6 +1,7 @@
 ---
 name: talking-head
-description: Videos carried by speech: YouTube videos, vlogs, lessons, podcasts, interviews, testimonials, webinars and talks. Cutting fillers, pauses, false starts and repeats from the transcript; tight but natural pacing; structure (hook, chapters); hiding jump cuts with punch-ins and b-roll; several speakers; voice sound; lower thirds and chapters. Read before cutting speech; video-editing comes first.
+description: >-
+  Videos carried by speech: YouTube videos, vlogs, lessons, podcasts, interviews, testimonials, webinars and talks. Cutting fillers, pauses, false starts and repeats from the transcript; tight but natural pacing; structure (hook, chapters); hiding jump cuts with punch-ins and b-roll; several speakers; voice sound; lower thirds and chapters. Read before cutting speech; video-editing comes first.
 ---
 
 # Speech-led videos
