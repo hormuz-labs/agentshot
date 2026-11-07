@@ -21,7 +21,7 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{title}</title>
   <meta name="description" content={description} />
-  <meta name="theme-color" content="#0b0b0a" />
+  <meta name="theme-color" content="#0d0c11" />
   {noindex && <meta name="robots" content="noindex" />}
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png" />
@@ -38,6 +38,11 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
   <script is:inline>(() => {
     const u = navigator.userAgent, phone = /iPhone|iPad|Android/.test(u) || (/Mac/.test(u) && navigator.maxTouchPoints > 1)
     document.documentElement.dataset.os = phone ? 'phone' : /Mac/.test(u) ? 'mac' : /Win/.test(u) ? 'win' : /Linux|X11/.test(u) ? 'linux' : 'any'
+    // entrances wait for the motion script; if it hasn't run in 4 s (blocked, offline), show everything as it is
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.documentElement.classList.add('motion')
+      setTimeout(() => { if (!window.__motion) document.documentElement.classList.remove('motion') }, 4000)
+    }
   })()</script>
   <slot name="head" />
 </head>
@@ -123,6 +128,7 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
         queued = false
         if (Math.abs(scrollY - last) < 6) return
         top.classList.toggle('away', scrollY > last && scrollY > 120 && !top.matches(':focus-within'))
+        top.classList.toggle('scrolled', scrollY > 20)
         last = scrollY
       })
     }, { passive: true })
@@ -132,5 +138,6 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
     if (os === 'phone' && hero) new IntersectionObserver(([e]) => (dock.hidden = e.isIntersecting || e.boundingClientRect.top > 0)).observe(hero)
     else if (os === 'phone') dock.hidden = false
   </script>
+  <script>import '../scripts/motion'</script>
 </body>
 </html>

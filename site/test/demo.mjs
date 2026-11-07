@@ -43,7 +43,7 @@ for (const [name, vp] of [['desktop', { width: 1440, height: 900 }], ['phone', {
   await page.waitForSelector('#decide:not([hidden])', { timeout: 15000 })
   await page.waitForTimeout(600)
   await page.screenshot({ path: `${out}/${name}-6-cinema.png` })
-  await page.screenshot({ path: `${out}/${name}-full.png`, fullPage: true })
+  await page.screenshot({ path: `${out}/${name}-full.png`, fullPage: true, timeout: 120000 })
   await page.close()
 }
 await browser.close()
