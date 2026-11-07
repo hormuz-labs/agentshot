@@ -197,6 +197,31 @@ try {
     assert.equal(requests.at(-1).text, prompt)
     assert.deepEqual(requests.at(-1).model, created.model, `${kind}'s first request sees the chosen model`)
   }
+
+  // The job cards: a video job asks for the video and starts with its sentence; the demo starts the sentence and waits
+  // for the app's link.
+  await win.getByRole('button', { name: 'New project', exact: true }).click()
+  await win.locator('[data-job="shorts"]').waitFor()
+  if (process.env.E2E_SHOTS) await win.screenshot({ path: join(process.env.E2E_SHOTS, 'jobs.png') })
+  await win.locator('[data-job="demo"]').click()
+  assert.equal(await win.locator('[data-tour="start-prompt"]').inputValue(), 'A product walkthrough of ')
+  await win.locator('[data-walkthrough]').waitFor()
+  await win.locator('[data-tour="start-prompt"]').fill('')
+  await app.evaluate(({ ipcMain }, files) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => files) }, [join(tmp, 'film.mp4')])
+  await win.locator('[data-job="shorts"]').click()
+  await win.waitForFunction(() => !document.querySelector('[data-tour="start-prompt"]'))
+  const shortsDir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(shortsDir, 'project.json'), 'utf8')).files), ['media/film.mp4'], 'the chosen video is imported')
+  await win.locator('[data-tour="composer"]:visible').waitFor()
+  const jobRequest = (await app.evaluate(() => globalThis.__sent)).at(-1)
+  assert.match(jobRequest.text, /vertical Short \(9:16\) with word-by-word captions/)
+  assert.deepEqual(jobRequest.files, ['media/film.mp4'], 'the job sends its video with the request')
+  await app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => []) })
+  await win.getByRole('button', { name: 'New project', exact: true }).click()
+  const before = (await app.evaluate(() => globalThis.__sent)).length
+  await win.locator('[data-job="cleanup"]').click()
+  await win.locator('[data-tour="start-prompt"]').waitFor()
+  assert.equal((await app.evaluate(() => globalThis.__sent)).length, before, 'cancelling the picker starts nothing')
   await win.getByRole('button', { name: 'New project', exact: true }).click()
   await app.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('agent:models')
