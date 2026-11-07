@@ -99,6 +99,7 @@ The agent is durable: it runs on a pi-durable harness backed by SQLite, so a con
 | “music under it, quieter when I talk” | the mix ducks under speech, and you hear it live before anything renders |
 | “sync the second camera” | audio cross-correlation (GCC-PHAT) with clock-drift fitting |
 | “captions are always yellow” | memory: said once, every later project knows |
+| “send this to Premiere” | the cut as FCPXML, Premiere XML and OpenTimelineIO, with its footage: every cut keeps its in and out points |
 | “put @logo.png bottom right” | <kbd>@</kbd> picks any file, kept version or title by name |
 
 It also knows how different films are cut: talking heads, tutorials, Shorts and Reels, promos, montages, motion graphics, cleanup and repair. These skills are plain files you can read and change.
@@ -221,7 +222,7 @@ Install AgentShot from https://github.com/hormuz-labs/agentshot. On macOS run `b
 
 Renders use your graphics chip when they can: Apple's on a Mac, NVIDIA, Intel or AMD on Windows, NVIDIA on Linux. Everything else falls back to the CPU. **Got a GPU we don't cover?** [Adding one is a small change](CONTRIBUTING.md#gpu-encoders), and we'd love the help.
 
-To run it from source, see **[CONTRIBUTING.md](CONTRIBUTING.md)**. For how the services are hosted, see [workspace and hosting](docs/workspace.md). For what's next (handing the cut to Premiere, Resolve or Final Cut, publishing to YouTube, notes from clients on the frame), see the **[roadmap](ROADMAP.md)**.
+To run it from source, see **[CONTRIBUTING.md](CONTRIBUTING.md)**. For how the services are hosted, see [workspace and hosting](docs/workspace.md). For what's next (publishing to YouTube, notes from clients on the frame, generated shots), see the **[roadmap](ROADMAP.md)**.
 
 ---
 
