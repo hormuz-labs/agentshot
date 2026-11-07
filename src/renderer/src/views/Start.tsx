@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { ArrowUp, Clapperboard, KeyRound, Loader2, Paperclip, X } from 'lucide-react'
+import { ArrowUp, Captions, Clapperboard, KeyRound, Loader2, MonitorPlay, Paperclip, Scissors, Smartphone, X, type LucideIcon } from 'lucide-react'
 import { extOf, kindByName } from '../../../shared/file-kinds'
 import { FileIcon } from './FilesPanel'
 import { JobsTray } from '@/components/JobsTray'
@@ -13,7 +13,16 @@ import { wantsWalkthrough } from '../../../shared/walkthrough'
 import { MAC, cn } from '@/lib/utils'
 import type { GalleryExample, Project } from '../../../shared/types'
 
-const IDEAS = ['Cut the ums and long pauses', 'Make a 60-second vertical for Shorts', 'Add a fade in and fade out', 'Trim to the best 30 seconds', 'Make a product walkthrough of my web app']
+/** What people come to make, one click each. A video job asks for the video and starts; the demo needs a link, so it
+ *  starts the sentence and leaves the cursor where the link goes. Each prompt is what the user would have typed, sent
+ *  as their first message, so the conversation shows what was asked. */
+type Job = { id: string; title: string; does: string; needs: 'video' | 'url'; prompt: string; icon: LucideIcon }
+const JOBS: Job[] = [
+  { id: 'demo', title: 'Product demo', does: 'Films your web app in your Chrome, cuts it and narrates it', needs: 'url', prompt: 'A product walkthrough of ', icon: MonitorPlay },
+  { id: 'shorts', title: 'Shorts from a long video', does: 'Finds the best moments, vertical, with captions', needs: 'video', prompt: 'Find the 3 best moments and make each one a vertical Short (9:16) with word-by-word captions and a strong first second.', icon: Smartphone },
+  { id: 'cleanup', title: 'Clean up a talking head', does: 'Cuts the ums, false starts and long pauses', needs: 'video', prompt: 'Cut the ums, false starts and long pauses, keep it natural, and even out the sound.', icon: Scissors },
+  { id: 'captions', title: 'Captions', does: 'Word by word, timed to the speech', needs: 'video', prompt: 'Add word-by-word captions timed to the speech, easy to read on a phone.', icon: Captions },
+]
 const message = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
 /** A motion or walkthrough project's name: the first words of what the user asked for (a link as its site), else the
@@ -83,6 +92,33 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
       }
       const p = await window.agentshot.project.create(files, model)
       onOpen(p, prompt.trim() || undefined, Object.keys(p.files || {}))
+    } catch (e) {
+      setError(message(e))
+      setBusy(false)
+    }
+  }
+  // a video job: the footage already in the box, else ask for it; then start at once with the job's sentence
+  const startJob = async (job: Job) => {
+    if (busy) return
+    if (job.needs === 'url') {
+      setPrompt(job.prompt)
+      setError(null)
+      setTimeout(() => { const el = input.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) } }, 0)
+      return
+    }
+    let chosen = files
+    if (!footage) {
+      try { chosen = [...new Set([...files, ...(await window.agentshot.project.pick())])] } catch (e) { setError(message(e)); return }
+      if (chosen.length === files.length) return
+      if (!chosen.some(f => kindByName(f) === 'video')) { setFiles(chosen); setError(`${job.title} needs a video. Choose one to start.`); return }
+    }
+    setFiles(chosen)
+    setPrompt(job.prompt)
+    setBusy(true)
+    setError(null)
+    try {
+      const p = await window.agentshot.project.create(chosen, model)
+      onOpen(p, job.prompt, Object.keys(p.files || {}))
     } catch (e) {
       setError(message(e))
       setBusy(false)
@@ -203,9 +239,17 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
           )}
 
           {!example && !reference && (
-            <div data-tour="ideas" className="mt-5 flex flex-wrap justify-center gap-2">
-              {IDEAS.map(i => (
-                <button key={i} onClick={() => { setPrompt(i); input.current?.focus() }} className="rounded-lg border border-line bg-panel px-3 py-1.5 text-[12.5px] text-dim hover:border-line-strong hover:bg-surface hover:text-fg">{i}</button>
+            <div data-tour="ideas" className="mt-5 grid w-full grid-cols-2 gap-2 max-[560px]:grid-cols-1">
+              {JOBS.map(j => (
+                <button key={j.id} data-job={j.id} disabled={busy} onClick={() => startJob(j)}
+                  className="group flex items-start gap-3 rounded-xl border border-line bg-panel p-3 text-left transition-colors hover:border-amber/60 hover:bg-surface disabled:opacity-50">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-soft text-amber"><j.icon className="size-[18px]" /></span>
+                  <span className="min-w-0">
+                    <span className="block text-[13.5px] font-medium text-fg">{j.title}</span>
+                    <span className="block text-[12px] leading-snug text-dim">{j.does}</span>
+                    <span className="mt-1 block text-[11.5px] text-faint group-hover:text-amber">{j.needs === 'url' ? 'Paste your app’s link' : footage ? 'Start with this video' : 'Choose a video'}</span>
+                  </span>
+                </button>
               ))}
             </div>
           )}
