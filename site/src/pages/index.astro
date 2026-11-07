@@ -6,6 +6,7 @@ import Pricing from '../components/Pricing.astro'
 import motion from '../data/motion.json'
 import { OFFERS, PRICING_FAQS, PLAN_SUMMARY, STARTER_CREDITS, fmt } from '../data/plans'
 import { GH as gh, version, MAC_ARM, MAC_INTEL, WINDOWS, DEB, DEB_ARM, APPIMAGE, APPIMAGE_ARM, BREW, APT, AGENT_PROMPT } from '../data/download'
+import { clips, diamond, note, play, reel, spark, spark4, wave } from '../lib/shapes'
 
 const title = 'AgentShot: the video editor you talk to. Free and open source.'
 const description = 'Give notes, get cuts. Say what you want, point at the frame, and keep the cut or send it back. AgentShot runs on your computer, for macOS, Windows and Linux. Free with your own model key.'
@@ -82,13 +83,14 @@ const log = [
   { k: 'Sound', trace: svg(soundTrace()), found: '−19 LUFS, 14 pauses over half a second', say: 'tighten the pauses' },
 ]
 
-// what you say, what AgentShot does, what comes out. Each caption says what the clip really is.
+// the jobs people come for: what you say, what AgentShot does, what comes out. Each caption says what the clip really is.
+// Product demos first: filming a product in your own browser is what nothing else does.
 const ex = (id: string) => motion.find(m => m.id === id)!
 const films = [
-  { k: 'Your footage', prompt: 'Make it cinematic, and put his name on screen.', steps: ['Measured the clip: one shot, one face, followed in every frame', 'Graded it and set it in a widescreen letterbox', 'Set his name in real type you can still drag and retype', 'Came back as a before and after, to keep or send back'], video: '/demo/cinema.mp4', poster: '/demo/cinema.webp', shape: 'wide', cap: 'The after, rendered by the engine AgentShot drives' },
-  { k: 'A vertical Short', prompt: 'Make it a Short with a caption.', steps: ['Found the subject and tracked him through the shot', 'Reframed 16:9 to 9:16 so he never leaves the frame', 'Timed the caption to the moment and burned it in', 'Exported 1080 × 1920 for Shorts, Reels and TikTok'], video: '/demo/short.mp4', poster: '/demo/short.webp', shape: 'tall', cap: 'The after, rendered by the engine AgentShot drives' },
-  { k: 'Your product’s URL', prompt: 'A walkthrough of app.example.com: sign up and make a first project.', steps: ['Tried the product first, without filming', 'Showed a storyboard: each step and what the voice will say', 'Filmed one take in your Chrome, where you’re already signed in', 'Cut the waiting, zoomed into each click, held each step for its line'], video: `/motion/robj3d3-b18fad.mp4`, poster: '/motion/robj3d3-b18fad.jpg', shape: 'wide', cap: `A product film from the gallery, by @${ex('robj3d3-b18fad').handle}` },
-  { k: 'Nothing at all', prompt: `Use the “${ex('tdinh-me-815acb').title}” example, but reveal @logo.png in our colours.`, steps: ['Read the example’s prompt and studied the film', 'Asked for what it needed: the logo, two colours, a track', 'Showed a storyboard before making a frame', 'Built real motion graphics, so a note changes one scene, not all of them'], video: `/motion/tdinh-me-815acb.mp4`, poster: '/motion/tdinh-me-815acb.jpg', shape: 'wide', cap: `The example it starts from, by @${ex('tdinh-me-815acb').handle}` },
+  { job: 'Product demos', tone: 'sky', from: 'From a URL', k: 'Your product’s URL', prompt: 'A walkthrough of app.example.com: sign up and make a first project.', steps: ['Tried the product first, without filming', 'Showed a storyboard: each step and what the voice will say', 'Filmed one take in your Chrome, where you’re already signed in', 'Cut the waiting, zoomed into each click, held each step for its line'], video: `/motion/robj3d3-b18fad.mp4`, poster: '/motion/robj3d3-b18fad.jpg', shape: 'wide', cap: `A product film from the gallery, by @${ex('robj3d3-b18fad').handle}` },
+  { job: 'Shorts and Reels', tone: 'pink', from: 'From any video', k: 'A vertical Short', prompt: 'Make it a Short with a caption.', steps: ['Found the subject and tracked him through the shot', 'Reframed 16:9 to 9:16 so he never leaves the frame', 'Timed the caption to the moment and burned it in', 'Exported 1080 × 1920 for Shorts, Reels and TikTok'], video: '/demo/short.mp4', poster: '/demo/short.webp', shape: 'tall', cap: 'The after, rendered by the engine AgentShot drives' },
+  { job: 'Your footage, polished', tone: 'coral', from: 'From your footage', k: 'Your footage', prompt: 'Make it cinematic, and put his name on screen.', steps: ['Measured the clip: one shot, one face, followed in every frame', 'Graded it and set it in a widescreen letterbox', 'Set his name in real type you can still drag and retype', 'Came back as a before and after, to keep or send back'], video: '/demo/cinema.mp4', poster: '/demo/cinema.webp', shape: 'wide', cap: 'The after, rendered by the engine AgentShot drives' },
+  { job: 'Motion graphics', tone: 'violet', from: 'From nothing at all', k: 'Nothing at all', prompt: `Use the “${ex('tdinh-me-815acb').title}” example, but reveal @logo.png in our colours.`, steps: ['Read the example’s prompt and studied the film', 'Asked for what it needed: the logo, two colours, a track', 'Showed a storyboard before making a frame', 'Built real motion graphics, so a note changes one scene, not all of them'], video: `/motion/tdinh-me-815acb.mp4`, poster: '/motion/tdinh-me-815acb.jpg', shape: 'wide', cap: `The example it starts from, by @${ex('tdinh-me-815acb').handle}` },
 ]
 
 const notes = [
@@ -131,38 +133,113 @@ const faqs = [
   </Fragment>
 
   <main>
-    <section class="hero wrap" aria-label="AgentShot">
-      <h1>Give notes. <mark>Get cuts.</mark></h1>
-      <div class="hero-side">
-        <p class="lede">The video editor you talk to. Say what you want, point at the frame, and keep the cut or send it back.</p>
-        <div class="hero-cta" data-hero-cta>
-          <Cta />
+    <section class="hero" aria-label="AgentShot" data-hero>
+      <div class="wrap hero-in">
+        <Fragment set:html={reel({ cls: 'hs hs-reel', depth: 0.5 })} />
+        <Fragment set:html={clips({ cls: 'hs hs-clips', depth: 0.35 })} />
+        <Fragment set:html={play({ cls: 'hs hs-play', depth: 0.6 })} />
+        <Fragment set:html={spark({ cls: 'hs hs-spark', depth: 0.8 })} />
+        <Fragment set:html={spark4({ cls: 'hs hs-spark4', depth: 0.45, ramp: 'cool' })} />
+        <div class="hero-title">
+          <span class="tag">the open-source video editor you talk to</span>
+          <h1>Give notes. <span class="cuts">Get cuts.</span></h1>
+          <span class="hero-sticker"><span class="sticker sticker-pink drag">no timeline required</span></span>
         </div>
-        <p class="reassure for-computer">Free and open source. Your footage stays on your computer.</p>
-        <p class="reassure for-phone">It runs on Mac, Windows and Linux, so send yourself the link. Free and open source.</p>
-        <button class="film-link" type="button" data-film>Watch the film <span class="mono dur">1:28</span></button>
+        <div class="hero-side">
+          <p class="lede">Say what you want, point at the frame, and keep the cut or send it back. It edits on your own computer.</p>
+          <div class="hero-cta magnetic" data-hero-cta>
+            <Cta />
+          </div>
+          <p class="reassure for-computer">Free and open source. Your footage stays on your computer.</p>
+          <p class="reassure for-phone">It runs on Mac, Windows and Linux, so send yourself the link. Free and open source.</p>
+          <button class="film-link" type="button" data-film><span class="pl" aria-hidden="true"></span>Watch the film <span class="mono dur">1:28</span></button>
+        </div>
       </div>
-      <div class="stage" id="try">
+      <div class="wrap stage" id="try">
         <Demo />
         <p class="credit">Try it. Each after is a real render of one clip. Timofey the Pallas’s cat, Moscow Zoo, CC BY 4.0.</p>
       </div>
     </section>
 
     <ul class="facts wrap" role="list">
-      <li><b>$0</b><span>with your own Claude, Gemini or GPT key</span></li>
-      <li><b>0 uploads</b><span>editing and transcription run on your computer</span></li>
-      <li><b>Every version</b><span>kept. Nothing is ever overwritten</span></li>
-      <li><b>All the code</b><span>on GitHub under the GPL</span></li>
+      <li data-reveal style="--c: var(--yellow)"><b>$0</b><span>with your own Claude, Gemini or GPT key</span></li>
+      <li data-reveal style="--c: var(--mint)"><b>0 uploads</b><span>editing and transcription run on your computer</span></li>
+      <li data-reveal style="--c: var(--pink)"><b>Every version</b><span>kept. Nothing is ever overwritten</span></li>
+      <li data-reveal style="--c: var(--sky)"><b>All the code</b><span>on GitHub under the GPL</span></li>
     </ul>
 
-    <section class="sec wrap" id="notes">
+    <section class="sec wrap statement" aria-label="Why AgentShot">
+      <Fragment set:html={wave({ cls: 'st-wave', depth: 0.4 })} />
+      <Fragment set:html={diamond({ cls: 'st-diamond', depth: 0.7 })} />
+      <span class="tag">why AgentShot</span>
+      <p data-fill>Editing a video is thousands of small decisions made with a mouse. AgentShot keeps the decisions and drops the mouse work. You watch your film, say what should change, and it changes it.</p>
+    </section>
+
+    <section class="slide" data-slide aria-label="What people make with it">
+      <div class="slide-row" data-track>
+        <span class="sw">Product demos</span><Fragment set:html={spark({ cls: 'slide-shape', depth: 0 })} />
+        <span class="sw">Shorts</span><Fragment set:html={play({ cls: 'slide-shape', depth: 0, ramp: 'cool' })} />
+        <span class="sw">Clean takes</span><Fragment set:html={spark4({ cls: 'slide-shape', depth: 0 })} />
+        <span class="sw">Captions</span><Fragment set:html={note({ cls: 'slide-shape', depth: 0, ramp: 'hot' })} />
+        <span class="sw">Motion graphics</span>
+      </div>
+      <div class="slide-row outline" data-track2 aria-hidden="true">
+        <span>cut the ums</span><i>✦</i><span>blur this</span><i>✦</i><span>make it vertical</span><i>✦</i><span>music under it</span><i>✦</i><span>name on screen</span><i>✦</i><span>tighter</span>
+      </div>
+    </section>
+
+    <section class="sec wrap" id="make">
       <div class="sec-head">
-        <h2>Talk to it like an editor in the room.</h2>
+        <span class="tag">what it makes</span>
+        <h2>Pick the job. <span class="grad">Say it your way.</span></h2>
+        <p>Bring footage, a URL, or nothing at all. Each of these started as one sentence.</p>
+      </div>
+      <div class="jobs">
+        {films.map((f, i) => (
+          <article class={`job job-${f.tone}`} data-job style={`--i: ${i}`}>
+            <div class="job-in">
+              <div class="job-copy">
+                <span class={`sticker sticker-${f.tone === 'sky' ? 'mint' : f.tone}`}>{f.from}</span>
+                <h3>{f.job}</h3>
+                <q>{f.prompt}</q>
+                <ol>{f.steps.map(st => <li>{st}</li>)}</ol>
+              </div>
+              <figure class={f.shape}>
+                <video data-src={f.video} poster={f.poster} muted loop playsinline preload="none" aria-label={`Result: ${f.job}`}></video>
+                <figcaption>{f.cap}</figcaption>
+              </figure>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <div class="gallery-head" id="examples">
+        <h3><span class="big" data-count="233">233</span> examples ship in the app, each with the prompt that made it.</h3>
+        <p>Pick one, say what yours is about, and AgentShot makes it the same way. Click to see the prompt.</p>
+      </div>
+      <ul class="reels" role="list">
+        {motion.map((m, i) => (
+          <li data-reveal>
+            <button type="button" data-ex={i} aria-label={`Play “${m.title}” by @${m.handle}`}>
+              <video data-src={`/motion/${m.id}.mp4`} poster={`/motion/${m.id}.jpg`} muted loop playsinline preload="none" width="768" height="432" aria-hidden="true"></video>
+              <span><span>@{m.handle}</span><span class="mono">{clock(m.duration)}</span></span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p class="fine">Made with Claude by the people credited, collected by <a href="https://prompt-motion.com">prompt-motion.com</a>.</p>
+    </section>
+
+    <section class="sec wrap" id="notes">
+      <Fragment set:html={note({ cls: 'notes-shape', depth: 0.5 })} />
+      <div class="sec-head">
+        <span class="tag">how you edit</span>
+        <h2>Talk to it like an editor <span class="grad">in the room.</span></h2>
         <p>Every word you recorded is timed, so a note lands exactly where you meant it. A real session reads like this.</p>
       </div>
-      <ol class="session" role="list">
-        {notes.map(n => (
-          <li>
+      <ol class="session" role="list" data-chat>
+        {notes.map((n, i) => (
+          <li style={`--c: var(--${['pink', 'sky', 'yellow', 'mint', 'violet'][i % 5]})`}>
             <q>{n.you}</q>
             <p>{n.did}</p>
             <span class="mono">{n.at}</span>
@@ -170,8 +247,8 @@ const faqs = [
         ))}
       </ol>
       <div class="point">
-        <figure><img src="/shots/inline.webp" width="1600" height="955" loading="lazy" alt="AgentShot: a note boxed on the frame says “make the name bigger”, with the conversation on the left and the proposed cut, Before / After, Reject and Accept above the film" /></figure>
-        <div>
+        <figure data-reveal><img src="/shots/inline.webp" width="1600" height="955" loading="lazy" alt="AgentShot: a note boxed on the frame says “make the name bigger”, with the conversation on the left and the proposed cut, Before / After, Reject and Accept above the film" /></figure>
+        <div data-reveal>
           <h3>Point instead of describing.</h3>
           <dl>
             <div><dt><kbd>B</kbd></dt><dd>Box anything on the picture</dd></div>
@@ -183,46 +260,10 @@ const faqs = [
       </div>
     </section>
 
-    <section class="sec wrap" id="make">
-      <div class="sec-head">
-        <h2>Bring footage. Or a URL. Or nothing.</h2>
-      </div>
-      <div class="tabs" role="tablist" aria-label="What you start from">
-        {films.map((f, i) => <button role="tab" id={`ft-${i}`} aria-controls={`fp-${i}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1} data-ftab={i}>{f.k}</button>)}
-      </div>
-      {films.map((f, i) => (
-        <div class="film" role="tabpanel" id={`fp-${i}`} aria-labelledby={`ft-${i}`} hidden={i !== 0}>
-          <div class="film-copy">
-            <q>{f.prompt}</q>
-            <ol>{f.steps.map(st => <li>{st}</li>)}</ol>
-          </div>
-          <figure class={f.shape}>
-            <video data-src={f.video} poster={f.poster} muted loop playsinline preload="none" aria-label={`Result: ${f.k}`}></video>
-            <figcaption>{f.cap}</figcaption>
-          </figure>
-        </div>
-      ))}
-
-      <div class="gallery-head" id="examples">
-        <h3>233 examples ship in the app, each with the prompt that made it.</h3>
-        <p>Pick one, say what yours is about, and AgentShot makes it the same way. Click to see the prompt.</p>
-      </div>
-      <ul class="reels" role="list">
-        {motion.map((m, i) => (
-          <li>
-            <button type="button" data-ex={i} aria-label={`Play “${m.title}” by @${m.handle}`}>
-              <video data-src={`/motion/${m.id}.mp4`} poster={`/motion/${m.id}.jpg`} muted loop playsinline preload="none" width="768" height="432" aria-hidden="true"></video>
-              <span><span>@{m.handle}</span><span class="mono">{clock(m.duration)}</span></span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <p class="fine">Made with Claude by the people credited, collected by <a href="https://prompt-motion.com">prompt-motion.com</a>.</p>
-    </section>
-
     <section class="sec wrap" id="how">
       <div class="sec-head">
-        <h2>It reads your film before it touches it.</h2>
+        <span class="tag">how it works</span>
+        <h2>It reads your film <span class="grad">before it touches it.</span></h2>
         <p>A language model can’t watch video. So AgentShot measures your footage on your computer, and the model reads the result. That’s why “drop the second take” lands on the right syllable.</p>
       </div>
       <div class="tracks" role="table" aria-label="What AgentShot measures in a 6-minute interview, and what that lets you say">
@@ -231,8 +272,8 @@ const faqs = [
           <span role="columnheader">One 6-minute interview</span>
           <span role="columnheader">So you can say</span>
         </div>
-        {log.map(r => (
-          <div class="track" role="row">
+        {log.map((r, i) => (
+          <div class="track" role="row" style={`--c: var(--${['yellow', 'pink', 'sky', 'mint', 'violet', 'coral'][i]})`}>
             <span class="k" role="rowheader">{r.k}</span>
             <div role="cell"><span class="trace" set:html={r.trace} /><p class="mono">{r.found}</p></div>
             <q role="cell">{r.say}</q>
@@ -243,9 +284,10 @@ const faqs = [
 
     <section class="sec wrap" id="compare">
       <div class="sec-head">
-        <h2>Not a timeline to operate. Not a slot machine.</h2>
+        <span class="tag">compared</span>
+        <h2>Not a timeline to operate. <span class="grad">Not a slot machine.</span></h2>
       </div>
-      <div class="cmp" role="table" aria-label="AgentShot compared with timeline editors, video as code, and AI generators">
+      <div class="cmp" role="table" aria-label="AgentShot compared with timeline editors, video as code, and AI generators" data-reveal>
         <div class="row th" role="row"><span role="columnheader"></span><span role="columnheader">Timeline editors<small>Premiere, Final Cut, Resolve, CapCut</small></span><span role="columnheader">Video as code<small>HyperFrames, Remotion</small></span><span role="columnheader">AI generators<small>Runway, Sora, Veo</small></span><span role="columnheader" class="us">AgentShot</span></div>
         <div class="row" role="row"><span role="rowheader">You</span><span role="cell" data-h="Timeline editors">operate it, cut by cut</span><span role="cell" data-h="Video as code">describe it, read code</span><span role="cell" data-h="AI generators">prompt, hope, re-roll</span><span role="cell" data-h="AgentShot" class="us">say it, point at it</span></div>
         <div class="row" role="row"><span role="rowheader">You look at</span><span role="cell" data-h="Timeline editors">a timeline</span><span role="cell" data-h="Video as code">a terminal</span><span role="cell" data-h="AI generators">a prompt box</span><span role="cell" data-h="AgentShot" class="us">your film, before and after</span></div>
@@ -256,8 +298,10 @@ const faqs = [
     </section>
 
     <section class="sec wrap yours" id="yours">
-      <div>
-        <h2>Your footage stays yours.</h2>
+      <Fragment set:html={reel({ cls: 'yours-reel', depth: 0.4, ramp: 'cool' })} />
+      <div data-reveal>
+        <span class="tag">private by design</span>
+        <h2>Your footage <span class="grad">stays yours.</span></h2>
         <ul role="list">
           <li><b>No upload queue, no cloud project.</b> Editing, transcription and analysis run on your computer.</li>
           <li><b>The AI model sees text and still frames.</b> It never sees the video file.</li>
@@ -266,39 +310,41 @@ const faqs = [
         </ul>
       </div>
       <div class="phones">
-        <div class="phone-copy">
+        <div class="phone-copy" data-reveal>
           <h3>Direct it from your phone.</h3>
           <p>A remote for the editor on your computer. Mark a moment, box the picture, say the change, and keep it with your thumb. In Google Play testing now.</p>
         </div>
-        <img src="/phone/film.webp" width="415" height="801" loading="lazy" alt="The film full screen on the phone, with Note, Box, Range and Timeline down the right" />
-        <img src="/phone/conversation.webp" width="415" height="801" loading="lazy" alt="A project on the phone: the conversation, with the agent’s question as buttons" />
+        <img data-reveal src="/phone/film.webp" width="415" height="801" loading="lazy" alt="The film full screen on the phone, with Note, Box, Range and Timeline down the right" />
+        <img data-reveal src="/phone/conversation.webp" width="415" height="801" loading="lazy" alt="A project on the phone: the conversation, with the agent’s question as buttons" />
       </div>
     </section>
 
     <Pricing />
 
     <section class="sec wrap" id="get">
+      <Fragment set:html={clips({ cls: 'get-clips', depth: 0.4 })} />
       <div class="sec-head">
-        <h2>Install it. Give it a note.</h2>
+        <span class="tag">install</span>
+        <h2>Install it. <span class="grad">Give it a note.</span></h2>
         <p class="for-phone">AgentShot runs on a computer. Send yourself the link and open it there.</p>
         <p class="for-computer">Open it, sign in for {fmt(STARTER_CREDITS)} free credits or paste your own key, and drop in a video. A short guided start takes you to your first note.</p>
       </div>
       <div class="phone-get for-phone"><Cta /></div>
       <div class="oses">
-        <article data-os-col="mac">
+        <article data-os-col="mac" data-reveal style="--c: var(--pink)">
           <h3>macOS</h3>
           <p class="req">macOS 12+. Signed and notarized.</p>
           <a class="btn get" href={MAC_ARM}>Apple silicon .dmg</a>
           <div class="line"><code>{BREW}</code><button class="copy" data-copy={BREW}>Copy</button></div>
           <p class="more"><a href={MAC_INTEL}>Intel Mac .dmg</a></p>
         </article>
-        <article data-os-col="win">
+        <article data-os-col="win" data-reveal style="--c: var(--sky)">
           <h3>Windows</h3>
           <p class="req">Windows 10 (1903+) and 11, 64-bit.</p>
           <a class="btn get" href={WINDOWS}>Setup .exe</a>
           <p class="more">No Node, Python, FFmpeg or developer tools needed. It updates itself. If SmartScreen asks once: More info, then Run anyway.</p>
         </article>
-        <article data-os-col="linux">
+        <article data-os-col="linux" data-reveal style="--c: var(--mint)">
           <h3>Linux</h3>
           <p class="req">Debian, Ubuntu and AppImage.</p>
           <a class="btn get" href={DEB}>x64 .deb</a>
@@ -306,7 +352,7 @@ const faqs = [
           <p class="more"><a href={DEB_ARM}>ARM .deb</a> · <a href={APPIMAGE}>AppImage x64</a> · <a href={APPIMAGE_ARM}>AppImage ARM</a></p>
         </article>
       </div>
-      <div class="agent">
+      <div class="agent" data-reveal>
         <div>
           <h3>Or let your coding agent install it.</h3>
           <p>Paste this into Claude Code, Cursor or Codex.</p>
@@ -315,25 +361,31 @@ const faqs = [
       </div>
     </section>
 
-    <section class="sec wrap source" id="source">
-      <div>
-        <h2>Read the whole thing.</h2>
-        <p>The agent, the editor and its 12 craft skills are on GitHub under the GPL. Skills are plain files you can change. Point it at any OpenAI- or Anthropic-compatible endpoint, local servers included. If you like where it’s going, a star helps other people find it.</p>
+    <section class="sec wrap" id="source">
+      <div class="source" data-reveal>
+        <Fragment set:html={spark({ cls: 'source-spark', depth: 0.6 })} />
+        <div>
+          <h2>Read the whole thing.</h2>
+          <p>The agent, the editor and its 12 craft skills are on GitHub under the GPL. Skills are plain files you can change. Point it at any OpenAI- or Anthropic-compatible endpoint, local servers included. If you like where it’s going, a star helps other people find it.</p>
+        </div>
+        <a class="btn star magnetic" href={gh}>Star on GitHub</a>
       </div>
-      <a class="btn ghost" href={gh}>Star on GitHub</a>
     </section>
 
     <section class="sec wrap faq" id="faq">
+      <span class="tag">questions</span>
       <h2>Questions</h2>
       <div class="qs">{faqs.map(f => <details><summary>{f.q}</summary><p set:html={f.a} /></details>)}</div>
     </section>
 
     <section class="last">
-      <div class="last-film">
+      <div class="wrap last-film">
         <video id="cat" src="/timofey.mp4" poster="/timofey.webp" width="960" height="720" muted loop playsinline preload="none" aria-label="Timofey, a Pallas's cat, staring flatly at the camera"><track kind="captions" src="/captions/silent.vtt" srclang="en" label="No sound" /></video>
         <p class="caption"><mark>He’s waiting for your notes.</mark></p>
+        <Fragment set:html={play({ cls: 'last-play', depth: 0.5 })} />
+        <Fragment set:html={spark4({ cls: 'last-spark', depth: 0.7, ramp: 'cool' })} />
       </div>
-      <div class="last-cta"><Cta /></div>
+      <div class="last-cta magnetic"><Cta /></div>
     </section>
   </main>
 
@@ -357,133 +409,187 @@ const faqs = [
 </Base>
 
 <style>
-  /* the hero: the promise, the button, and the product itself, all in the first screen */
-  .hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px 48px; align-items: end; padding-top: clamp(24px, 4vh, 44px); }
-  h1 { font-size: min(10vw, 19vh, 160px); line-height: .92; font-weight: 800; font-stretch: 72%; letter-spacing: -.015em; }
-  h1 mark { display: inline-block; padding: 0 .1em .03em; }
-  .lede { font-size: clamp(19px, 1.65vw, 23px); line-height: 1.35; }
-  .hero-cta { margin-top: 18px; }
-  .film-link { margin-top: 10px; padding: 4px 0; border: 0; background: none; font-size: 16px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); cursor: pointer; }
-  .film-link:hover { text-decoration-color: currentColor; }
-  .dur { margin-left: 6px; font-size: 14px; color: var(--ink-3); }
+  /* the hero: the promise and the button over floating shapes, then the product itself */
+  .hero { position: relative; padding-top: clamp(28px, 5vh, 64px); isolation: isolate; }
+  .hero-in { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 18px 56px; align-items: end; }
+  .hero-title { position: relative; }
+  h1 { font-size: min(8.4vw, 17vh, 150px); line-height: .9; font-weight: 800; letter-spacing: -.045em; }
+  h1 :global(.line) { padding-bottom: .04em; }
+  .cuts { color: var(--yellow); }
+  .hero-sticker { position: absolute; right: 2%; bottom: -.2em; z-index: 2; font-size: clamp(16px, 1.9vw, 26px); }
+  .hero-sticker .sticker { cursor: grab; }
+  .lede { font-size: clamp(19px, 1.7vw, 24px); line-height: 1.35; }
+  .hero-cta { margin-top: 20px; }
+  .film-link { display: inline-flex; align-items: center; gap: 10px; margin-top: 14px; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-2); font-size: 16px; font-weight: 600; cursor: pointer; transition: background .15s; }
+  .film-link:hover { background: var(--bg-3); }
+  .pl { width: 30px; height: 30px; border-radius: 50%; background: var(--film); -webkit-mask: radial-gradient(circle, #000 64%, transparent 65%); mask: radial-gradient(circle, #000 64%, transparent 65%); position: relative; }
+  .pl::after { content: ''; position: absolute; inset: 9px 8px 9px 11px; background: #fff; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+  .dur { font-size: 14px; color: var(--ink-3); }
   .reassure { margin-top: 12px; font-size: 15px; color: var(--ink-2); }
   .for-phone { display: none; }
   :global([data-os='phone']) .for-phone { display: block; }
   :global([data-os='phone']) .for-computer { display: none; }
-  .stage { grid-column: 1 / -1; width: min(100%, max(800px, (100vh - 370px) * 2.25)); margin: 6px auto 0; }
-  .credit { margin-top: 10px; font-size: 13.5px; color: var(--ink-3); }
+  .stage { position: relative; z-index: 1; width: min(100% - 32px, max(800px, (100vh - 370px) * 2.25)); margin: clamp(28px, 4vh, 48px) auto 0; }
+  .stage :global(#demo) { border-radius: var(--r); overflow: hidden; box-shadow: 0 40px 120px -30px rgba(123, 97, 255, .45), 0 0 0 1px var(--line); }
+  .credit { margin-top: 12px; font-size: 13.5px; color: var(--ink-3); }
 
-  .facts { list-style: none; margin-top: 44px; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid var(--line); }
-  .facts li { display: grid; gap: 2px; padding: 20px 20px 20px 0; }
-  .facts li + li { padding-left: 20px; border-left: 1px solid var(--line); }
-  .facts b { font-size: 25px; line-height: 1.1; font-weight: 800; font-stretch: 82%; }
+  :global(.hs) { z-index: 0; }
+  /* around the headline, in the space the words leave: above the side copy, after "notes.", under the demo's corner */
+  :global(.hs-reel) { width: clamp(100px, 9.5vw, 160px); top: -30%; left: 40%; }
+  :global(.hs-play) { width: clamp(56px, 5vw, 88px); top: 30%; left: 54%; }
+  :global(.hs-spark) { width: clamp(40px, 3.6vw, 64px); top: -22%; left: 56%; }
+  :global(.hs-spark4) { width: clamp(34px, 3vw, 54px); bottom: -8%; left: 49%; }
+  :global(.hs-clips) { width: clamp(120px, 12vw, 200px); bottom: -70%; right: -4%; }
+
+  .facts { list-style: none; margin-top: clamp(48px, 7vw, 88px); padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .facts li { position: relative; display: grid; gap: 4px; padding: 22px 22px 24px; border-radius: var(--r); background: var(--bg-2); overflow: hidden; }
+  .facts li::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--c); }
+  .facts b { font-size: clamp(26px, 2.6vw, 34px); line-height: 1.05; font-weight: 800; letter-spacing: -.03em; color: var(--c); }
   .facts span { font-size: 15px; line-height: 1.35; color: var(--ink-2); }
 
-  /* a session: what you said, large, because that's the product */
-  .session { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
-  .session li { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 130px; gap: 8px 36px; align-items: baseline; padding: 20px 0; border-bottom: 1px solid var(--line); }
-  .session q { font-size: clamp(22px, 2.3vw, 30px); line-height: 1.15; font-weight: 700; font-stretch: 88%; }
-  .session p { color: var(--ink-2); }
-  .session span { font-size: 13.5px; color: var(--ink-3); text-align: right; }
+  /* a statement that lights up as you read it */
+  .statement { position: relative; }
+  .statement p { position: relative; z-index: 1; max-width: 1120px; font-size: clamp(32px, 4.6vw, 66px); line-height: 1.08; font-weight: 800; letter-spacing: -.03em; }
+  :global(.st-wave) { width: clamp(180px, 22vw, 320px); right: -2%; top: 18%; }
+  :global(.st-diamond) { width: clamp(50px, 5vw, 80px); left: -1%; bottom: -14%; }
 
-  .point { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 40px; align-items: center; margin-top: 48px; }
+  /* the jobs, sliding past */
+  .slide { position: relative; overflow: hidden; padding-block: clamp(64px, 9vw, 120px); }
+  .slide-row { display: flex; align-items: center; gap: clamp(20px, 3vw, 44px); width: max-content; padding-inline: 4vw; white-space: nowrap; }
+  .sw { font-size: clamp(64px, 13vw, 220px); font-weight: 800; letter-spacing: -.05em; line-height: .95; }
+  .slide-row :global(.slide-shape) { position: relative; flex: none; width: clamp(64px, 9vw, 150px); }
+  .outline { margin-top: 18px; gap: 24px; font-size: clamp(30px, 5vw, 76px); font-weight: 800; letter-spacing: -.03em; color: transparent; -webkit-text-stroke: 1.5px var(--ink-3); }
+  .outline i { font-style: normal; color: var(--pink); -webkit-text-stroke: 0; font-size: .5em; }
+
+  /* the jobs, as cards that stack as you scroll */
+  .jobs { display: grid; gap: 28px; }
+  .job { position: sticky; top: calc(84px + var(--i) * 16px); border-radius: calc(var(--r) + 8px); transform-origin: 50% 0; }
+  .job-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: clamp(24px, 4vw, 56px); align-items: center; padding: clamp(22px, 3.4vw, 48px); border-radius: inherit; background: var(--bg-2); border: 1px solid var(--line); }
+  .job-sky .job-in { background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--sky) 30%, var(--bg-2)), var(--bg-2) 60%); }
+  .job-pink .job-in { background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--pink) 30%, var(--bg-2)), var(--bg-2) 60%); }
+  .job-coral .job-in { background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--coral) 30%, var(--bg-2)), var(--bg-2) 60%); }
+  .job-violet .job-in { background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--violet) 36%, var(--bg-2)), var(--bg-2) 60%); }
+  .job .sticker { font-size: 15px; }
+  .job h3 { margin-top: 18px; font-size: clamp(32px, 4vw, 58px); letter-spacing: -.035em; }
+  .job q { display: block; margin-top: 14px; font-size: clamp(19px, 1.8vw, 24px); line-height: 1.25; font-weight: 600; color: var(--ink); }
+  .job ol { margin: 20px 0 0; padding: 0; list-style: none; counter-reset: s; }
+  .job li { counter-increment: s; display: flex; gap: 12px; padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink-2); font-size: 15.5px; line-height: 1.4; }
+  .job li::before { content: counter(s); flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--bg); font: 600 12px/1 var(--mono); margin-top: 1px; }
+  .job figure { margin: 0; }
+  .job video { width: 100%; border-radius: 16px; background: #000; }
+  .job .tall video { width: auto; max-height: 480px; margin-inline: auto; }
+  .job figcaption { margin-top: 8px; font-size: 13.5px; color: var(--ink-3); }
+
+  .gallery-head { margin: clamp(80px, 10vw, 140px) 0 24px; max-width: 900px; }
+  .gallery-head h3 { font-size: clamp(26px, 3vw, 40px); }
+  .big { display: inline-block; min-width: 2.2ch; font-size: 1.8em; vertical-align: -.1em; background: var(--film); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .gallery-head p { margin-top: 12px; color: var(--ink-2); }
+  .reels { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .reels button { position: relative; display: block; width: 100%; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: #000; cursor: pointer; transition: transform .25s cubic-bezier(.2, .9, .3, 1.3); }
+  .reels button:hover { transform: scale(1.025) rotate(-.4deg); }
+  .reels video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+  .reels button > span { position: absolute; inset: auto 8px 8px; display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 999px; background: rgba(13, 12, 17, .78); backdrop-filter: blur(6px); font-size: 13.5px; color: var(--ink); text-align: left; }
+  .fine { margin-top: 14px; font-size: 14px; color: var(--ink-3); }
+
+  /* a session, as a conversation */
+  :global(.notes-shape) { width: clamp(70px, 8vw, 130px); right: 4%; top: 6%; }
+  .session { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
+  .session li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 24px; align-items: start; }
+  .session q { grid-column: 2; justify-self: end; max-width: 100%; padding: 16px 22px; border-radius: 24px 24px 6px 24px; background: var(--c); color: var(--on-yellow); font-size: clamp(19px, 2vw, 27px); line-height: 1.18; font-weight: 700; letter-spacing: -.015em; quotes: none; }
+  .session p { grid-column: 1 / span 1; grid-row: 2; padding: 14px 18px; border-radius: 24px 24px 24px 6px; background: var(--bg-2); border: 1px solid var(--line); color: var(--ink-2); }
+  .session .mono { grid-column: 2; grid-row: 2; align-self: center; font-size: 13.5px; color: var(--ink-3); }
+
+  .point { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 44px; align-items: center; margin-top: 64px; }
   .point figure { margin: 0; }
-  .point img { border-radius: 4px; }
-  .point dl { margin: 18px 0; border-top: 1px solid var(--line); }
+  .point img { border-radius: var(--r); box-shadow: 0 30px 90px -30px rgba(255, 79, 176, .45); }
+  .point dl { margin: 18px 0; }
   .point dl div { display: flex; gap: 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
   .point dt { flex: none; min-width: 52px; font-weight: 700; }
   .point dd { margin: 0; color: var(--ink-2); }
-  kbd { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--ink-3); border-radius: 2px; font: 500 15px/1 var(--mono); }
+  kbd { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--yellow); color: var(--on-yellow); box-shadow: 0 3px 0 #b39c00; font: 600 15px/1 var(--mono); }
   .point p { color: var(--ink-2); }
 
-  /* where you start */
-  .tabs { display: flex; gap: 0; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
-  .tabs button { flex: none; padding: 14px 22px 14px 0; margin-right: 8px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--ink-3); font-size: 19px; font-weight: 700; font-stretch: 88%; cursor: pointer; }
-  .tabs button:hover { color: var(--ink); }
-  .tabs button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--yellow); }
-  .film { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 40px; padding-top: 32px; }
-  .film-copy q { display: block; font-size: clamp(24px, 2.6vw, 34px); line-height: 1.12; font-weight: 700; font-stretch: 88%; }
-  .film-copy ol { margin: 22px 0 0; padding: 0; list-style: none; }
-  .film-copy li { padding: 9px 0; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 16px; line-height: 1.4; }
-  .film figure { margin: 0; }
-  .film video { width: 100%; background: #000; }
-  .film .tall video { width: auto; max-height: 520px; margin-inline: auto; }
-  .film figcaption { margin-top: 8px; font-size: 14px; color: var(--ink-3); }
-  .gallery-head { margin: 64px 0 20px; max-width: 760px; }
-  .gallery-head p { margin-top: 10px; color: var(--ink-2); }
-  .reels { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-  .reels button { position: relative; display: block; width: 100%; padding: 0; border: 0; background: #000; cursor: pointer; }
-  .reels video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
-  .reels button > span { position: absolute; inset: auto 0 0; display: flex; justify-content: space-between; padding: 7px 10px; background: rgba(0, 0, 0, .78); font-size: 13.5px; color: var(--ink); text-align: left; }
-  .fine { margin-top: 12px; font-size: 14px; color: var(--ink-3); }
-
-  /* the measurements, drawn as the tracks of a timeline */
-  .tracks { border-top: 1px solid var(--line); }
-  .track { display: grid; grid-template-columns: 100px minmax(0, 1.6fr) minmax(0, 1fr); gap: 8px 28px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
-  .track.head { padding: 10px 0; font: 500 13px/1.2 var(--mono); color: var(--ink-3); }
-  .k { font-weight: 700; font-size: 18px; }
+  /* the measurements, drawn as the tracks of a timeline, each in its colour */
+  .tracks { border-radius: var(--r); background: var(--bg-2); padding: 6px 24px; }
+  .track { display: grid; grid-template-columns: 100px minmax(0, 1.6fr) minmax(0, 1fr); gap: 8px 28px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .track:last-child { border-bottom: 0; }
+  .track.head { padding: 12px 0; font: 500 13px/1.2 var(--mono); color: var(--ink-3); }
+  .k { font-weight: 800; font-size: 18px; color: var(--c); }
   .trace { display: block; height: 28px; }
   .trace :global(svg) { display: block; width: 100%; height: 100%; }
-  .trace :global(.p) { fill: var(--ink-3); }
+  .trace :global(.p) { fill: color-mix(in srgb, var(--c) 45%, var(--bg-3)); }
   .trace :global(.q) { fill: var(--ink); }
-  .trace :global(.r) { fill: var(--yellow); }
+  .trace :global(.r) { fill: var(--c); }
   .trace :global(.b) { fill: var(--bg-3); }
-  .trace :global(.rl) { fill: none; stroke: var(--ink); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+  .trace :global(.rl) { fill: none; stroke: var(--c); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
   .track p { margin-top: 6px; font-size: 13.5px; color: var(--ink-2); }
-  .track q { font-size: 20px; line-height: 1.2; font-weight: 700; font-stretch: 88%; }
+  .track q { font-size: 20px; line-height: 1.2; font-weight: 700; }
 
-  .cmp { border-top: 1px solid var(--line); }
+  .cmp { border-radius: var(--r); background: var(--bg-2); overflow: hidden; }
   .row { display: grid; grid-template-columns: 120px repeat(3, minmax(0, 1fr)) minmax(0, 1.1fr); border-bottom: 1px solid var(--line); }
-  .row > span { padding: 15px 16px 15px 0; line-height: 1.3; color: var(--ink-2); }
+  .row:last-child { border-bottom: 0; }
+  .row > span { padding: 16px 16px; line-height: 1.3; color: var(--ink-2); }
   .row > [role='rowheader'] { color: var(--ink-3); font-size: 15px; }
-  .row .us { padding-left: 16px; background: var(--bg-2); color: var(--ink); font-weight: 700; }
-  .th .us { background: var(--yellow); color: var(--on-yellow); }
+  .row .us { background: color-mix(in srgb, var(--violet) 16%, var(--bg-2)); color: var(--ink); font-weight: 700; }
+  .th .us { background: var(--film); color: var(--on-yellow); font-weight: 800; }
   .th > span { font-weight: 700; color: var(--ink); }
   .th small { display: block; margin-top: 3px; font-size: 13px; font-weight: 400; color: var(--ink-3); }
 
   .yours { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; }
-  .yours ul { list-style: none; margin: 28px 0 0; padding: 0; border-top: 1px solid var(--line); }
+  :global(.yours-reel) { width: clamp(90px, 10vw, 150px); left: 44%; top: 48%; }
+  .yours ul { list-style: none; margin: 28px 0 0; padding: 0; }
   .yours li { padding: 14px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); }
   .yours b { color: var(--ink); }
-  .phones { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .phones { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .phone-copy { grid-column: 1 / -1; }
   .phone-copy p { margin-top: 10px; color: var(--ink-2); }
-  .phones img { width: 100%; border-radius: 4px; }
+  .phones img { width: 100%; border-radius: 28px; box-shadow: 0 30px 80px -30px rgba(79, 200, 255, .45); }
+  .phones img:last-child { margin-top: 40px; }
 
+  :global(.get-clips) { width: clamp(110px, 12vw, 190px); right: 2%; top: 4%; }
   .phone-get { margin-bottom: 28px; }
-  .oses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); }
-  .oses article { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 24px; }
-  .oses article + article { border-left: 1px solid var(--line); }
+  .oses { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .oses article { position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 26px 24px; border-radius: var(--r); background: var(--bg-2); overflow: hidden; }
+  .oses article::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--c); }
   .req { font-size: 15px; color: var(--ink-3); }
   .get { width: 100%; background: var(--bg-3); color: var(--ink); }
   .get:hover { background: var(--ink); color: var(--bg); }
   :global([data-os='mac']) [data-os-col='mac'] .get, :global([data-os='win']) [data-os-col='win'] .get, :global([data-os='linux']) [data-os-col='linux'] .get { background: var(--yellow); color: var(--on-yellow); }
-  :global([data-os='win']) [data-os-col='win'], :global([data-os='linux']) [data-os-col='linux'] { order: -1; border-left: 0; }
-  :global([data-os='win']) [data-os-col='mac'], :global([data-os='linux']) [data-os-col='mac'] { border-left: 1px solid var(--line); }
+  :global([data-os='win']) [data-os-col='win'], :global([data-os='linux']) [data-os-col='linux'] { order: -1; }
   .more { font-size: 14.5px; line-height: 1.45; color: var(--ink-3); }
-  .agent { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; padding: 20px 24px; border: 1px solid var(--line); border-top: 0; }
+  .agent { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; margin-top: 12px; padding: 22px 24px; border-radius: var(--r); background: var(--bg-2); }
   .agent p { margin-top: 4px; color: var(--ink-2); font-size: 15.5px; }
 
-  .source { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 48px; align-items: end; }
-  .source p { margin-top: 16px; max-width: 700px; color: var(--ink-2); }
+  .source { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 48px; align-items: end; padding: clamp(28px, 5vw, 64px); border-radius: calc(var(--r) + 8px); background: var(--film); color: var(--on-yellow); overflow: hidden; }
+  .source h2 { position: relative; }
+  .source p { position: relative; margin-top: 16px; max-width: 700px; font-size: 18px; color: color-mix(in srgb, var(--on-yellow) 80%, transparent); }
+  .source :global(.source-spark) { width: clamp(80px, 10vw, 150px); right: 18%; top: -10%; opacity: .9; }
+  .star { position: relative; background: var(--on-yellow); color: var(--ink); }
+  .star:hover { background: #000; }
 
-  .faq h2 { margin-bottom: 32px; }
-  .qs { max-width: 900px; border-top: 1px solid var(--line); }
-  .qs details { border-bottom: 1px solid var(--line); }
-  .qs summary { padding: 18px 0; font-size: 19px; font-weight: 600; cursor: pointer; }
-  .qs p { padding-bottom: 20px; color: var(--ink-2); }
+  .faq h2 { margin-bottom: 36px; }
+  .qs { max-width: 920px; display: grid; gap: 10px; }
+  .qs details { border-radius: 18px; background: var(--bg-2); padding: 0 22px; transition: background .15s; }
+  .qs details[open] { background: var(--bg-3); }
+  .qs summary { padding: 20px 0; font-size: 19px; font-weight: 700; cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+  .qs summary::-webkit-details-marker { display: none; }
+  .qs summary::after { content: '+'; flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--yellow); color: var(--on-yellow); font-weight: 800; transition: transform .2s; }
+  .qs details[open] summary::after { transform: rotate(45deg); }
+  .qs p { padding-bottom: 22px; color: var(--ink-2); }
 
   .last { padding-top: var(--gap); }
-  .last-film { position: relative; overflow: hidden; background: #000; }
-  .last-film video { width: 100%; height: clamp(380px, 62vh, 680px); object-fit: cover; object-position: center 18%; }
-  .caption { position: absolute; inset: auto 16px 8%; text-align: center; font-size: clamp(26px, 5vw, 64px); font-weight: 800; font-stretch: 78%; line-height: 1.2; }
-  .last-cta { display: flex; justify-content: center; padding-top: 28px; }
+  .last-film { position: relative; }
+  .last-film video { width: 100%; height: clamp(380px, 62vh, 680px); object-fit: cover; object-position: center 18%; border-radius: calc(var(--r) + 8px); background: #000; }
+  .caption { position: absolute; inset: auto 16px 8%; z-index: 1; text-align: center; font-size: clamp(26px, 5vw, 68px); font-weight: 800; letter-spacing: -.03em; line-height: 1.2; }
+  :global(.last-play) { width: clamp(80px, 9vw, 150px); left: -2%; top: -8%; z-index: 2; }
+  :global(.last-spark) { width: clamp(50px, 5vw, 90px); right: 1%; bottom: 30%; z-index: 2; }
+  .last-cta { display: flex; justify-content: center; padding-top: 32px; }
   :global([data-os='phone']) .last-cta { display: none; }
 
-  .player { width: min(1120px, 100% - 24px); max-height: 92vh; padding: 0; border: 0; background: #000; color: var(--ink); overflow: auto; }
-  .player::backdrop { background: rgba(0, 0, 0, .86); }
+  .player { width: min(1120px, 100% - 24px); max-height: 92vh; padding: 0; border: 0; border-radius: var(--r); background: #000; color: var(--ink); overflow: auto; }
+  .player::backdrop { background: rgba(8, 6, 14, .88); backdrop-filter: blur(6px); }
   .player video { width: 100%; }
-  .close { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border: 0; background: rgba(0, 0, 0, .75); color: #fff; font-size: 26px; cursor: pointer; }
+  .close { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .75); color: #fff; font-size: 26px; cursor: pointer; }
   .ex-info { padding: 14px 16px 16px; }
   .ex-title { font-size: 20px; font-weight: 700; }
   .ex-by { font-size: 15px; color: var(--ink-2); }
@@ -492,62 +598,52 @@ const faqs = [
   .ex-info pre { margin: 10px 0 0; white-space: pre-wrap; font: 500 13.5px/1.5 var(--mono); color: var(--ink-2); }
 
   @media (max-width: 900px) {
-    .hero { grid-template-columns: 1fr; }
-    .stage { width: 100%; }
-    h1 { font-size: min(21vw, 132px); }
+    .hero-in { grid-template-columns: 1fr; }
+    .stage { width: calc(100% - 32px); }
+    h1 { font-size: min(19vw, 132px); }
+    .hero-sticker { position: relative; right: auto; bottom: auto; display: inline-block; margin: 14px 0 0 10px; }
+    :global(.hs-clips), :global(.hs-spark4), :global(.hs-play), :global(.hs-spark) { display: none; }
+    :global(.hs-reel) { width: 64px; top: -6px; left: auto; right: 0; }
+    .hero-title .tag { padding-right: 70px; }
     .facts { grid-template-columns: 1fr 1fr; }
-    .facts li:nth-child(3) { padding-left: 0; border-left: 0; }
-    .facts li:nth-child(n+3) { border-top: 1px solid var(--line); }
     .session li { grid-template-columns: 1fr; }
-    .session span { text-align: left; }
-    .point, .film, .yours { grid-template-columns: 1fr; }
+    .session q { grid-column: 1; justify-self: end; }
+    .session p, .session .mono { grid-column: 1; grid-row: auto; }
+    .point, .yours { grid-template-columns: 1fr; }
+    .job { position: relative; top: auto; }
+    .job-in { grid-template-columns: 1fr; }
     .reels { grid-template-columns: 1fr 1fr; }
     .track { grid-template-columns: 1fr; }
     .track.head { display: none; }
-    .row:not(.th) { grid-template-columns: 1fr; padding-bottom: 12px; }
+    .tracks { padding: 6px 18px; }
+    .row:not(.th) { grid-template-columns: 1fr; padding: 4px 16px 12px; }
     .row.th { display: none; }
     .row > span { padding: 4px 0; }
+    .row .us { padding: 8px 10px; border-radius: 10px; }
     .row > [role='rowheader'] { padding-top: 14px; font-weight: 700; color: var(--ink); font-size: 18px; }
     .row > [role='cell']::before { content: attr(data-h) ': '; color: var(--ink-3); }
-    .row .us { padding: 8px 10px; }
     .oses { grid-template-columns: 1fr; }
-    .oses article + article { border-left: 0; border-top: 1px solid var(--line); }
-    :global([data-os='win']) [data-os-col='win'], :global([data-os='linux']) [data-os-col='linux'] { border-top: 0; }
-    :global([data-os='win']) [data-os-col='mac'], :global([data-os='linux']) [data-os-col='mac'] { border-left: 0; border-top: 1px solid var(--line); }
     .source { grid-template-columns: 1fr; }
+    :global(.yours-reel), :global(.get-clips), :global(.notes-shape) { display: none; }
     .hero-cta :global([data-send]), .phone-get :global([data-send]), .last-cta :global([data-send]) { width: 100%; }
     .last-cta :global(.dl-set) { width: 100%; }
     .last-cta { padding-inline: 16px; }
     :global([data-os='phone']) :global(.foot) { padding-bottom: 96px; }
   }
+  @media (max-width: 560px) {
+    .facts li { padding: 18px 16px 20px; }
+    .phones img:last-child { margin-top: 24px; }
+  }
 </style>
 
 <script>
-  // where you start: tabs, and the shown result plays while it's on screen
+  // each job's result plays while it's on screen (and not at all for people who'd rather nothing moved)
   const move = !matchMedia('(prefers-reduced-motion: reduce)').matches
-  const ftabs = [...document.querySelectorAll<HTMLButtonElement>('[data-ftab]')]
-  const fpanels = ftabs.map(t => document.getElementById(t.getAttribute('aria-controls')!)!)
-  let filmsOn = false
-  const fvideo = (i: number) => fpanels[i].querySelector('video') as HTMLVideoElement
-  const fplay = (i: number) => { const v = fvideo(i); if (!v.src) v.src = v.dataset.src!; if (filmsOn && move) v.play().catch(() => {}) }
-  const fshow = (n: number) => ftabs.forEach((t, i) => {
-    const on = i === n
-    t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1
-    fpanels[i].hidden = !on
-    if (on) fplay(i); else fvideo(i).pause()
-  })
-  ftabs.forEach((t, i) => {
-    t.addEventListener('click', () => fshow(i))
-    t.addEventListener('keydown', e => {
-      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
-      if (d) { const n = (i + d + ftabs.length) % ftabs.length; fshow(n); ftabs[n].focus() }
-    })
-  })
-  new IntersectionObserver(([e]) => {
-    filmsOn = e.isIntersecting
-    const i = ftabs.findIndex(t => t.getAttribute('aria-selected') === 'true')
-    if (filmsOn) fplay(i); else fvideo(i).pause()
-  }, { rootMargin: '200px' }).observe(document.getElementById('make')!)
+  const jobs = new IntersectionObserver(es => es.forEach(e => {
+    const v = e.target as HTMLVideoElement
+    if (e.isIntersecting) { if (!v.src) v.src = v.dataset.src!; if (move) v.play().catch(() => {}) } else v.pause()
+  }), { rootMargin: '200px 0px', threshold: 0.2 })
+  document.querySelectorAll<HTMLVideoElement>('.job video').forEach(v => jobs.observe(v))
 
   // the film opens in a player over the page
   const film = document.getElementById('film') as HTMLDialogElement, filmV = document.getElementById('film-v') as HTMLVideoElement
@@ -585,7 +681,7 @@ const faqs = [
   ex.addEventListener('click', e => { if (e.target === ex) ex.close() })
   ex.addEventListener('close', () => exV.pause())
 
-  // the cat plays only while he's on screen, and not at all for people who'd rather nothing moved
+  // the cat plays only while he's on screen
   const cat = document.getElementById('cat') as HTMLVideoElement
   if (move) new IntersectionObserver(([e]) => { if (e.isIntersecting) cat.play().catch(() => {}); else cat.pause() }, { rootMargin: '200px' }).observe(cat)
 </script>
