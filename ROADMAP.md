@@ -22,7 +22,7 @@
 |---|---|:-:|:-:|:-:|
 | [**0 · Foundations**](#phase-0-foundations) | `██████░░░░` 55% | 5 | 1 | 4 |
 | [**1 · MVP (v0.1)**](#phase-1-mvp-v01) | `████████░░` 77% | 15 | 4 | 3 |
-| [**2 · Generated shots, hand-off, publishing**](#phase-2-generated-shots-hand-off-publishing) | `░░░░░░░░░░` 0% | 0 | 0 | 9 |
+| [**2 · Generated shots, hand-off, publishing**](#phase-2-generated-shots-hand-off-publishing) | `█░░░░░░░░░` 11% | 1 | 0 | 8 |
 | [**3 · AgentShot key and Pro**](#phase-3-agentshot-key-and-pro) | `███░░░░░░░` 30% | 1 | 1 | 3 |
 | [**4 · Cloud, mobile, teams**](#phase-4-cloud-mobile-teams) | `███░░░░░░░` 31% | 1 | 1 | 6 |
 
@@ -213,7 +213,7 @@ pro editors can take an AgentShot rough cut into their own editor.
 - ⬜ **Complete the shot:** draw a box over a time range and say what belongs there; only that box and range are generated
 - ⬜ **Label every generated shot** in the history, on the timeline and in the exported file's metadata (C2PA content
       credentials where the provider supports them)
-- ⬜ Export to **Premiere / DaVinci Resolve / Final Cut** (FCPXML, XML, EDL via OpenTimelineIO)
+- ✅ Export to **Premiere / DaVinci Resolve / Final Cut**: FCPXML, Premiere (FCP 7) XML and OpenTimelineIO, with the files the cut uses
 - ⬜ YouTube publishing (upload, schedule, thumbnails, chapters)
 - ⬜ Spending view in Settings (from the usage meter)
 - ⬜ AgentShot key early-access sign-up live

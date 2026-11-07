@@ -1,6 +1,6 @@
 // Export the film: size, how other shapes are filled, captions. Progress shows in the jobs tray.
 import { useEffect, useState } from 'react'
-import { Check, Download, FolderOpen, Info, Loader2, Upload } from 'lucide-react'
+import { Check, Download, FolderOpen, Info, Loader2, Upload, Waypoints } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
@@ -34,9 +34,17 @@ export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: b
       setState(r ? { file: r.file } : 'idle')
     } catch (e) { setState({ error: String((e as Error).message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '').slice(0, 300) }) }
   }
+  const [editors, setEditors] = useState<'idle' | 'busy' | { dir: string; notes: string[] } | { error: string }>('idle')
+  const handOff = async () => {
+    setEditors('busy')
+    try {
+      const r = await window.agentshot.export.editors(dir)
+      setEditors(r ? { dir: r.dir, notes: r.notes } : 'idle')
+    } catch (e) { setEditors({ error: String((e as Error).message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '').slice(0, 300) }) }
+  }
   const choice = (on: boolean) => cn('rounded-lg border px-3 py-2 text-left transition-colors', on ? 'border-amber bg-amber-soft' : 'border-line bg-raised/60 hover:border-line-strong')
   return (
-    <Dialog open={open} onOpenChange={v => { onOpenChange(v); if (!v) setState('idle') }} title="Export" description="A finished MP4 of the version on screen.">
+    <Dialog open={open} onOpenChange={v => { onOpenChange(v); if (!v) { setState('idle'); setEditors('idle') } }} title="Export" description="A finished MP4 of the version on screen.">
       <div className="mb-4 grid grid-cols-2 gap-2">
         {PRESETS.map(p => (
           <button key={p.id} onClick={() => setPreset(p.id)} className={choice(preset === p.id)}>
@@ -88,6 +96,22 @@ export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: b
       {typeof state === 'object' && 'error' in state && <p className="mb-3 text-xs text-bad" data-selectable>{state.error}</p>}
       <div className="flex justify-end">
         <Button variant="primary" onClick={go} disabled={state === 'busy' || (downloading && captions !== 'none')}>{state === 'busy' ? <Loader2 className="animate-spin" /> : <Upload />}Export</Button>
+      </div>
+      <div className="mt-5 border-t border-line pt-4">
+        <div className="mb-1 font-medium">Finish it in another editor</div>
+        <p className="mb-3 text-xs text-dim">The cut for Premiere Pro, DaVinci Resolve or Final Cut Pro, with the footage it uses, so every cut can still be trimmed. Motion graphics and titles go over as video files.</p>
+        {typeof editors === 'object' && 'dir' in editors && (
+          <div className="mb-3 rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2">
+              <Check className="size-3.5 text-ok" /><span className="flex-1 truncate" data-selectable>{editors.dir}</span>
+              <Button size="sm" variant="ghost" onClick={() => window.agentshot.export.reveal(editors.dir)}><FolderOpen />Show</Button>
+            </div>
+            <p className="mt-1 text-dim">Open the .fcpxml in Final Cut or Resolve, or the Premiere .xml in Premiere. How to open.txt says how.</p>
+            {editors.notes.length > 0 && <ul className="mt-1 list-disc pl-4 text-dim">{editors.notes.map(n => <li key={n}>{n}</li>)}</ul>}
+          </div>
+        )}
+        {typeof editors === 'object' && 'error' in editors && <p className="mb-3 text-xs text-bad" data-selectable>{editors.error}</p>}
+        <Button onClick={handOff} disabled={editors === 'busy'}>{editors === 'busy' ? <Loader2 className="animate-spin" /> : <Waypoints />}Export for another editor</Button>
       </div>
     </Dialog>
   )

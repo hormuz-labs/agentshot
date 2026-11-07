@@ -59,6 +59,20 @@ try {
   const burned = frame(join(tmp, 'landscape.mp4')), plain = frame(join(tmp, 'no-captions.mp4'))
   assert.equal(burned.length, plain.length)
   assert.ok(burned.reduce((sum, value, i) => sum + Math.abs(value - plain[i]), 0) / burned.length > 1, 'burned captions change the lower picture')
+
+  // For another editor: a folder with the cut as FCPXML, Premiere XML and OTIO, and the footage it uses
+  const handoff = join(tmp, 'talk for editors')
+  await app.evaluate(({ dialog }, f) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }) }, handoff)
+  await win.getByRole('button', { name: 'Export', exact: true }).click()
+  const dialog = win.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Export for another editor' }).click()
+  await dialog.getByText('Open the .fcpxml in Final Cut or Resolve').waitFor({ timeout: 120000 })
+  if (process.env.E2E_SHOTS) await win.screenshot({ path: join(process.env.E2E_SHOTS, 'handoff.png') })
+  for (const f of ['talk.fcpxml', 'talk (Premiere).xml', 'talk.otio', 'How to open.txt', 'Media/talk.mp4']) assert.ok(existsSync(join(handoff, f)), f)
+  const fcpxml = readFileSync(join(handoff, 'talk.fcpxml'), 'utf8')
+  assert.match(fcpxml, /<asset-clip ref="m1" offset="0s" name="talk.mp4" start="0s" duration="5s"/)
+  assert.ok(fcpxml.includes(encodeURI(join(handoff, 'Media', 'talk.mp4')).replace(/^/, 'file://')), 'the FCPXML points at the copy in Media')
+  await dialog.locator('button:has(svg.lucide-x)').click()
   console.log('export e2e: ok')
 } finally {
   await app.close()
