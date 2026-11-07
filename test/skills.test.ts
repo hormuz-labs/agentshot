@@ -115,3 +115,21 @@ describe('bundled skills', () => {
     }
   })
 })
+
+describe('bundled skills', () => {
+  // GitHub, Claude and other tools read the frontmatter as strict YAML: an unquoted "a: b" in a description breaks it.
+  it('have frontmatter that is valid YAML with a name and description', async () => {
+    const { load } = await import('js-yaml')
+    const { readdirSync } = await import('node:fs')
+    const dir = join(__dirname, '..', 'resources', 'skills')
+    for (const id of readdirSync(dir)) {
+      const path = join(dir, id, 'SKILL.md')
+      if (!existsSync(path)) continue
+      const head = /^---\n([\s\S]*?)\n---/.exec(readFileSync(path, 'utf8').replace(/\r\n/g, '\n'))
+      expect(head, id).toBeTruthy()
+      const meta = load(head![1]) as { name?: string; description?: string }
+      expect(meta.name, id).toBe(id)
+      expect(meta.description?.length, id).toBeGreaterThan(20)
+    }
+  })
+})

@@ -1,6 +1,7 @@
 ---
 name: demo-editor
-description: Synchronizing separate screen and face-camera recordings with common audio, protecting narration and demo steps while removing dead time, and composing an editable circle, square or rectangular face overlay. Read before editing a screen recording with a separate webcam, phone or camera recording; video-editing comes first.
+description: >-
+  Synchronizing separate screen and face-camera recordings with common audio, protecting narration and demo steps while removing dead time, and composing an editable circle, square or rectangular face overlay. Read before editing a screen recording with a separate webcam, phone or camera recording; video-editing comes first.
 ---
 
 # Auto Demo Edit

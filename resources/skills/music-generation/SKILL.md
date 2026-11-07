@@ -1,6 +1,7 @@
 ---
 name: music-generation
-description: Making original music for a film with generate_music: when to generate, writing the brief from the edit (mood, BPM, length, sections that hit the cuts), checking the track and fitting it under the picture with set_mix. Read before generating or scoring music; video-editing covers the mix.
+description: >-
+  Making original music for a film with generate_music: when to generate, writing the brief from the edit (mood, BPM, length, sections that hit the cuts), checking the track and fitting it under the picture with set_mix. Read before generating or scoring music; video-editing covers the mix.
 ---
 
 # Generating music for a film

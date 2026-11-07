@@ -1,6 +1,7 @@
 ---
 name: promos-and-montages
-description: Music-driven films from footage or photos with little or no speech: ads and commercials, product and car promos, brand films, trailers, event, wedding and travel recaps, sports highlights, real estate tours, photo slideshows. Rating shots, structures with timings, cutting to the music, speed ramps, sound design, titles, end cards. Read before making any of these; video-editing comes first.
+description: >-
+  Music-driven films from footage or photos with little or no speech: ads and commercials, product and car promos, brand films, trailers, event, wedding and travel recaps, sports highlights, real estate tours, photo slideshows. Rating shots, structures with timings, cutting to the music, speed ramps, sound design, titles, end cards. Read before making any of these; video-editing comes first.
 ---
 
 # Promos, commercials and montages

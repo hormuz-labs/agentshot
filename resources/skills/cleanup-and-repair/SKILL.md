@@ -1,6 +1,7 @@
 ---
 name: cleanup-and-repair
-description: Making footage look and sound right: diagnosing from measurements, then fixing shake, dark or bright shots, flat contrast, colour casts, mismatched shots, noise, tilt, lens distortion, interlacing, black bars, rotation, variable frame rate, and sound (levels, hiss, hum, rumble, wind, harsh s, uneven speech, one-sided, clipped, out of sync). Read before any fix-it or clean-up request.
+description: >-
+  Making footage look and sound right: diagnosing from measurements, then fixing shake, dark or bright shots, flat contrast, colour casts, mismatched shots, noise, tilt, lens distortion, interlacing, black bars, rotation, variable frame rate, and sound (levels, hiss, hum, rumble, wind, harsh s, uneven speech, one-sided, clipped, out of sync). Read before any fix-it or clean-up request.
 ---
 
 # Cleanup and repair
