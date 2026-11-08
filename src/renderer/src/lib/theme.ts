@@ -1,4 +1,4 @@
-// Light (the default), dark, or whatever the system uses. The page keeps the choice to paint the first frame right;
+// Dark (the default, like agentshot.si), light, or whatever the system uses. The page keeps the choice to paint the first frame right;
 // the main process keeps it too, for the window behind the page and the native menus.
 import { useEffect, useState } from 'react'
 
@@ -8,7 +8,7 @@ const dark = matchMedia('(prefers-color-scheme: dark)')
 const listeners = new Set<(t: Theme) => void>()
 
 export function getTheme(): Theme {
-  try { const t = localStorage.getItem(KEY); return t === 'dark' || t === 'system' ? t : 'light' } catch { return 'light' }
+  try { const t = localStorage.getItem(KEY); return t === 'light' || t === 'system' ? t : 'dark' } catch { return 'dark' }
 }
 
 const paint = (t: Theme) => document.documentElement.classList.toggle('dark', t === 'dark' || (t === 'system' && dark.matches))

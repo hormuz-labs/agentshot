@@ -3,11 +3,11 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 
 const button = cva(
-  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-colors disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/50 [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-semibold transition-colors disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/50 [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        primary: 'bg-amber text-on-amber hover:bg-amber-hover',
+        primary: 'bg-amber text-on-amber hover:bg-amber-hover shadow-[0_2px_0_rgb(0_0_0/0.18)]',
         secondary: 'bg-raised text-fg border border-line hover:bg-hover',
         ghost: 'text-dim hover:text-fg hover:bg-hover',
         danger: 'text-bad hover:bg-bad/10',

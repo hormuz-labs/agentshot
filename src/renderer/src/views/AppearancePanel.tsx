@@ -5,9 +5,9 @@ import { cn } from '@/lib/utils'
 import { useTheme, type Theme } from '@/lib/theme'
 
 const CHOICES: { id: Theme; label: string; icon: typeof Sun; swatch: string }[] = [
-  { id: 'light', label: 'Light', icon: Sun, swatch: 'bg-[linear-gradient(135deg,#fcfcfb_50%,#efefed_50%)]' },
-  { id: 'dark', label: 'Dark', icon: Moon, swatch: 'bg-[linear-gradient(135deg,#161412_50%,#0e0d0c_50%)]' },
-  { id: 'system', label: 'Match system', icon: Monitor, swatch: 'bg-[linear-gradient(135deg,#fcfcfb_50%,#0e0d0c_50%)]' },
+  { id: 'light', label: 'Light', icon: Sun, swatch: 'bg-[linear-gradient(135deg,#fbfaff_50%,#efedf5_50%)]' },
+  { id: 'dark', label: 'Dark', icon: Moon, swatch: 'bg-[linear-gradient(135deg,#1b1823_50%,#0d0c11_50%)]' },
+  { id: 'system', label: 'Match system', icon: Monitor, swatch: 'bg-[linear-gradient(135deg,#fbfaff_50%,#0d0c11_50%)]' },
 ]
 
 export function AppearancePanel() {

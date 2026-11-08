@@ -126,7 +126,7 @@ export const Stage = forwardRef<StageHandle, Props>(function Stage(p, ref) {
         g.drawImage(cam, x, y, sw, sh, l.x * sx + place.left, l.y * sy + place.top, place.width, place.height); g.restore()
       }
       if (box) {
-        g.strokeStyle = '#f2a541'
+        g.strokeStyle = '#ffe01a'
         g.lineWidth = Math.max(3, c.width / 300)
         g.strokeRect(box.x * c.width, box.y * c.height, box.w * c.width, box.h * c.height)
       }

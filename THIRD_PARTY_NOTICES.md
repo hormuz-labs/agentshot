@@ -88,10 +88,10 @@ Review the applicable toolchain terms before a public Windows release.
 SIL Open Font License 1.1, https://github.com/rsms/inter. Used for clip typography (woff2, via @fontsource-variable/inter)
 and for burned-in captions (`Inter-Regular.ttf`, `Inter-Bold.ttf` from the v4.1 release; licence in `lib/fonts/Inter-LICENSE.txt`).
 
-## Source Serif 4 (font)
+## Archivo (font)
 
-SIL Open Font License 1.1, https://github.com/adobe-fonts/source-serif. Used for the app's headings and the agent's replies
-(woff2, via @fontsource-variable/source-serif-4).
+SIL Open Font License 1.1, https://github.com/Omnibus-Type/Archivo. The app's typeface, as on agentshot.si (woff2, via
+@fontsource-variable/archivo).
 
 ## Three.js (the animated Manul companion)
 
