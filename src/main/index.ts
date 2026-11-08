@@ -1426,10 +1426,10 @@ function agentRuns(dir: string, e: BaseEvent) {
 // The app icon. Packaged builds get it from build/ through electron-builder; in development set it by hand.
 const ICON = app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(import.meta.dirname, '../../build/icon.png')
 /** The window's colour before the page paints: the sidebar's, light or dark. */
-const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#0e0d0c' : '#fbfbf9')
+const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#0d0c11' : '#f7f6fb')
 
 function createWindow() {
-  nativeTheme.themeSource = getConfig().theme || 'light'
+  nativeTheme.themeSource = getConfig().theme || 'dark'
   win = new BrowserWindow({
     ...(process.platform === 'linux' && existsSync(ICON) ? { icon: ICON } : {}),
     width: 1440, height: 900, minWidth: 900, minHeight: 600,

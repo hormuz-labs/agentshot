@@ -89,7 +89,7 @@ function Viewer({ list, index, onIndex, onClose, onUse, onTag }: {
           <aside className="flex w-[380px] shrink-0 flex-col border-l border-line">
             <div className="flex items-start gap-3 px-6 pb-4 pt-6">
               <div className="min-w-0 flex-1">
-                <D.Title className="font-serif text-[22px] leading-tight text-fg">{e.title}</D.Title>
+                <D.Title className="font-serif text-[22px] font-extrabold leading-tight tracking-[-0.02em] text-fg">{e.title}</D.Title>
                 <p className="mt-1.5 text-[13px] text-dim">
                   by <a href={e.creator.url || `https://x.com/${e.creator.handle}`} target="_blank" rel="noreferrer" className="text-fg hover:underline">@{e.creator.handle}</a>
                   {e.post && <> · <a href={e.post} target="_blank" rel="noreferrer" className="inline-flex items-center hover:text-fg hover:underline">View post<ArrowUpRight className="size-3" /></a></>}
@@ -158,7 +158,7 @@ export function Gallery({ list, onUse }: { list: GalleryExample[]; onUse: (e: Ga
   return (
     <section data-gallery className="w-full">
       <div className="mb-3 flex items-baseline gap-3">
-        <h2 className="font-serif text-[22px] text-fg">Start from an example</h2>
+        <h2 className="font-serif text-[24px] font-extrabold tracking-[-0.025em] text-fg">Start from <span className="film-text">an example</span></h2>
         <span className="text-[12px] text-faint">{list.length} motion videos, each with the prompt that made it</span>
       </div>
 

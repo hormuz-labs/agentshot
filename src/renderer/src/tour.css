@@ -28,7 +28,7 @@
 }
 .agentshot-tour-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-right: 20px; color: var(--color-faint); font-size: 11.5px; }
 .agentshot-tour-heading img { flex-shrink: 0; }
-.agentshot-tour .driver-popover-title { margin: 0 0 8px; font-family: var(--font-serif); font-size: 24px; font-weight: 400; line-height: 1.2; letter-spacing: -.01em; }
+.agentshot-tour .driver-popover-title { margin: 0 0 8px; font-family: var(--font-serif); font-size: 24px; font-weight: 800; line-height: 1.1; letter-spacing: -.025em; }
 .agentshot-tour .driver-popover-description { color: var(--color-dim); font-size: 13px; line-height: 1.65; }
 .agentshot-tour .driver-popover-description p { margin: 10px 0 0; }
 .agentshot-tour kbd { display: inline-flex; align-items: center; border: 1px solid var(--color-line-strong); border-radius: 4px; background: var(--color-raised); padding: 0 4px; font-family: var(--font-sans); font-size: 11px; line-height: 1.6; color: var(--color-dim); }

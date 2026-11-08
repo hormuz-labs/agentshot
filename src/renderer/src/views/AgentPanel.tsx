@@ -488,7 +488,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, text, o
         {empty && (
           <div className="pt-[14vh] text-center">
             <ManulCompanion agent={agent} needsConsent={consents.length > 0} active={active} hero />
-            <h2 className="font-serif text-[30px] font-normal tracking-[-0.01em]">What should change?</h2>
+            <h2 className="font-serif text-[30px] font-extrabold tracking-[-0.03em]">What should <span className="film-text">change?</span></h2>
             <p className="mx-auto mt-2 max-w-[460px] text-dim">Say it in your own words. To point at a moment, press <Kbd>N</Kbd> on the film, drag across the timeline, or <Kbd>B</Kbd> to box part of the picture.</p>
           </div>
         )}

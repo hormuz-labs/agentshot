@@ -1,62 +1,83 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/source-serif-4";
+@import "@fontsource-variable/archivo/wdth.css";
 
-/* AgentShot: Claude's near-white neutrals by day, the Pallas cat's dark fur by night; amber of its eyes in both.
-   Light is the default; html.dark switches every token at once. */
+/* AgentShot: the screening room from agentshot.si. A deep violet-black page so film looks right, Archivo for every
+   word, round shapes, and the site's colours: caption yellow means "act here", and the rest (pink, sky, mint, violet,
+   coral) tell kinds of work apart. Dark is the default; light keeps the same colours on a pale page, with violet in
+   yellow's place because yellow can't be read on white. html.dark switches every token at once. */
 @theme {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Source Serif 4 Variable", ui-serif, Georgia, serif; /* headings and the agent's replies */
+  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Archivo Variable", ui-sans-serif, system-ui, sans-serif; /* headings and the agent's replies */
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
-  --color-bg: #fbfbf9; /* the sidebar and window chrome (Claude's near-white neutrals) */
-  --color-canvas: #f3f3f1; /* the work area (film, browser): between the window chrome and the side panels */
-  --color-panel: #fcfcfb;
+  --color-bg: #f7f6fb; /* the sidebar and window chrome */
+  --color-canvas: #efedf5; /* the work area (film, browser): between the window chrome and the side panels */
+  --color-panel: #fbfaff;
   --color-surface: #ffffff; /* the message box, cards that sit on a panel */
-  --color-raised: #f0f0ee;
-  --color-hover: #efefed;
-  --color-line: #e4e4e2;
-  --color-line-strong: #d4d3d0;
-  --color-fg: #141413;
-  --color-dim: #52514f;
-  --color-faint: #898782;
-  --color-amber: #c06f12;
-  --color-amber-hover: #a85f0c;
-  --color-amber-soft: #c06f121a;
+  --color-raised: #eeecf5;
+  --color-hover: #ebe8f4;
+  --color-line: #e2dfec;
+  --color-line-strong: #cfcadf;
+  --color-fg: #15131c;
+  --color-dim: #4f4b5e;
+  --color-faint: #878299;
+  --color-amber: #6b4ff0; /* the accent: violet by day */
+  --color-amber-hover: #5a3fe0;
+  --color-amber-soft: #6b4ff01c;
   --color-on-amber: #ffffff;
-  --color-ok: #2d8653;
-  --color-bad: #c2412f;
-  --color-note: #2f6bd0;
-  --color-shade: #1414132e; /* shadows under popovers and dialogs */
-  --color-scrim: #1414134d; /* behind a dialog */
+  --color-ok: #1f8a5b;
+  --color-bad: #d4363f;
+  --color-note: #2a7fd4;
+  --color-shade: #15131c2e; /* shadows under popovers and dialogs */
+  --color-scrim: #15131c59; /* behind a dialog */
 
-  --radius-card: 12px;
+  /* the site's colours, for telling kinds of work apart (jobs, tracks, tags) */
+  --color-sun: #ffe01a;
+  --color-coral: #ff5a36;
+  --color-pink: #ff4fb0;
+  --color-violet: #7b61ff;
+  --color-sky: #4fc8ff;
+  --color-mint: #3cf2b5;
+
+  --radius-card: 18px;
+  /* rounder everywhere, like the site's cards and pills */
+  --radius-md: 8px;
+  --radius-lg: 11px;
+  --radius-xl: 16px;
+  --radius-2xl: 22px;
 }
 
 html.dark {
-  --color-bg: #0e0d0c;
-  --color-canvas: #121110;
-  --color-panel: #161412;
-  --color-surface: #1d1a17;
-  --color-raised: #1d1a17;
-  --color-hover: #25211d;
-  --color-line: #2c2723;
-  --color-line-strong: #3a342e;
-  --color-fg: #efe8df;
-  --color-dim: #a39888;
-  --color-faint: #6f665b;
-  --color-amber: #f2a541;
-  --color-amber-hover: #f7b65e;
-  --color-amber-soft: #f2a54122;
-  --color-on-amber: #1a1208;
-  --color-ok: #7cc79a;
-  --color-bad: #ef7a6a;
-  --color-note: #8fb5ff;
-  --color-shade: #00000080;
-  --color-scrim: #00000099;
+  --color-bg: #0d0c11;
+  --color-canvas: #100e15;
+  --color-panel: #141219;
+  --color-surface: #1b1823;
+  --color-raised: #211e2b;
+  --color-hover: #282434;
+  --color-line: #2c2838;
+  --color-line-strong: #3b3649;
+  --color-fg: #f6f3ec;
+  --color-dim: #c3bfcf;
+  --color-faint: #8a859b;
+  --color-amber: #ffe01a; /* caption yellow: act here */
+  --color-amber-hover: #fff06a;
+  --color-amber-soft: #ffe01a1f;
+  --color-on-amber: #0d0c11;
+  --color-ok: #3cf2b5;
+  --color-bad: #ff6b6b;
+  --color-note: #4fc8ff;
+  --color-shade: #00000099;
+  --color-scrim: #05040aa8;
   color-scheme: dark;
 }
 html { color-scheme: light; }
+
+/* the film gradient, the site's signature: violet through pink and coral to yellow */
+.film-grad { background-image: linear-gradient(100deg, var(--color-violet), var(--color-pink) 38%, var(--color-coral) 68%, var(--color-sun)); }
+/* the site's glossy shapes (lib/shapes.ts) sit inline here, not absolutely as on the site */
+.shape { display: block; }
+.shape svg { display: block; width: 100%; height: auto; overflow: visible; }
+.film-text { background-image: linear-gradient(100deg, var(--color-violet), var(--color-pink) 38%, var(--color-coral) 68%, var(--color-sun)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 html, body, #root { height: 100%; }
 body {
@@ -82,7 +103,7 @@ textarea, input, [data-selectable] { user-select: text; }
 
 /* the agent's working orb */
 @keyframes orb { 0%,100% { transform: scale(1); filter: hue-rotate(0deg); } 50% { transform: scale(1.12); filter: hue-rotate(-18deg); } }
-.orb { background: radial-gradient(circle at 35% 30%, #ffe2b0, #f2a541 45%, #b4541e 80%); animation: orb 1.6s ease-in-out infinite; box-shadow: 0 0 18px #f2a54155; }
+.orb { background: radial-gradient(circle at 35% 30%, #fff6b0, var(--color-pink) 48%, var(--color-violet) 82%); animation: orb 1.6s ease-in-out infinite; box-shadow: 0 0 18px #ff4fb055; }
 
 /* a beam running around the edge of whatever the agent is working on */
 @property --beam { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
@@ -90,7 +111,7 @@ textarea, input, [data-selectable] { user-select: text; }
 .beam { position: relative; }
 .beam::after {
   content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
-  background: conic-gradient(from var(--beam), transparent 70%, #f2a541 85%, transparent 100%);
+  background: conic-gradient(from var(--beam), transparent 62%, var(--color-violet) 74%, var(--color-pink) 82%, var(--color-sun) 90%, transparent 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
   animation: beam 2.4s linear infinite;
 }

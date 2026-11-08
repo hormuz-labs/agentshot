@@ -11,18 +11,21 @@ import { Gallery, inputsOf, useGallery } from '@/components/Gallery'
 import { ASPECTS, aspectOf, type Aspect } from '../../../shared/motion-formats'
 import { wantsWalkthrough } from '../../../shared/walkthrough'
 import { MAC, cn } from '@/lib/utils'
+import { play, spark, spark4 } from '@/lib/shapes'
 import type { GalleryExample, Project } from '../../../shared/types'
 
 /** What people come to make, one click each. A video job asks for the video and starts; the demo needs a link, so it
  *  starts the sentence and leaves the cursor where the link goes. Each prompt is what the user would have typed, sent
  *  as their first message, so the conversation shows what was asked. */
-type Job = { id: string; title: string; does: string; needs: 'video' | 'url'; prompt: string; icon: LucideIcon }
+type Job = { id: string; title: string; does: string; needs: 'video' | 'url'; prompt: string; icon: LucideIcon; /** the site's colour for this kind of film: its chip, its glow */ tone: string }
 const JOBS: Job[] = [
-  { id: 'demo', title: 'Product demo', does: 'Films your web app in your Chrome, cuts it and narrates it', needs: 'url', prompt: 'A product walkthrough of ', icon: MonitorPlay },
-  { id: 'shorts', title: 'Shorts from a long video', does: 'Finds the best moments, vertical, with captions', needs: 'video', prompt: 'Find the 3 best moments and make each one a vertical Short (9:16) with word-by-word captions and a strong first second.', icon: Smartphone },
-  { id: 'cleanup', title: 'Clean up a talking head', does: 'Cuts the ums, false starts and long pauses', needs: 'video', prompt: 'Cut the ums, false starts and long pauses, keep it natural, and even out the sound.', icon: Scissors },
-  { id: 'captions', title: 'Captions', does: 'Word by word, timed to the speech', needs: 'video', prompt: 'Add word-by-word captions timed to the speech, easy to read on a phone.', icon: Captions },
+  { id: 'demo', title: 'Product demo', does: 'Films your web app in your Chrome, cuts it and narrates it', needs: 'url', prompt: 'A product walkthrough of ', icon: MonitorPlay, tone: 'bg-sky shadow-sky/40' },
+  { id: 'shorts', title: 'Shorts from a long video', does: 'Finds the best moments, vertical, with captions', needs: 'video', prompt: 'Find the 3 best moments and make each one a vertical Short (9:16) with word-by-word captions and a strong first second.', icon: Smartphone, tone: 'bg-pink shadow-pink/40' },
+  { id: 'cleanup', title: 'Clean up a talking head', does: 'Cuts the ums, false starts and long pauses', needs: 'video', prompt: 'Cut the ums, false starts and long pauses, keep it natural, and even out the sound.', icon: Scissors, tone: 'bg-coral shadow-coral/40' },
+  { id: 'captions', title: 'Captions', does: 'Word by word, timed to the speech', needs: 'video', prompt: 'Add word-by-word captions timed to the speech, easy to read on a phone.', icon: Captions, tone: 'bg-mint shadow-mint/40' },
 ]
+/** The glossy shapes around the cat, drawn once (they're static markup) */
+const shape = { spark: spark({ depth: 0 }), play: play({ depth: 0 }), spark4: spark4({ depth: 0, ramp: 'cool' }) }
 const message = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
 /** A motion or walkthrough project's name: the first words of what the user asked for (a link as its site), else the
@@ -149,8 +152,13 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
 
       <div className="flex-1 overflow-auto">
         <div ref={top} className="mx-auto flex w-full max-w-[680px] flex-col items-center px-6 pt-[5vh]">
-          <ManulMascot state={busy ? 'working' : prompt ? 'thinking' : 'idle'} size={120} className="shrink-0" />
-          <h1 className="mb-7 mt-1 font-serif text-[34px] font-normal tracking-[-0.01em] text-fg">What are we making?</h1>
+          <div className="relative">
+            <span aria-hidden className="pointer-events-none absolute -left-24 top-6 w-11 -rotate-12 opacity-90" dangerouslySetInnerHTML={{ __html: shape.spark }} />
+            <span aria-hidden className="pointer-events-none absolute -right-28 top-2 w-14 rotate-6 opacity-90" dangerouslySetInnerHTML={{ __html: shape.play }} />
+            <span aria-hidden className="pointer-events-none absolute -right-14 bottom-0 w-7 opacity-80" dangerouslySetInnerHTML={{ __html: shape.spark4 }} />
+            <ManulMascot state={busy ? 'working' : prompt ? 'thinking' : 'idle'} size={120} className="shrink-0" />
+          </div>
+          <h1 className="mb-7 mt-1 font-serif text-[44px] font-extrabold leading-none tracking-[-0.04em] text-fg">What are we <span className="film-text">making?</span></h1>
 
           <div className={cn('w-full rounded-2xl border bg-surface p-2.5 shadow-[0_1px_2px_var(--color-shade),0_6px_24px_-12px_var(--color-shade)] transition-colors',
             over ? 'border-amber bg-amber-soft' : 'border-line')}>
@@ -242,10 +250,10 @@ export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, pr
             <div data-tour="ideas" className="mt-5 grid w-full grid-cols-2 gap-2 max-[560px]:grid-cols-1">
               {JOBS.map(j => (
                 <button key={j.id} data-job={j.id} disabled={busy} onClick={() => startJob(j)}
-                  className="group flex items-start gap-3 rounded-xl border border-line bg-panel p-3 text-left transition-colors hover:border-amber/60 hover:bg-surface disabled:opacity-50">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-soft text-amber"><j.icon className="size-[18px]" /></span>
+                  className="group flex items-start gap-3 rounded-2xl border border-line bg-panel p-3.5 text-left transition-[transform,background-color,border-color] hover:-translate-y-0.5 hover:border-line-strong hover:bg-surface disabled:opacity-50 motion-reduce:hover:translate-y-0">
+                  <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl text-[#0d0c11] shadow-[0_6px_16px_-6px] transition-transform group-hover:-rotate-6', j.tone)}><j.icon className="size-[19px]" /></span>
                   <span className="min-w-0">
-                    <span className="block text-[13.5px] font-medium text-fg">{j.title}</span>
+                    <span className="block text-[14px] font-bold tracking-[-0.01em] text-fg">{j.title}</span>
                     <span className="block text-[12px] leading-snug text-dim">{j.does}</span>
                     <span className="mt-1 block text-[11.5px] text-faint group-hover:text-amber">{j.needs === 'url' ? 'Paste your app’s link' : footage ? 'Start with this video' : 'Choose a video'}</span>
                   </span>
