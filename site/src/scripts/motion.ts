@@ -66,8 +66,11 @@ function hero() {
   tl.from(h.querySelectorAll('.hero-sticker'), { scale: 0, rotation: -60, duration: 1.3, ease: 'elastic.out(1.1, 0.45)' }, 0.75)
     .from(h.querySelectorAll('.tag, .lede, .hero-cta, .reassure, .film-link'), { y: 28, opacity: 0, duration: 1, stagger: 0.07 }, 0.45)
     .fromTo(h.querySelectorAll('.shape'), { scale: 0, opacity: 0, rotation: -70 }, { scale: 1, opacity: 1, rotation: 0, duration: 1.7, stagger: 0.09, ease: 'elastic.out(1, 0.6)' }, 0.25)
-  h.querySelectorAll<HTMLElement>('.shape').forEach((s, i) => gsap.to(s, {
-    x: (i % 2 ? -1 : 1) * 140, scale: 1.2, ease: 'none',
+  // The scatter says where it starts (full size, in place) rather than reading it off the shape: when this is set up the
+  // entrance above still holds every shape at scale 0, and a tween that started from that would shrink them back to
+  // nothing whenever the page returned to the top.
+  h.querySelectorAll<HTMLElement>('.shape').forEach((s, i) => gsap.fromTo(s, { x: 0, scale: 1 }, {
+    x: (i % 2 ? -1 : 1) * 140, scale: 1.2, ease: 'none', immediateRender: false,
     scrollTrigger: { trigger: h, start: 'top top', end: 'bottom top', scrub: true },
   }))
 }
