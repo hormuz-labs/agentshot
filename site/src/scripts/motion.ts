@@ -108,11 +108,14 @@ function slide() {
 /** Job cards stack: the one underneath sinks back and dims as the next slides over it. */
 function jobs() {
   const cards = [...document.querySelectorAll<HTMLElement>('[data-job]')]
-  cards.forEach((card, i) => {
-    const next = cards[i + 1]
-    if (!next) return
-    gsap.to(card, { scale: 0.92, ease: 'none', scrollTrigger: { trigger: next, start: 'top bottom', end: 'top 18%', scrub: true } })
-    gsap.to(card.querySelector('.job-in'), { opacity: 0.3, ease: 'none', scrollTrigger: { trigger: next, start: 'top 80%', end: 'top 25%', scrub: true } })
+  // only where the cards stack (wide screens): on a phone they sit one under the other, and a dimmed card is one you're still reading
+  gsap.matchMedia().add('(min-width: 901px)', () => {
+    cards.forEach((card, i) => {
+      const next = cards[i + 1]
+      if (!next) return
+      gsap.to(card, { scale: 0.92, ease: 'none', scrollTrigger: { trigger: next, start: 'top bottom', end: 'top 18%', scrub: true } })
+      gsap.to(card.querySelector('.job-in'), { opacity: 0.3, ease: 'none', scrollTrigger: { trigger: next, start: 'top 80%', end: 'top 25%', scrub: true } })
+    })
   })
 }
 

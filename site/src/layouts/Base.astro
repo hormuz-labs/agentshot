@@ -98,6 +98,13 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
     // Mac and Windows download straight away; Linux has several packages, so it goes to the install section
     document.querySelectorAll<HTMLAnchorElement>('a[data-dl]:not([data-dl="linux"])').forEach(a => a.addEventListener('click', () => (toast.hidden = false)))
 
+    // "Download for Mac" is the Apple silicon build. Chrome and Edge can say which chip this Mac has, so an Intel Mac
+    // gets the Intel build from the same button (Safari can't say; the hero and the install section link to it)
+    const uad = (navigator as unknown as { userAgentData?: { getHighEntropyValues?: (h: string[]) => Promise<{ architecture?: string }> } }).userAgentData
+    if (os === 'mac' && uad?.getHighEntropyValues) uad.getHighEntropyValues(['architecture']).then(v => {
+      if (v.architecture === 'x86') document.querySelectorAll<HTMLAnchorElement>('a[data-intel]').forEach(a => (a.href = a.dataset.intel!))
+    }).catch(() => {})
+
     // a phone can't run the app: hand the link to the visitor's computer
     document.querySelectorAll<HTMLButtonElement>('[data-send]').forEach(b => b.addEventListener('click', async () => {
       const url = 'https://agentshot.si/#get', text = 'AgentShot, the video editor you talk to. Install it on my computer.'

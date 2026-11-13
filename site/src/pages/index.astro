@@ -150,7 +150,7 @@ const faqs = [
           <div class="hero-cta magnetic" data-hero-cta>
             <Cta />
           </div>
-          <p class="reassure for-computer">Free and open source. Your footage stays on your computer.</p>
+          <p class="reassure for-computer">Free and open source. Your footage stays on your computer.<span class="mac-only"> <a href={MAC_INTEL} data-dl="mac">Intel Mac?</a></span></p>
           <p class="reassure for-phone">It runs on Mac, Windows and Linux, so send yourself the link. Free and open source.</p>
           <button class="film-link" type="button" data-film><span class="pl" aria-hidden="true"></span>Watch the film <span class="mono dur">1:28</span></button>
         </div>
@@ -600,7 +600,15 @@ const faqs = [
   @media (max-width: 900px) {
     .hero-in { grid-template-columns: 1fr; }
     .stage { width: calc(100% - 32px); }
-    h1 { font-size: min(19vw, 132px); }
+    /* two lines, like the desktop, so the product itself starts on the first screen */
+    h1 { font-size: min(14.2vw, 26vh, 132px); }
+    .slide { padding-block: 40px; }
+    :global(.st-wave) { width: 120px; top: calc(var(--gap) - 34px); right: 0; }
+    /* the result before the explanation: on a small screen you see what it made, then how */
+    .job figure { order: -1; }
+    .job .tall video { max-height: 400px; }
+    :global([data-os='phone']) .oses, :global([data-os='phone']) .agent { display: none; }
+    :global([data-os='phone']) .phone-get { margin-bottom: 0; }
     .hero-sticker { position: relative; right: auto; bottom: auto; display: inline-block; margin: 14px 0 0 10px; }
     :global(.hs-clips), :global(.hs-spark4), :global(.hs-play), :global(.hs-spark) { display: none; }
     :global(.hs-reel) { width: 64px; top: -6px; left: auto; right: 0; }
@@ -618,9 +626,10 @@ const faqs = [
     .tracks { padding: 6px 18px; }
     .row:not(.th) { grid-template-columns: 1fr; padding: 4px 16px 12px; }
     .row.th { display: none; }
-    .row > span { padding: 4px 0; }
-    .row .us { padding: 8px 10px; border-radius: 10px; }
-    .row > [role='rowheader'] { padding-top: 14px; font-weight: 700; color: var(--ink); font-size: 18px; }
+    .row > span { padding: 2px 0; font-size: 15px; }
+    /* AgentShot's answer leads each group; the other three sit under it, smaller */
+    .row .us { order: -1; margin-bottom: 6px; padding: 9px 12px; border-radius: 10px; font-size: 17px; }
+    .row > [role='rowheader'] { order: -2; padding: 14px 0 6px; font-weight: 700; color: var(--ink); font-size: 18px; }
     .row > [role='cell']::before { content: attr(data-h) ': '; color: var(--ink-3); }
     .oses { grid-template-columns: 1fr; }
     .source { grid-template-columns: 1fr; }
