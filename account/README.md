@@ -55,6 +55,29 @@ app also uses with a person's own keys. The service picks the vendor and model f
 credit left doesn't cover the price (402). It reserves the price from the budget before calling the vendor and
 refunds vendor failures. Disabled keys are refused (403). Errors never name the vendor. `GET /v1/voices` lists AgentShot's voice names.
 
+## Cloud jobs
+
+The cloud jobs server (the private `hormuz-labs/agentshot-worker`) runs paid jobs such as upscaling. It keeps no
+balance of its own: it asks this service, inside the cluster, with a secret the two share (`WORKER_JOBS_SECRET`, sent
+as `x-agentshot-worker`). Without that secret these endpoints answer 404, to everyone.
+
+| Endpoint | Sent with | What it does |
+|---|---|---|
+| `GET /v1/worker/who` | the person's key and key id | Whose key it is and the credits they have. It only reads; `?sync=1` takes the key's gateway spend off first, for an exact figure before a job is priced. |
+| `POST /v1/worker/charge` `{ operation, credits, label }` | the person's key and key id | Takes a job's credits under the wallet's lock, or answers 402 with what is left. |
+| `POST /v1/worker/refund` `{ userId, operation }` | the secret only | Gives that charge back. |
+
+- **One charge per `operation`.** Asked again, it takes nothing more and says what it took the first time, so the jobs
+  server can ask again whenever an answer is lost.
+- **A refund names a charge, never an amount.** It returns exactly what that `operation` took, once, to the person it
+  was taken from. The secret can't be used to create credits.
+- **A refund calls the charge off.** Once a refund has been asked for, that `operation` is never charged (409), even
+  if the charge arrives afterwards. A refund for a charge that was never taken returns 0.
+- **Only a job's own ledger rows.** `operation` must be `manul:job:<id>`; a plan's grant or a key's gateway spend can't
+  be named.
+
+Charges called off are kept in `manul_job_voids`, beside `manul_gateway_charges`.
+
 ## Local development
 
 From the project root, fill `gateway/.env` using `.env.example`, then run:
@@ -102,3 +125,5 @@ local work. Point the app at it with `MANUL_AUTH_ISSUER` and `MANUL_AUTH_CLIENT_
 - `test/account-service.test.ts`: this service, against a fake Clerk and Bifrost.
 - `test/account.test.ts`: the app's sign-in, against a fake Clerk and account service.
 - `test/account-bifrost.integration.test.ts`: real Bifrost + Postgres, process restart and independent replica retries.
+- `test/account-jobs.integration.test.ts`: the cloud jobs endpoints on a real Postgres (`ACCOUNT_TEST_DATABASE_URL`), for the
+  locking: charges and refunds racing each other, and many people at once.

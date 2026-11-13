@@ -74,6 +74,9 @@ export interface Env {
   HEADSCALE_API_KEY?: string
   /** Shared secret for registering pooled workers (cloud or home pool) */
   WORKER_POOL_SECRET?: string
+  /** Shared with the cloud jobs server (hormuz-labs/agentshot-worker), which takes and returns a job's credits with it.
+   *  Unset: the /v1/worker endpoints don't exist. */
+  WORKER_JOBS_SECRET?: string
   /** How long a cloud lease lasts unused before its spot is freed for someone else (seconds; default 15 minutes). */
   LEASE_IDLE_SECONDS?: string
   /** The longest one person keeps a cloud spot in a row, however busy (hours; default 8), and the wait after that
@@ -279,6 +282,9 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
   if (url.pathname === '/v1/workers' && req.method === 'GET') return listWorkers()
   if (url.pathname === '/v1/workers/lease' && req.method === 'POST') return leaseWorker()
   if (url.pathname === '/v1/workers/release' && req.method === 'POST') return releaseWorker()
+  if (url.pathname === '/v1/worker/who' && req.method === 'GET') return jobWho()
+  if (url.pathname === '/v1/worker/charge' && req.method === 'POST') return jobCharge()
+  if (url.pathname === '/v1/worker/refund' && req.method === 'POST') return jobRefund()
   return fail(404, 'Not found.')
 
   async function signIn() {
@@ -460,6 +466,94 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     return new Response(audio.data as Uint8Array<ArrayBuffer>, { headers: { 'content-type': audio.type, 'x-manul-cost': String(cost) } })
   }
 
+  // ---------------------------------------------------------------- cloud jobs
+  // The cloud jobs server asks these on a person's behalf: who a key belongs to, to take a job's credits, to give them
+  // back. Its side of the agreement is api/account-worker.v1.md in hormuz-labs/agentshot-worker. A charge has one
+  // name (its operation) and is taken once under it; a refund names the charge and never an amount, so the most it
+  // can return is a charge that was really taken.
+
+  /** Only the jobs server may ask, and to anyone else these endpoints don't exist. */
+  function fromJobsServer() {
+    const given = req.headers.get('x-agentshot-worker') || ''
+    return !!(env.WORKER_JOBS_SECRET && given && same(given, env.WORKER_JOBS_SECRET))
+  }
+
+  /** Whose key this is and what they can spend. Asked on every request the jobs server gets, so it only reads; with
+   *  ?sync=1 (before a job is priced) the gateway's spend so far is taken off first, so the figure is exact. */
+  async function jobWho() {
+    if (!fromJobsServer()) return fail(404, 'Not found.')
+    const vk = await caller()
+    if (vk instanceof Response) return vk
+    const userId = await owner(vk)
+    if (!wallet || !userId) return fail(503, 'Accounts are unavailable. Try again later.')
+    const account = url.searchParams.get('sync') === '1' ? await sync(env, wallet, vk.id, userId) : await wallet.account(userId)
+    if (!account) return fail(502, 'Could not reach the gateway. Try again in a moment.')
+    return json({ userId, email: account.email, credits: Math.max(0, account.available) })
+  }
+
+  /** Takes a job's credits, once per operation: asked again, it takes nothing more and says what it took the first time. */
+  async function jobCharge() {
+    if (!fromJobsServer()) return fail(404, 'Not found.')
+    const vk = await caller()
+    if (vk instanceof Response) return vk
+    const userId = await owner(vk)
+    if (!wallet || !userId) return fail(503, 'Accounts are unavailable. Try again later.')
+    const b = await req.json().catch(() => null) as { operation?: unknown; credits?: unknown; label?: unknown } | null
+    const operation = typeof b?.operation === 'string' ? b.operation : ''
+    const credits = b?.credits
+    if (!JOB_OPERATION.test(operation) || typeof credits !== 'number' || !Number.isSafeInteger(credits) || credits < 1 || credits > MAX_JOB_CREDITS)
+      return fail(400, 'A charge needs its job and a whole number of credits.')
+    const label = typeof b?.label === 'string' && b.label.trim() ? b.label.trim().slice(0, 80) : 'AgentShot: cloud job'
+    // what the key has spent in the gateway comes off first, so what is left is what can really be spent
+    if (!await sync(env, wallet, vk.id, userId)) return fail(502, 'Could not reach the gateway. Try again in a moment.')
+    const out = await wallet.lock(userId, async () => {
+      // called off already (the jobs server gave up waiting for this very answer): it must not be taken now
+      if (await wallet.voided(operation)) return { status: 409 as const }
+      const had = await wallet.posted(operation)
+      if (had) return had.userId === userId && had.delta < 0 ? { status: 200 as const, charged: -had.delta, again: true } : { status: 409 as const }
+      const left = (await wallet.account(userId))?.available ?? 0
+      if (left < credits) return { status: 402 as const, left }
+      await wallet.post(userId, -credits, 'usage', label, operation)
+      return { status: 200 as const, charged: credits, again: false }
+    })
+    if (out.status === 409) return fail(409, 'This charge was called off.')
+    if (out.status === 402) {
+      track(env, 'manul out of credits', userId, { kind: 'job' })
+      return json({ error: `This needs ${credits} credits and ${Math.max(0, out.left)} are left.`, credits: Math.max(0, out.left) }, 402)
+    }
+    if (!out.again) {
+      console.log(JSON.stringify({ job: operation, user: userId, credits: out.charged }))
+      // the gateway's budget follows the wallet
+      await sync(env, wallet, vk.id, userId).catch(e => console.error('sync:', e.message))
+    }
+    return json({ charged: out.charged })
+  }
+
+  /** Gives a job's charge back, once, to the person it was taken from, and calls the charge off so it can't be taken later. */
+  async function jobRefund() {
+    if (!fromJobsServer()) return fail(404, 'Not found.')
+    if (!wallet) return fail(503, 'Accounts are unavailable. Try again later.')
+    const b = await req.json().catch(() => null) as { userId?: unknown; operation?: unknown } | null
+    const userId = typeof b?.userId === 'string' ? b.userId : ''
+    const operation = typeof b?.operation === 'string' ? b.operation : ''
+    if (!userId || !JOB_OPERATION.test(operation)) return fail(400, 'A refund needs its job and whose job it was.')
+    const out = await wallet.lock(userId, async () => {
+      const done = await wallet.voided(operation)
+      if (done) return done.userId === userId ? { refunded: done.refunded } : undefined
+      const had = await wallet.posted(operation)
+      if (had && had.userId !== userId) return undefined
+      const refunded = had && had.delta < 0 ? -had.delta : 0
+      // the ledger row first, under its own name: if this stops before the charge is marked called off, asking again
+      // finds the row already there and only marks it
+      if (refunded > 0) await wallet.post(userId, refunded, 'usage', 'AgentShot: cloud job refund', `${operation}:refund`)
+      await wallet.setVoided(operation, userId, refunded)
+      if (refunded > 0) console.log(JSON.stringify({ job: operation, user: userId, refunded }))
+      return { refunded }
+    })
+    if (!out) return fail(400, 'That charge is someone else’s.')
+    return json(out)
+  }
+
   async function joinMesh() {
     const poolSecret = req.headers.get('x-manul-pool-secret') || ''
     const isPoolWorker = !!(env.WORKER_POOL_SECRET && poolSecret && same(poolSecret, env.WORKER_POOL_SECRET))
@@ -636,6 +730,11 @@ function phoneCallback(url: URL): Response {
     headers: { location: back.toString(), 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   })
 }
+
+/** The only ledger names the cloud jobs server may charge or refund under: its own jobs, never a plan's grant or a key's spend. */
+const JOB_OPERATION = /^manul:job:[0-9a-z-]{1,64}$/
+/** No job costs this much: a bound against a mistake in the jobs server, not a price. */
+const MAX_JOB_CREDITS = 1_000_000
 
 /** Equal strings, compared in constant time. */
 function same(a: string, b: string) {

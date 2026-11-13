@@ -117,6 +117,8 @@ spec:
             - { name: HEADSCALE_PUBLIC_URL, value: "https://mesh.agentshot.si" }
             - { name: HEADSCALE_API_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: HEADSCALE_API_KEY, optional: true } } }
             - { name: WORKER_POOL_SECRET, valueFrom: { secretKeyRef: { name: manul-secrets, key: WORKER_POOL_SECRET, optional: true } } }
+            # shared with the cloud jobs server; until it is set, the /v1/worker endpoints don't exist
+            - { name: WORKER_JOBS_SECRET, valueFrom: { secretKeyRef: { name: manul-secrets, key: WORKER_JOBS_SECRET, optional: true } } }
           volumeMounts:
             - { name: code, mountPath: /app, readOnly: true }
             - { name: media, mountPath: /config, readOnly: true }
