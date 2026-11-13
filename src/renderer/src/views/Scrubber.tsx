@@ -195,9 +195,14 @@ export function Scrubber({ dir, revision, fps: rate, duration, time, notes, rang
           <div className="absolute inset-x-0 bottom-0 truncate bg-panel/90 px-2 py-0.5 text-[10px] font-medium">{name} · {length(item).toFixed(2)}s</div>
         </div>, document.body)
       })()}
-      {actionItem && movable && onEdit && <div className="absolute bottom-full right-0 z-40 mb-2 w-[360px] max-w-full">
-        <ClipActions key={`${actionItem.id}:${JSON.stringify(actionItem)}`} item={actionItem} items={track.items} start={at0[track.items.indexOf(actionItem)]} time={time} onEdit={onEdit} onClose={() => setActions(null)} onOpen={actionItem.kind === 'clip' ? () => { onOpenClip(actionItem.id, actionItem.clip, at0[track.items.indexOf(actionItem)]); setActions(null) } : undefined} />
-      </div>}
+      {/* above the timeline's right end, on the page's top layer: inside the timeline it sat under the film, which took
+          its clicks wherever the two overlapped */}
+      {actionItem && movable && onEdit && root.current && (() => {
+        const r = root.current.getBoundingClientRect()
+        return createPortal(<div className="fixed z-[90] w-[360px]" style={{ right: Math.max(8, innerWidth - r.right), bottom: innerHeight - r.top + 8, maxWidth: r.width }}>
+          <ClipActions key={`${actionItem.id}:${JSON.stringify(actionItem)}`} item={actionItem} items={track.items} start={at0[track.items.indexOf(actionItem)]} time={time} onEdit={onEdit} onClose={() => setActions(null)} onOpen={actionItem.kind === 'clip' ? () => { onOpenClip(actionItem.id, actionItem.clip, at0[track.items.indexOf(actionItem)]); setActions(null) } : undefined} />
+        </div>, document.body)
+      })()}
       {ask && range && (() => {
         // above the selection's middle (or the note's moment), where the strip shows it now, kept inside the box
         const r = root.current?.getBoundingClientRect(), b = bar.current?.getBoundingClientRect()

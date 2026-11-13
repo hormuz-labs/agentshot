@@ -81,7 +81,9 @@ try {
   assert.equal(await win.locator('[data-clip-actions]').count(), 0, 'selection shows tools in the transport, without opening a popup')
   const transport = win.locator('[data-timeline-transport]')
   const labels = await transport.locator('button').allTextContents()
-  assert.ok(!labels.includes('Trim') && labels.indexOf('Split') < labels.indexOf('Move clip') && labels.indexOf('Move clip') < labels.indexOf('Note'))
+  // the transport reads Move clip, Note, Box, Split (Split moved after Box with the voiceover timeline); no Trim
+  const at = (l) => labels.findIndex(x => x.trim().startsWith(l))
+  assert.ok(!labels.includes('Trim') && at('Move clip') >= 0 && at('Move clip') < at('Note') && at('Note') < at('Split'), `transport order: ${labels.join(' | ')}`)
   await timeline.click({ position: { x: 60, y: 25 } })
   await transport.getByRole('button', { name: 'Split', exact: true }).click()
   await win.waitForFunction(() => document.querySelectorAll('[data-testid="timeline-scrubber"] [data-piece]').length === 3)
