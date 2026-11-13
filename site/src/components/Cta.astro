@@ -1,19 +1,25 @@
 ---
 // The download buttons: all three systems, with the visitor's own first and in yellow. On a phone, where a desktop app
 // can't install, they give way to a button that sends the link to the visitor's computer. The head script sets
-// html[data-os] before first paint. `small` is the header's single button, which leads to the install section.
-import { MAC_ARM, WINDOWS } from '../data/download'
+// html[data-os] before first paint. `small` is the header's single button: a straight download on Mac and Windows,
+// where there is one installer to pick, and the install section everywhere else.
+// data-intel is the Intel Mac build: Base swaps it in where the browser can tell us the chip.
+import { MAC_ARM, MAC_INTEL, WINDOWS } from '../data/download'
 
 interface Props { small?: boolean }
 const { small = false } = Astro.props
 ---
 {small
-  ? <a class="btn go sm" href="/#get">Download</a>
+  ? <span class="top-dl">
+      <a class="btn go sm" href={MAC_ARM} data-intel={MAC_INTEL} data-dl="mac">Download for Mac</a>
+      <a class="btn go sm" href={WINDOWS} data-dl="win">Download for Windows</a>
+      <a class="btn go sm any" href="/#get">Download</a>
+    </span>
   : <>
       <div class="dl-set">
-        <a class="btn" href={MAC_ARM} data-dl="mac" aria-label="Download for Mac"><span class="pre">Download for&nbsp;</span>Mac</a>
-        <a class="btn" href={WINDOWS} data-dl="win" aria-label="Download for Windows"><span class="pre">Download for&nbsp;</span>Windows</a>
-        <a class="btn" href="/#get" data-dl="linux" aria-label="Download for Linux"><span class="pre">Download for&nbsp;</span>Linux</a>
+        <a class="btn" href={MAC_ARM} data-intel={MAC_INTEL} data-dl="mac" aria-label="Download for Mac"><span class="pre">Download for</span>Mac</a>
+        <a class="btn" href={WINDOWS} data-dl="win" aria-label="Download for Windows"><span class="pre">Download for</span>Windows</a>
+        <a class="btn" href="/#get" data-dl="linux" aria-label="Download for Linux"><span class="pre">Download for</span>Linux</a>
       </div>
       <button type="button" class="btn go" data-send>Send to my computer</button>
     </>}
