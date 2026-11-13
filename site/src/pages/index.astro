@@ -413,7 +413,8 @@ const faqs = [
   .hero { position: relative; padding-top: clamp(28px, 5vh, 64px); isolation: isolate; }
   .hero-in { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 18px 56px; align-items: end; }
   .hero-title { position: relative; }
-  h1 { font-size: min(8.4vw, 17vh, 150px); line-height: .9; font-weight: 800; letter-spacing: -.045em; }
+  /* sized so "Give notes." always fits its column on one line: two lines at every width, never three */
+  h1 { font-size: min(8.2vw, 17vh, 118px); line-height: .9; font-weight: 800; letter-spacing: -.045em; }
   h1 :global(.line) { padding-bottom: .04em; }
   .cuts { color: var(--yellow); }
   .hero-sticker { position: absolute; right: 2%; bottom: -.2em; z-index: 2; font-size: clamp(16px, 1.9vw, 26px); }
@@ -435,10 +436,16 @@ const faqs = [
 
   :global(.hs) { z-index: 0; }
   /* around the headline, in the space the words leave: above the side copy, after "notes.", under the demo's corner */
-  :global(.hs-reel) { width: clamp(100px, 9.5vw, 160px); top: -30%; left: 40%; }
-  :global(.hs-play) { width: clamp(56px, 5vw, 88px); top: 30%; left: 54%; }
-  :global(.hs-spark) { width: clamp(40px, 3.6vw, 64px); top: -22%; left: 56%; }
-  :global(.hs-spark4) { width: clamp(34px, 3vw, 54px); bottom: -8%; left: 49%; }
+  :global(.hs-reel) { width: clamp(96px, 9vw, 136px); top: -12%; left: 50%; }
+  :global(.hs-play) { width: clamp(56px, 5vw, 88px); top: 48%; left: 54%; }
+  :global(.hs-spark) { width: clamp(40px, 3.6vw, 60px); top: -16%; left: 41%; }
+  :global(.hs-spark4) { width: clamp(34px, 3vw, 54px); bottom: -4%; left: 86%; }
+  /* a narrow laptop: the side column runs taller than the headline, so centre the two and keep the shapes off the header */
+  @media (min-width: 901px) and (max-width: 1180px) {
+    .hero-in { gap: 18px 36px; align-items: center; }
+    :global(.hs-reel) { top: 0; left: 46%; }
+    :global(.hs-spark) { top: 2%; left: 38%; }
+  }
   :global(.hs-clips) { width: clamp(120px, 12vw, 200px); bottom: -70%; right: -4%; }
 
   .facts { list-style: none; margin-top: clamp(48px, 7vw, 88px); padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -496,7 +503,9 @@ const faqs = [
   .session { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
   .session li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 24px; align-items: start; }
   .session q { grid-column: 2; justify-self: end; max-width: 100%; padding: 16px 22px; border-radius: 24px 24px 6px 24px; background: var(--c); color: var(--on-yellow); font-size: clamp(19px, 2vw, 27px); line-height: 1.18; font-weight: 700; letter-spacing: -.015em; quotes: none; }
-  .session p { grid-column: 1 / span 1; grid-row: 2; padding: 14px 18px; border-radius: 24px 24px 24px 6px; background: var(--bg-2); border: 1px solid var(--line); color: var(--ink-2); }
+  .session p { position: relative; grid-column: 1 / span 1; grid-row: 2; margin-left: 42px; padding: 14px 18px; border-radius: 24px 24px 24px 6px; background: var(--bg-2); border: 1px solid var(--line); color: var(--ink-2); }
+  /* AgentShot's side of the conversation carries its face, so it's clear who is answering */
+  .session p::before { content: ''; position: absolute; left: -43px; bottom: -1px; width: 32px; height: 32px; border-radius: 50%; background: var(--bg-3) url('/icon-56.png') center / cover; }
   .session .mono { grid-column: 2; grid-row: 2; align-self: center; font-size: 13.5px; color: var(--ink-3); }
 
   .point { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 44px; align-items: center; margin-top: 64px; }
@@ -536,15 +545,19 @@ const faqs = [
   .th small { display: block; margin-top: 3px; font-size: 13px; font-weight: 400; color: var(--ink-3); }
 
   .yours { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; }
-  :global(.yours-reel) { width: clamp(90px, 10vw, 150px); left: 44%; top: 48%; }
+  :global(.yours-reel) { width: clamp(90px, 10vw, 150px); left: 30%; top: auto; bottom: -30px; }
   .yours ul { list-style: none; margin: 28px 0 0; padding: 0; }
   .yours li { padding: 14px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); }
   .yours b { color: var(--ink); }
-  .phones { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .yours h2 { font-size: clamp(42px, 6vw, 88px); }
+  .yours > div { position: relative; z-index: 1; }
+  .phones { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; }
   .phone-copy { grid-column: 1 / -1; }
   .phone-copy p { margin-top: 10px; color: var(--ink-2); }
-  .phones img { width: 100%; border-radius: 28px; box-shadow: 0 30px 80px -30px rgba(79, 200, 255, .45); }
-  .phones img:last-child { margin-top: 40px; }
+  /* each screenshot sits in a phone's bezel, the pair leaning apart, so two different screens read as two phones */
+  .phones img { width: 100%; border: 7px solid #060509; border-radius: 36px; background: #000; box-shadow: 0 0 0 1px var(--line), 0 30px 80px -30px rgba(79, 200, 255, .45); }
+  .phones img:nth-of-type(1) { rotate: -2.5deg; }
+  .phones img:last-child { margin-top: 44px; rotate: 2.5deg; }
 
   :global(.get-clips) { width: clamp(110px, 12vw, 190px); right: 2%; top: 4%; }
   .phone-get { margin-bottom: 28px; }
@@ -604,19 +617,31 @@ const faqs = [
     h1 { font-size: min(14.2vw, 26vh, 132px); }
     .slide { padding-block: 40px; }
     :global(.st-wave) { width: 120px; top: calc(var(--gap) - 34px); right: 0; }
-    /* the result before the explanation: on a small screen you see what it made, then how */
-    .job figure { order: -1; }
+    /* one column, in the order it happens: the job, what you say, what comes back, then how it got there */
+    .job-in { gap: 0; }
+    .job-copy { display: contents; }
+    .job .sticker { order: 1; justify-self: start; }
+    .job h3 { order: 2; }
+    .job q { order: 3; }
+    .job figure { order: 4; margin-top: 20px; }
+    .job ol { order: 5; margin-top: 16px; }
     .job .tall video { max-height: 400px; }
+    .job .tall figcaption { text-align: center; }
+    .phones { padding-inline: 8px; }
     :global([data-os='phone']) .oses, :global([data-os='phone']) .agent { display: none; }
     :global([data-os='phone']) .phone-get { margin-bottom: 0; }
     .hero-sticker { position: relative; right: auto; bottom: auto; display: inline-block; margin: 14px 0 0 10px; }
     :global(.hs-clips), :global(.hs-spark4), :global(.hs-play), :global(.hs-spark) { display: none; }
-    :global(.hs-reel) { width: 64px; top: -6px; left: auto; right: 0; }
-    .hero-title .tag { padding-right: 70px; }
+    /* the reel sits in the space "Get cuts." leaves on its line, so the label above keeps its one line */
+    :global(.hs-reel) { width: clamp(46px, 14vw, 104px); top: calc(40px + min(14.2vw, 26vh, 132px) * .92); left: auto; right: 0; }
+    .hero-title .tag { font-size: 12.5px; }
     .facts { grid-template-columns: 1fr 1fr; }
-    .session li { grid-template-columns: 1fr; }
-    .session q { grid-column: 1; justify-self: end; }
+    .session { gap: 26px; }
+    .session li { grid-template-columns: 1fr; gap: 8px; }
+    .session q { grid-column: 1; justify-self: end; max-width: 88%; }
     .session p, .session .mono { grid-column: 1; grid-row: auto; }
+    .session p { justify-self: start; }
+    .session .mono { margin-left: 42px; }
     .point, .yours { grid-template-columns: 1fr; }
     .job { position: relative; top: auto; }
     .job-in { grid-template-columns: 1fr; }
@@ -640,6 +665,13 @@ const faqs = [
     :global([data-os='phone']) :global(.foot) { padding-bottom: 96px; }
   }
   @media (max-width: 560px) {
+    /* small tiles: the credit goes under the film, not over a third of it */
+    .reels { gap: 14px 10px; }
+    .reels button { border-radius: 0; overflow: visible; background: none; }
+    .reels video { border-radius: 12px; background: #000; }
+    .reels button > span { position: static; padding: 7px 2px 0; border-radius: 0; background: none; backdrop-filter: none; font-size: 13px; color: var(--ink-2); }
+    /* the screenshot is too wide to read at this size, so show the half the paragraph is about: the note on the frame */
+    .point img { width: 100%; aspect-ratio: 710 / 955; object-fit: cover; object-position: 100% 0; }
     .facts li { padding: 18px 16px 20px; }
     .phones img:last-child { margin-top: 24px; }
   }

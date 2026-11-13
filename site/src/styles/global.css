@@ -87,6 +87,11 @@ mark { padding: 0 .12em; background: var(--yellow); color: var(--on-yellow); bor
 [data-os='mac'] .top-dl .any, [data-os='win'] .top-dl .any { display: none; }
 .mac-only { display: none; }
 [data-os='mac'] .mac-only { display: inline; }
+/* when the three can't share a row, the visitor's own takes a row to itself and the other two share the next */
+.hero-cta, .plan-cta, .last-cta { container-type: inline-size; }
+@container (max-width: 440px) {
+  [data-os='mac'] .dl-set [data-dl='mac'], [data-os='win'] .dl-set [data-dl='win'], [data-os='linux'] .dl-set [data-dl='linux'] { flex-basis: 100%; }
+}
 [data-send] { display: none; }
 [data-os='phone'] [data-send] { display: inline-flex; }
 [data-os='phone'] .dl-set { display: none; }
