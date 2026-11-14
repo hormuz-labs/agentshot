@@ -4,21 +4,22 @@
 // html[data-os] before first paint. `small` is the header's single button: a straight download on Mac and Windows,
 // where there is one installer to pick, and the install section everywhere else.
 // data-intel is the Intel Mac build: Base swaps it in where the browser can tell us the chip.
-import { MAC_ARM, MAC_INTEL, WINDOWS } from '../data/download'
+// Each button goes to that installer's own page, which starts the download (data/download.ts).
+import { page } from '../data/download'
 
 interface Props { small?: boolean }
 const { small = false } = Astro.props
 ---
 {small
   ? <span class="top-dl">
-      <a class="btn go sm" href={MAC_ARM} data-intel={MAC_INTEL} data-dl="mac">Download for Mac</a>
-      <a class="btn go sm" href={WINDOWS} data-dl="win">Download for Windows</a>
+      <a class="btn go sm" href={page('mac')} data-intel={page('mac-intel')} data-dl="mac" rel="nofollow">Download for Mac</a>
+      <a class="btn go sm" href={page('windows')} data-dl="win" rel="nofollow">Download for Windows</a>
       <a class="btn go sm any" href="/#get">Download</a>
     </span>
   : <>
       <div class="dl-set">
-        <a class="btn" href={MAC_ARM} data-intel={MAC_INTEL} data-dl="mac" aria-label="Download for Mac"><span class="pre">Download for</span>Mac</a>
-        <a class="btn" href={WINDOWS} data-dl="win" aria-label="Download for Windows"><span class="pre">Download for</span>Windows</a>
+        <a class="btn" href={page('mac')} data-intel={page('mac-intel')} data-dl="mac" rel="nofollow" aria-label="Download for Mac"><span class="pre">Download for</span>Mac</a>
+        <a class="btn" href={page('windows')} data-dl="win" rel="nofollow" aria-label="Download for Windows"><span class="pre">Download for</span>Windows</a>
         <a class="btn" href="/#get" data-dl="linux" aria-label="Download for Linux"><span class="pre">Download for</span>Linux</a>
       </div>
       <button type="button" class="btn go" data-send>Send to my computer</button>

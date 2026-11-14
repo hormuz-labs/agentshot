@@ -13,7 +13,8 @@
     "astro": "astro",
     "test:demo": "node test/demo.mjs",
     "test:sizes": "node test/sizes.mjs",
-    "test:landing": "node test/landing.mjs"
+    "test:landing": "node test/landing.mjs",
+    "test:download": "node test/download.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
