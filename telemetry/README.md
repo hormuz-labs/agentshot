@@ -76,8 +76,10 @@ least to the most direct:
 
 | Question | Number | What it really is |
 |---|---|---|
+| How many people visit the website? | Cloudflare Web Analytics for agentshot.si | Visits and page views, with where they came from and their country. No cookies. Browsers that block the counter are missed. |
+| How many clicked Download on the website? | Views of `/download/…` in Cloudflare Web Analytics | Each installer has its own page that starts the download (`site/src/pages/download`), so a click is a page view, by system and country. Linux included; the README's buttons are not. |
 | How many downloads? | `installer_downloads` (and `mac_`, `windows_`, `deb_`, `appimage_downloads`) | Every request for an installer. Homebrew, apt, the Linux and Windows updaters and our own release jobs fetch these too, so it runs well ahead of people. |
-| How many people clicked Download? | `button_downloads` | Installers fetched by the name without a version (`AgentShot-arm64.dmg`), which only the website's and README's buttons use. Mac and Windows only. |
+| How many downloads did the buttons start, website and README together? | `button_downloads` | Installers fetched by the name without a version (`AgentShot-arm64.dmg`), which only the website's and README's buttons use. Mac and Windows only. |
 | How much is it in use? | `update_checks` (and `mac_`, `windows_`, `linux_update_checks`) | Requests for the update feed. An installed app asks when it starts and every six hours after, so one app left open all day is four. |
 | How many people use it, of those who said yes? | People with an `app opened` event, per day or week | One random ID per installation that ticked "Share usage statistics". The boxes start unticked, so this is a floor. |
 | How many have an account? | People with the account service's `manul signed in` event, or the user count in Clerk | People who signed in for an AgentShot key. Those using their own model key never appear. |

@@ -5,7 +5,7 @@ import Demo from '../components/Demo.astro'
 import Pricing from '../components/Pricing.astro'
 import motion from '../data/motion.json'
 import { OFFERS, PRICING_FAQS, PLAN_SUMMARY, STARTER_CREDITS, fmt } from '../data/plans'
-import { GH as gh, version, MAC_ARM, MAC_INTEL, WINDOWS, DEB, DEB_ARM, APPIMAGE, APPIMAGE_ARM, BREW, APT, AGENT_PROMPT } from '../data/download'
+import { GH as gh, version, page, BREW, APT, AGENT_PROMPT } from '../data/download'
 import { clips, diamond, note, play, reel, spark, spark4, wave } from '../lib/shapes'
 
 const title = 'AgentShot: the video editor you talk to. Free and open source.'
@@ -166,7 +166,7 @@ const faqs = [
           <Cta />
         </div>
         <div class="under">
-          <p class="reassure for-computer">Free and open source. Your footage stays on your computer.<span class="mac-only"> <a href={MAC_INTEL} data-dl="mac">Intel Mac?</a></span></p>
+          <p class="reassure for-computer">Free and open source. Your footage stays on your computer.<span class="mac-only"> <a href={page('mac-intel')} data-dl="mac" rel="nofollow">Intel Mac?</a></span></p>
           <p class="reassure for-phone">It runs on Mac, Windows and Linux, so send yourself the link. Free and open source.</p>
           <button class="film-link" type="button" data-film><span class="pl" aria-hidden="true"></span>Watch the film <span class="mono dur">0:28</span></button>
         </div>
@@ -385,22 +385,22 @@ const faqs = [
         <article data-os-col="mac" data-reveal style="--c: var(--pink)">
           <h3>macOS</h3>
           <p class="req">macOS 12+. Signed and notarized.</p>
-          <a class="btn get" href={MAC_ARM}>Apple silicon .dmg</a>
+          <a class="btn get" href={page('mac')} rel="nofollow">Apple silicon .dmg</a>
           <div class="line"><code>{BREW}</code><button class="copy" data-copy={BREW}>Copy</button></div>
-          <p class="more"><a href={MAC_INTEL}>Intel Mac .dmg</a></p>
+          <p class="more"><a href={page('mac-intel')} rel="nofollow">Intel Mac .dmg</a></p>
         </article>
         <article data-os-col="win" data-reveal style="--c: var(--sky)">
           <h3>Windows</h3>
           <p class="req">Windows 10 (1903+) and 11, 64-bit.</p>
-          <a class="btn get" href={WINDOWS}>Setup .exe</a>
+          <a class="btn get" href={page('windows')} rel="nofollow">Setup .exe</a>
           <p class="more">No Node, Python, FFmpeg or developer tools needed. It updates itself. If SmartScreen asks once: More info, then Run anyway.</p>
         </article>
         <article data-os-col="linux" data-reveal style="--c: var(--mint)">
           <h3>Linux</h3>
           <p class="req">Debian, Ubuntu and AppImage.</p>
-          <a class="btn get" href={DEB}>x64 .deb</a>
+          <a class="btn get" href={page('deb')} rel="nofollow">x64 .deb</a>
           <div class="line"><code>curl -fsSL https://apt.agentshot.si/… &amp;&amp; sudo apt install manul</code><button class="copy" data-copy={APT}>Copy</button></div>
-          <p class="more"><a href={DEB_ARM}>ARM .deb</a> · <a href={APPIMAGE}>AppImage x64</a> · <a href={APPIMAGE_ARM}>AppImage ARM</a></p>
+          <p class="more"><a href={page('deb-arm')} rel="nofollow">ARM .deb</a> · <a href={page('appimage')} rel="nofollow">AppImage x64</a> · <a href={page('appimage-arm')} rel="nofollow">AppImage ARM</a></p>
         </article>
       </div>
       <div class="agent" data-reveal>

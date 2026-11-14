@@ -15,6 +15,22 @@ export const DEB_ARM = versioned(`manul_${version}_arm64.deb`)
 export const APPIMAGE = versioned(`manul_${version}_x86_64.AppImage`)
 export const APPIMAGE_ARM = versioned(`manul_${version}_arm64.AppImage`)
 
+// Every installer has a page of its own, /download/<name>/. The buttons go there and the page starts the download,
+// so a download is a page view like any other (the only thing the site's visitor counts can see) and the visitor
+// lands on what to do next. `file` is the name the download arrives under.
+const named = (url: string) => ({ url, file: url.slice(url.lastIndexOf('/') + 1) })
+export const DOWNLOADS = {
+  mac: { ...named(MAC_ARM), system: 'mac', label: 'AgentShot for Mac' },
+  'mac-intel': { ...named(MAC_INTEL), system: 'mac', label: 'AgentShot for Intel Macs' },
+  windows: { ...named(WINDOWS), system: 'windows', label: 'AgentShot for Windows' },
+  deb: { ...named(DEB), system: 'deb', label: 'AgentShot for Debian and Ubuntu' },
+  'deb-arm': { ...named(DEB_ARM), system: 'deb', label: 'AgentShot for Debian and Ubuntu on ARM' },
+  appimage: { ...named(APPIMAGE), system: 'appimage', label: 'the AgentShot AppImage' },
+  'appimage-arm': { ...named(APPIMAGE_ARM), system: 'appimage', label: 'the AgentShot AppImage for ARM' },
+} as const
+export type Download = keyof typeof DOWNLOADS
+export const page = (d: Download) => `/download/${d}/`
+
 export const BREW = 'brew install hormuz-labs/tap/manul'
 export const APT = `curl -fsSL https://apt.agentshot.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &&
 echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.agentshot.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &&

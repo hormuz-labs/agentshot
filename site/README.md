@@ -22,6 +22,7 @@ npm run site:build        # → site/dist/
 npm run site:test:demo    # clicks through the demo in Chrome, screenshots each stage
 npm run site:test:sizes   # checks 18 screen sizes for anything spilling off screen
 npm run site:test:landing # the message box, the jobs, an example's prompt, and no sideways scroll on a phone
+npm run site:test:download # each installer's page starts the right file by itself; nothing is really downloaded
 ```
 
 Originally deployed by Cloudflare Pages from `hormuz-labs/manul-site` on every push to `main`.

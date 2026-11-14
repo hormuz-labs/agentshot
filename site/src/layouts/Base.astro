@@ -4,7 +4,6 @@ import '@fontsource/ibm-plex-mono/500.css'
 import '../styles/global.css'
 import Cta from '../components/Cta.astro'
 import { GH } from '../data/download'
-import { STARTER_CREDITS, fmt } from '../data/plans'
 
 interface Props {
   title: string
@@ -84,20 +83,9 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
     <Cta />
     <a class="btn ghost" href={GH}>Star on GitHub</a>
   </div>
-  <div class="toast" id="toast" role="status" hidden>
-    <p><b>Your download has started.</b> Open it, sign in for {fmt(STARTER_CREDITS)} free credits, and drop in a video.</p>
-    <a href="/#get">Install help</a>
-    <button type="button" aria-label="Dismiss">×</button>
-  </div>
 
   <script>
     const os = document.documentElement.dataset.os
-    const toast = document.getElementById('toast')!
-    toast.querySelector('button')!.addEventListener('click', () => (toast.hidden = true))
-
-    // Mac and Windows download straight away; Linux has several packages, so it goes to the install section
-    document.querySelectorAll<HTMLAnchorElement>('a[data-dl]:not([data-dl="linux"])').forEach(a => a.addEventListener('click', () => (toast.hidden = false)))
-
     // "Download for Mac" is the Apple silicon build. Chrome and Edge can say which chip this Mac has, so an Intel Mac
     // gets the Intel build from the same button (Safari can't say; the hero and the install section link to it)
     const uad = (navigator as unknown as { userAgentData?: { getHighEntropyValues?: (h: string[]) => Promise<{ architecture?: string }> } }).userAgentData

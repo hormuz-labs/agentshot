@@ -139,9 +139,6 @@ mark { padding: 0 .12em; background: var(--yellow); color: var(--on-yellow); bor
 .dock .btn { min-width: 0; min-height: 48px; padding: 0 10px; font-size: 16px; }
 @media (max-width: 370px) { .dock { grid-template-columns: 1.2fr 1fr; gap: 6px; padding-inline: 8px; } .dock .btn { padding: 0 6px; font-size: 14px; letter-spacing: -.01em; } }
 
-.toast { position: fixed; right: 16px; bottom: 16px; z-index: 40; display: flex; align-items: center; gap: 16px; max-width: min(560px, 100% - 32px); padding: 14px 12px 14px 18px; background: var(--ink); color: var(--bg); font-size: 15.5px; border-radius: 16px; }
-.toast a { flex: none; font-weight: 700; }
-.toast button { flex: none; width: 32px; height: 32px; border: 0; background: none; color: inherit; font-size: 22px; line-height: 1; cursor: pointer; }
 
 /* ---------------------------------------------------------------- shapes (src/lib/shapes.ts) */
 .shape { position: absolute; z-index: 0; pointer-events: none; will-change: transform; }
