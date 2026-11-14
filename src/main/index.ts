@@ -41,7 +41,7 @@ import type { TelemetryState } from '../shared/telemetry'
 import type { BaseEvent } from '@ag-ui/core'
 import { Memory } from './memory'
 import { History } from './history'
-import { Skills } from './skills'
+import { Skills, type OwnSkill } from './skills'
 import { Browser } from './browser'
 import { chromeCdp, devToolsPortFiles, probeExpression } from './cdp'
 import { BskCapture, ScreencastCapture, type Capture } from './take'
@@ -729,6 +729,8 @@ const takes = new Takes()
 /** The agent's bsk wrappers' state (see bskScript): yield/ (commands running, for a take filming through bsk) and halted
  *  (the user interrupted the agent in the browser; cleared by their next message). */
 const takeState = () => join(app.getPath('userData'), 'takes')
+/** The person's own skills: plain files, which the agent may read and never change. */
+const ownSkillsDir = () => join(app.getPath('userData'), 'my-skills')
 const yieldDir = () => join(takeState(), 'yield')
 const haltFile = () => join(takeState(), 'halted')
 const run = promisify(execFile)
@@ -1077,6 +1079,10 @@ function wire() {
   ipcMain.handle('skills:enable', (_e, id: string, on: boolean) => { skills.setEnabled(id, on); return skillState() })
   ipcMain.handle('skills:profile', (_e, id: string) => { skills.useProfile(id); return skillState() })
   ipcMain.handle('skills:newProfile', (_e, name: string) => { const p = skills.createProfile(name); skills.useProfile(p.id); return skillState() })
+  // the person's own skills, written in Settings → Skills
+  ipcMain.handle('skills:own', (_e, id: string) => skills.own(id))
+  ipcMain.handle('skills:save', (_e, draft: OwnSkill) => { skills.saveOwn(draft); return skillState() })
+  ipcMain.handle('skills:remove', (_e, id: string) => { skills.removeOwn(id); return skillState() })
   ipcMain.handle('memory:list', () => memory.list())
   ipcMain.handle('memory:save', (_e, name: string, description: string, body: string) => { memory.remember(name, description, body); return memory.list() })
   ipcMain.handle('memory:forget', (_e, name: string) => { memory.forget(name); return memory.list() })
@@ -1466,7 +1472,7 @@ const startup = app.whenReady().then(async () => {
   Tools.setOnInstalled((tool, ok) => telemetry.track('tool installed', { tool, ok }))
   memory = new Memory(join(app.getPath('userData'), 'memory'))
   const resources = app.isPackaged ? process.resourcesPath : join(import.meta.dirname, '../../resources')
-  skills = new Skills({ bundled: join(resources, 'skills'), profiles: join(app.getPath('userData'), 'profiles') })
+  skills = new Skills({ bundled: join(resources, 'skills'), profiles: join(app.getPath('userData'), 'profiles'), own: ownSkillsDir() })
   // skills come only from the bundle now: drop what the old over-the-air feed downloaded (a cache, never the user's)
   rmSync(join(app.getPath('userData'), 'skill-updates'), { recursive: true, force: true })
   wire()
@@ -1513,7 +1519,7 @@ const startup = app.whenReady().then(async () => {
       // the agent's files and shell stay in the project: AgentShot's resources read-only, and the browser CLI's own state
       fence: (() => {
         const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })
-        return { resources, extraRw: [privateHome(app.getPath('userData'), homedir()), userBskHome(homedir()), takeState()], extraRo: [agentBin, ...(userBsk ? [dirname(userBsk)] : [])] }
+        return { resources, extraRw: [privateHome(app.getPath('userData'), homedir()), userBskHome(homedir()), takeState()], extraRo: [agentBin, ownSkillsDir(), ...(userBsk ? [dirname(userBsk)] : [])] }
       })(),
       dbPath: join(app.getPath('userData'), 'agent.sqlite'),
       memory,
