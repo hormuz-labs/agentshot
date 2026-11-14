@@ -179,6 +179,9 @@ Releases (signing, Windows NSIS, Homebrew, apt) are covered in [RELEASING.md](RE
 AgentShot is open source under the [GNU General Public License v3.0 or later](LICENSE), copyright agenthormuz@proton.me; redistributions keep the notices in [NOTICE](NOTICE). A few parts carry their own licence, marked at the top of the file:
 the ffmpeg build modules are Apache-2.0 (texts in [LICENSES](LICENSES)).
 
+The licence covers the code, not the names or the artwork. A fork that is distributed takes a name, an icon and a mascot
+of its own: [TRADEMARKS.md](TRADEMARKS.md) says what may be done with AgentShot's.
+
 ### Contributor agreement
 
 By sending a contribution (a pull request, a patch, a commit) you agree that:
@@ -189,3 +192,10 @@ By sending a contribution (a pull request, a patch, a commit) you agree that:
    modify, distribute and sublicense it, and to release it under other licence terms, including commercial ones.
 
 You keep the copyright in your contribution.
+
+Each pull request says so in its description, with this line ticked. The template puts it there, and a check
+(`.github/workflows/contributor-agreement.yml`) fails until it is:
+
+```
+- [x] I have read the contributor agreement in CONTRIBUTING.md and agree to it for this contribution.
+```

@@ -7,6 +7,10 @@ version. It is distributed WITHOUT ANY WARRANTY; see LICENSE for the full text.
 
 Source: https://github.com/hormuz-labs/agentshot
 
+Additional term under section 7(e) of the GNU General Public License v3: this licence grants no right to use the names
+AgentShot, Manul or Hormuz Labs, or the AgentShot icon, logo and mascot. TRADEMARKS.md says what may be done with them;
+a changed version that is distributed takes a name and artwork of its own.
+
 Releases up to 0.1.1 and the code published before 2026-10-08 were licensed GPL-3.0; the code published from
 2026-10-08 until the change to GPL-3.0-or-later was licensed Apache-2.0 (LICENSES/Apache-2.0.txt) and those
 published versions remain available under it.
