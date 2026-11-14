@@ -1,14 +1,18 @@
 // The check every pull request gets: its description must carry the contributor agreement, ticked. The description is
 // the record that the author agreed, so what counts as agreeing has to be exact.
-import { execFileSync, spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error a plain script, run as it is by the workflow
 import { AGREEMENT, agreed } from '../scripts/contributor-agreement.mjs'
 
 const from = (body: string | null | undefined, association = 'CONTRIBUTOR', type = 'User') => agreed({ body, association, type }) as { ok: boolean; why: string }
 const ticked = `- [x] ${AGREEMENT}`
-const template = readFileSync('.github/pull_request_template.md', 'utf8')
+// a Windows checkout may hand these files over with CRLF line ends: what they say is the same
+const read = (path: string) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
+const template = read('.github/pull_request_template.md')
 
 describe('the contributor agreement on a pull request', () => {
   it('is agreed to when its line is ticked in the description', () => {
@@ -59,8 +63,8 @@ describe('the contributor agreement on a pull request', () => {
   })
 
   it('says the same sentence everywhere it is written down', () => {
-    expect(readFileSync('CONTRIBUTING.md', 'utf8')).toContain(ticked)
-    expect(readFileSync('CONTRIBUTING.md', 'utf8')).toContain('### Contributor agreement')
+    expect(read('CONTRIBUTING.md')).toContain(ticked)
+    expect(read('CONTRIBUTING.md')).toContain('### Contributor agreement')
   })
 
   it('runs as the workflow runs it: text from the environment, a failing exit when not agreed', () => {
@@ -72,14 +76,17 @@ describe('the contributor agreement on a pull request', () => {
     expect(run({ PR_BODY: '', AUTHOR_ASSOCIATION: 'OWNER', AUTHOR_TYPE: 'User' }).status).toBe(0)
     expect(run({}).status).toBe(1)
     // a description is a stranger's text: it is never run, whatever it says
-    const nasty = run({ PR_BODY: '$(touch /tmp/agentshot-should-not-exist); `id`; "; exit 0', AUTHOR_ASSOCIATION: 'NONE', AUTHOR_TYPE: 'User' })
+    const marker = join(mkdtempSync(join(tmpdir(), 'agentshot-agreement-')), 'ran')
+    const nasty = run({ PR_BODY: `$(node -e "require('fs').writeFileSync('${marker.replaceAll('\\', '/')}','x')"); \`id\`; "; exit 0`, AUTHOR_ASSOCIATION: 'NONE', AUTHOR_TYPE: 'User' })
     expect(nasty.status).toBe(1)
-    expect(() => execFileSync('ls', ['/tmp/agentshot-should-not-exist'], { stdio: 'pipe' })).toThrow()
+    expect(existsSync(marker)).toBe(false)
+    // the same description with CRLF line ends, as a browser on Windows may send it, still counts when ticked
+    expect(run({ PR_BODY: `A change.\r\n\r\n${ticked}\r\n`, AUTHOR_ASSOCIATION: 'CONTRIBUTOR', AUTHOR_TYPE: 'User' }).status).toBe(0)
   })
 })
 
 describe('the workflow that runs it', () => {
-  const workflow = readFileSync('.github/workflows/contributor-agreement.yml', 'utf8')
+  const workflow = read('.github/workflows/contributor-agreement.yml')
   it('judges a pull request with the check from main, never with the pull request’s own code', () => {
     expect(workflow).toContain('pull_request_target:')
     expect(workflow).not.toMatch(/ref:\s*\$\{\{\s*github\.event\.pull_request\.head/)
@@ -92,6 +99,12 @@ describe('the workflow that runs it', () => {
     expect(run).toEqual(['        run: node scripts/contributor-agreement.mjs'])
     expect(workflow).toContain('PR_BODY: ${{ github.event.pull_request.body }}')
   })
+  it('reads the same whatever line ends the checkout gave the files', () => {
+    const crlf = workflow.replace(/\n/g, '\r\n')
+    expect(crlf.replace(/\r\n/g, '\n')).toBe(workflow)
+    expect(workflow).not.toContain('\r')
+    expect(from(template.replace(/\n/g, '\r\n').replace('- [ ]', '- [x]')).ok).toBe(true)
+  })
   it('looks again when the description is edited, which is how the box gets ticked', () => {
     expect(workflow).toMatch(/types: \[opened, edited, reopened, synchronize\]/)
   })
@@ -99,15 +112,14 @@ describe('the workflow that runs it', () => {
 
 describe('names and logos', () => {
   it('the policy is where the licence notices and the README point', () => {
-    const policy = readFileSync('TRADEMARKS.md', 'utf8')
+    const policy = read('TRADEMARKS.md')
     for (const name of ['AgentShot', 'Manul', 'Hormuz Labs']) expect(policy).toContain(name)
-    expect(readFileSync('NOTICE', 'utf8')).toContain('TRADEMARKS.md')
-    expect(readFileSync('NOTICE', 'utf8')).toContain('section 7(e)')
-    expect(readFileSync('README.md', 'utf8')).toContain('href="TRADEMARKS.md"')
-    expect(readFileSync('CONTRIBUTING.md', 'utf8')).toContain('(TRADEMARKS.md)')
+    expect(read('NOTICE')).toContain('TRADEMARKS.md')
+    expect(read('NOTICE')).toContain('section 7(e)')
+    expect(read('README.md')).toContain('href="TRADEMARKS.md"')
+    expect(read('CONTRIBUTING.md')).toContain('(TRADEMARKS.md)')
   })
-  it('the artwork it names is in the repository', async () => {
-    const { existsSync } = await import('node:fs')
+  it('the artwork it names is in the repository', () => {
     for (const path of ['build/icon.png', 'build/icons', 'LICENSE', 'NOTICE']) expect(existsSync(path), path).toBe(true)
   })
 })

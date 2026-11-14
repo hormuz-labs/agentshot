@@ -2,6 +2,9 @@
 // sentence below, ticked, in the pull request's description. The description and its history stay on GitHub, which is
 // the record that they agreed. Run by .github/workflows/contributor-agreement.yml on every pull request.
 
+import { realpathSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+
 /** What a contributor ticks. The pull request template carries it, with "contributor agreement" as a link. */
 export const AGREEMENT = 'I have read the contributor agreement in CONTRIBUTING.md and agree to it for this contribution.'
 
@@ -36,7 +39,8 @@ export function agreed({ body, association, type }) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// run as a program, not imported: said in a way that holds on Windows (drive letters) and through linked folders
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const r = agreed({ body: process.env.PR_BODY, association: process.env.AUTHOR_ASSOCIATION, type: process.env.AUTHOR_TYPE })
   console.log(r.why)
   process.exit(r.ok ? 0 : 1)
