@@ -64,6 +64,13 @@ export interface Wallet {
   setCharged(keyId: string, userId: string, credits: number): Promise<void>
   /** Every key with spend to look at. */
   keys(): Promise<string[]>
+  /** The ledger row posted under this key, if there is one: whose it is and what it added or took. */
+  posted(key: string): Promise<{ userId: string; delta: number } | undefined>
+  /** A cloud job's charge that has been called off: whose job it was and what was given back (0 when nothing had been
+   *  taken). Once a charge is here it is never taken, so a refund can't be overtaken by a charge that arrives late. */
+  voided(operation: string): Promise<{ userId: string; refunded: number } | undefined>
+  /** Calls a job's charge off. The first call for an operation is the one that counts. */
+  setVoided(operation: string, userId: string, refunded: number): Promise<void>
   /** One at a time per person, across replicas. */
   lock<T>(userId: string, run: () => Promise<T>): Promise<T>
   close?(): Promise<void>
@@ -83,6 +90,10 @@ export interface Wallet {
 export async function postgresWallet(connectionString: string, agentshotDatabase?: string, { createTables = false } = {}): Promise<Wallet> {
   const pool = new pg.Pool({ connectionString, max: 5, connectionTimeoutMillis: 10_000 })
   pool.on('error', e => console.error('wallet database:', e.message))
+  // A lock holds a connection for as long as its work runs, and that work needs connections of its own. Locks get
+  // their own pool, so those waiting for a lock can never use up the connections the one holding it needs to finish.
+  const lockPool = new pg.Pool({ connectionString, max: 8, connectionTimeoutMillis: 30_000 })
+  lockPool.on('error', e => console.error('wallet locks:', e.message))
   if (createTables) await pool.query(PITCH_TABLES)
   // What AgentShot has charged per key lives with AgentShot, not in Pitch's schema.
   const own = agentshotDatabase ? new pg.Pool({ connectionString: agentshotDatabase, max: 3, connectionTimeoutMillis: 10_000 }) : pool
@@ -107,6 +118,12 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
     updated_at timestamptz NOT NULL DEFAULT now()
   )`)
   await own.query(`ALTER TABLE manul_workers ADD COLUMN IF NOT EXISTS leased_since timestamptz`)
+  await own.query(`CREATE TABLE IF NOT EXISTS manul_job_voids (
+    operation text PRIMARY KEY,
+    user_id text NOT NULL,
+    refunded bigint NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`)
   type WorkerRow = { id: string; owner_id: string | null; pool: boolean; name: string; urls: unknown; fingerprint: string; secret: string; capabilities: unknown; leased_to: string | null; leased_until: string | Date | null; leased_since?: string | Date | null; updated_at: string | Date }
   const rowToWorker = (r: WorkerRow): WorkerRecord => ({
     id: r.id,
@@ -163,8 +180,19 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
         ON CONFLICT (key_id) DO UPDATE SET user_id = excluded.user_id, credits = excluded.credits, updated_at = now()`, [keyId, userId, credits])
     },
     async keys() { return (await own.query('SELECT key_id FROM manul_gateway_charges')).rows.map(r => r.key_id) },
+    async posted(key) {
+      const r = await pool.query(`SELECT "userId", delta FROM "CreditTransaction" WHERE "idempotencyKey" = $1`, [key])
+      return r.rows[0] ? { userId: r.rows[0].userId, delta: Number(r.rows[0].delta) } : undefined
+    },
+    async voided(operation) {
+      const r = await own.query('SELECT user_id, refunded FROM manul_job_voids WHERE operation = $1', [operation])
+      return r.rows[0] ? { userId: r.rows[0].user_id, refunded: Number(r.rows[0].refunded) } : undefined
+    },
+    async setVoided(operation, userId, refunded) {
+      await own.query('INSERT INTO manul_job_voids (operation, user_id, refunded) VALUES ($1, $2, $3) ON CONFLICT (operation) DO NOTHING', [operation, userId, refunded])
+    },
     async lock(userId, run) {
-      const client = await pool.connect()
+      const client = await lockPool.connect()
       let broken = false
       try {
         await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', ['manul-wallet:' + userId])
@@ -239,7 +267,7 @@ export async function postgresWallet(connectionString: string, agentshotDatabase
       )
       return r.rows[0] ? rowToWorker(r.rows[0]) : undefined
     },
-    async close() { await pool.end(); if (own !== pool) await own.end() },
+    async close() { await lockPool.end(); await pool.end(); if (own !== pool) await own.end() },
   }
   return wallet
 }
@@ -261,10 +289,11 @@ export function memoryWallet() {
   const ledger: { userId: string; delta: number; type: string; description: string; key: string }[] = []
   const subscriptions = new Map<string, Subscription>()
   const charges = new Map<string, Charged>()
+  const voids = new Map<string, { userId: string; refunded: number }>()
   const locks = new Map<string, Promise<unknown>>()
   const workers = new Map<string, WorkerRecord>()
-  const wallet: Wallet & { ledger: typeof ledger; subscriptions: typeof subscriptions; profiles: typeof profiles; workers: typeof workers } = {
-    ledger, subscriptions, profiles, workers,
+  const wallet: Wallet & { ledger: typeof ledger; subscriptions: typeof subscriptions; profiles: typeof profiles; workers: typeof workers; voids: typeof voids } = {
+    ledger, subscriptions, profiles, workers, voids,
     async link(email, agentshotUser) {
       for (const [id, p] of profiles) if (p.email.toLowerCase() === email.toLowerCase()) return id
       const id = 'manul_' + agentshotUser
@@ -284,6 +313,12 @@ export function memoryWallet() {
     async charged(keyId) { return charges.get(keyId) },
     async setCharged(keyId, userId, credits) { charges.set(keyId, { userId, credits }) },
     async keys() { return [...charges.keys()] },
+    async posted(key) {
+      const r = ledger.find(r => r.key === key)
+      return r && { userId: r.userId, delta: r.delta }
+    },
+    async voided(operation) { return voids.get(operation) },
+    async setVoided(operation, userId, refunded) { if (!voids.has(operation)) voids.set(operation, { userId, refunded }) },
     async lock(userId, run) {
       const next = (locks.get(userId) || Promise.resolve()).catch(() => {}).then(run)
       locks.set(userId, next)

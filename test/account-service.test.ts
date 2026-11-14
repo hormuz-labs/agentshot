@@ -510,3 +510,186 @@ describe('the account service: headscale mesh and worker pool', () => {
     expect(u2.worker.id).toBe('pool-idle')
   })
 })
+
+// What the cloud jobs server (hormuz-labs/agentshot-worker) asks: its side is api/account-worker.v1.md there.
+describe('the account service: cloud jobs', () => {
+  const secret = 'jobs_secret_123'
+  const jobsEnv: Env = { ...env, WORKER_JOBS_SECRET: secret }
+  const to = (path: string, init: RequestInit = {}, e: Env = jobsEnv) => handle(new Request(`https://account.test${path}`, init), e, wallet)
+  const trusted = { 'x-agentshot-worker': secret, 'content-type': 'application/json' }
+  const who = (key = asKey()) => to('/v1/worker/who', { headers: { ...key, ...trusted } })
+  const charge = (operation: unknown, credits: unknown, key = asKey()) =>
+    to('/v1/worker/charge', { method: 'POST', headers: { ...key, ...trusted }, body: JSON.stringify({ operation, credits, label: 'AgentShot: upscale to 4K' }) })
+  const refund = (operation: unknown, userId: unknown = 'manul_user_1') => to('/v1/worker/refund', { method: 'POST', headers: trusted, body: JSON.stringify({ userId, operation }) })
+  const left = async (userId = 'manul_user_1') => (await wallet.account(userId))!.available
+  const rows = (operation: string) => wallet.ledger.filter(r => r.key.startsWith(operation))
+  const job = 'manul:job:1794610731-25b051dc'
+
+  it('does not exist for anyone but the jobs server', async () => {
+    await ask('good')
+    const before = wallet.ledger.length
+    const body = JSON.stringify({ operation: job, credits: 150, userId: 'manul_user_1' })
+    for (const headers of [{ ...asKey() }, { ...asKey(), 'x-agentshot-worker': 'jobs_secret_124' }, { ...asKey(), 'x-agentshot-worker': '' }]) {
+      expect((await to('/v1/worker/who', { headers })).status).toBe(404)
+      expect((await to('/v1/worker/charge', { method: 'POST', headers, body })).status).toBe(404)
+      expect((await to('/v1/worker/refund', { method: 'POST', headers, body })).status).toBe(404)
+    }
+    // with no secret set on the service, even the right-looking header opens nothing (and an empty one never matches)
+    for (const e of [env, { ...env, WORKER_JOBS_SECRET: '' }]) {
+      expect((await to('/v1/worker/who', { headers: { ...asKey(), ...trusted } }, e)).status).toBe(404)
+      expect((await to('/v1/worker/charge', { method: 'POST', headers: { ...asKey(), ...trusted }, body }, e)).status).toBe(404)
+      expect((await to('/v1/worker/refund', { method: 'POST', headers: { 'x-agentshot-worker': '' }, body }, e)).status).toBe(404)
+    }
+    expect(wallet.ledger.length).toBe(before)
+    expect(wallet.voids.size).toBe(0)
+  })
+
+  it('says whose key it is and what they can spend, with the gateway’s spend already taken off', async () => {
+    await ask('good')
+    keys.vk_1.budgets[0].current_usage = 0.5
+    // a plain ask only reads: nothing is charged and the gateway is asked nothing but whose key it is
+    const before = calls.length
+    const plain = await who()
+    expect(plain.status).toBe(200)
+    expect(await plain.json()).toEqual({ userId: 'manul_user_1', email: 'ada@example.com', credits: STARTER_CREDITS })
+    expect(calls.slice(before).map(c => c.method)).toEqual(['GET'])
+    expect(wallet.ledger.filter(r => r.type === 'usage')).toEqual([])
+    // before a job is priced, what the key has spent in the gateway is taken off first
+    const r = await to('/v1/worker/who?sync=1', { headers: { ...asKey(), ...trusted } })
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ userId: 'manul_user_1', email: 'ada@example.com', credits: STARTER_CREDITS - creditsForCost(0.5) })
+    // a key that isn't theirs, and one that has been turned off
+    expect((await who(asKey('sk-bf-forged'))).status).toBe(401)
+    expect((await who({ authorization: 'Bearer sk-bf-vk_1' } as any)).status).toBe(401)
+    keys.vk_1.is_active = false
+    expect((await who()).status).toBe(403)
+  })
+
+  it('takes a job’s credits once, however often it is asked', async () => {
+    await ask('good')
+    const r = await charge(job, 150)
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ charged: 150 })
+    expect(await left()).toBe(STARTER_CREDITS - 150)
+    expect(rows(job)).toEqual([{ userId: 'manul_user_1', delta: -150, type: 'usage', description: 'AgentShot: upscale to 4K', key: job }])
+    // the key's budget follows the wallet, so the credits can't also be spent on models
+    expect(keys.vk_1.budgets[0].max_limit).toBeCloseTo(costForCredits(STARTER_CREDITS - 150))
+
+    // an answer lost on the way: asked again, with the same or even another amount, it says what it took the first time
+    expect(await (await charge(job, 150)).json()).toEqual({ charged: 150 })
+    expect(await (await charge(job, 300)).json()).toEqual({ charged: 150 })
+    expect(await left()).toBe(STARTER_CREDITS - 150)
+    expect(rows(job)).toHaveLength(1)
+  })
+
+  it('takes nothing when there are too few credits, and all of them when there are just enough', async () => {
+    await ask('good')
+    const r = await charge(job, STARTER_CREDITS + 1)
+    expect(r.status).toBe(402)
+    expect(await r.json()).toMatchObject({ credits: STARTER_CREDITS })
+    expect(await left()).toBe(STARTER_CREDITS)
+    expect(rows(job)).toEqual([])
+    expect((await charge(job, STARTER_CREDITS)).status).toBe(200)
+    expect(await left()).toBe(0)
+  })
+
+  it('counts what the key spent in the gateway before deciding there is enough', async () => {
+    await ask('good')
+    keys.vk_1.budgets[0].current_usage = costForCredits(900)
+    const r = await charge(job, 150)
+    expect(r.status).toBe(402)
+    expect((await r.json()).credits).toBe(STARTER_CREDITS - 900)
+    expect(rows(job)).toEqual([])
+  })
+
+  it('two charges at once can’t spend the same credits', async () => {
+    await ask('good')
+    const [a, b] = await Promise.all([charge('manul:job:a', 600), charge('manul:job:b', 600)])
+    expect([a.status, b.status].sort()).toEqual([200, 402])
+    expect(await left()).toBe(STARTER_CREDITS - 600)
+    // and the same charge asked twice at once is taken once
+    const twice = await Promise.all([charge('manul:job:c', 100), charge('manul:job:c', 100)])
+    expect(twice.map(r => r.status)).toEqual([200, 200])
+    expect(await left()).toBe(STARTER_CREDITS - 700)
+    expect(rows('manul:job:c')).toHaveLength(1)
+  })
+
+  it('gives a charge back once, to the person it was taken from', async () => {
+    await ask('good')
+    await charge(job, 150)
+    const r = await refund(job)
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ refunded: 150 })
+    expect(await left()).toBe(STARTER_CREDITS)
+    expect(await (await refund(job)).json()).toEqual({ refunded: 150 })
+    expect(await (await refund(job)).json()).toEqual({ refunded: 150 })
+    expect(await left()).toBe(STARTER_CREDITS)
+    expect(rows(job).map(r => [r.delta, r.key])).toEqual([[-150, job], [150, `${job}:refund`]])
+    // a refunded charge is not taken again under the same name
+    expect((await charge(job, 150)).status).toBe(409)
+    expect(await left()).toBe(STARTER_CREDITS)
+  })
+
+  it('returns nothing for a charge that was never taken, and then never takes it', async () => {
+    await ask('good')
+    // the jobs server gave up waiting for the charge's answer and asked for it back; the charge arrives after
+    expect(await (await refund(job)).json()).toEqual({ refunded: 0 })
+    expect(await left()).toBe(STARTER_CREDITS)
+    const late = await charge(job, 150)
+    expect(late.status).toBe(409)
+    expect(await left()).toBe(STARTER_CREDITS)
+    expect(rows(job)).toEqual([])
+    expect(await (await refund(job)).json()).toEqual({ refunded: 0 })
+  })
+
+  it('finishes a refund that stopped halfway without paying it twice', async () => {
+    await ask('good')
+    await charge(job, 150)
+    // the credits went back, but the service stopped before it could mark the charge called off
+    await wallet.post('manul_user_1', 150, 'usage', 'AgentShot: cloud job refund', `${job}:refund`)
+    expect(await left()).toBe(STARTER_CREDITS)
+    expect(await (await refund(job)).json()).toEqual({ refunded: 150 })
+    expect(await left()).toBe(STARTER_CREDITS)
+    expect(rows(job)).toHaveLength(2)
+  })
+
+  it('never gives one person’s charge to another, or charges two people under one name', async () => {
+    await ask('good')
+    await ask('good_2')
+    await charge(job, 150)
+    expect((await refund(job, 'manul_user_2')).status).toBe(400)
+    expect(await left()).toBe(STARTER_CREDITS - 150)
+    expect(await left('manul_user_2')).toBe(STARTER_CREDITS)
+    expect(wallet.voids.size).toBe(0)
+    expect((await charge(job, 150, asKey('sk-bf-vk_2', 'vk_2'))).status).toBe(409)
+    expect(await left('manul_user_2')).toBe(STARTER_CREDITS)
+    // the right person still gets it back
+    expect(await (await refund(job)).json()).toEqual({ refunded: 150 })
+    expect((await refund(job, 'manul_user_2')).status).toBe(400)
+    expect(await left()).toBe(STARTER_CREDITS)
+  })
+
+  it('touches no ledger row but a job’s own', async () => {
+    await ask('good')
+    await wallet.post('manul_user_1', 10_000, 'promo', 'pro plan', 'sub_grant:sub_1:initial')
+    await charge(job, 150)
+    for (const name of ['manul:starter:manul_user_1', 'sub_grant:sub_1:initial', 'manul:gateway:vk_1:200', `${job}:refund`, 'manul:job:', 'manul:job:A B', '', 7, null]) {
+      expect((await charge(name, 150)).status, String(name)).toBe(400)
+      expect((await refund(name)).status, String(name)).toBe(400)
+    }
+    expect((await refund(job, '')).status).toBe(400)
+    expect((await to('/v1/worker/charge', { method: 'POST', headers: { ...asKey(), ...trusted }, body: '{ not json' })).status).toBe(400)
+    expect((await to('/v1/worker/refund', { method: 'POST', headers: trusted, body: '{ not json' })).status).toBe(400)
+    expect(await left()).toBe(STARTER_CREDITS + 10_000 - 150)
+    expect(wallet.voids.size).toBe(0)
+  })
+
+  it('refuses an amount that isn’t a whole number of credits above nothing', async () => {
+    await ask('good')
+    for (const credits of [0, -150, 1.5, '150', null, undefined, NaN, Infinity, 1_000_001, 2 ** 60]) {
+      expect((await charge(job, credits)).status, String(credits)).toBe(400)
+    }
+    expect(await left()).toBe(STARTER_CREDITS)
+    expect(rows(job)).toEqual([])
+  })
+})
