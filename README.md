@@ -49,9 +49,9 @@ Editing video is thousands of small decisions made with a mouse. AgentShot keeps
 </tr>
 </table>
 
-https://github.com/user-attachments/assets/084276fb-6129-47e2-9cba-4724c1432990
+https://github.com/user-attachments/assets/eb1ca7a5-a7a9-47b1-8897-9ec0ddba4ee7
 
-<p align="center"><sub>90 seconds of AgentShot, starring the grumpiest cat on Earth. Footage: BBC, <i>Frozen Planet II</i>.</sub></p>
+<p align="center"><sub>28 seconds of AgentShot: say it, and it makes the cut. Sound on.</sub></p>
 
 ## What it makes
 
