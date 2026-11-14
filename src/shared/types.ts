@@ -175,7 +175,7 @@ export type Job = {
   title: string
   /** Shown once it finished, e.g. "Installed Whisper". */
   doneTitle?: string
-  kind: 'download' | 'install' | 'transcribe' | 'speakers' | 'render' | 'import'
+  kind: 'download' | 'install' | 'transcribe' | 'speakers' | 'render' | 'import' | 'cloud'
   project?: string
   status: 'running' | 'done' | 'failed'
   /** 0–1, or null when there is no estimate */

@@ -48,6 +48,10 @@ import { BskCapture, ScreencastCapture, type Capture } from './take'
 import { composeWalkthrough, takeDir, Takes, type ComposeRequest } from './walkthrough'
 import { generate } from './generate'
 import { randomUUID } from 'node:crypto'
+import { CloudJobs, offersFor, priceOf, resultTitle, statusLine, type CloudKind } from './cloud-jobs'
+import { WORKER_URL } from '../shared/cloud-tools'
+import { MANUL_KEY } from './gateway'
+import { stat as statFile } from 'node:fs/promises'
 import { validateVoiceover } from '../shared/voiceover'
 import { voiceoverAccess } from './account'
 import { agentEnv, browserPrompt, BskDaemon, BSK_BIN, bskScript, chromeBsk, extensionStorage, HALTED, findUserBsk, privateHome, userBskEnv, userBskHome } from './bsk'
@@ -729,6 +733,11 @@ const takes = new Takes()
 /** The agent's bsk wrappers' state (see bskScript): yield/ (commands running, for a take filming through bsk) and halted
  *  (the user interrupted the agent in the browser; cleared by their next message). */
 const takeState = () => join(app.getPath('userData'), 'takes')
+/** The signed-in person's AgentShot key with its id, which is how the worker knows whose credits a job spends. */
+const cloudKey = () => { const key = process.env[MANUL_KEY], keyId = getConfig().account?.keyId; return key && keyId ? { key, keyId } : undefined }
+/** AgentShot's worker for paid jobs. MANUL_WORKER points the app at another one (tests, a worker of your own). */
+const cloud = new CloudJobs({ url: () => process.env.MANUL_WORKER || WORKER_URL, key: cloudKey })
+const cloudRunning = new Set<string>()
 /** The person's own skills: plain files, which the agent may read and never change. */
 const ownSkillsDir = () => join(app.getPath('userData'), 'my-skills')
 const yieldDir = () => join(takeState(), 'yield')
@@ -1272,6 +1281,59 @@ function wire() {
     return exportFilm(p, req, r.filePath, 'user', version)
   })
   ipcMain.handle('export:reveal', (_e, file: string) => shell.showItemInFolder(file))
+  // Paid work on AgentShot's worker (upscaling, voice isolation), done to the film as it stands. What is on offer comes
+  // from the worker itself: while it can't be reached, there is nothing to show and nothing here does anything.
+  const filmOf = async (p: Project, versionId = p.current) => {
+    const v = p.versions.find(x => x.id === versionId)
+    const info = v && p.media[v.path]
+    if (!v || !info) return undefined
+    const bytes = (await statFile(join(p.dir, v.path)).catch(() => null))?.size
+    return bytes ? { path: join(p.dir, v.path), film: { seconds: info.duration, bytes, hasAudio: info.hasAudio } } : undefined
+  }
+  ipcMain.handle('cloud:offers', async (_e, dir: string) => {
+    const offers = await cloud.offers()
+    if (!offers.length) return { signedIn: false, offers: [] }
+    return { signedIn: !!cloudKey(), offers: offersFor(offers, (await filmOf(projectOf(dir)))?.film) }
+  })
+  ipcMain.handle('cloud:run', async (_e, dir: string, kind: CloudKind) => {
+    if (workerClient.ownsProject(dir)) throw new Error('This project is on AgentShot Cloud. Cloud jobs work for projects on this computer.')
+    const p = projectOf(dir)
+    if (!cloudKey()) throw new Error('Sign in to AgentShot first (Settings → Keys).')
+    if (p.proposal) throw new Error('Accept or reject the current preview first.')
+    if (cloudRunning.has(dir)) throw new Error('A cloud job is already running for this project.')
+    const offer = (await cloud.offers()).find(o => o.kind === kind)
+    if (!offer) throw new Error('That isn’t on offer right now. Try again in a moment.')
+    cloudRunning.add(dir)
+    try {
+      const source = await filmOf(p, await renderEdit(p)) // hand edits first become a version: that is the film that is sent
+      const [mine] = offersFor([offer], source?.film)
+      if (!source || mine.cannot || mine.credits == null) throw new Error(mine.cannot || 'There’s no film to send yet.')
+      const title = resultTitle(kind)
+      // Not waited for: it takes minutes to hours. It shows in the jobs tray, and what comes back is a version to accept or reject.
+      void asJob(offer.name, 'cloud', async job => {
+        await mkdir(join(p.dir, 'renders'), { recursive: true })
+        const out = join(p.dir, 'renders', `cloud-${randomUUID()}.mp4`)
+        // The tray takes an update at most every 150 ms and drops the rest. Where a job has got to must not be one of
+        // the dropped ones, so the latest is always said again a moment later.
+        let again: ReturnType<typeof setTimeout> | undefined
+        const say = (progress: number | null, detail: string) => {
+          job.progress(progress, detail)
+          clearTimeout(again)
+          again = setTimeout(() => job.progress(progress, detail), 200)
+        }
+        const done = await cloud.run({ kind, file: source.path, seconds: source.film.seconds, name: p.title, out }, {
+          sent: f => say(f * 0.2, 'Sending the film'),
+          job: j => say(null, statusLine(j)),
+        }).finally(() => clearTimeout(again))
+        if (open.get(dir) !== p) throw new Error(`The project was closed while this ran. The film is in its renders folder: ${basename(out)}.`)
+        // a preview waiting for an answer is not pushed aside: the film is added beside it
+        if (p.proposal) { await Projects.addVersion(p, out, title, 'agent'); await checkpoint(p, `Added “${title}”`) } else await proposeFile(p, out, title)
+        await publish(p)
+        return done
+      }, { project: dir, doneTitle: title, doneDetail: j => `${j.charged} credits` }).catch(() => {}).finally(() => cloudRunning.delete(dir))
+      return { credits: mine.credits }
+    } catch (e) { cloudRunning.delete(dir); throw e }
+  })
   // For another editor: the cut as FCPXML / Premiere XML / OTIO, with its files, in a folder the user names.
   ipcMain.handle('export:editors', async (_e, dir: string) => {
     if (workerClient.ownsProject(dir)) throw new Error('This project is on AgentShot Cloud. Exporting for another editor works for projects on this computer.')
