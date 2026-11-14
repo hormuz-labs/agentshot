@@ -143,8 +143,8 @@ const faqs = [
     })} />
     <script type="application/ld+json" set:html={JSON.stringify({
       '@context': 'https://schema.org', '@type': 'VideoObject', name: 'AgentShot: give notes, get cuts',
-      description: 'An 88-second film about AgentShot, the open-source video editor you talk to.',
-      thumbnailUrl: 'https://agentshot.si/film/poster.jpg', contentUrl: 'https://agentshot.si/film/manul.mp4', uploadDate: '2026-10-07', duration: 'PT1M28S',
+      description: 'A 28-second film about AgentShot, the open-source video editor you talk to: say what you want, and it makes the cut.',
+      thumbnailUrl: 'https://agentshot.si/film/poster.jpg', contentUrl: 'https://agentshot.si/film/agentshot.mp4', uploadDate: '2026-11-14', duration: 'PT28S',
     })} />
     <script type="application/ld+json" set:html={JSON.stringify({
       '@context': 'https://schema.org', '@type': 'FAQPage',
@@ -168,7 +168,7 @@ const faqs = [
         <div class="under">
           <p class="reassure for-computer">Free and open source. Your footage stays on your computer.<span class="mac-only"> <a href={MAC_INTEL} data-dl="mac">Intel Mac?</a></span></p>
           <p class="reassure for-phone">It runs on Mac, Windows and Linux, so send yourself the link. Free and open source.</p>
-          <button class="film-link" type="button" data-film><span class="pl" aria-hidden="true"></span>Watch the film <span class="mono dur">1:28</span></button>
+          <button class="film-link" type="button" data-film><span class="pl" aria-hidden="true"></span>Watch the film <span class="mono dur">0:28</span></button>
         </div>
 
         <div class="ask-box" id="ask" role="group" aria-label="Examples of a note, and what AgentShot answers">
@@ -215,10 +215,9 @@ const faqs = [
     <section class="sec wrap why" aria-label="Why AgentShot">
       <span class="tag">why AgentShot</span>
       <p class="statement" data-fill>Editing a video is thousands of small decisions made with a mouse. AgentShot keeps the decisions and drops the mouse work. You watch your film, say what should change, and it changes it.</p>
-      <button class="film-card" type="button" data-film data-reveal aria-label="Watch the film about AgentShot, 1 minute 28 seconds">
-        <img src="/film/poster.jpg" width="1920" height="1080" loading="lazy" alt="" />
-        <span class="pb" aria-hidden="true"></span>
-        <span class="fm">Watch the film <span class="mono">1:28</span></span>
+      <button class="film-card" type="button" data-film data-reveal aria-label="Watch the film about AgentShot with sound, 28 seconds">
+        <video id="film-loop" poster="/film/poster.jpg" data-src="/film/agentshot.mp4" width="1920" height="1080" muted loop playsinline preload="none" aria-hidden="true"></video>
+        <span class="fm"><span class="pl" aria-hidden="true"></span>Watch with sound <span class="mono">0:28</span></span>
       </button>
     </section>
 
@@ -455,7 +454,7 @@ const faqs = [
 
   <dialog class="player" id="film" aria-label="AgentShot, the film">
     <video id="film-v" controls playsinline preload="none" poster="/film/poster.jpg" width="1920" height="1080">
-      <source src="/film/manul.mp4" type="video/mp4" />
+      <source src="/film/agentshot.mp4" type="video/mp4" />
       <track kind="captions" src="/captions/film.vtt" srclang="en" label="English" />
     </video>
     <button class="close" type="button" aria-label="Close the film">×</button>
@@ -547,11 +546,9 @@ const faqs = [
   /* the reason, lighting up as you read it, then the film */
   .statement { max-width: 1040px; font-size: clamp(28px, 3.8vw, 54px); line-height: 1.12; font-weight: 800; letter-spacing: -.03em; }
   .film-card { position: relative; display: block; width: 100%; margin-top: clamp(36px, 5vw, 64px); padding: 0; border: 0; border-radius: calc(var(--r) + 6px); overflow: hidden; background: #000; cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
-  .film-card img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; opacity: .86; transition: opacity .25s, transform .6s cubic-bezier(.2, .8, .2, 1); }
-  .film-card:hover img { opacity: 1; transform: scale(1.015); }
-  .pb { position: absolute; inset: 0; margin: auto; width: clamp(64px, 7vw, 100px); aspect-ratio: 1; border-radius: 50%; background: var(--yellow); box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
-  .pb::after { content: ''; position: absolute; inset: 30% 26% 30% 36%; background: var(--on-yellow); clip-path: polygon(0 0, 100% 50%, 0 100%); }
-  .fm { position: absolute; left: 18px; bottom: 16px; display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 999px; background: rgba(13, 12, 17, .8); backdrop-filter: blur(8px); font-size: 15px; font-weight: 700; color: var(--ink); }
+  .film-card video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
+  .film-card:hover video { transform: scale(1.015); }
+  .fm { position: absolute; left: 18px; bottom: 16px; display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(13, 12, 17, .8); backdrop-filter: blur(8px); font-size: 15px; font-weight: 700; color: var(--ink); }
   .fm .mono { font-size: 13px; color: var(--ink-3); }
 
   /* ------------------------------------------------------------ what it makes: one job on screen at a time */
@@ -822,10 +819,15 @@ const faqs = [
 
   // the film opens in a player over the page
   const film = document.getElementById('film') as HTMLDialogElement, filmV = document.getElementById('film-v') as HTMLVideoElement
-  document.querySelectorAll('[data-film]').forEach(b => b.addEventListener('click', () => { film.showModal(); filmV.play().catch(() => {}) }))
+  // On the page it plays by itself without sound, only while it is on screen. Opened, it starts again from the top with sound.
+  const loop = document.getElementById('film-loop') as HTMLVideoElement
+  let loopSeen = false
+  const playLoop = () => { if (!move || !loopSeen || film.open) return; if (!loop.src) loop.src = loop.dataset.src!; loop.play().catch(() => {}) }
+  new IntersectionObserver(([e]) => { loopSeen = e.isIntersecting; if (loopSeen) playLoop(); else loop.pause() }, { threshold: 0.35 }).observe(loop)
+  document.querySelectorAll('[data-film]').forEach(b => b.addEventListener('click', () => { loop.pause(); film.showModal(); filmV.currentTime = 0; filmV.play().catch(() => {}) }))
   film.querySelector('.close')!.addEventListener('click', () => film.close())
   film.addEventListener('click', e => { if (e.target === film) film.close() })
-  film.addEventListener('close', () => filmV.pause())
+  film.addEventListener('close', () => { filmV.pause(); playLoop() })
 
   // motion examples: small silent previews from this site, fetched a screen early, playing while on screen;
   // a click opens the full one with sound and the prompt behind it
