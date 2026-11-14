@@ -218,9 +218,59 @@ describe('GitHub stats', () => {
       return new Response(JSON.stringify(responses[path]), { status: 200 })
     })
     const stats = await githubStats({ token: 't', fetchImpl })
-    expect(stats).toEqual({ installer_downloads: 16, mac_downloads: 10, deb_downloads: 4, appimage_downloads: 2, stars: 40, forks: 3, clones_14d: 12, unique_cloners_14d: 5 })
+    expect(stats).toEqual({
+      installer_downloads: 16, mac_downloads: 10, windows_downloads: 0, deb_downloads: 4, appimage_downloads: 2, button_downloads: 0,
+      update_checks: 0, mac_update_checks: 0, windows_update_checks: 0, linux_update_checks: 0,
+      stars: 40, forks: 3, clones_14d: 12, unique_cloners_14d: 5,
+    })
     const capture = vi.fn(async (_url: string, _init: RequestInit) => new Response(null, { status: 200 }))
     await send(stats, { host: 'https://ph.test', token: 'phc_test', fetchImpl: capture, now: new Date('2026-10-08T03:17:00Z') })
     expect(JSON.parse(capture.mock.calls[0][1].body as string)).toMatchObject({ event: 'github snapshot', distinct_id: 'manul-github', properties: { stars: 40 } })
+  })
+
+  // the file names are the ones a real release carries (v0.4.48)
+  const release = (assets: Record<string, number>, more = {}) => ({ assets: Object.entries(assets).map(([name, download_count]) => ({ name, download_count })), ...more })
+  const statsOf = async (releases: unknown[]) => githubStats({ fetchImpl: vi.fn(async (url: string) => {
+    const path = url.replace('https://api.github.com/repos/hormuz-labs/agentshot', '')
+    return new Response(JSON.stringify(path.startsWith('/releases') ? releases : { stargazers_count: 0, forks_count: 0 }), { status: 200 })
+  }) as unknown as typeof fetch })
+
+  it('counts the Windows installer, which it used to leave out', async () => {
+    const stats = await statsOf([release({ 'AgentShot-0.4.48-windows-x64-Setup.exe': 3, 'AgentShot-windows-x64-Setup.exe': 11, 'AgentShot-0.4.48-windows-x64-Setup.exe.blockmap': 9 })])
+    expect(stats).toMatchObject({ windows_downloads: 14, installer_downloads: 14 })
+  })
+
+  it('keeps apart the downloads that came from a download button: the installers named without a version', async () => {
+    const stats = await statsOf([
+      release({ 'AgentShot-arm64.dmg': 11, 'AgentShot-x64.dmg': 4, 'AgentShot-windows-x64-Setup.exe': 11,
+        'AgentShot-0.4.48-arm64.dmg': 3, 'AgentShot-0.4.48-x64.dmg': 1, 'AgentShot-0.4.48-windows-x64-Setup.exe': 3,
+        'manul_0.4.48_amd64.deb': 5, 'manul_0.4.48_x86_64.AppImage': 13 }),
+      release({ 'Manul-arm64.dmg': 2, 'Manul-1.0.0-arm64.dmg': 7 }), // the old name counts the same way
+    ])
+    expect(stats.button_downloads).toBe(11 + 4 + 11 + 2)
+    expect(stats.installer_downloads).toBe(11 + 4 + 11 + 3 + 1 + 3 + 5 + 13 + 2 + 7)
+    expect(stats.mac_downloads).toBe(11 + 4 + 3 + 1 + 2 + 7)
+  })
+
+  it('counts update checks by system, and never as downloads', async () => {
+    const stats = await statsOf([
+      release({ 'latest-mac.yml': 144, 'latest.yml': 76, 'latest-linux.yml': 5, 'latest-linux-arm64.yml': 2, 'AgentShot-0.4.48-arm64-mac.zip': 21, 'AgentShot-0.4.48-arm64.dmg.blockmap': 1 }),
+      release({ 'latest-mac.yml': 6, 'latest.yml': 4 }),
+    ])
+    expect(stats).toMatchObject({ update_checks: 237, mac_update_checks: 150, windows_update_checks: 80, linux_update_checks: 7, installer_downloads: 0, button_downloads: 0 })
+  })
+
+  it('leaves drafts and pre-releases out of every count', async () => {
+    const stats = await statsOf([
+      release({ 'AgentShot-arm64.dmg': 50, 'latest-mac.yml': 50 }, { draft: true }),
+      release({ 'AgentShot-arm64.dmg': 50, 'latest-mac.yml': 50 }, { prerelease: true }),
+      release({ 'AgentShot-arm64.dmg': 1, 'latest-mac.yml': 2 }),
+    ])
+    expect(stats).toMatchObject({ installer_downloads: 1, button_downloads: 1, update_checks: 2 })
+  })
+
+  it('sends no clone figures without a token', async () => {
+    const stats = await statsOf([release({ 'AgentShot-arm64.dmg': 1 })])
+    expect(stats).not.toHaveProperty('clones_14d')
   })
 })

@@ -65,9 +65,22 @@ GitHub Actions, daily (telemetry/github-stats.mjs) ── downloads, stars, fork
   limits each IP to 30 batches a minute, and passes on nothing from the request but the cleaned events.
 - **Dashboards** are made in PostHog. There is no server of ours to run.
 - **GitHub numbers** come from [`.github/workflows/github-stats.yml`](../.github/workflows/github-stats.yml) as one
-  `github snapshot` event a day. Installer downloads are GitHub's `download_count` for `.dmg`, `.deb` and `.AppImage`
-  files: requests, not people or completed installs. Clone counts cover GitHub's rolling 14 days and need a token
+  `github snapshot` event a day. They are GitHub's `download_count`, so requests and never people. Each is a running
+  total: chart the change from one day to the next. Clone counts cover GitHub's rolling 14 days and need a token
   with push access.
+
+## How many people use it
+
+Nothing here counts people exactly, and nothing is collected to make it so. These are the numbers there are, from the
+least to the most direct:
+
+| Question | Number | What it really is |
+|---|---|---|
+| How many downloads? | `installer_downloads` (and `mac_`, `windows_`, `deb_`, `appimage_downloads`) | Every request for an installer. Homebrew, apt, the Linux and Windows updaters and our own release jobs fetch these too, so it runs well ahead of people. |
+| How many people clicked Download? | `button_downloads` | Installers fetched by the name without a version (`AgentShot-arm64.dmg`), which only the website's and README's buttons use. Mac and Windows only. |
+| How much is it in use? | `update_checks` (and `mac_`, `windows_`, `linux_update_checks`) | Requests for the update feed. An installed app asks when it starts and every six hours after, so one app left open all day is four. |
+| How many people use it, of those who said yes? | People with an `app opened` event, per day or week | One random ID per installation that ticked "Share usage statistics". The boxes start unticked, so this is a floor. |
+| How many have an account? | People with the account service's `manul signed in` event, or the user count in Clerk | People who signed in for an AgentShot key. Those using their own model key never appear. |
 
 ## Setting it up
 
