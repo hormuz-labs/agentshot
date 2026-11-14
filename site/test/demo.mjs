@@ -29,6 +29,20 @@ for (const [name, vp] of [['desktop', { width: 1440, height: 900 }], ['phone', {
   await page.waitForSelector('#decide:not([hidden])', { timeout: 15000 })
   await page.waitForTimeout(600)
   await page.screenshot({ path: `${out}/${name}-3-compare.png` })
+  // the demo wears the app's own look (dark panels, caption yellow), and its Before / After labels are plain:
+  // the page's .tag would put braces around them
+  const look = await page.evaluate(() => {
+    const css = (sel, pseudo) => getComputedStyle(document.querySelector(sel), pseudo)
+    const lum = c => { const [r, g, b] = c.match(/\d+/g).map(Number); return (r * 299 + g * 587 + b * 114) / 1000 }
+    return {
+      panel: lum(css('#demo .chat').backgroundColor), text: lum(css('#demo .chat').color),
+      exportBg: css('#demo .export').backgroundColor, keepBg: css('#keep').backgroundColor,
+      braces: [...document.querySelectorAll('#split span')].map(s => getComputedStyle(s, '::before').content).filter(c => c !== 'none'),
+    }
+  })
+  if (look.panel > 60 || look.text < 200) errors.push(`${name}: the demo isn't dark like the app (panel ${look.panel}, text ${look.text})`)
+  for (const k of ['exportBg', 'keepBg']) if (look[k] !== 'rgb(255, 224, 26)') errors.push(`${name}: ${k} is ${look[k]}, not the app's yellow`)
+  if (look.braces.length) errors.push(`${name}: Before / After labels carry the page's braces (${look.braces.join(' ')})`)
   await page.click('#keep')
   await page.waitForTimeout(700)
   await page.screenshot({ path: `${out}/${name}-4-kept.png` })
