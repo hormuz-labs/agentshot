@@ -15,6 +15,10 @@ export const CLOUD_TOOLS: CloudTool[] = [
     id: 'upscale', name: 'Upscale (Real-ESRGAN)', endpoint: `${WORKER_URL}/upscale`, status: 'coming-soon',
     description: 'Sharper, higher-resolution footage, 2× or 4× (up to 4K). Runs on AgentShot’s worker, so your computer stays free; only the shot you upscale is sent.',
   },
+  {
+    id: 'voice', name: 'Voice isolation', endpoint: `${WORKER_URL}/voice`, status: 'coming-soon',
+    description: 'Keeps the speech and takes away the music, noise and room behind it. Runs on AgentShot’s worker; only the film you choose is sent, and its picture comes back untouched.',
+  },
 ]
 
 /** The tool, if it can be used now. */

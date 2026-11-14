@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { PRESETS, type PresetId } from '../../../shared/export'
+import { CloudJobs } from './CloudJobs'
 
 export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: boolean; onOpenChange(v: boolean): void }) {
   const [preset, setPreset] = useState<PresetId>('original')
@@ -97,6 +98,7 @@ export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: b
       <div className="flex justify-end">
         <Button variant="primary" onClick={go} disabled={state === 'busy' || (downloading && captions !== 'none')}>{state === 'busy' ? <Loader2 className="animate-spin" /> : <Upload />}Export</Button>
       </div>
+      <CloudJobs dir={dir} open={open} />
       <div className="mt-5 border-t border-line pt-4">
         <div className="mb-1 font-medium">Finish it in another editor</div>
         <p className="mb-3 text-xs text-dim">The cut for Premiere Pro, DaVinci Resolve or Final Cut Pro, with the footage it uses, so every cut can still be trimmed. Motion graphics and titles go over as video files.</p>

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentshot.si/schemas/job-api.v1.json",
+  "title": "AgentShot cloud jobs, version 1",
+  "description": "What the worker answers. Every request carries the header x-agentshot-api: 1, the person's AgentShot key as a Bearer token, and the id that key was given with as x-manul-key-id. The app's tests check its client against this file; the worker's tests check its real answers against it.",
+  "$defs": {
+    "error": {
+      "description": "Any answer that isn't 200. The sentence is written for the person and can be shown as it is.",
+      "type": "object",
+      "required": ["error"],
+      "properties": { "error": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    },
+    "job": {
+      "type": "object",
+      "required": ["id", "kind", "status", "error", "seconds", "bytes", "name", "credits", "charged", "refunded", "createdAt", "startedAt", "finishedAt"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[0-9]+-[0-9a-f]{8}$" },
+        "kind": { "enum": ["upscale", "voice"] },
+        "status": {
+          "description": "awaiting_upload: made and priced, waiting for its film. uploading: the film is arriving. queued: paid for, waiting for a machine. starting: a machine is being started. running: the machine is working. done: the film can be fetched. failed: it stopped, see error; credits taken are returned. cancelled: the person stopped it.",
+          "enum": ["awaiting_upload", "uploading", "queued", "starting", "running", "done", "failed", "cancelled"]
+        },
+        "error": { "type": ["string", "null"] },
+        "seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" },
+        "credits": { "description": "The price quoted before it ran.", "type": "integer", "minimum": 1 },
+        "charged": { "description": "Credits taken so far.", "type": "integer", "minimum": 0 },
+        "refunded": { "description": "Credits given back so far.", "type": "integer", "minimum": 0 },
+        "createdAt": { "type": "integer" },
+        "startedAt": { "type": ["integer", "null"] },
+        "finishedAt": { "type": ["integer", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "offers": {
+      "description": "GET /v1/offers",
+      "type": "object",
+      "required": ["api", "offers"],
+      "properties": {
+        "api": { "const": "1" },
+        "offers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "name", "creditsPerSecond", "minCredits", "maxSeconds", "maxBytes", "refund"],
+            "properties": {
+              "kind": { "enum": ["upscale", "voice"] },
+              "name": { "type": "string" },
+              "creditsPerSecond": { "type": "number", "exclusiveMinimum": 0 },
+              "minCredits": { "type": "integer", "minimum": 1 },
+              "maxSeconds": { "type": "number", "exclusiveMinimum": 0 },
+              "maxBytes": { "type": "integer", "minimum": 1 },
+              "refund": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "createRequest": {
+      "description": "POST /v1/jobs. seconds and bytes are the film's length and size; the price is worked out from seconds, and the film sent must be exactly bytes long.",
+      "type": "object",
+      "required": ["kind", "seconds", "bytes"],
+      "properties": {
+        "kind": { "enum": ["upscale", "voice"] },
+        "seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "created": {
+      "description": "Answer to POST /v1/jobs. Nothing has been charged yet. PUT the film to the upload path with its Content-Length.",
+      "type": "object",
+      "required": ["job", "upload"],
+      "properties": { "job": { "$ref": "#/$defs/job" }, "upload": { "type": "string", "pattern": "^/v1/jobs/[0-9a-f-]+/input$" } },
+      "additionalProperties": false
+    },
+    "list": {
+      "description": "GET /v1/jobs: the person's 50 newest jobs.",
+      "type": "object",
+      "required": ["jobs"],
+      "properties": { "jobs": { "type": "array", "items": { "$ref": "#/$defs/job" } } },
+      "additionalProperties": false
+    }
+  }
+}

@@ -11,6 +11,11 @@ describe('cloud tools', () => {
     expect(CLOUD_TOOLS.find(t => t.id === 'upscale')).toMatchObject({ status: 'coming-soon', endpoint: `${WORKER_URL}/upscale` })
   })
 
+  it('has a place for voice isolation too', () => {
+    expect(CLOUD_TOOLS.map(t => t.id)).toEqual(['upscale', 'voice'])
+    expect(CLOUD_TOOLS.find(t => t.id === 'voice')).toMatchObject({ status: 'coming-soon', endpoint: `${WORKER_URL}/voice` })
+  })
+
   it('refuses tools that are not live yet, and unknown ones', () => {
     expect(() => cloudTool('upscale')).toThrow(/coming soon/)
     expect(() => cloudTool('nope')).toThrow(/unknown/)

@@ -21,6 +21,8 @@ export type UndoState = { back: number; forward: number }
 type ProvidersState = { providers: CustomProviderInfo[]; omp: boolean }
 
 type SkillState = { skills: { id: string; name: string; description: string; path: string; own?: boolean }[]; enabled: string[]; profile: { id: string; name: string }; profiles: { id: string; name: string }[] }
+/** A cloud job on offer for one film: what it would cost, or why it can't be done to this film. */
+type CloudOffer = { kind: 'upscale' | 'voice'; name: string; credits: number | null; refund: string; cannot?: string }
 /** One of the person's own skills as they write it; with an id, one they are changing. */
 type OwnSkill = { id?: string; name: string; description: string; body: string }
 
@@ -129,6 +131,13 @@ const api = {
     reveal: (file: string) => ipcRenderer.invoke('export:reveal', file),
     /** For another editor: a folder with the cut as FCPXML, Premiere XML and OTIO, and its files. */
     editors: (dir: string) => ipcRenderer.invoke('export:editors', dir) as Promise<{ dir: string; files: string[]; notes: string[]; copied: number } | null>,
+  },
+  /** Paid work on AgentShot's worker, done to the film as it stands. */
+  cloud: {
+    /** What can be done to this project's film and what each would cost; nothing while the worker can't be reached. */
+    offers: (dir: string) => ipcRenderer.invoke('cloud:offers', dir) as Promise<{ signedIn: boolean; offers: CloudOffer[] }>,
+    /** Starts a job. It carries on in the background (see jobs); what comes back is a version to accept or reject. */
+    run: (dir: string, kind: CloudOffer['kind']) => ipcRenderer.invoke('cloud:run', dir, kind) as Promise<{ credits: number }>,
   },
   mix: {
     /** Where speech is on a version's timeline ('edit': the edit by hand). */
