@@ -10,6 +10,7 @@ import { _electron as electron } from 'playwright-core'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
+import { dismissOnboarding } from '../test/e2e/onboarding.mjs'
 
 const root = join(import.meta.dirname, '..')
 const bin = join(root, 'resources', 'bin', `${process.platform}-${process.arch}`)
@@ -54,16 +55,20 @@ try {
   const win = await app.firstWindow()
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows().find(x => x.isVisible()) || BrowserWindow.getAllWindows()[0]; w.setSize(1440, 860); w.center() })
   await win.waitForSelector('text=What are we making?')
+  await dismissOnboarding(win) // the first-run introduction would sit over the start screen
+  // the app opens dark; the first three shots are the light theme
+  const light = () => win.evaluate(() => document.documentElement.classList.remove('dark'))
   // a placeholder key so the agent's input shows (nothing is sent)
   await win.evaluate(() => window.agentshot.keys.set('GEMINI_API_KEY', 'screenshot-placeholder'))
   await win.reload()
   await win.waitForSelector('text=What are we making?')
+  await light()
   await win.locator('textarea').fill('Cut the ums, then add a lower third that says “Otocolobus manul” when the cat is named')
   await shot(win, 'start')
 
-  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => f) }, join(tmp, 'Pallas cat.mp4'))
+  await app.evaluate(({ ipcMain }, f) => { ipcMain.removeHandler('project:pick'); ipcMain.handle('project:pick', () => [f]) }, join(tmp, 'Pallas cat.mp4'))
   await win.locator('textarea').fill('')
-  await win.click('text=Drop a video here')
+  await win.getByRole('button', { name: 'Choose files', exact: true }).click()
   await win.locator('button[aria-label="Start"]').click()
   await win.waitForSelector('[data-project-title]', { timeout: 30_000 })
   await win.waitForFunction(d => window.agentshot.project.open(d).then(p => Object.keys(p.transcripts || {}).length > 0),
@@ -78,6 +83,7 @@ try {
   const [rel] = await win.evaluate(([d, f]) => window.agentshot.project.import(d, f), [dir, join(tmp, 'v2 Ums cut, lower third.mp4')])
   await win.waitForTimeout(1500)
   await win.waitForSelector('text=Finding who speaks', { state: 'detached', timeout: 180_000 }).catch(() => {}) // the import's own job
+  await win.waitForSelector('text=/^Transcribing/', { state: 'detached', timeout: 180_000 }).catch(() => {}) // and its transcript
   const p = await win.evaluate(d => window.agentshot.project.open(d), dir)
   const film = p.versions[0].path
   const staged = {

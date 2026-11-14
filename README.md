@@ -3,29 +3,51 @@
 </p>
 
 <p align="center">
-  <b>The video editor you talk to.</b> Say what you want. Point at the frame. Keep the cut, or send it back.
+  <b>The video editor you talk to.</b> Say what you want. Point at the frame. Keep the cut, or send it back.<br>
+  It edits on your own computer, with the AI model you choose.
 </p>
 
 <p align="center">
-  <a href="https://github.com/hormuz-labs/agentshot/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/hormuz-labs/agentshot?style=for-the-badge&color=FFE01A&labelColor=17151D&label=release"></a>
-  <a href="LICENSE"><img alt="GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-FF4FB0?style=for-the-badge&labelColor=17151D"></a>
-  <a href="#install"><img alt="macOS · Windows · Linux · Android" src="https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux%20·%20Android-4FC8FF?style=for-the-badge&labelColor=17151D"></a>
-  <a href="https://agentshot.si"><img alt="agentshot.si" src="https://img.shields.io/badge/agentshot.si-7B61FF?style=for-the-badge&labelColor=17151D"></a>
+  <a href="https://github.com/hormuz-labs/agentshot/releases/latest/download/AgentShot-arm64.dmg"><img src="docs/readme-dl-mac.png" alt="Download for Mac" height="46"></a>
+  <a href="https://github.com/hormuz-labs/agentshot/releases/latest/download/AgentShot-windows-x64-Setup.exe"><img src="docs/readme-dl-windows.png" alt="Download for Windows" height="46"></a>
+  <a href="#install"><img src="docs/readme-dl-linux.png" alt="Download for Linux" height="46"></a>
 </p>
 
 <p align="center">
-  <a href="https://agentshot.si/#get"><b>Download for Mac, Windows or Linux</b></a> · free and open source · your footage never leaves your computer
+  <sub>Free and open source · your footage never leaves your computer · <a href="https://github.com/hormuz-labs/agentshot/releases/latest/download/AgentShot-x64.dmg">Intel Mac</a> · Homebrew: <code>brew install hormuz-labs/tap/manul</code></sub>
 </p>
 
 <p align="center">
-  <img src="docs/readme-hero.webp" alt="AgentShot: the conversation on the left (“Cut the ums, then add a lower third…”, the steps it took, its reply) and the film on the right with the proposed cut, Before / After, Reject and Accept" width="100%">
+  <a href="https://github.com/hormuz-labs/agentshot/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/hormuz-labs/agentshot?style=flat-square&color=FFE01A&labelColor=17151D&label=release"></a>
+  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-FF4FB0?style=flat-square&labelColor=17151D"></a>
+  <a href="#install"><img alt="macOS, Windows, Linux and Android" src="https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux%20·%20Android-4FC8FF?style=flat-square&labelColor=17151D"></a>
 </p>
 
-<p align="center"><sub>On a Mac with Homebrew: <code>brew install hormuz-labs/tap/manul</code>. <a href="#install">Every other way to install, and the phone app, below.</a></sub></p>
+<p align="center">
+  <a href="#what-it-makes">What it makes</a> ·
+  <a href="#a-session">A session</a> ·
+  <a href="#what-happens-when-you-say-cut-the-ums">How it works</a> ·
+  <a href="#how-it-compares">Compared</a> ·
+  <a href="#on-your-phone">Phone</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#custom-work">Custom work</a> ·
+  <a href="https://agentshot.si">agentshot.si</a>
+</p>
 
----
+<p align="center">
+  <img src="docs/readme-hero.webp" alt="AgentShot. On the left, the conversation: “Cut the ums, then add a lower third…”, the steps it took and its reply. On the right, the film with the proposed cut, Before / After, Reject and Accept. Three stickers: say it, or point at it, keep it or send it back." width="100%">
+</p>
 
 Editing video is thousands of small decisions made with a mouse. AgentShot keeps the decisions and drops the mouse work: you watch your film and give notes the way a director gives them to an editor, and it makes each change **on your own computer**. Every change comes back as a new version to compare before and after. You keep it, or send it back with a reply.
+
+<table>
+<tr>
+<td align="center" width="25%"><h3>$0</h3>with your own Claude, Gemini or GPT key</td>
+<td align="center" width="25%"><h3>0 uploads</h3>editing and transcription run on your computer</td>
+<td align="center" width="25%"><h3>Every version</h3>kept. Nothing is ever overwritten</td>
+<td align="center" width="25%"><h3>All the code</h3>right here, under the GPL</td>
+</tr>
+</table>
 
 https://github.com/user-attachments/assets/084276fb-6129-47e2-9cba-4724c1432990
 
@@ -33,16 +55,34 @@ https://github.com/user-attachments/assets/084276fb-6129-47e2-9cba-4724c1432990
 
 ## What it makes
 
-<p align="center">
-  <img src="docs/readme-jobs.webp" alt="Four jobs: product demos, from a URL; Shorts and Reels, from any video; clean takes, from your footage; motion graphics, from nothing at all" width="100%">
-</p>
+Each one is a sentence, and the first three are one click on AgentShot's first screen.
 
-Each one is a sentence, and the first three are one click on AgentShot's first screen:
-
-- **Product demos.** *“A walkthrough of app.example.com: sign up and make a first project.”* It tries your product first, shows a storyboard, then [films it in your own Chrome](#no-footage-two-other-ways-in) and cuts it like a person would.
-- **Shorts and Reels.** *“Find the 3 best moments and make each a vertical Short with captions.”* The crop follows whoever is talking, and the captions land word by word.
-- **Clean takes.** *“Cut the ums, false starts and long pauses.”* Each cut falls in the silence between words, and the sound is evened out.
-- **Motion graphics.** Describe it, or [start from one of 233 examples](#no-footage-two-other-ways-in) and say what yours is about.
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/readme-job-demos.webp" alt="Product demos, from a URL" width="100%"><br><br>
+<i>“A walkthrough of app.example.com: sign up and make a first project.”</i><br><br>
+It tries your product first, shows a storyboard, then <a href="#no-footage-two-other-ways-in">films it in your own Chrome</a> and cuts it like a person would.
+</td>
+<td width="50%" valign="top">
+<img src="docs/readme-job-shorts.webp" alt="Shorts and Reels, from any video" width="100%"><br><br>
+<i>“Find the 3 best moments and make each a vertical Short with captions.”</i><br><br>
+The crop follows whoever is talking, and the captions land word by word.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/readme-job-takes.webp" alt="Clean takes, from your footage" width="100%"><br><br>
+<i>“Cut the ums, false starts and long pauses.”</i><br><br>
+Each cut falls in the silence between words, and the sound is evened out.
+</td>
+<td width="50%" valign="top">
+<img src="docs/readme-job-motion.webp" alt="Motion graphics, from nothing at all" width="100%"><br><br>
+<i>“Use this example, but reveal our logo in our colours.”</i><br><br>
+Describe it, or <a href="#no-footage-two-other-ways-in">start from one of 233 examples</a> and say what yours is about.
+</td>
+</tr>
+</table>
 
 And when it's nearly there, [hand the cut to Premiere, Resolve or Final Cut](#things-you-can-just-say) with every cut still trimmable.
 
@@ -67,6 +107,14 @@ You point instead of describing. Press <kbd>B</kbd> and box something on the pic
 <p align="center">
   <img src="docs/point.webp" alt="A box drawn around the cat's face with the note “zoom in on this grumpy face”, then the before / after of the zoom, ready to keep or send back" width="100%">
 </p>
+
+One clip and three notes. Each after is a real render, not a mock-up:
+
+<p align="center">
+  <img src="docs/readme-notes.webp" alt="One clip of a Pallas's cat, and three notes. “Make it cinematic, add his name”: graded, letterboxed, with a lower third. “Punch in on his face”: a close-up that follows him. “Make it a Short with a caption”: the same clip at 9:16 with the caption burned in." width="100%">
+</p>
+
+<p align="center"><sub>Timofey the Pallas's cat, Moscow Zoo, <a href="https://commons.wikimedia.org/wiki/File:%D0%9C%D0%B0%D0%BD%D1%83%D0%BB_%D0%A2%D0%B8%D0%BC%D0%BE%D1%84%D0%B5%D0%B9_%D0%BD%D0%B0_%D1%80%D0%B0%D0%B7%D0%B6%D0%B8%D1%80%D0%BE%D0%B2%D0%BA%D0%B5.webm">CC BY 4.0</a>, edited. <a href="https://agentshot.si/#try">Try the three notes yourself</a> on agentshot.si.</sub></p>
 
 ## What happens when you say “cut the ums”
 
@@ -116,6 +164,18 @@ The agent is durable: it runs on a pi-durable harness backed by SQLite, so a con
 | “put @logo.png bottom right” | <kbd>@</kbd> picks any file, kept version or title by name |
 
 It also knows how different films are cut: talking heads, tutorials, Shorts and Reels, promos, montages, motion graphics, cleanup and repair. These skills are plain files you can read and change.
+
+## How it compares
+
+Not a timeline to operate. Not a slot machine.
+
+| | Timeline editors<br><sub>Premiere, Final Cut, Resolve, CapCut</sub> | Video as code<br><sub>HyperFrames, Remotion</sub> | AI generators<br><sub>Runway, Sora, Veo</sub> | AgentShot |
+| --- | --- | --- | --- | --- |
+| **You** | operate it, cut by cut | describe it, read code | prompt, hope, re-roll | **say it, point at it** |
+| **You look at** | a timeline | a terminal | a prompt box | **your film, before and after** |
+| **Your footage** | yours | yours, plus coded layers | swapped for generated frames | **yours, on your computer** |
+| **Undo** | Ctrl-Z, until it isn't | git, if you use it | start over | **every version, kept** |
+| **Costs** | a subscription, mostly | free, plus your agent | credits | **free with your key** |
 
 ## No footage? Two other ways in
 
@@ -170,9 +230,9 @@ The phone app doesn't edit anything itself. It's a remote for the editor on your
 | Platform | |
 | --- | --- |
 | **macOS** (Apple silicon and Intel) | [Apple silicon `.dmg`](https://github.com/hormuz-labs/agentshot/releases/latest/download/AgentShot-arm64.dmg) · [Intel `.dmg`](https://github.com/hormuz-labs/agentshot/releases/latest/download/AgentShot-x64.dmg), signed and notarized. Or `brew install hormuz-labs/tap/manul` |
-| **Windows 10 (1903+) / 11, x64** | [`AgentShot-windows-x64-Setup.exe`](https://github.com/hormuz-labs/agentshot/releases/latest) |
+| **Windows 10 (1903+) / 11, x64** | [`AgentShot-windows-x64-Setup.exe`](https://github.com/hormuz-labs/agentshot/releases/latest/download/AgentShot-windows-x64-Setup.exe), one offline installer |
 | **Debian / Ubuntu** | the signed apt repository, [below](#debian--ubuntu) |
-| **Other Linux** | AppImage from the [latest release](https://github.com/hormuz-labs/agentshot/releases/latest) |
+| **Other Linux** | AppImage (x86-64 or arm64) from the [latest release](https://github.com/hormuz-labs/agentshot/releases/latest) |
 | **Android** | build from [`mobile/`](mobile/README.md) until the Play Store listing is public |
 
 <details>
@@ -193,7 +253,7 @@ If it says `brew: command not found`, install [Homebrew](https://brew.sh) first,
 <summary><b>Windows</b></summary>
 <br>
 
-Download `AgentShot-windows-x64-Setup.exe` from the [latest release](https://github.com/hormuz-labs/agentshot/releases/latest) and run it. It's a single offline installer: no wizard, and no Node, Python, FFmpeg or developer tools needed. It installs for your account, opens AgentShot, and updates itself from then on. The installer is signed with Hormuz Labs' own certificate, so SmartScreen may ask once: **More info → Run anyway**.
+Download [`AgentShot-windows-x64-Setup.exe`](https://github.com/hormuz-labs/agentshot/releases/latest/download/AgentShot-windows-x64-Setup.exe) and run it. It's a single offline installer: no wizard, and no Node, Python, FFmpeg or developer tools needed. It installs for your account, opens AgentShot, and updates itself from then on. The installer is signed with Hormuz Labs' own certificate, so SmartScreen may ask once: **More info → Run anyway**.
 
 </details>
 
@@ -222,6 +282,60 @@ Install AgentShot from https://github.com/hormuz-labs/agentshot. On macOS run `b
 
 **First run.** Sign in under **Settings → Keys** to use AgentShot's credits, or bring your own Claude, Gemini or OpenAI key (your own keys are used first). A short guided start takes you from a key to your first note. You can replay it any time from <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd>.
 
+## Custom work
+
+Want it done for you? We take custom work: films made for you, and AgentShot fitted to the way your team works. Write to **[work@agentshot.si](mailto:work@agentshot.si)** and tell us what you have in mind.
+
+## Questions
+
+<details>
+<summary><b>Does my video get uploaded anywhere?</b></summary>
+<br>
+
+No. Editing, transcription and analysis run on your computer. The AI model reads text and a few still frames it asks to look at. It never gets the video file. AgentShot Cloud and cloud workers are there if you choose them, and only then does a project leave your computer.
+
+</details>
+
+<details>
+<summary><b>Is it really free?</b></summary>
+<br>
+
+Yes. AgentShot is open source under the [GNU GPL v3 or later](LICENSE) and runs on your computer. Bring your own Claude, Gemini or OpenAI key (or any compatible endpoint) and AgentShot costs nothing, for good: you pay your model provider directly, usually cents per edit. No account needed. If you'd rather not manage a key, sign in and use AgentShot's credits: a new account starts with 1,000. See [pricing](https://agentshot.si/pricing/).
+
+</details>
+
+<details>
+<summary><b>Do I need to know video editing?</b></summary>
+<br>
+
+No. If you can describe what you want to a person, you can direct AgentShot. If you do know editing, you'll get there faster: it understands “J-cut”, “punch in” and “duck the music”.
+
+</details>
+
+<details>
+<summary><b>Which AI does it use?</b></summary>
+<br>
+
+Your pick, per project: Claude, Gemini, GPT, or any OpenAI- or Anthropic-compatible endpoint. Your keys stay in your system's keychain, and the agent's sandbox can't read them.
+
+</details>
+
+<details>
+<summary><b>Can I still edit by hand?</b></summary>
+<br>
+
+Yes. It edits a timeline, not your pixels. Cuts, titles, captions and music stay editable, so you can drag, resize or retype anything on the picture afterwards. Or send the cut to Premiere, Resolve or Final Cut and finish there.
+
+</details>
+
+<details>
+<summary><b>What can't it do yet?</b></summary>
+<br>
+
+Publish straight to YouTube, or generate camera shots. Both are on the [roadmap](ROADMAP.md).
+
+</details>
+
 ## What's in this repository
 
 | | |
@@ -243,5 +357,5 @@ To run it from source, see **[CONTRIBUTING.md](CONTRIBUTING.md)**. For how the s
   <img src="build/icons/64x64.png" width="28" alt=""><br>
   <sub>The cat is a <b>manul</b>, a Pallas's cat: small, patient, and unbothered by anything. It sits beside your message box, follows your cursor, and waves when an edit is done.</sub><br><br>
   <sub>Free and open source under the <a href="LICENSE">GNU GPL v3 or later</a> · <a href="THIRD_PARTY_NOTICES.md">Third-party notices</a> · <a href="TRADEMARKS.md">Names and logos</a> · Made by <a href="https://github.com/hormuz-labs">Hormuz Labs</a></sub><br>
-  <sub>If you like where it's going, a ⭐ helps other people find it.</sub>
+  <sub>If you like where it's going, a ⭐ helps other people find it. Questions: <a href="mailto:support@agentshot.si">support@agentshot.si</a> · Custom work: <a href="mailto:work@agentshot.si">work@agentshot.si</a></sub>
 </p>
