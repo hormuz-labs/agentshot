@@ -1,0 +1,25 @@
+name: Contributor agreement
+# Every pull request says, in its description, that its author agrees to the contributor agreement in CONTRIBUTING.md.
+# This reads the description only. It runs the check from main and never checks out or runs the pull request's own
+# code, which is what makes pull_request_target safe here: a pull request can't change the check that judges it.
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  agreed:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: The author agrees to the contributor agreement
+        # passed as environment, never written into the command: a description is text a stranger wrote
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        run: node scripts/contributor-agreement.mjs
