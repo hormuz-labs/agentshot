@@ -27,10 +27,18 @@ execFileSync(join(BIN, 'ffmpeg' + suffix), ['-y', '-loglevel', 'error', '-f', 'l
   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(tmp, 'src.mp4')])
 
 const app = await electron.launch({ executablePath: exe, args: [`--user-data-dir=${join(tmp, 'ud')}`], env: { ...process.env, MANUL_PROJECTS: join(tmp, 'projects'), MANUL_UPDATE_CHECK_ONLY: '1' } })
+// what the app prints, kept so that a start that fails can say why
+const said = []
+for (const stream of [app.process().stdout, app.process().stderr]) stream?.on('data', d => said.push(String(d)))
 try {
   assert.equal(await app.evaluate(({ app }) => app.isPackaged), true)
   const win = await app.firstWindow()
-  await win.waitForSelector('text=What are we making?')
+  // a freshly unpacked app's first start on a CI machine can be slow (it is scanned as it loads): give it longer than
+  // the usual wait, and if the start screen still never comes, say what the window shows instead of only timing out
+  await win.waitForSelector('text=What are we making?', { timeout: 90_000 }).catch(async e => {
+    const shown = await win.evaluate(() => ({ url: location.href, title: document.title, text: (document.body?.innerText || '').slice(0, 600) })).catch(err => ({ unreadable: String(err) }))
+    throw new Error(`The packaged app never showed its start screen.\nThe window shows: ${JSON.stringify(shown)}\nThe app said:\n${said.join('').slice(-4000) || '(nothing)'}`, { cause: e })
+  })
   // bundled tools answer from Resources/bin
   const tools = await win.evaluate(() => window.agentshot.tools.bundled())
   assert.deepEqual(tools.map(t => t.name).sort(), ['ffmpeg', 'ffprobe'])
