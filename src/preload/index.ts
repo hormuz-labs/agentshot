@@ -20,7 +20,9 @@ export type SubtitlesState = { link?: SubtitleLink; cues: Cue[]; candidates: str
 export type UndoState = { back: number; forward: number }
 type ProvidersState = { providers: CustomProviderInfo[]; omp: boolean }
 
-type SkillState = { skills: { id: string; name: string; description: string; path: string }[]; enabled: string[]; profile: { id: string; name: string }; profiles: { id: string; name: string }[] }
+type SkillState = { skills: { id: string; name: string; description: string; path: string; own?: boolean }[]; enabled: string[]; profile: { id: string; name: string }; profiles: { id: string; name: string }[] }
+/** One of the person's own skills as they write it; with an id, one they are changing. */
+type OwnSkill = { id?: string; name: string; description: string; body: string }
 
 type ModelInfo = { provider: string; providerLabel: string; modelId: string; name: string; context?: number; price?: { input: number; output: number }; images: boolean; reasoning: boolean }
 
@@ -80,6 +82,9 @@ const api = {
     enable: (id: string, on: boolean) => ipcRenderer.invoke('skills:enable', id, on) as Promise<SkillState>,
     useProfile: (id: string) => ipcRenderer.invoke('skills:profile', id) as Promise<SkillState>,
     newProfile: (name: string) => ipcRenderer.invoke('skills:newProfile', name) as Promise<SkillState>,
+    own: (id: string) => ipcRenderer.invoke('skills:own', id) as Promise<Required<OwnSkill>>,
+    save: (draft: OwnSkill) => ipcRenderer.invoke('skills:save', draft) as Promise<SkillState>,
+    remove: (id: string) => ipcRenderer.invoke('skills:remove', id) as Promise<SkillState>,
   },
   memory: {
     list: () => ipcRenderer.invoke('memory:list') as Promise<{ name: string; description: string; body: string }[]>,

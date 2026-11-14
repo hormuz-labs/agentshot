@@ -356,6 +356,6 @@ To run it from source, see **[CONTRIBUTING.md](CONTRIBUTING.md)**. For how the s
 <p align="center">
   <img src="build/icons/64x64.png" width="28" alt=""><br>
   <sub>The cat is a <b>manul</b>, a Pallas's cat: small, patient, and unbothered by anything. It sits beside your message box, follows your cursor, and waves when an edit is done.</sub><br><br>
-  <sub>Free and open source under the <a href="LICENSE">GNU GPL v3 or later</a> · <a href="THIRD_PARTY_NOTICES.md">Third-party notices</a> · Made by <a href="https://github.com/hormuz-labs">Hormuz Labs</a></sub><br>
+  <sub>Free and open source under the <a href="LICENSE">GNU GPL v3 or later</a> · <a href="THIRD_PARTY_NOTICES.md">Third-party notices</a> · <a href="TRADEMARKS.md">Names and logos</a> · Made by <a href="https://github.com/hormuz-labs">Hormuz Labs</a></sub><br>
   <sub>If you like where it's going, a ⭐ helps other people find it. Questions: <a href="mailto:support@agentshot.si">support@agentshot.si</a> · Custom work: <a href="mailto:work@agentshot.si">work@agentshot.si</a></sub>
 </p>
