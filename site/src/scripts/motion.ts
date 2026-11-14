@@ -41,9 +41,6 @@ function start() {
     hero()
     reveal()
     fill()
-    slide()
-    jobs()
-    chat()
     traces()
     counters()
     shapes()
@@ -53,7 +50,7 @@ function start() {
   })
 }
 
-/** The headline rises letter by letter out of its lines; the shapes spring in around it, then scatter as you leave. */
+/** The headline rises letter by letter out of its lines, the rest follows, the shapes spring in around it and scatter as you leave. */
 function hero() {
   const h = document.querySelector<HTMLElement>('[data-hero]')
   if (!h) return
@@ -63,8 +60,7 @@ function hero() {
     type: 'lines,words,chars', mask: 'lines', autoSplit: true,
     onSplit: self => tl.from(self.chars, { yPercent: 118, rotation: 8, duration: 1.15, stagger: 0.024 }, 0),
   })
-  tl.from(h.querySelectorAll('.hero-sticker'), { scale: 0, rotation: -60, duration: 1.3, ease: 'elastic.out(1.1, 0.45)' }, 0.75)
-    .from(h.querySelectorAll('.tag, .lede, .hero-cta, .reassure, .film-link'), { y: 28, opacity: 0, duration: 1, stagger: 0.07 }, 0.45)
+  tl.from(h.querySelectorAll('.tag, .lede, .hero-cta, .under, .ask-box'), { y: 28, opacity: 0, duration: 1, stagger: 0.08 }, 0.4)
     .fromTo(h.querySelectorAll('.shape'), { scale: 0, opacity: 0, rotation: -70 }, { scale: 1, opacity: 1, rotation: 0, duration: 1.7, stagger: 0.09, ease: 'elastic.out(1, 0.6)' }, 0.25)
   // The scatter says where it starts (full size, in place) rather than reading it off the shape: when this is set up the
   // entrance above still holds every shape at scale 0, and a tween that started from that would shrink them back to
@@ -87,47 +83,6 @@ function fill() {
   document.querySelectorAll<HTMLElement>('[data-fill]').forEach(el => {
     const split = SplitText.create(el, { type: 'words', aria: 'none' })
     gsap.fromTo(split.words, { opacity: 0.13 }, { opacity: 1, stagger: 0.1, ease: 'none', scrollTrigger: { trigger: el, start: 'top 80%', end: 'bottom 45%', scrub: 0.6 } })
-  })
-}
-
-/** Giant words slide sideways while the section holds still (desktop); on phones each row drifts as it passes. */
-function slide() {
-  const sec = document.querySelector<HTMLElement>('[data-slide]')
-  if (!sec) return
-  const a = sec.querySelector<HTMLElement>('[data-track]')!, b = sec.querySelector<HTMLElement>('[data-track2]')!
-  const mm = gsap.matchMedia()
-  mm.add('(min-width: 760px)', () => {
-    const dist = () => Math.max(0, a.scrollWidth - innerWidth + 40)
-    const tween = gsap.to(a, { x: () => -dist(), ease: 'none', scrollTrigger: { trigger: sec, pin: true, scrub: 0.8, start: 'center center', end: () => '+=' + dist() * 0.7, invalidateOnRefresh: true, anticipatePin: 1 } })
-    gsap.fromTo(b, { x: () => -(b.scrollWidth - innerWidth) }, { x: 0, ease: 'none', scrollTrigger: { trigger: sec, start: 'center center', end: () => '+=' + dist() * 0.7, scrub: 0.8, invalidateOnRefresh: true } })
-    sec.querySelectorAll('.slide-shape').forEach((s, i) => gsap.fromTo(s, { rotation: -120 * (i % 2 ? -1 : 1), scale: 0.3 }, { rotation: 120 * (i % 2 ? -1 : 1), scale: 1, ease: 'none', scrollTrigger: { trigger: s, containerAnimation: tween, start: 'left right', end: 'right left', scrub: true } }))
-  })
-  mm.add('(max-width: 759px)', () => {
-    gsap.fromTo(a, { x: 0 }, { x: () => -(a.scrollWidth - innerWidth), ease: 'none', scrollTrigger: { trigger: sec, start: 'top bottom', end: 'bottom top', scrub: 0.6, invalidateOnRefresh: true } })
-    gsap.fromTo(b, { x: () => -(b.scrollWidth - innerWidth) }, { x: 0, ease: 'none', scrollTrigger: { trigger: sec, start: 'top bottom', end: 'bottom top', scrub: 0.6, invalidateOnRefresh: true } })
-  })
-}
-
-/** Job cards stack: the one underneath sinks back and dims as the next slides over it. */
-function jobs() {
-  const cards = [...document.querySelectorAll<HTMLElement>('[data-job]')]
-  // only where the cards stack (wide screens): on a phone they sit one under the other, and a dimmed card is one you're still reading
-  gsap.matchMedia().add('(min-width: 901px)', () => {
-    cards.forEach((card, i) => {
-      const next = cards[i + 1]
-      if (!next) return
-      gsap.to(card, { scale: 0.92, ease: 'none', scrollTrigger: { trigger: next, start: 'top bottom', end: 'top 18%', scrub: true } })
-      gsap.to(card.querySelector('.job-in'), { opacity: 0.3, ease: 'none', scrollTrigger: { trigger: next, start: 'top 80%', end: 'top 25%', scrub: true } })
-    })
-  })
-}
-
-/** A session: each note pops in from the right, AgentShot's answer follows it from the left. */
-function chat() {
-  document.querySelectorAll<HTMLElement>('[data-chat] li').forEach(li => {
-    const tl = gsap.timeline({ scrollTrigger: { trigger: li, start: 'top 86%', toggleActions: 'play none none reverse' } })
-    tl.from(li.querySelector('q'), { x: 60, scale: 0.85, opacity: 0, duration: 0.8, ease: 'back.out(1.8)' })
-      .from(li.querySelectorAll('p, .mono'), { x: -40, opacity: 0, duration: 0.7, stagger: 0.08, ease: 'expo.out' }, 0.25)
   })
 }
 

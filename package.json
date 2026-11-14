@@ -26,6 +26,7 @@
     "site:preview": "npm run preview --prefix site --",
     "site:test:demo": "npm run test:demo --prefix site --",
     "site:test:sizes": "npm run test:sizes --prefix site --",
+    "site:test:landing": "npm run test:landing --prefix site --",
     "stack:up": "docker compose -f gateway/docker-compose.yml --profile site up -d --build --wait",
     "stack:down": "docker compose -f gateway/docker-compose.yml --profile site down",
     "start": "node scripts/run-electron.mjs preview",

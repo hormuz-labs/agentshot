@@ -49,7 +49,7 @@ code, .mono { font-family: var(--mono); font-weight: 500; }
 .sec { position: relative; padding-top: var(--gap); }
 
 h1, h2, h3 { margin: 0; font-stretch: 100%; font-weight: 800; line-height: .98; letter-spacing: -.025em; text-wrap: balance; }
-h2, .sec-head h1 { font-size: clamp(42px, 7vw, 104px); }
+h2, .sec-head h1 { font-size: clamp(36px, 5vw, 68px); }
 h3 { font-size: clamp(22px, 2.4vw, 32px); line-height: 1.08; letter-spacing: -.015em; }
 .sec-head { position: relative; max-width: 900px; margin-bottom: clamp(36px, 5vw, 64px); }
 .sec-head p { margin-top: 20px; max-width: 640px; font-size: clamp(18px, 1.6vw, 21px); color: var(--ink-2); }

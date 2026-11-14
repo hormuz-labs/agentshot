@@ -8,7 +8,9 @@ The look is a screening room: a black page so film looks right, hard edges, and 
 
 Proof is real or it isn't on the page: the demo plays real renders, the screenshots are the app, and captions say what each clip is. No invented testimonials, logos or user counts.
 
-The hero demo (`src/components/Demo.astro`) keeps the app's own look, so it looks and works like AgentShot really does.
+The page, top to bottom (`src/pages/index.astro`): the promise and the buttons; a message box that types example notes and shows what comes back, with a chip for each (every one is something the app does, worded as the app words it); the demo; the film; the four jobs, one on screen at a time; the examples; six numbered ways to direct a cut; what it measures; the comparison; privacy; pricing; install; questions; the kinds of film it knows.
+
+The demo (`src/components/Demo.astro`) keeps the app's own look, so it looks and works like AgentShot really does.
 
 The motion tiles play small silent previews from `public/motion/` (768 px, 30 fps, about 0.5 MB each), made from the gallery's full videos with `ffmpeg -i in.mp4 -an -vf fps=30,scale=768:-2 -c:v libx264 -crf 27 -preset slow -movflags +faststart out.mp4`; clicking one opens the full video, with sound, from AgentShot's bucket.
 
@@ -19,6 +21,7 @@ npm run site:dev          # http://localhost:4321
 npm run site:build        # → site/dist/
 npm run site:test:demo    # clicks through the demo in Chrome, screenshots each stage
 npm run site:test:sizes   # checks 18 screen sizes for anything spilling off screen
+npm run site:test:landing # the message box, the jobs, an example's prompt, and no sideways scroll on a phone
 ```
 
 Originally deployed by Cloudflare Pages from `hormuz-labs/manul-site` on every push to `main`.
