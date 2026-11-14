@@ -31,6 +31,10 @@ const pressed = page => page.evaluate(() => [...document.querySelectorAll('#ask 
   check(await page.locator('#ask-name').textContent() === asks[last].file, 'a chip does not show what is attached')
   check(await pressed(page) === last, 'the chip that was pressed is not marked as pressed')
   check(await page.locator('#ask .chip[aria-pressed="true"]').count() === 1, 'more than one chip is marked as pressed')
+  // and the film on the page stays a still picture: nothing is fetched or played until it is opened
+  await page.locator('.film-card').scrollIntoViewIfNeeded()
+  await page.waitForTimeout(1200)
+  check(await page.locator('#film-loop').evaluate(v => v.paused && !v.getAttribute('src')), 'with reduced motion the film on the page loads or plays by itself')
   await page.close()
 }
 
@@ -38,6 +42,7 @@ const pressed = page => page.evaluate(() => [...document.querySelectorAll('#ask 
 {
   const page = await open({ viewport: { width: 1440, height: 900 } })
   const asks = JSON.parse(await page.locator('#ask-data').textContent())
+  check(await page.locator('#film-loop').evaluate(v => !v.getAttribute('src')), 'the film on the page is fetched before it is scrolled to')
   await page.waitForFunction(() => [...document.querySelectorAll('#ask .chip')].findIndex(c => c.getAttribute('aria-pressed') === 'true') > 0, null, { timeout: 15000 })
     .catch(() => errors.push('the asks never moved on by themselves'))
   await page.locator('#ask .chip').nth(3).click()
@@ -72,10 +77,38 @@ const pressed = page => page.evaluate(() => [...document.querySelectorAll('#ask 
     check(await page.locator('#film').evaluate(d => d.open), `${sel} does not open the film`)
     await page.locator('#film .close').click()
   }
+
+  // 6. the film: the one file, the length the page says, playing silently on the page and with sound once opened
+  const FILM = '/film/agentshot.mp4'
+  const file = await page.request.get(new URL(FILM, url).href)
+  check(file.ok(), `${FILM} is not served`)
+  check((await file.body()).length < 6 * 1024 * 1024, `${FILM} is over 6 MB, too heavy to play by itself on the page`)
+  check(/^WEBVTT/.test(await (await page.request.get(new URL('/captions/film.vtt', url).href)).text()), 'the film has no captions file')
+  check((await page.locator('.hero [data-film] .dur').textContent()) === '0:28', 'the hero does not give the film\'s length as 0:28')
+  const card = page.locator('.film-card'), onPage = page.locator('#film-loop'), opened = page.locator('#film-v')
+  await card.scrollIntoViewIfNeeded()
+  await page.waitForFunction(() => { const v = document.getElementById('film-loop'); return !v.paused && v.currentTime > 0.3 }, null, { timeout: 10000 })
+    .catch(() => errors.push('the film on the page does not play when it is scrolled to'))
+  check(await onPage.evaluate(v => v.muted && v.loop && v.currentSrc.endsWith('/film/agentshot.mp4')), 'the film on the page is not the silent, looping film')
+  await card.click()
+  await page.waitForFunction(() => { const v = document.getElementById('film-v'); return v.readyState >= 1 && !v.paused }, null, { timeout: 10000 })
+    .catch(() => errors.push('the opened film does not play'))
+  check(await opened.evaluate(v => v.currentSrc.endsWith('/film/agentshot.mp4') && !v.muted), 'the opened film is not the film with its sound on')
+  check(await opened.evaluate(v => Math.abs(v.duration - 28.4) < 0.5), `the film is ${await opened.evaluate(v => v.duration)} s long, but the page says 0:28`)
+  check(await opened.evaluate(v => v.textTracks.length === 1), 'the opened film has no captions track')
+  check(await onPage.evaluate(v => v.paused), 'the film on the page keeps playing under the opened one')
+  await page.locator('#film .close').click()
+  await page.waitForFunction(() => document.getElementById('film-v').paused, null, { timeout: 5000 })
+    .catch(() => errors.push('closing the film does not stop it'))
+  await page.waitForFunction(() => !document.getElementById('film-loop').paused, null, { timeout: 5000 })
+    .catch(() => errors.push('the film on the page does not carry on after the opened one is closed'))
+  await page.mouse.wheel(0, -20000)
+  await page.waitForFunction(() => document.getElementById('film-loop').paused, null, { timeout: 5000 })
+    .catch(() => errors.push('the film on the page keeps playing after it is scrolled away'))
   await page.close()
 }
 
-// 6. a phone: nothing pushes the page sideways (the chips and tabs scroll inside their own rows)
+// 7. a phone: nothing pushes the page sideways (the chips and tabs scroll inside their own rows)
 for (const width of [320, 390]) {
   const page = await open({ viewport: { width, height: 760 }, isMobile: true, hasTouch: true })
   const wide = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
