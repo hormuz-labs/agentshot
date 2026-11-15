@@ -33,4 +33,6 @@ Imported from `https://github.com/hormuz-labs/manul-site.git` at commit
 `21e2affde898a94bbc548a597224d1115a33ed2f`. Source, media, editor settings, and browser checks
 live here; the release-following workflow lives at `../.github/workflows/site-release.yml`.
 
+The film (`public/film/`, 66 seconds) shows five edits, each before and after: `before-after.mp4` opens with sound, `before-after-loop.mp4` is the lighter silent copy that plays on the page (under 6 MB), and a new cut gets new file names because `/film/*` is cached for a year. Its footage is Linus Torvalds at a 2017 keynote (The Linux Foundation, CC BY 4.0), a college basketball reel (Warrior Insider, CC BY 3.0) and US Navy footage of the Army-Navy game (public domain); the pointer is Bibata Cursor by Abdulkaiz Khatri. The credit line under the film stays, and nothing on the page may suggest the people in it endorse AgentShot.
+
 The demo clips in `public/demo/` are real edits (ffmpeg) of "Manul Timofey" by the Moscow Zoo, [CC BY 4.0](https://commons.wikimedia.org/wiki/File:%D0%9C%D0%B0%D0%BD%D1%83%D0%BB_%D0%A2%D0%B8%D0%BC%D0%BE%D1%84%D0%B5%D0%B9_%D0%BD%D0%B0_%D1%80%D0%B0%D0%B7%D0%B6%D0%B8%D1%80%D0%BE%D0%B2%D0%BA%D0%B5.webm).
