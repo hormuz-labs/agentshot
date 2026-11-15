@@ -1,23 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { CLOUD_TOOLS, WORKER_URL, cloudTool } from '../src/shared/cloud-tools'
+import * as cloud from '../src/shared/cloud-tools'
 
 describe('cloud tools', () => {
-  it('live on AgentShot’s worker', () => {
-    expect(WORKER_URL).toBe('https://worker.trypitch.co')
-    for (const t of CLOUD_TOOLS) expect(t.endpoint.startsWith(`${WORKER_URL}/`)).toBe(true)
-  })
-
-  it('has a place for upscaling, switched off until the worker serves it', () => {
-    expect(CLOUD_TOOLS.find(t => t.id === 'upscale')).toMatchObject({ status: 'coming-soon', endpoint: `${WORKER_URL}/upscale` })
-  })
-
-  it('has a place for voice isolation too', () => {
-    expect(CLOUD_TOOLS.map(t => t.id)).toEqual(['upscale', 'voice'])
-    expect(CLOUD_TOOLS.find(t => t.id === 'voice')).toMatchObject({ status: 'coming-soon', endpoint: `${WORKER_URL}/voice` })
-  })
-
-  it('refuses tools that are not live yet, and unknown ones', () => {
-    expect(() => cloudTool('upscale')).toThrow(/coming soon/)
-    expect(() => cloudTool('nope')).toThrow(/unknown/)
+  it('names only where the worker is: what it offers is asked of the worker, never listed ahead of it', () => {
+    expect(cloud.WORKER_URL).toMatch(/^https:\/\//)
+    expect(Object.keys(cloud)).toEqual(['WORKER_URL'])
   })
 })

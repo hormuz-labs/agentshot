@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ChatMarkdown } from '../src/renderer/src/components/ChatMarkdown'
+import { revealLabel } from '../src/renderer/src/lib/utils'
 
 const render = (text: string, dir?: string, files?: string[]) => renderToStaticMarkup(createElement(ChatMarkdown, { text, dir, files }))
 
@@ -11,7 +12,8 @@ describe('chat artifact rendering', () => {
     expect(html.match(/data-artifact=/g)).toHaveLength(1)
     expect(html).toContain('alt="cover.png"')
     expect(html).toContain('aria-label="Download cover.png"')
-    expect(html).toContain('aria-label="Show cover.png in folder"')
+    // Finder on a Mac, a folder elsewhere
+    expect(html).toContain(`aria-label="${revealLabel('cover.png')}"`)
     expect(html).toContain('loading="lazy"')
     expect(html).not.toContain('href="renders/cover.png"')
   })

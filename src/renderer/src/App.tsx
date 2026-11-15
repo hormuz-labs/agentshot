@@ -81,24 +81,25 @@ export function App() {
     setProjects(x => { const { [dir]: _, ...rest } = x; return rest })
   }, [])
 
-  const mod = navigator.platform.startsWith('Mac') ? '⌘' : 'Ctrl+'
+  // shortcuts are shown from shared/shortcuts.ts, the list the native menu binds
   useCommands([
-    { id: 'palette', title: 'Command palette', shortcut: `${mod}K`, run: () => setPalette(true) },
-    { id: 'home', title: 'New project', keywords: 'start home open recent tab', shortcut: `${mod}N`, run: () => setTabs(t => ({ ...t, active: null })) },
-    { id: 'tab.next', title: 'Next project', shortcut: 'Ctrl+Tab', run: () => setTabs(t => cycleTab(t, 1)) },
-    { id: 'tab.prev', title: 'Previous project', shortcut: 'Ctrl+Shift+Tab', run: () => setTabs(t => cycleTab(t, -1)) },
-    { id: 'tab.close', title: 'Close project', shortcut: `${mod}W`, run: () => setTabs(t => { if (t.active) setTimeout(() => close(t.active!), 0); return t }) },
+    { id: 'palette', title: 'Command palette', run: () => setPalette(true) },
+    { id: 'home', title: 'New project', keywords: 'start home open recent tab', run: () => setTabs(t => ({ ...t, active: null })) },
+    { id: 'tab.next', title: 'Next project', run: () => setTabs(t => cycleTab(t, 1)) },
+    { id: 'tab.prev', title: 'Previous project', run: () => setTabs(t => cycleTab(t, -1)) },
+    { id: 'tab.close', title: 'Close project', run: () => setTabs(t => { if (t.active) setTimeout(() => close(t.active!), 0); return t }) },
     ...Array.from({ length: 9 }, (_, i) => ({ id: `tab.${i + 1}`, title: `Go to project ${i + 1}`, run: () => setTabs(t => (t.open[i] ? { ...t, active: t.open[i] } : t)) })),
-    { id: 'sidebar', title: 'Show or hide the sidebar', keywords: 'projects', shortcut: `${mod}\\`, run: () => setCollapsed(c => !c) },
-    { id: 'settings', title: 'Settings', shortcut: `${mod},`, run: () => setSettings('appearance') },
+    { id: 'sidebar', title: 'Show or hide the sidebar', keywords: 'projects', run: () => setCollapsed(c => !c) },
+    { id: 'settings', title: 'Settings', run: () => setSettings('appearance') },
     { id: 'settings.appearance', title: 'Settings: Appearance', keywords: 'theme light dark mode colours', run: () => setSettings('appearance') },
     { id: 'settings.keys', title: 'Settings: Keys', keywords: 'api gemini anthropic openai elevenlabs', run: () => setSettings('keys') },
     { id: 'settings.skills', title: 'Settings: Skills', keywords: 'profiles', run: () => setSettings('skills') },
     { id: 'settings.memory', title: 'Settings: Memory', keywords: 'remember', run: () => setSettings('memory') },
     { id: 'settings.browser', title: 'Settings: Browser', keywords: 'chrome bsk web sign in agent browser', run: () => setSettings('browser') },
     { id: 'update.check', title: 'Check for updates', run: () => { setSettings('about'); window.agentshot.updates.check() } },
-    { id: 'about', title: 'About AgentShot and updates', keywords: 'version update', run: () => setSettings('about') },
+    { id: 'about', title: 'About AgentShot', keywords: 'version update licences', run: () => setSettings('about') },
     { id: 'settings.tools', title: 'Settings: Tools', keywords: 'whisper ffmpeg download', run: () => setSettings('tools') },
+    { id: 'settings.mobile', title: 'Settings: Mobile', keywords: 'phone pair qr code cloud worker', run: () => setSettings('mobile') },
   ], [close])
 
   const selectDir = async (dir: string) => {
@@ -133,7 +134,7 @@ export function App() {
           ))}
           {tabs.active === null && (
             <div data-new-project className="absolute inset-0">
-              <Start ready={ready} lead={lead} onKeys={() => setSettings('keys')} onTools={() => setSettings('tools')} onOpen={openProject} />
+              <Start ready={ready} lead={lead} onKeys={() => setSettings('keys')} onOpen={openProject} />
             </div>
           )}
         </div>

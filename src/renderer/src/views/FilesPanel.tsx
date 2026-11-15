@@ -3,7 +3,7 @@
 // knows to use it. Also the icons and chips for files the message box and the start screen use.
 import { Captions, ChevronRight, Download, File, Film, Folder, FolderOpen, Image as ImageIcon, Music, Palette, Paperclip, ScrollText, Sparkles, Trash2, Type } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { cn, timecode } from '@/lib/utils'
+import { cn, REVEAL, revealLabel, timecode } from '@/lib/utils'
 import { attachFiles, detachFiles, useAttached } from '@/lib/attach'
 import { kindByName } from '../../../shared/file-kinds'
 import type { FileKind, Project } from '../../../shared/types'
@@ -147,7 +147,7 @@ export function FilesTree({ project }: { project: Project }) {
               {long && <span className="ml-auto shrink-0 text-[10.5px] tabular text-faint">{long}</span>}
             </button>
             <button type="button" aria-label={`Download ${row.rel.split('/').pop()}`} title="Download file" className="shrink-0 rounded p-1 text-faint hover:bg-hover hover:text-fg" onClick={() => window.agentshot.project.downloadFile(project.dir, row.rel).catch(e => alert((e as Error).message))}><Download className="size-3" /></button>
-            <button type="button" aria-label={`Show ${row.rel.split('/').pop()} in folder`} title="Show in folder" className="shrink-0 rounded p-1 text-faint hover:bg-hover hover:text-fg" onClick={() => window.agentshot.project.revealFile(project.dir, row.rel).catch(e => alert((e as Error).message))}><FolderOpen className="size-3" /></button>
+            <button type="button" aria-label={revealLabel(row.rel.split('/').pop()!)} title={REVEAL} className="shrink-0 rounded p-1 text-faint hover:bg-hover hover:text-fg" onClick={() => window.agentshot.project.revealFile(project.dir, row.rel).catch(e => alert((e as Error).message))}><FolderOpen className="size-3" /></button>
             {row.rel.startsWith('media/') && <Remove label={row.rel.split('/').pop()!} onConfirm={() => remove([row.rel])} />}
           </li>
         )
