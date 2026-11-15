@@ -30,7 +30,7 @@ try {
   await win.click('[data-tour="import"]'); await win.locator('button[aria-label="Start"]').click()
   await win.waitForSelector('[data-project-title]')
   await win.waitForFunction(() => document.querySelector('video')?.readyState >= 2)
-  await win.click('[aria-label="Conversation"]') // shut the conversation: the film takes the window
+  await win.click('[aria-label="Chat"]') // shut the chat: the film takes the window
   await win.waitForTimeout(300)
 
   // 1. a box on the picture: the message box opens under it, typed into at once

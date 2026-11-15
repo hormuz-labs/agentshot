@@ -20,3 +20,7 @@ export const typing = () => !!(document.activeElement as HTMLElement | null)?.cl
 
 /** On a Mac (the window's own buttons sit at the top left). */
 export const MAC = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')
+/** What showing a file where it lives is called here: Finder on a Mac, a folder elsewhere. */
+export const REVEAL = MAC ? 'Show in Finder' : 'Show in folder'
+/** The same, for one named file. */
+export const revealLabel = (name: string) => (MAC ? `Show ${name} in Finder` : `Show ${name} in folder`)

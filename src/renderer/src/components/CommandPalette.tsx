@@ -3,14 +3,16 @@ import { useEffect, useMemo, useState } from 'react'
 import * as D from '@radix-ui/react-dialog'
 import { CornerDownLeft, Search, Sparkles } from 'lucide-react'
 import { rank, useAllCommands } from '@/lib/commands'
-import { cn } from '@/lib/utils'
+import { cn, MAC } from '@/lib/utils'
+import { shortcutFor } from '../../../shared/shortcuts'
 
 export function CommandPalette({ open, onOpenChange, onAsk }: { open: boolean; onOpenChange(v: boolean): void; onAsk?: (q: string) => void }) {
   const all = useAllCommands().filter(c => c.id !== 'palette')
   const [q, setQ] = useState('')
   const [i, setI] = useState(0)
   const list = useMemo(() => rank(all, q), [all, q])
-  const rows = [...list.map(c => ({ key: c.id, title: c.title, shortcut: c.shortcut, run: c.run, ask: false })),
+  // a shortcut the menu binds is shown from the same list the menu uses (shared/shortcuts.ts)
+  const rows = [...list.map(c => ({ key: c.id, title: c.title, shortcut: c.shortcut ?? shortcutFor(c.id, MAC), run: c.run, ask: false })),
     ...(q.trim() && onAsk ? [{ key: '__ask', title: `Ask AgentShot: “${q.trim()}”`, shortcut: undefined, run: () => onAsk(q.trim()), ask: true }] : [])]
   useEffect(() => { setI(0) }, [q])
   useEffect(() => { if (!open) setQ('') }, [open])

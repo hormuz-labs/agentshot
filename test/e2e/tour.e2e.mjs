@@ -49,10 +49,17 @@ try {
   const target = async name => {
     assert.equal(await win.locator(`.driver-active-element[data-tour="${name}"]:visible`).count(), 1, `spotlight finds ${name}`)
   }
+  // after a resize the popover moves on the next frames: give it a moment to land before measuring
   const fits = async () => {
-    const r = await win.locator('.agentshot-tour').boundingBox()
-    const viewport = await win.evaluate(() => ({ width: innerWidth, height: innerHeight }))
-    assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.width <= viewport.width + 1 && r.y + r.height <= viewport.height + 1, 'tour stays inside viewport')
+    let inside = false, r, viewport
+    for (let i = 0; i < 20 && !inside; i++) {
+      if (i) await win.waitForTimeout(100)
+      await settled()
+      r = await win.locator('.agentshot-tour').boundingBox()
+      viewport = await win.evaluate(() => ({ width: innerWidth, height: innerHeight }))
+      inside = r.x >= 0 && r.y >= 0 && r.x + r.width <= viewport.width + 1 && r.y + r.height <= viewport.height + 1
+    }
+    assert.ok(inside, `tour stays inside viewport: ${JSON.stringify({ r, viewport })}`)
   }
   await title('Direct your video.')
   assert.match(await win.locator('.agentshot-tour').textContent(), process.platform === 'darwin' ? /macOS/ : /Linux/)
@@ -123,7 +130,7 @@ try {
   await win.locator('.agentshot-tour').evaluate(el => { el.tabIndex = -1; el.focus() })
   await win.keyboard.press('Space')
   assert.equal(await win.locator('video').evaluate(v => v.paused), true, 'tour does not trigger playback')
-  await next(); await title('Keep the conversation going'); await target('composer')
+  await next(); await title('Keep the chat going'); await target('composer')
   await next(); await title('Watch your film'); await target('picture')
   await win.keyboard.press('ArrowRight'); await title('Point at a moment'); await target('timeline')
   assert.equal(await win.locator('video').evaluate(v => v.currentTime), initialTime, 'navigation does not seek the film')

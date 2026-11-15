@@ -15,12 +15,10 @@ try {
   await win.click('[aria-label="Settings"]') // the sidebar's gear
   await dismissSettingsOnboarding(win)
   await win.click('nav >> text=Tools')
-  await win.waitForSelector('text=In the cloud')
-  const row = win.locator('[data-cloud-tool="upscale"]')
-  const text = await row.innerText()
-  const disabled = await row.getAttribute('aria-disabled')
-  await row.scrollIntoViewIfNeeded()
+  await win.waitForSelector('text=Downloaded when needed')
+  // cloud jobs are offered in Export, where they're used, and only once the worker offers them: nothing here says "Coming soon"
+  const text = await win.getByRole('dialog').innerText()
   await win.screenshot({ path: join(out, 'tools.png') })
-  if (!/Upscale/.test(text) || !/Coming soon/.test(text) || disabled !== 'true') throw new Error(`upscale row wrong: ${text}`)
+  if (/In the cloud|Coming soon/.test(text)) throw new Error(`Tools still lists cloud placeholders: ${text}`)
   console.log('tools e2e ok:', join(out, 'tools.png'))
 } finally { await app.close() }

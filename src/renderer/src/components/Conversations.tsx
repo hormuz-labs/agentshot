@@ -13,15 +13,15 @@ export function Conversations({ project }: { project: Project }) {
   const cur = list.find(c => c.id === project.conversation)
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger className="no-drag inline-flex h-7 min-w-0 max-w-[360px] items-center gap-1 rounded-md px-1.5 text-[14px] font-medium hover:bg-hover" title="Conversations">
-        <span className="truncate">{cur?.title || 'New conversation'}</span>
+      <Popover.Trigger className="no-drag inline-flex h-7 min-w-0 max-w-[360px] items-center gap-1 rounded-md px-1.5 text-[14px] font-medium hover:bg-hover" title="Chats">
+        <span className="truncate">{cur?.title || 'New chat'}</span>
         <ChevronDown className="size-3.5 shrink-0 text-faint" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="start" sideOffset={6} className="z-50 w-72 rounded-card border border-line bg-panel p-1 shadow-2xl shadow-shade">
           <button onClick={async () => { await window.agentshot.agent.newConversation(project.dir); setOpen(false) }}
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-amber hover:bg-hover">
-            <MessageSquarePlus className="size-3.5" />New conversation
+            <MessageSquarePlus className="size-3.5" />New chat
           </button>
           <div className="my-1 h-px bg-line" />
           <div className="max-h-72 overflow-y-auto">

@@ -1,7 +1,7 @@
 // The sidebar, as in Claude's app: search, a new project, every project, the one on screen opened up as a tree of its
 // chats and its files, and settings at the foot. Open projects keep working in the background.
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronRight, CircleHelp, Loader2, PanelLeft, Plus, Search, Settings, Sparkles, Brain, Trash2, X } from 'lucide-react'
+import { ChevronRight, CircleHelp, Loader2, PanelLeft, Plus, Search, Settings, Trash2, X } from 'lucide-react'
 import { Tip } from '@/components/ui/tooltip'
 import { useAgent } from '@/lib/agui'
 import { MAC, cn } from '@/lib/utils'
@@ -141,8 +141,6 @@ export function Sidebar({ open, active, loaded, onNew, onSelect, onClose, onDele
           </div>
         </div>
         <Nav icon={Plus} label="New project" onClick={onNew} active={active === null} />
-        <Nav icon={Sparkles} label="Skills" onClick={() => onSettings('skills')} />
-        <Nav icon={Brain} label="Memory" onClick={() => onSettings('memory')} />
       </div>
 
       <div data-tour="projects" className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">

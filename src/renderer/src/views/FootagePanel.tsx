@@ -98,11 +98,11 @@ export function FootagePanel({ project, onInsert, onClose }: { project: Project;
   return (
     <div data-footage-panel className="absolute inset-0 z-20 flex flex-col gap-3 bg-canvas p-3">
       <div className="flex items-center gap-2">
-        <h2 className="font-medium">Footage</h2>
+        <h2 className="font-medium">Files</h2>
         <span className="text-[12px] text-faint">{rels.length} {rels.length === 1 ? 'file' : 'files'}</span>
         <span className="flex-1" />
         <Button size="sm" variant="secondary" onClick={() => pickFiles(project.dir)}><Plus />Add files</Button>
-        <Button size="iconSm" variant="ghost" aria-label="Close footage" onClick={onClose}><X /></Button>
+        <Button size="iconSm" variant="ghost" aria-label="Close files" onClick={onClose}><X /></Button>
       </div>
       <div className="flex flex-wrap gap-1" role="tablist" aria-label="Show">
         {FILTERS.map(f => (

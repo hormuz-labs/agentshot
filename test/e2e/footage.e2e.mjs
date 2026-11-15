@@ -34,8 +34,8 @@ try {
   const dir = await win.evaluate(() => window.agentshot.tabs.get().then(t => t.active))
   const pickAnswers = async files => app.evaluate(({ ipcMain }, fs) => { ipcMain.removeHandler('project:pickFiles'); ipcMain.handle('project:pickFiles', () => fs) }, files)
 
-  // Footage opens from the top bar, beside Show in Finder and the browser
-  await win.getByRole('button', { name: 'Footage', exact: true }).click()
+  // Files opens from the top bar, beside Show in Finder and the browser
+  await win.click('button[aria-label="Files"]')
   const panel = win.locator('[data-footage-panel]')
   await panel.waitFor()
   await panel.locator('[data-footage="media/film.mp4"]').waitFor()
@@ -113,7 +113,7 @@ try {
 
   // an import that fails: a card says which file and why, in words (no "Error invoking", no path), until dismissed
   await pickAnswers([join(tmp, 'gone.mp4')])
-  await win.getByRole('button', { name: 'Footage', exact: true }).click()
+  await win.click('button[aria-label="Files"]')
   await panel.getByRole('button', { name: 'Add files' }).click()
   const card = win.locator('[data-import-problem="gone.mp4"]')
   await card.waitFor()

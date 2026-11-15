@@ -36,7 +36,7 @@ const titleOf = (prompt: string, example: GalleryExample | null) =>
 /** The home screen: one message box, and below it the motion gallery. Files with a video make an edit; no footage (a
  *  brief, an example or a reference video) makes a motion video on a blank canvas, or, when the brief asks for a
  *  walkthrough of a product, a walkthrough AgentShot films in the browser. Selected files come with the first message. */
-export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, prompt?: string, files?: string[]) => void; onKeys: () => void; onTools?: () => void; ready: boolean; lead?: ReactNode }) {
+export function Start({ onOpen, onKeys, ready, lead }: { onOpen: (p: Project, prompt?: string, files?: string[]) => void; onKeys: () => void; ready: boolean; lead?: ReactNode }) {
   const [files, setFiles] = useState<string[]>([])
   const [prompt, setPrompt] = useState('')
   const [over, setOver] = useState(false)

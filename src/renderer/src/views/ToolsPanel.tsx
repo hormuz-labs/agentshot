@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { AudioLines, Check, Cloud, Download, FolderSearch, Loader2, Package, RefreshCw, Trash2 } from 'lucide-react'
+import { AudioLines, Check, Download, FolderSearch, Loader2, Package, RefreshCw, Trash2 } from 'lucide-react'
 import { PanelHeader } from '@/components/ui/panel-header'
 import { Button } from '@/components/ui/button'
 import { JobRow, useJobs } from '@/components/JobsTray'
 import type { OnDemandTool, ToolStatus, WhisperStatus } from '../../../shared/types'
-import { CLOUD_TOOLS } from '../../../shared/cloud-tools'
 
 const short = (p?: string) => p?.replace(/^\/Users\/[^/]+/, '~')
 const modelName = (p: string) => p.split('/').pop()!.replace(/^ggml-|\.bin$/g, '')
@@ -108,19 +107,6 @@ export function ToolsPanel() {
               ) : (
                 <Button size="sm" onClick={() => act(t.id, () => window.agentshot.tools.install(t.id))}><Download />Install</Button>
               )}
-            </div>
-            <p className="mt-1 text-xs leading-relaxed text-dim">{t.description}</p>
-          </div>
-        ))}
-      </div>
-      <div className="mb-2 mt-5 text-xs font-medium uppercase tracking-wider text-faint">In the cloud</div>
-      <div className="space-y-1.5">
-        {CLOUD_TOOLS.map(t => (
-          <div key={t.id} className="rounded-lg border border-line bg-raised/60 px-3 py-2.5" data-cloud-tool={t.id} aria-disabled={t.status !== 'live'}>
-            <div className="flex items-center gap-3">
-              <Cloud className="size-4 text-dim" />
-              <span className="min-w-0 flex-1 font-medium">{t.name}</span>
-              {t.status !== 'live' && <span className="rounded bg-bg px-1.5 py-0.5 text-[10.5px] text-dim">Coming soon</span>}
             </div>
             <p className="mt-1 text-xs leading-relaxed text-dim">{t.description}</p>
           </div>

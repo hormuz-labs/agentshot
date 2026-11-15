@@ -13,6 +13,7 @@ const CAPS: { cap: string; label: string }[] = [
   { cap: 'text', label: 'Editing agent' },
   { cap: 'images', label: 'Image generation' },
   { cap: 'voice', label: 'AI voice' },
+  { cap: 'music', label: 'Music' },
 ]
 
 export function KeysPanel({ tourTab }: { tourTab?: 'own' | 'agentshot' } = {}) {

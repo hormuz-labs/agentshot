@@ -12,6 +12,12 @@ describe('platform-specific first-run guidance', () => {
     expect(editor).not.toContain('Ctrl+')
   })
 
+  it('greets Windows users as Windows users, with Control shortcuts', () => {
+    expect(content('home', 'Win32')).toContain('Windows')
+    expect(content('home', 'Win32')).not.toContain('Linux')
+    expect(content('editor', 'Win32')).toContain('Ctrl+E')
+  })
+
   it('shows Linux and Control shortcuts on both Linux architectures', () => {
     for (const platform of ['Linux x86_64', 'Linux aarch64']) {
       expect(content('home', platform)).toContain('Linux')

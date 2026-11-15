@@ -16,7 +16,7 @@ import { paneStyle, Resizer, useWidth } from '@/components/ui/resizer'
 import { Kbd } from '@/components/ui/kbd'
 import { useAgent } from '@/lib/agui'
 import { addFiles, attachFiles, clearAttached, detachFiles, pickFiles, useAttached } from '@/lib/attach'
-import { MAC, cn, mediaUrl, timecode } from '@/lib/utils'
+import { MAC, REVEAL, cn, mediaUrl, timecode } from '@/lib/utils'
 import { AgentPanel } from './AgentPanel'
 import { BrowserPanel } from './BrowserPanel'
 import { FootagePanel } from './FootagePanel'
@@ -157,7 +157,6 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const mod = navigator.platform.startsWith('Mac') ? '⌘' : 'Ctrl+'
   // a background project stops playing and leaves the menu, palette and keys to the one on screen
   useEffect(() => { if (!active) stage.current?.video?.pause() }, [active])
 
@@ -209,21 +208,21 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const act = useRef({ undoEdit, saveVersion, edited })
   act.current = { undoEdit, saveVersion, edited }
   useCommands(!active ? [] : [
-    { id: 'export', title: 'Export…', keywords: 'save render mp4 vertical shorts captions srt', shortcut: `${mod}E`, run: () => setExporting(true) },
-    { id: 'media', title: 'Add files…', keywords: 'import media footage image audio music logo subtitles srt vtt font lut folder zip', shortcut: `${mod}I`, run: () => pickFiles(p.dir) },
-    { id: 'reveal', title: 'Show project in Finder', keywords: 'folder files', run: () => window.agentshot.project.reveal(p.dir) },
+    { id: 'export', title: 'Export…', keywords: 'save render mp4 vertical shorts captions srt', run: () => setExporting(true) },
+    { id: 'media', title: 'Add files…', keywords: 'import media footage image audio music logo subtitles srt vtt font lut folder zip', run: () => pickFiles(p.dir) },
+    { id: 'reveal', title: MAC ? 'Show project in Finder' : 'Show project folder', keywords: 'folder files finder', run: () => window.agentshot.project.reveal(p.dir) },
     { id: 'history', title: 'History', keywords: 'undo restore versions', run: () => setHistoryOpen(true) },
     { id: 'note', title: 'Add a note at the playhead', shortcut: 'N', run: () => noteHere() },
     { id: 'box', title: 'Draw a box on the picture', shortcut: 'B', run: () => { stage.current?.video?.pause(); setDrawing(true) } },
     { id: 'play', title: 'Play or pause', shortcut: 'Space', run: playPause },
-    { id: 'agent.new', title: 'New conversation', run: () => window.agentshot.agent.newConversation(p.dir) },
-    { id: 'agent.focus', title: 'Ask AgentShot', shortcut: `${mod}L`, run: () => ask() },
-    { id: 'agent.panel', title: 'Show or hide the conversation', keywords: 'chat collapse film', run: () => { setChatShut(x => !x); setPreview(true) } },
+    { id: 'agent.new', title: 'New chat', keywords: 'conversation thread', run: () => window.agentshot.agent.newConversation(p.dir) },
+    { id: 'agent.focus', title: 'Ask AgentShot', run: () => ask() },
+    { id: 'agent.panel', title: 'Show or hide the chat', keywords: 'conversation collapse film', run: () => { setChatShut(x => !x); setPreview(true) } },
     { id: 'agent.stop', title: 'Stop the agent', run: () => window.agentshot.agent.stop(p.dir) },
-    { id: 'browser', title: 'Show or hide the browser', keywords: 'web internet bsk sign in google youtube', shortcut: `${mod}⇧B`, run: () => setBrowsing(x => !x) },
-    { id: 'timeline.undo', title: 'Undo an edit', keywords: 'timeline back', shortcut: `${mod}Z`, run: () => act.current.undoEdit(false) },
-    { id: 'timeline.redo', title: 'Redo an edit', keywords: 'timeline', shortcut: `⇧${mod}Z`, run: () => act.current.undoEdit(true) },
-    { id: 'timeline.render', title: 'Save the edit as a version', keywords: 'render timeline', run: () => { if (act.current.edited) act.current.saveVersion() } },
+    { id: 'browser', title: 'Show or hide the browser', keywords: 'web internet bsk sign in google youtube', run: () => setBrowsing(x => !x) },
+    { id: 'timeline.undo', title: 'Undo', keywords: 'timeline edit back', run: () => act.current.undoEdit(false) },
+    { id: 'timeline.redo', title: 'Redo', keywords: 'timeline edit', run: () => act.current.undoEdit(true) },
+    { id: 'timeline.render', title: 'Save as version', keywords: 'render timeline edit', run: () => { if (act.current.edited) act.current.saveVersion() } },
   ], [p.dir, active])
   const playable = onScreen.dry || onScreen.path
   const liveItem = live ? sourceAt(tl, time)?.item : undefined
@@ -426,7 +425,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         if (v) { if (on && !paused) void v.play().catch(() => {}); else { v.pause(); setTime(v.currentTime) } }
       }} onSaved={(next, src) => {
         setP(next); attachFiles(p.dir, [src]); setChatShut(false)
-        setVoiceoverNotice('Voiceover added to your video and conversation files. You can trim, move, adjust the volume, or ask for changes in chat.')
+        setVoiceoverNotice('Voiceover added to your video and this chat\'s files. You can trim, move, adjust the volume, or ask for changes in the chat.')
       }} />}
       </div>
     </div>
@@ -464,15 +463,15 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         <span className="flex-1" />
         <JobsTray />
         <HistoryButton project={p} open={historyOpen} onOpenChange={setHistoryOpen} onRestored={np => { setP(np); setEditing(null) }} />
-        <Tip label="Show in Finder" side="bottom"><Button className="no-drag" size="iconSm" variant="ghost" onClick={() => window.agentshot.project.reveal(p.dir)}><FolderOpen /></Button></Tip>
-        <Tip label="Footage: everything you brought in" side="bottom">
-          <Button className="no-drag" size="iconSm" variant={footage ? 'secondary' : 'ghost'} onClick={() => { setFootage(x => !x); setPreview(true) }} aria-label="Footage"><Images /></Button>
+        <Tip label={REVEAL} side="bottom"><Button className="no-drag" size="iconSm" variant="ghost" onClick={() => window.agentshot.project.reveal(p.dir)} aria-label={REVEAL}><FolderOpen /></Button></Tip>
+        <Tip label="Files: everything you brought in" side="bottom">
+          <Button className="no-drag" size="iconSm" variant={footage ? 'secondary' : 'ghost'} onClick={() => { setFootage(x => !x); setPreview(true) }} aria-label="Files"><Images /></Button>
         </Tip>
         <Tip label="AgentShot's browser (the agent uses it for the web)" side="bottom">
           <Button className="no-drag" size="iconSm" variant={browsing ? 'secondary' : 'ghost'} onClick={() => { setBrowsing(x => !x); setFootage(false) }} aria-label="Browser"><Globe /></Button>
         </Tip>
-        <Tip label={chatShut ? 'Show the conversation' : 'Hide the conversation'} side="bottom">
-          <Button className="no-drag" size="iconSm" variant={chatShut ? 'ghost' : 'secondary'} onClick={() => { setChatShut(x => !x); setPreview(true) }} aria-label="Conversation"><MessagesSquare /></Button>
+        <Tip label={chatShut ? 'Show the chat' : 'Hide the chat'} side="bottom">
+          <Button className="no-drag" size="iconSm" variant={chatShut ? 'ghost' : 'secondary'} onClick={() => { setChatShut(x => !x); setPreview(true) }} aria-label="Chat"><MessagesSquare /></Button>
         </Tip>
         <Tip label={preview ? 'Hide the film' : 'Show the film'} side="bottom">
           <Button className="no-drag" size="iconSm" variant={preview ? 'secondary' : 'ghost'} onClick={() => setPreview(x => !x)} aria-label="Film preview"><PanelRight /></Button>
