@@ -143,8 +143,8 @@ const faqs = [
     })} />
     <script type="application/ld+json" set:html={JSON.stringify({
       '@context': 'https://schema.org', '@type': 'VideoObject', name: 'AgentShot: give notes, get cuts',
-      description: 'A 28-second film about AgentShot, the open-source video editor you talk to: say what you want, and it makes the cut.',
-      thumbnailUrl: 'https://agentshot.si/film/poster.jpg', contentUrl: 'https://agentshot.si/film/agentshot.mp4', uploadDate: '2026-11-14', duration: 'PT28S',
+      description: 'A 66-second film about AgentShot, the open-source video editor you talk to: five edits, each shown before and after.',
+      thumbnailUrl: 'https://agentshot.si/film/before-after.jpg', contentUrl: 'https://agentshot.si/film/before-after.mp4', uploadDate: '2026-11-16', duration: 'PT66S',
     })} />
     <script type="application/ld+json" set:html={JSON.stringify({
       '@context': 'https://schema.org', '@type': 'FAQPage',
@@ -168,7 +168,7 @@ const faqs = [
         <div class="under">
           <p class="reassure for-computer">Free and open source. Your footage stays on your computer.<span class="mac-only"> <a href={page('mac-intel')} data-dl="mac" rel="nofollow">Intel Mac?</a></span></p>
           <p class="reassure for-phone">It runs on Mac, Windows and Linux, so send yourself the link. Free and open source.</p>
-          <button class="film-link" type="button" data-film><span class="pl" aria-hidden="true"></span>Watch the film <span class="mono dur">0:28</span></button>
+          <button class="film-link" type="button" data-film><span class="pl" aria-hidden="true"></span>Watch the film <span class="mono dur">1:06</span></button>
         </div>
 
         <div class="ask-box" id="ask" role="group" aria-label="Examples of a note, and what AgentShot answers">
@@ -215,10 +215,11 @@ const faqs = [
     <section class="sec wrap why" aria-label="Why AgentShot">
       <span class="tag">why AgentShot</span>
       <p class="statement" data-fill>Editing a video is thousands of small decisions made with a mouse. AgentShot keeps the decisions and drops the mouse work. You watch your film, say what should change, and it changes it.</p>
-      <button class="film-card" type="button" data-film data-reveal aria-label="Watch the film about AgentShot with sound, 28 seconds">
-        <video id="film-loop" poster="/film/poster.jpg" data-src="/film/agentshot.mp4" width="1920" height="1080" muted loop playsinline preload="none" aria-hidden="true"></video>
-        <span class="fm"><span class="pl" aria-hidden="true"></span>Watch with sound <span class="mono">0:28</span></span>
+      <button class="film-card" type="button" data-film data-reveal aria-label="Watch the film about AgentShot with sound, 66 seconds">
+        <video id="film-loop" poster="/film/before-after.jpg" data-src="/film/before-after-loop.mp4" width="1920" height="1080" muted loop playsinline preload="none" aria-hidden="true"></video>
+        <span class="fm"><span class="pl" aria-hidden="true"></span>Watch with sound <span class="mono">1:06</span></span>
       </button>
+      <p class="film-credit mono">Five edits, each shown before and after. Footage and voice: The Linux Foundation (CC BY 4.0), Warrior Insider (CC BY 3.0), US Navy. Nobody shown has endorsed AgentShot.</p>
     </section>
 
     <section class="sec wrap" id="make">
@@ -453,8 +454,8 @@ const faqs = [
   </main>
 
   <dialog class="player" id="film" aria-label="AgentShot, the film">
-    <video id="film-v" controls playsinline preload="none" poster="/film/poster.jpg" width="1920" height="1080">
-      <source src="/film/agentshot.mp4" type="video/mp4" />
+    <video id="film-v" controls playsinline preload="none" poster="/film/before-after.jpg" width="1920" height="1080">
+      <source src="/film/before-after.mp4" type="video/mp4" />
       <track kind="captions" src="/captions/film.vtt" srclang="en" label="English" />
     </video>
     <button class="close" type="button" aria-label="Close the film">×</button>
@@ -550,6 +551,7 @@ const faqs = [
   .film-card:hover video { transform: scale(1.015); }
   .fm { position: absolute; left: 18px; bottom: 16px; display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(13, 12, 17, .8); backdrop-filter: blur(8px); font-size: 15px; font-weight: 700; color: var(--ink); }
   .fm .mono { font-size: 13px; color: var(--ink-3); }
+  .film-credit { margin-top: 12px; font-size: 12.5px; line-height: 1.5; color: var(--ink-3); }
 
   /* ------------------------------------------------------------ what it makes: one job on screen at a time */
   .jobs { position: relative; }
@@ -819,7 +821,7 @@ const faqs = [
 
   // the film opens in a player over the page
   const film = document.getElementById('film') as HTMLDialogElement, filmV = document.getElementById('film-v') as HTMLVideoElement
-  // On the page it plays by itself without sound, only while it is on screen. Opened, it starts again from the top with sound.
+  // On the page a lighter copy without sound plays by itself, only while it is on screen. Opened, the full film starts from the top with sound.
   const loop = document.getElementById('film-loop') as HTMLVideoElement
   let loopSeen = false
   const playLoop = () => { if (!move || !loopSeen || film.open) return; if (!loop.src) loop.src = loop.dataset.src!; loop.play().catch(() => {}) }
