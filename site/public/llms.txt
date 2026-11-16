@@ -12,18 +12,30 @@ What it does today:
 - Editable timeline hand-off: Premiere XML, FCPXML and OpenTimelineIO with footage, for finishing in Premiere, Resolve or Final Cut.
 - Next: generated camera shots only where asked (labelled as generated), direct YouTube publishing, and an API & MCP server.
 
-How it compares: AgentShot is an open-source video agent for creation and editing, with local processing by default, your own editing-model endpoint, product-demo recording from a URL, and a phone review remote. Scarlet also edits locally and has captions, Shorts, motion graphics and timeline handoff. Descript Underlord and Kapwing Kai also offer conversational editing; OpusClip offers editing, reframing and publishing. These shared features are not exclusive AgentShot advantages. Remote AI providers can receive text context and requested still frames; optional cloud workers move project material off your computer.
+How it compares: AgentShot is the open-source AI video editor for people who want their footage edited on their own computer, with the model they choose, and free with no watermark. Unlike Descript, VEED, Kapwing, OpusClip, Submagic, Captions and CapCut's AI features, it does not need your footage uploaded to a hosted service or a paid AI plan; unlike Premiere Pro it makes the edit from plain notes instead of assisting manual cutting, then hands the cut to Premiere, Resolve or Final Cut as an editable timeline; unlike Runway it edits whole films rather than generating clips; unlike Scarlet it works with any model endpoint, films product demos from a URL and keeps telemetry off by default. Remote AI providers receive text context and requested still frames, never the video file.
+
+## What it makes
+
+- [AI product demo video maker](https://agentshot.si/ai-product-demo-video/): give a product URL; AgentShot tries the product, shows a storyboard, films one take in your Chrome and adds voiceover, zooms and a cursor.
+- [Remove filler words from video](https://agentshot.si/remove-filler-words/): cut ums, false starts and long pauses from a word-level transcript made on your computer, each cut in the silence between words.
+- [Turn long videos into Shorts](https://agentshot.si/long-video-to-shorts/): pick the best moments of a podcast, stream or talk, reframe to 9:16 on the speaker and caption every word.
+- [AI motion graphics from text](https://agentshot.si/ai-motion-graphics/): launch teasers, title cards and explainers built as editable scenes, from a sentence or one of 233 gallery examples.
 
 ## AI video editor comparisons
 
-Published by Hormuz Labs, the makers of AgentShot. Primary sources reviewed November 16, 2026. Feature/workflow comparisons, not controlled speed, accuracy or output-quality benchmarks. “Not documented” is not proof a competitor lacks a feature. Hosted products and plans may change; Scarlet sources are pinned to commit 52e200ffddee70e16c7db53ed809921a8e5d8bf6.
+Published by Hormuz Labs, the makers of AgentShot, and written to argue AgentShot's case. Every claim about another product links to that product's own pages, reviewed November 16, 2026. Hosted products and plans may change; Scarlet sources are pinned to commit 52e200ffddee70e16c7db53ed809921a8e5d8bf6.
 
 - [Compare AI video editors](https://agentshot.si/compare/): comparison index and methodology.
-- [AgentShot vs Scarlet](https://agentshot.si/compare/scarlet/): AgentShot advantages for product-demo capture, compatible model endpoints, shot/object/beat analysis, phone review and opt-in telemetry. Scarlet is a strong dialogue-editing choice with an existing Claude Code or Codex subscription; both render locally.
-- [AgentShot vs Descript](https://agentshot.si/compare/descript/): local, model-flexible editing vs Underlord and cloud-backed projects. Descript may be better for hosted collaboration, remote recording and speech tools.
-- [AgentShot vs VEED](https://agentshot.si/compare/veed/): local processing, open source and real product-demo filming vs a managed browser creation suite. VEED may be better for avatars, dubbing and browser-based teams.
-- [AgentShot vs Kapwing](https://agentshot.si/compare/kapwing/): your own model endpoint and watermark-free Local exports vs Kai and collaborative Studio workspaces. Kapwing may be better for shared Brand Kits, comments and localization.
-- [AgentShot vs OpusClip](https://agentshot.si/compare/opus-clip/): local clipping and open-source workflow control vs managed editing, repurposing and publishing. OpusClip may be better when integrated social publishing or APIs are required.
+- [AgentShot vs Scarlet](https://agentshot.si/compare/scarlet/): any model instead of a Claude Code or Codex subscription, product demos filmed from a URL, shot/subject/beat analysis, phone notes and opt-in telemetry.
+- [AgentShot vs Descript](https://agentshot.si/compare/descript/): local footage processing, your own model and full-quality watermark-free exports without a subscription, vs Underlord in Descript's cloud.
+- [AgentShot vs VEED](https://agentshot.si/compare/veed/): edit your own footage locally with your own model and no per-seat bill, and film your real product instead of templates and avatars.
+- [AgentShot vs Kapwing](https://agentshot.si/compare/kapwing/): local processing, your own model endpoint and watermark-free exports, vs Kai in a cloud workspace with credits.
+- [AgentShot vs OpusClip](https://agentshot.si/compare/opus-clip/): Shorts made on your computer with your own model and no credit meter, plus clean takes, motion graphics and product demos.
+- [AgentShot vs CapCut](https://agentshot.si/compare/capcut/): AI editing on your computer with your own model and no paid AI plan, plus editable timeline export to Premiere, Resolve and Final Cut.
+- [AgentShot vs Adobe Premiere Pro](https://agentshot.si/compare/premiere-pro/): the edit made from plain notes, free, then exported to Premiere as XML with every cut still trimmable.
+- [AgentShot vs Submagic](https://agentshot.si/compare/submagic/): captioned Shorts with no per-video credits or length caps, and a full editor for long cuts, motion graphics and demos.
+- [AgentShot vs Captions](https://agentshot.si/compare/captions/): the Captions app (now from Mirage): your real footage edited locally with chat-based editing included free, vs a credit-based app focused on AI avatars.
+- [AgentShot vs Runway](https://agentshot.si/compare/runway/): edit a whole film from real footage on your computer, vs generating and transforming clips of up to 30 seconds on credits.
 
 ## Pricing
 

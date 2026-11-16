@@ -1,0 +1,138 @@
+---
+// One page per job (product demos, clean takes, Shorts, motion graphics), each aimed at what people search for.
+import Base from '../layouts/Base.astro'
+import Cta from '../components/Cta.astro'
+import ComparisonCards from '../components/ComparisonCards.astro'
+import { JOBS, jobPath, type Job } from '../data/jobs'
+
+export function getStaticPaths() {
+  return JOBS.map(job => ({ params: { job: job.slug }, props: { job } }))
+}
+interface Props { job: Job }
+const { job: j } = Astro.props
+const url = `https://agentshot.si${jobPath(j.slug)}`
+const others = JOBS.filter(o => o.slug !== j.slug)
+---
+<Base title={j.title} description={j.description}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'WebPage', name: j.title, description: j.description, url,
+      about: { '@type': 'SoftwareApplication', name: 'AgentShot', applicationCategory: 'MultimediaApplication', operatingSystem: 'macOS, Windows, Linux', url: 'https://agentshot.si/', offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' } },
+      publisher: { '@type': 'Organization', name: 'Hormuz Labs', url: 'https://agentshot.si/' },
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'AgentShot', item: 'https://agentshot.si/' },
+        { '@type': 'ListItem', position: 2, name: j.tag.charAt(0).toUpperCase() + j.tag.slice(1), item: url },
+      ],
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: j.faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+    })} />
+  </Fragment>
+  <main class="job-page wrap" style={`--c: var(--${j.tone})`}>
+    <header class="job-hero">
+      <div class="hero-copy">
+        <span class="tag">{j.tag}</span>
+        <h1>{j.h1} <span class="grad">{j.grad}</span></h1>
+        <p class="intro">{j.intro}</p>
+        <div class="hero-actions" data-hero-cta><a class="btn go" href="/#get">Get AgentShot, free <span aria-hidden="true">↗</span></a><a class="btn ghost" href="#how">How it works</a></div>
+      </div>
+      <figure class:list={['clip', { tall: j.tall }]}>
+        <video src={j.video} poster={j.poster} muted loop playsinline autoplay preload="none" aria-hidden="true"></video>
+        <figcaption class="mono">{j.caption}</figcaption>
+      </figure>
+    </header>
+
+    <section class="says" aria-labelledby="says-h">
+      <h2 id="says-h" class="mono">Things you can say</h2>
+      <ul role="list">{j.says.map(s => <li>“{s}”</li>)}</ul>
+    </section>
+
+    <section class="chapter" id="how" aria-labelledby="how-h">
+      <div class="sec-head"><span class="tag">how it works</span><h2 id="how-h">One note. <span class="grad">Four steps you can watch.</span></h2></div>
+      <ol class="steps" role="list">{j.steps.map((s, i) => (
+        <li><span class="number mono">0{i + 1}</span><h3>{s.title}</h3><p>{s.text}</p></li>
+      ))}</ol>
+      <p class="skill">Every step follows a plain file you can read and change: <a href={j.skill.url}>{j.skill.label} <span aria-hidden="true">↗</span></a></p>
+    </section>
+
+    <section class="chapter promise" aria-label="What stays the same">
+      <p><b>On your computer.</b> Transcription, analysis and rendering run locally. Your model sees text and a few stills, never the video file.</p>
+      <p><b>Every version kept.</b> Each change comes back as a before and after. Keep it, or send it back with a note.</p>
+      <p><b>Free with your key.</b> Open source under the GPL. Bring a Claude, Gemini or OpenAI key, and there’s no watermark.</p>
+    </section>
+
+    <section class="chapter questions" id="questions" aria-labelledby="questions-h">
+      <div class="sec-head"><span class="tag">questions</span><h2 id="questions-h">Questions</h2></div>
+      {j.faqs.map(f => <details><summary>{f.q}</summary><p>{f.a}</p></details>)}
+    </section>
+
+    <section class="chapter more" aria-labelledby="more-h">
+      <h2 id="more-h">It does other jobs too.</h2>
+      <ul class="others" role="list">{others.map(o => (
+        <li style={`--c: var(--${o.tone})`}><a href={jobPath(o.slug)}><span class="mono">{o.tag}</span>{o.h1} {o.grad}</a></li>
+      ))}</ul>
+    </section>
+
+    <section class="chapter related" aria-labelledby="related-h"><h2 id="related-h">Choosing between editors?</h2><ComparisonCards only={j.compare} /></section>
+    <section class="chapter try-editor" aria-labelledby="try-h"><h2 id="try-h">Try it on <span class="grad">your next video.</span></h2><p>Download AgentShot for macOS, Windows or Linux, and give it a note. Or <a href="/#try">try the before-and-after demo</a> first.</p><div class="plan-cta"><Cta /></div></section>
+  </main>
+</Base>
+
+<style>
+  .job-page { padding-top: clamp(32px, 6vw, 80px); padding-bottom: 56px; }
+  .job-hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); align-items: center; gap: clamp(32px, 5vw, 72px); }
+  .hero-copy { min-width: 0; }
+  h1 { margin-top: 12px; font-size: clamp(40px, 5.4vw, 76px); line-height: 1.02; letter-spacing: -.04em; }
+  h1 .grad { display: block; margin-top: 8px; }
+  .intro { max-width: 760px; margin-top: 26px; font-size: clamp(17px, 1.6vw, 21px); color: var(--ink-2); }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .hero-actions .btn { font-size: 16px; padding-inline: 24px; }
+  .clip { margin: 0; min-width: 0; }
+  .clip video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg-2); box-shadow: 0 40px 110px -70px var(--c); }
+  .clip.tall { justify-self: center; width: min(100%, 320px); }
+  .clip.tall video { aspect-ratio: 9 / 16; }
+  .clip figcaption { margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+  .says { margin-top: clamp(44px, 6vw, 76px); padding-block: 20px; border-block: 1px solid var(--line); }
+  .says h2 { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+  .says ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 28px; margin: 14px 0 0; padding: 0; list-style: none; }
+  .says li { font-size: 17px; font-weight: 700; line-height: 1.4; }
+  .chapter { margin-top: clamp(72px, 9vw, 128px); scroll-margin-top: 90px; }
+  .steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
+  .steps li { padding: clamp(24px, 3vw, 36px); border: 1px solid var(--line); border-radius: var(--r); background: linear-gradient(145deg, color-mix(in srgb, var(--c) 6%, var(--bg-2)), var(--bg-2) 60%); }
+  .number { font-size: 12px; color: var(--ink-2); }
+  .steps h3 { margin-top: 14px; }
+  .steps p { margin-top: 12px; color: var(--ink-2); }
+  .skill { margin-top: 18px; font-size: 14px; color: var(--ink-2); }
+  .skill a { color: var(--text-sky); }
+  .promise { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--line); }
+  .promise p { padding: 24px; color: var(--ink-2); }
+  .promise p:first-child { padding-left: 0; }
+  .promise p + p { border-left: 1px solid var(--line); }
+  .promise b { display: block; margin-bottom: 8px; font-size: 20px; color: var(--text-yellow); }
+  .questions { max-width: 920px; }
+  details { border-block-end: 1px solid var(--line); }
+  details:first-of-type { border-top: 1px solid var(--line); }
+  summary { display: flex; justify-content: space-between; gap: 20px; padding: 22px 0; font-weight: 700; font-size: 19px; cursor: pointer; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; color: var(--text-yellow); flex: none; }
+  details[open] summary::after { content: '−'; }
+  details p { padding-bottom: 24px; max-width: 820px; color: var(--ink-2); }
+  .more h2, .related h2 { font-size: clamp(28px, 3.4vw, 44px); margin-bottom: 28px; }
+  .others { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
+  .others a { display: flex; flex-direction: column; gap: 10px; height: 100%; padding: 24px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg-2); box-shadow: inset 0 3px var(--c); color: var(--ink); font-size: 20px; font-weight: 700; line-height: 1.25; text-decoration: none; }
+  .others a:hover { border-color: color-mix(in srgb, var(--c) 45%, var(--line)); }
+  .others .mono { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+  .try-editor p { margin-top: 20px; color: var(--ink-2); max-width: 700px; }
+  .plan-cta { margin-top: 28px; max-width: 580px; }
+  @media (max-width: 760px) {
+    .job-hero, .steps, .says ul, .promise, .others { grid-template-columns: minmax(0, 1fr); }
+    h1 { font-size: clamp(38px, 9vw, 56px); }
+    .intro { font-size: 17px; line-height: 1.6; }
+    .promise p { padding: 20px 0; }
+    .promise p + p { border-left: 0; border-top: 1px solid var(--line); }
+    .hero-actions .btn { flex: 1 1 auto; min-width: 0; font-size: 15px; padding-inline: 20px; }
+    summary { font-size: 17px; line-height: 1.4; }
+  }
+</style>

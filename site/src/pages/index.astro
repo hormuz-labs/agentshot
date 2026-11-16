@@ -9,7 +9,7 @@ import { OFFERS, PRICING_FAQS, PLAN_SUMMARY, STARTER_CREDITS, fmt } from '../dat
 import { GH as gh, version, page, BREW, APT, AGENT_PROMPT } from '../data/download'
 import { clips, diamond, note, play, reel, spark, spark4, wave } from '../lib/shapes'
 
-const title = 'AgentShot: the video editor you talk to. Free and open source.'
+const title = 'AgentShot: the open-source AI video editor you talk to. Free.'
 const description = 'Give notes, get cuts. Say what you want, point at the frame, and keep the cut or send it back. AgentShot runs on your computer, for macOS, Windows and Linux. Free with your own model key.'
 // motion examples from the gallery inside AgentShot: made by the people credited, with Claude; collected by prompt-motion.com.
 // Videos and posters stream from AgentShot's bucket (scripts/publish-motion-gallery.mjs in the app's repo).
@@ -88,10 +88,10 @@ const log = [
 // Product demos first: filming a product in your own browser is what nothing else does.
 const ex = (id: string) => motion.find(m => m.id === id)!
 const films = [
-  { job: 'Product demos', tone: 'sky', from: 'From a URL', k: 'Your product’s URL', prompt: 'A walkthrough of app.example.com: sign up and make a first project.', steps: ['Tried the product first, without filming', 'Showed a storyboard: each step and what the voice will say', 'Filmed one take in your Chrome, where you’re already signed in', 'Cut the waiting, zoomed into each click, held each step for its line'], video: `/motion/robj3d3-b18fad.mp4`, poster: '/motion/robj3d3-b18fad.jpg', shape: 'wide', cap: `A product film from the gallery, by @${ex('robj3d3-b18fad').handle}` },
-  { job: 'Shorts and Reels', tone: 'pink', from: 'From any video', k: 'A vertical Short', prompt: 'Make it a Short with a caption.', steps: ['Found the subject and tracked him through the shot', 'Reframed 16:9 to 9:16 so he never leaves the frame', 'Timed the caption to the moment and burned it in', 'Exported 1080 × 1920 for Shorts, Reels and TikTok'], video: '/demo/short.mp4', poster: '/demo/short.webp', shape: 'tall', cap: 'The after, rendered by the engine AgentShot drives' },
-  { job: 'Your footage, polished', tone: 'coral', from: 'From your footage', k: 'Your footage', prompt: 'Make it cinematic, and put his name on screen.', steps: ['Measured the clip: one shot, one face, followed in every frame', 'Graded it and set it in a widescreen letterbox', 'Set his name in real type you can still drag and retype', 'Came back as a before and after, to keep or send back'], video: '/demo/cinema.mp4', poster: '/demo/cinema.webp', shape: 'wide', cap: 'The after, rendered by the engine AgentShot drives' },
-  { job: 'Motion graphics', tone: 'violet', from: 'From nothing at all', k: 'Nothing at all', prompt: `Use the “${ex('tdinh-me-815acb').title}” example, but reveal @logo.png in our colours.`, steps: ['Read the example’s prompt and studied the film', 'Asked for what it needed: the logo, two colours, a track', 'Showed a storyboard before making a frame', 'Built real motion graphics, so a note changes one scene, not all of them'], video: `/motion/tdinh-me-815acb.mp4`, poster: '/motion/tdinh-me-815acb.jpg', shape: 'wide', cap: `The example it starts from, by @${ex('tdinh-me-815acb').handle}` },
+  { job: 'Product demos', page: '/ai-product-demo-video/', more: 'Product demo videos, from a URL', tone: 'sky', from: 'From a URL', k: 'Your product’s URL', prompt: 'A walkthrough of app.example.com: sign up and make a first project.', steps: ['Tried the product first, without filming', 'Showed a storyboard: each step and what the voice will say', 'Filmed one take in your Chrome, where you’re already signed in', 'Cut the waiting, zoomed into each click, held each step for its line'], video: `/motion/robj3d3-b18fad.mp4`, poster: '/motion/robj3d3-b18fad.jpg', shape: 'wide', cap: `A product film from the gallery, by @${ex('robj3d3-b18fad').handle}` },
+  { job: 'Shorts and Reels', page: '/long-video-to-shorts/', more: 'Shorts and Reels from a long video', tone: 'pink', from: 'From any video', k: 'A vertical Short', prompt: 'Make it a Short with a caption.', steps: ['Found the subject and tracked him through the shot', 'Reframed 16:9 to 9:16 so he never leaves the frame', 'Timed the caption to the moment and burned it in', 'Exported 1080 × 1920 for Shorts, Reels and TikTok'], video: '/demo/short.mp4', poster: '/demo/short.webp', shape: 'tall', cap: 'The after, rendered by the engine AgentShot drives' },
+  { job: 'Your footage, polished', page: '/remove-filler-words/', more: 'Cutting ums, pauses and false starts', tone: 'coral', from: 'From your footage', k: 'Your footage', prompt: 'Make it cinematic, and put his name on screen.', steps: ['Measured the clip: one shot, one face, followed in every frame', 'Graded it and set it in a widescreen letterbox', 'Set his name in real type you can still drag and retype', 'Came back as a before and after, to keep or send back'], video: '/demo/cinema.mp4', poster: '/demo/cinema.webp', shape: 'wide', cap: 'The after, rendered by the engine AgentShot drives' },
+  { job: 'Motion graphics', page: '/ai-motion-graphics/', more: 'Motion graphics from a sentence', tone: 'violet', from: 'From nothing at all', k: 'Nothing at all', prompt: `Use the “${ex('tdinh-me-815acb').title}” example, but reveal @logo.png in our colours.`, steps: ['Read the example’s prompt and studied the film', 'Asked for what it needed: the logo, two colours, a track', 'Showed a storyboard before making a frame', 'Built real motion graphics, so a note changes one scene, not all of them'], video: `/motion/tdinh-me-815acb.mp4`, poster: '/motion/tdinh-me-815acb.jpg', shape: 'wide', cap: `The example it starts from, by @${ex('tdinh-me-815acb').handle}` },
 ]
 
 // the hero's message box: what's attached, the note, and what comes back. Each is something AgentShot does today
@@ -242,6 +242,7 @@ const faqs = [
               <q>{f.prompt}</q>
               <span class="lab did mono">AgentShot</span>
               <ol aria-label={`What AgentShot does for ${f.job}`}>{f.steps.map(st => <li>{st}</li>)}</ol>
+              <a class="job-more" href={f.page}>{f.more} <span aria-hidden="true">→</span></a>
             </div>
             <figure class={f.shape}>
               <video data-src={f.video} poster={f.poster} muted loop playsinline preload="none" aria-label={`Result: ${f.job}`}></video>
@@ -577,6 +578,8 @@ const faqs = [
   .job ol { margin: 12px 0 0; padding: 0; list-style: none; }
   .job li { position: relative; padding: 9px 0 9px 30px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 15.5px; line-height: 1.4; }
   .job li::before { content: ''; position: absolute; left: 2px; top: 13px; width: 14px; height: 8px; border: solid var(--mint); border-width: 0 0 2.5px 2.5px; rotate: -45deg; scale: .8; }
+  .job-more { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 14px; color: var(--text-c); font-size: 15px; font-weight: 700; text-decoration: none; }
+  .job-more:hover { text-decoration: underline; }
   .job figure { margin: 0; }
   .job video { width: 100%; border-radius: var(--r); background: #000; box-shadow: 0 0 0 1px var(--line), 0 40px 110px -50px color-mix(in srgb, var(--c) 80%, transparent); }
   .job .tall video { width: auto; max-height: 520px; margin-inline: auto; }
@@ -749,6 +752,7 @@ const faqs = [
     .job figure { order: 2; margin-top: 20px; }
     .job .lab.did { order: 3; margin-top: 22px; }
     .job ol { order: 4; }
+    .job-more { order: 5; }
     .job .tall video { max-height: 420px; }
     .reels { grid-template-columns: 1fr 1fr; }
     .track { grid-template-columns: 1fr; }

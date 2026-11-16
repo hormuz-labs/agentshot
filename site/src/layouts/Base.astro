@@ -4,6 +4,7 @@ import '@fontsource/ibm-plex-mono/500.css'
 import '../styles/global.css'
 import Cta from '../components/Cta.astro'
 import { GH } from '../data/download'
+import { JOBS } from '../data/jobs'
 
 interface Props {
   title: string
@@ -82,6 +83,7 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
         <a href="/#get">Install</a>
         <a href="/pricing/">Pricing</a>
         <a href="/compare/">Compare editors</a>
+        {JOBS.map(j => <a href={`/${j.slug}/`}>{j.tag.charAt(0).toUpperCase() + j.tag.slice(1)}</a>)}
         <a href={GH}>GitHub</a>
         <a href={`${GH}/blob/main/ROADMAP.md`}>Roadmap</a>
         <a href={`${GH}/releases`}>Releases</a>
@@ -162,10 +164,15 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
       })
     }, { passive: true })
 
-    // the phone's bar comes in once the hero's button has scrolled away
+    // the phone's bar comes in once the hero's button has scrolled away. Measured on scroll rather than observed: when a
+    // long headline starts the button below the first screen, one jump takes it from below to above without ever
+    // crossing the viewport, and an IntersectionObserver would never fire
     const hero = document.querySelector('[data-hero-cta]'), dock = document.getElementById('dock')!
-    if (os === 'phone' && hero) new IntersectionObserver(([e]) => (dock.hidden = e.isIntersecting || e.boundingClientRect.top > 0)).observe(hero)
-    else if (os === 'phone') dock.hidden = false
+    if (os === 'phone' && hero) {
+      const place = () => { dock.hidden = hero.getBoundingClientRect().bottom > 0 }
+      addEventListener('scroll', place, { passive: true })
+      place()
+    } else if (os === 'phone') dock.hidden = false
   </script>
   <script>import '../scripts/motion'</script>
 </body>

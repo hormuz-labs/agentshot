@@ -16,7 +16,8 @@
     "test:landing": "node test/landing.mjs",
     "test:download": "node test/download.mjs",
     "test:compare": "node test/compare.mjs",
-    "test:theme": "node test/theme.mjs"
+    "test:theme": "node test/theme.mjs",
+    "test:jobs": "node test/jobs.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
