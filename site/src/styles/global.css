@@ -119,9 +119,11 @@ mark { padding: 0 .12em; background: var(--yellow); color: var(--on-yellow); bor
 .top nav { display: flex; gap: 6px; margin-left: auto; font-size: 15px; font-weight: 600; }
 .top nav a { padding: 8px 12px; border-radius: 999px; color: var(--ink-2); text-decoration: none; transition: background .15s, color .15s; }
 .top nav a:hover { background: var(--bg-3); color: var(--ink); }
+.top nav a[aria-current='page'] { background: var(--bg-3); color: var(--ink); }
 [data-os='phone'] .top-cta { display: none; }
 @media (max-width: 860px) { .top nav .wide { display: none; } }
-@media (max-width: 560px) { .top-cta { display: none; } }
+@media (max-width: 560px) { .top-cta, .top nav .source-link { display: none; } .top-in { gap: 16px; } .top nav { gap: 0; font-size: 13.5px; } .top nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 10px; } }
+[data-os='phone'] .has-comparison { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 
 .foot { position: relative; margin-top: 40px; border-top: 1px solid var(--line); padding: 24px 0 26px; font-size: 15px; color: var(--ink-2); }
 .foot-in { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 32px; align-items: center; }

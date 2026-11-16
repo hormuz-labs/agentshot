@@ -1,0 +1,50 @@
+---
+import { COMPARISONS, comparisonPath } from '../data/comparisons'
+const scarlet = COMPARISONS[0]
+---
+<div class="compare-preview">
+  <div class="preview-head">
+    <div>
+      <h3>Compare the editors. <span class="grad">Not just the promises.</span></h3>
+      <p>Scarlet, Descript, VEED, Kapwing and OpusClip. What you gain with AgentShot, what overlaps, and when another tool fits better.</p>
+    </div>
+    <a class="btn ghost sm" href="/compare/">All comparisons <span aria-hidden="true">↗</span></a>
+  </div>
+  <a class="scarlet-preview" href={comparisonPath(scarlet.slug)}>
+    <div>
+      <span class="tag">AgentShot vs Scarlet</span>
+      <h3>Beyond the <span class="grad">dialogue cut.</span></h3>
+      <p>Both are open source. Both edit locally. AgentShot goes further with product-demo filming, your own model endpoints, shot/object/beat analysis and a phone review remote.</p>
+      <span class="read">See the differences, with sources <span aria-hidden="true">↗</span></span>
+    </div>
+    <ul role="list" aria-label="AgentShot workflow advantages">
+      <li><span class="mono">01</span> A product URL becomes a filmed demo</li>
+      <li><span class="mono">02</span> Claude, Gemini, GPT or your endpoint</li>
+      <li><span class="mono">03</span> Review and give notes from your phone</li>
+      <li><span class="mono">04</span> Usage statistics start off, not on</li>
+    </ul>
+  </a>
+  <nav class="other-comparisons" aria-label="More editor comparisons">
+    {COMPARISONS.slice(1).map(c => <a href={comparisonPath(c.slug)}>AgentShot vs {c.name} <span aria-hidden="true">↗</span></a>)}
+  </nav>
+</div>
+
+<style>
+  .compare-preview { margin-top: clamp(36px, 5vw, 64px); }
+  .preview-head { display: flex; flex-wrap: wrap; gap: 22px 36px; align-items: end; justify-content: space-between; }
+  .preview-head > div { max-width: 820px; }
+  p { margin-top: 16px; color: var(--ink-2); font-size: 17px; max-width: 650px; }
+  .scarlet-preview { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 32px 60px; align-items: center; margin-top: 28px; padding: clamp(24px, 4vw, 48px); border: 1px solid color-mix(in srgb, var(--violet) 30%, var(--line)); border-radius: var(--r); background: radial-gradient(100% 150% at 0% 0%, color-mix(in srgb, var(--violet) 18%, var(--bg-2)), var(--bg-2) 72%); box-shadow: inset 0 1px 0 #ffffff08; text-decoration: none; transition: border-color .2s; }
+  .scarlet-preview:hover { border-color: var(--violet); }
+  .scarlet-preview h3 { font-size: clamp(30px, 3.4vw, 46px); }
+  .read { display: inline-flex; gap: 16px; margin-top: 24px; color: var(--yellow); font-weight: 700; font-size: 15px; }
+  ul { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+  li { display: flex; align-items: baseline; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 16px; color: var(--ink-2); }
+  li .mono { font-size: 12px; color: var(--pink); }
+  .other-comparisons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .other-comparisons a { display: inline-flex; align-items: center; gap: 16px; min-height: 44px; padding: 9px 16px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; font-weight: 600; text-decoration: none; background: var(--bg-2); }
+  .other-comparisons a:hover { background: var(--bg-3); }
+  @media (max-width: 760px) { .scarlet-preview { grid-template-columns: minmax(0, 1fr); gap: 28px; } .preview-head .btn { min-height: 44px; } li .mono { flex: none; } }
+  @media (max-width: 480px) { .other-comparisons { display: grid; grid-template-columns: minmax(0, 1fr); } .other-comparisons a { justify-content: space-between; } p { font-size: 16px; } }
+  @media (prefers-reduced-motion: reduce) { .scarlet-preview { transition: none; } }
+</style>

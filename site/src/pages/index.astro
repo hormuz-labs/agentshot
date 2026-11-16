@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro'
 import Cta from '../components/Cta.astro'
 import Demo from '../components/Demo.astro'
 import Pricing from '../components/Pricing.astro'
+import ComparePreview from '../components/ComparePreview.astro'
 import motion from '../data/motion.json'
 import { OFFERS, PRICING_FAQS, PLAN_SUMMARY, STARTER_CREDITS, fmt } from '../data/plans'
 import { GH as gh, version, page, BREW, APT, AGENT_PROMPT } from '../data/download'
@@ -357,6 +358,7 @@ const faqs = [
         <div class="row" role="row"><span role="rowheader">Undo</span><span role="cell" data-h="Timeline editors">Ctrl-Z, until it isn’t</span><span role="cell" data-h="Video as code">git, if you use it</span><span role="cell" data-h="AI generators">start over</span><span role="cell" data-h="AgentShot" class="us">every version, kept</span></div>
         <div class="row" role="row"><span role="rowheader">Costs</span><span role="cell" data-h="Timeline editors">a subscription, mostly</span><span role="cell" data-h="Video as code">free, plus your agent</span><span role="cell" data-h="AI generators">credits</span><span role="cell" data-h="AgentShot" class="us">free with your key</span></div>
       </div>
+      <ComparePreview />
     </section>
 
     <section class="sec wrap yours" id="yours">

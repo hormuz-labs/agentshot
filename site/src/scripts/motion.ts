@@ -30,7 +30,8 @@ function start() {
     if (!el) return
     e.preventDefault()
     history.replaceState(null, '', url.hash)
-    lenis.scrollTo(el as HTMLElement, { offset: -76, duration: 1.3 })
+    // A numeric target keeps the header offset from stacking with CSS scroll-padding/scroll-margin.
+    lenis.scrollTo(el.getBoundingClientRect().top + scrollY, { offset: -76, duration: 1.3 })
   })
   // a dialog (the film, an example) holds the page still
   document.querySelectorAll('dialog').forEach(d => {

@@ -9,9 +9,21 @@ What it does today:
 - Mobile companion (iPhone, iPad & Android): sign in with the same account or pair with a QR code. Phone and computer join a private network built into each app, with no Tailscale to install, and the phone pins your computer's TLS certificate. Reaching your computer away from home and AgentShot Cloud are on Android for now; an iPhone connects on the same Wi-Fi. Shoot and upload clips from your phone, browse projects, draw frame boxes, chat live with the agent, and review or share exports from anywhere.
 - Cloud & home workers (`manul --worker`): offload heavy rendering and agent edits to a leased AgentShot cloud worker or your own workstation running `manul --worker`, connected over a built-in userspace Headscale/WireGuard mesh (`manul-mesh`, no OS Tailscale install required) with peer-to-peer project delta-sync.
 - 12 craft skills (`talking-head`, `short-form`, `motion-design`, `product-walkthrough`, `demo-editor`, `promos-and-montages`, `tutorials`, `voiceover`, `music-generation`, `cleanup-and-repair`, `video-editing`, `browser-skill`) ship as `SKILL.md` files in the repo.
-- Next: generated camera shots only where asked (labelled as generated), timeline hand-off to Premiere/Resolve/Final Cut, direct YouTube publishing, and an API & MCP server.
+- Editable timeline hand-off: Premiere XML, FCPXML and OpenTimelineIO with footage, for finishing in Premiere, Resolve or Final Cut.
+- Next: generated camera shots only where asked (labelled as generated), direct YouTube publishing, and an API & MCP server.
 
-How it compares: timeline editors (Premiere Pro, Final Cut Pro, DaVinci Resolve, CapCut) are operated cut by cut; Descript edits through the transcript; HyperFrames and Remotion turn video into code an agent writes; AI generators (Runway, Sora, Veo) replace your footage with generated frames; hosted video agents lock your workflow in their cloud. AgentShot is an open-source video agent for creation and editing: it runs on your computer (or a worker you pick), works from a blank canvas or your footage, and lets you review every change before keeping it.
+How it compares: AgentShot is an open-source video agent for creation and editing, with local processing by default, your own editing-model endpoint, product-demo recording from a URL, and a phone review remote. Scarlet also edits locally and has captions, Shorts, motion graphics and timeline handoff. Descript Underlord and Kapwing Kai also offer conversational editing; OpusClip offers editing, reframing and publishing. These shared features are not exclusive AgentShot advantages. Remote AI providers can receive text context and requested still frames; optional cloud workers move project material off your computer.
+
+## AI video editor comparisons
+
+Published by Hormuz Labs, the makers of AgentShot. Primary sources reviewed November 16, 2026. Feature/workflow comparisons, not controlled speed, accuracy or output-quality benchmarks. “Not documented” is not proof a competitor lacks a feature. Hosted products and plans may change; Scarlet sources are pinned to commit 52e200ffddee70e16c7db53ed809921a8e5d8bf6.
+
+- [Compare AI video editors](https://agentshot.si/compare/): comparison index and methodology.
+- [AgentShot vs Scarlet](https://agentshot.si/compare/scarlet/): AgentShot advantages for product-demo capture, compatible model endpoints, shot/object/beat analysis, phone review and opt-in telemetry. Scarlet is a strong dialogue-editing choice with an existing Claude Code or Codex subscription; both render locally.
+- [AgentShot vs Descript](https://agentshot.si/compare/descript/): local, model-flexible editing vs Underlord and cloud-backed projects. Descript may be better for hosted collaboration, remote recording and speech tools.
+- [AgentShot vs VEED](https://agentshot.si/compare/veed/): local processing, open source and real product-demo filming vs a managed browser creation suite. VEED may be better for avatars, dubbing and browser-based teams.
+- [AgentShot vs Kapwing](https://agentshot.si/compare/kapwing/): your own model endpoint and watermark-free Local exports vs Kai and collaborative Studio workspaces. Kapwing may be better for shared Brand Kits, comments and localization.
+- [AgentShot vs OpusClip](https://agentshot.si/compare/opus-clip/): local clipping and open-source workflow control vs managed editing, repurposing and publishing. OpusClip may be better when integrated social publishing or APIs are required.
 
 ## Pricing
 
@@ -48,6 +60,6 @@ sudo apt update && sudo apt install manul
 
 ## Optional
 
-- [Website](https://agentshot.si/): live demo, kinds of film, mobile & cloud workers, comparison, pricing, FAQ, and the 88-second film
+- [Website](https://agentshot.si/): live demo, kinds of film, mobile & cloud workers, comparisons, pricing, FAQ, and the 66-second film
 - [Source code](https://github.com/hormuz-labs/agentshot)
 - [License (GPL-3.0-or-later)](https://github.com/hormuz-labs/agentshot/blob/main/LICENSE)
