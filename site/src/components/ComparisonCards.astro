@@ -1,10 +1,10 @@
 ---
 import { COMPARISONS, comparisonPath } from '../data/comparisons'
-interface Props { exclude?: string }
-const { exclude } = Astro.props
+interface Props { exclude?: string; only?: string[] }
+const { exclude, only } = Astro.props
 ---
 <ul class="comparison-cards" role="list">
-  {COMPARISONS.filter(c => c.slug !== exclude).map(c => (
+  {COMPARISONS.filter(c => c.slug !== exclude && (!only || only.includes(c.slug))).map(c => (
     <li style={`--c: var(--${c.tone})`}>
       <a href={comparisonPath(c.slug)}>
         <span class="mono category">{c.category}</span>

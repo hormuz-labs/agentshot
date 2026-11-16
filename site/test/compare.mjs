@@ -10,7 +10,7 @@ const PHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKi
 const browser = await chromium.launch({ executablePath: CHROME })
 const errors = []
 const check = (ok, what) => { if (!ok) errors.push(what) }
-const routes = ['scarlet', 'descript', 'veed', 'kapwing', 'opus-clip'].map(slug => `/compare/${slug}/`)
+const routes = ['scarlet', 'descript', 'veed', 'kapwing', 'opus-clip', 'capcut', 'premiere-pro', 'submagic', 'captions', 'runway'].map(slug => `/compare/${slug}/`)
 const paths = ['/compare/', ...routes]
 const open = async (path, opts = {}) => {
   const page = await browser.newPage({ reducedMotion: 'reduce', ...opts })
