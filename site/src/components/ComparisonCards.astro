@@ -1,0 +1,35 @@
+---
+import { COMPARISONS, comparisonPath } from '../data/comparisons'
+interface Props { exclude?: string }
+const { exclude } = Astro.props
+---
+<ul class="comparison-cards" role="list">
+  {COMPARISONS.filter(c => c.slug !== exclude).map(c => (
+    <li style={`--c: var(--${c.tone})`}>
+      <a href={comparisonPath(c.slug)}>
+        <span class="mono category">{c.category}</span>
+        <h3>AgentShot <span>vs</span> {c.name}</h3>
+        <p>{c.hook}</p>
+        <span class="read">Read the comparison <span aria-hidden="true">↗</span></span>
+      </a>
+    </li>
+  ))}
+</ul>
+
+<style>
+  .comparison-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0; margin: 0; list-style: none; }
+  li { min-width: 0; }
+  a { position: relative; isolation: isolate; display: flex; flex-direction: column; height: 100%; min-height: 252px; padding: 28px; border: 1px solid var(--line); border-radius: var(--r); background: linear-gradient(145deg, color-mix(in srgb, var(--c) 7%, var(--bg-2)), var(--bg-2) 65%); text-decoration: none; overflow: hidden; transition: border-color .2s, box-shadow .2s, transform .2s; }
+  a::before { content: ''; position: absolute; inset: 0 auto auto 28px; width: 36px; height: 2px; background: var(--c); }
+  a::after { content: ''; position: absolute; z-index: -1; top: -50px; right: -40px; width: 160px; height: 160px; border: 1px solid color-mix(in srgb, var(--c) 12%, transparent); border-radius: 50%; box-shadow: 0 0 0 24px color-mix(in srgb, var(--c) 3%, transparent), 0 0 0 48px color-mix(in srgb, var(--c) 2%, transparent); pointer-events: none; }
+  @media (hover: hover) and (pointer: fine) { a:hover { border-color: color-mix(in srgb, var(--c) 55%, var(--line)); box-shadow: 0 16px 40px -28px var(--c); transform: translateY(-3px); } }
+  .category { font-size: 12px; color: var(--ink-2); }
+  h3 { margin-top: 22px; font-size: clamp(23px, 2.2vw, 30px); }
+  h3 span { font-weight: 500; color: var(--ink-3); }
+  p { margin-top: 12px; margin-bottom: 28px; color: var(--ink-2); font-size: 16px; }
+  .read { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 18px; border-top: 1px solid #ffffff0d; font-size: 14px; font-weight: 700; color: var(--ink); }
+  .read > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); color: var(--ink-2); }
+  @media (max-width: 1000px) { .comparison-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 600px) { .comparison-cards { grid-template-columns: minmax(0, 1fr); } a { min-height: 224px; padding: 24px; } h3 { margin-top: 20px; font-size: 26px; } }
+  @media (prefers-reduced-motion: reduce) { a { transition: none; } a:hover { transform: none; } }
+</style>

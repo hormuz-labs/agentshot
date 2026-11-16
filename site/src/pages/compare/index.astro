@@ -1,0 +1,81 @@
+---
+import Base from '../../layouts/Base.astro'
+import Cta from '../../components/Cta.astro'
+import ComparisonCards from '../../components/ComparisonCards.astro'
+import ComparisonSignal from '../../components/ComparisonSignal.astro'
+import { COMPARISONS, REVIEWED_LABEL, comparisonPath } from '../../data/comparisons'
+const title = 'Compare AgentShot vs Scarlet, Descript, VEED, Kapwing & OpusClip'
+const description = 'Compare AI video editors with sources. See where AgentShot wins on local processing, model choice and product-demo filming, and where other editors fit better.'
+const url = 'https://agentshot.si/compare/'
+---
+<Base title={title} description={description}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description, url,
+      mainEntity: { '@type': 'ItemList', itemListElement: COMPARISONS.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: `AgentShot vs ${c.name}`, url: `https://agentshot.si${comparisonPath(c.slug)}` })) },
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'AgentShot', item: 'https://agentshot.si/' },
+        { '@type': 'ListItem', position: 2, name: 'Compare AI video editors', item: url },
+      ],
+    })} />
+  </Fragment>
+  <main class="comparison-index wrap">
+    <header class="index-hero">
+      <div class="sec-head">
+      <span class="tag">compare AI video editors</span>
+      <h1>More control. <span class="grad">Less lock-in.</span></h1>
+      <p>AgentShot is the open-source video editor you talk to. Compare it with Scarlet and funded AI video editors on the things that change your workflow—not on who raised more money.</p>
+      <div class="hero-actions" data-hero-cta><a class="btn go" href="#editors">Find your comparison <span aria-hidden="true">↓</span></a><a class="btn ghost" href="/#try">Watch it edit <span aria-hidden="true">↗</span></a></div>
+      </div>
+      <ComparisonSignal />
+    </header>
+    <div class="summary" aria-label="Why choose AgentShot">
+      <p><b>Your computer.</b> Local transcription, analysis and rendering by default.</p>
+      <p><b>Your model.</b> Claude, Gemini, OpenAI or a compatible endpoint.</p>
+      <p><b>Your workflow.</b> Edit footage or have a real product demo filmed from a URL.</p>
+    </div>
+    <section class="editors" id="editors" aria-labelledby="editors-h">
+      <h2 id="editors-h">Which editor are you considering?</h2>
+      <ComparisonCards />
+    </section>
+    <aside class="method" aria-labelledby="method-h">
+      <span class="tag">how we compare</span>
+      <h2 id="method-h">Sources. <span class="grad">Not scorekeeping.</span></h2>
+      <p>Written by Hormuz Labs, the makers of AgentShot. Reviewed {REVIEWED_LABEL}. Each comparison links to official product pages, documentation or source code. Scarlet is pinned to a reviewed repository commit; hosted products and their plans may change.</p>
+      <p>These are feature and workflow comparisons, not head-to-head speed, accuracy or output-quality benchmarks. “Not documented” means we did not find a feature in the cited sources, not that it cannot exist. We call out shared capabilities and reasons to choose the other editor.</p>
+      <p>AgentShot Local costs $0 with your own keys; your model provider bills separately. Remote AI can receive text context and requested still frames. Optional cloud workers are not the local-only workflow.</p>
+    </aside>
+    <section class="try-editor" aria-labelledby="try-editor-h">
+      <h2 id="try-editor-h">Judge it on <span class="grad">your next cut.</span></h2>
+      <p>No app subscription required with your own model key. Or <a href="/#try">try the before-and-after demo</a> first.</p>
+      <div class="plan-cta"><Cta /></div>
+    </section>
+  </main>
+</Base>
+
+<style>
+  .comparison-index { padding-top: clamp(44px, 7vw, 96px); padding-bottom: 56px; }
+  .index-hero { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); align-items: center; gap: clamp(32px, 5vw, 72px); margin-bottom: clamp(44px, 6vw, 80px); }
+  .sec-head { max-width: 1100px; margin-bottom: 0; }
+  .sec-head h1 { font-size: clamp(44px, 6vw, 82px); line-height: .98; letter-spacing: -.04em; }
+  h1 .grad { display: block; margin-top: 8px; }
+  .sec-head p { max-width: 780px; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .hero-actions .btn { font-size: 16px; padding-inline: 24px; }
+  .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--line); }
+  .summary p { padding: 24px; color: var(--ink-2); }
+  .summary p:first-child { padding-left: 0; }
+  .summary p + p { border-left: 1px solid var(--line); }
+  .summary b { display: block; margin-bottom: 8px; font-size: 22px; color: var(--yellow); }
+  .editors { padding-top: clamp(48px, 7vw, 88px); scroll-margin-top: 90px; }
+  .editors h2 { margin-bottom: 28px; font-size: clamp(28px, 3.4vw, 44px); }
+  .method { max-width: 900px; margin-top: var(--gap); padding-top: 28px; border-top: 1px solid var(--line); }
+  .method h2 { font-size: clamp(32px, 4vw, 52px); }
+  .method p { margin-top: 20px; color: var(--ink-2); }
+  .try-editor { margin-top: var(--gap); }
+  .try-editor p { margin-top: 20px; color: var(--ink-2); }
+  .plan-cta { max-width: 580px; margin-top: 28px; }
+  @media (max-width: 760px) { .index-hero { grid-template-columns: minmax(0, 1fr); } .sec-head h1 { font-size: clamp(44px, 9vw, 68px); } .summary { grid-template-columns: minmax(0, 1fr); } .summary p { padding: 20px 0; font-size: 16px; } .summary p + p { border-left: 0; border-top: 1px solid var(--line); } .summary b { font-size: 20px; } .hero-actions .btn { flex: 1 1 auto; min-width: 0; font-size: 15px; padding-inline: 20px; } }
+</style>

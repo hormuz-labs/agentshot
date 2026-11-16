@@ -45,7 +45,7 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
   })()</script>
   <slot name="head" />
 </head>
-<body>
+<body class:list={{ 'has-comparison': Astro.url.pathname.startsWith('/compare/') }}>
   <div class="playhead" aria-hidden="true"></div>
   <header class="top">
     <div class="wrap top-in">
@@ -53,8 +53,9 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
       <nav aria-label="Site">
         <a href="/#make" class="wide">What it makes</a>
         <a href="/#how" class="wide">How it works</a>
+        <a href="/compare/" aria-current={Astro.url.pathname.startsWith('/compare/') ? 'page' : undefined}>Compare</a>
         <a href="/#pricing">Pricing</a>
-        <a href={GH}>GitHub</a>
+        <a href={GH} class="source-link">GitHub</a>
       </nav>
       <div class="top-cta"><Cta small /></div>
     </div>
@@ -68,6 +69,7 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
       <nav aria-label="Footer">
         <a href="/#get">Install</a>
         <a href="/pricing/">Pricing</a>
+        <a href="/compare/">Compare editors</a>
         <a href={GH}>GitHub</a>
         <a href={`${GH}/blob/main/ROADMAP.md`}>Roadmap</a>
         <a href={`${GH}/releases`}>Releases</a>

@@ -6,6 +6,18 @@
   },
   "entries": [
     {
+      "identifier": "urn:air:agentshot.si:knowledge:comparisons",
+      "displayName": "AgentShot AI video editor comparisons",
+      "type": "text/html",
+      "url": "https://agentshot.si/compare/",
+      "description": "Sourced feature and workflow comparisons with Scarlet, Descript, VEED, Kapwing and OpusClip, published by the makers of AgentShot. Includes tradeoffs, review dates and links to primary sources; not performance benchmarks.",
+      "representativeQueries": [
+        "How does AgentShot compare with Scarlet?",
+        "Is there an open-source Descript or VEED alternative?",
+        "Compare AgentShot vs Kapwing and OpusClip"
+      ]
+    },
+    {
       "identifier": "urn:air:agentshot.si:skills:install-manul",
       "displayName": "Install AgentShot (agent skill)",
       "type": "text/markdown; profile=\"urn:air:agent-skills\"",

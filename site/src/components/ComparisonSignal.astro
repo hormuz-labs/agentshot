@@ -1,0 +1,55 @@
+---
+interface Props { competitor?: string }
+const { competitor } = Astro.props
+---
+<aside class="signal" aria-label="AgentShot workflow at a glance">
+  <div class="signal-top mono"><span class="status" aria-hidden="true"></span> Your workflow, in focus <span aria-hidden="true">↗</span></div>
+  <div class="signal-title"><img src="/icon-56.png" alt="" width="40" height="40" /><span>AgentShot</span></div>
+  <p class="signal-lede">The edit stays yours.</p>
+  <div class="timeline" aria-hidden="true">
+    <div class="timecode mono"><span>01: Your footage</span><span>02: Your cut</span></div>
+    <div class="track footage"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="track captions"><i></i><i></i><i></i></div>
+    <div class="track audio"></div>
+    <span class="playline"></span>
+  </div>
+  <ul role="list">
+    <li><span class="mono">01</span><div><b>Local by default</b><span>Transcribe, analyze, render.</span></div></li>
+    <li><span class="mono">02</span><div><b>Your model connection</b><span>Your keys. Compatible endpoints.</span></div></li>
+    <li><span class="mono">03</span><div><b>Open-source workflow</b><span>Inspect it. Make it your own.</span></div></li>
+  </ul>
+  <p class="signal-foot mono">{competitor ? `A closer look vs ${competitor}` : 'Compare the workflow. Find your fit.'}</p>
+</aside>
+
+<style>
+  .signal { position: relative; isolation: isolate; min-width: 0; overflow: hidden; padding: clamp(24px, 3vw, 36px); border: 1px solid color-mix(in srgb, var(--violet) 35%, var(--line)); border-radius: 28px; background: radial-gradient(ellipse at 100% 0, color-mix(in srgb, var(--violet) 20%, transparent), transparent 65%), linear-gradient(150deg, var(--bg-3), var(--bg-2) 60%); box-shadow: 0 24px 80px -48px var(--violet), inset 0 1px 0 #ffffff08; }
+  .signal-top { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 12px; }
+  .signal-top > span:last-child { margin-left: auto; color: var(--ink-3); font-size: 18px; }
+  .status { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 12px color-mix(in srgb, var(--mint) 30%, transparent); flex: none; }
+  .signal-title { display: flex; align-items: center; gap: 12px; margin-top: 30px; font-size: 32px; font-weight: 800; letter-spacing: -.035em; line-height: 1; }
+  .signal-lede { margin-top: 12px; color: var(--ink-2); font-size: 17px; }
+  .timeline { position: relative; margin: 28px 0; padding: 0 0 14px; }
+  .timecode { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 12px; font-size: 9px; color: var(--ink-3); }
+  .track { display: flex; gap: 4px; margin-top: 6px; }
+  .track i { display: block; border-radius: 4px; }
+  .footage { height: 46px; }
+  .footage i { flex: 1; border: 1px solid #ffffff18; background: linear-gradient(145deg, #9d87ff, #3e305e); }
+  .footage i:nth-child(2) { flex: 1.6; background: linear-gradient(145deg, #66d3ff, #234453); }
+  .footage i:nth-child(3) { flex: .8; background: linear-gradient(145deg, #ff79bf, #622d4c); }
+  .footage i:nth-child(4) { flex: 1.3; background: linear-gradient(145deg, #ff8965, #693c38); }
+  .footage i:nth-child(5) { background: linear-gradient(145deg, #edd66c, #605430); }
+  .captions { height: 11px; padding-inline: 8% 14%; gap: 7px; }
+  .captions i { flex: 1; background: color-mix(in srgb, var(--yellow) 60%, var(--bg-3)); }
+  .captions i:nth-child(2) { flex: 1.7; }
+  .audio { height: 17px; border-radius: 4px; background: repeating-linear-gradient(90deg, transparent 0 3px, #3cf2b55c 3px 5px); clip-path: polygon(0 40%, 7% 25%, 12% 40%, 18% 10%, 24% 30%, 30% 0, 36% 30%, 45% 20%, 50% 45%, 57% 10%, 65% 25%, 74% 0, 82% 30%, 90% 20%, 100% 40%, 100% 65%, 90% 80%, 82% 70%, 74% 100%, 65% 75%, 57% 90%, 50% 55%, 45% 80%, 36% 70%, 30% 100%, 24% 70%, 18% 90%, 12% 60%, 7% 75%, 0 60%); }
+  .playline { position: absolute; top: 23px; bottom: 5px; left: 61%; width: 1px; background: var(--ink); box-shadow: 0 0 10px #f6f3ec33; }
+  .playline::before { content: ''; position: absolute; left: -4px; top: -4px; width: 9px; height: 9px; background: var(--ink); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+  ul { margin: 0; padding: 0; list-style: none; }
+  li { display: flex; align-items: baseline; gap: 16px; padding: 16px 0; border-top: 1px solid #ffffff0d; }
+  li > .mono { font-size: 12px; color: var(--sky); }
+  li b { display: block; font-size: 15px; font-weight: 700; }
+  li div > span { display: block; margin-top: 3px; font-size: 13px; color: var(--ink-2); }
+  .signal-foot { padding-top: 16px; border-top: 1px solid #ffffff0d; color: var(--ink-2); font-size: 12px; }
+  @media (max-width: 1000px) and (min-width: 761px) { .signal-title { font-size: 28px; } .signal { padding: 24px; } }
+  @media (max-width: 760px) { .signal { padding: 24px; border-radius: 22px; } .signal-title { margin-top: 24px; } .timeline { margin-block: 24px; } }
+</style>
