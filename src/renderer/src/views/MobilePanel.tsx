@@ -3,6 +3,7 @@ import { Check, ChevronRight, Cloud, Copy, RefreshCw, Server, Smartphone } from 
 import { PanelHeader } from '@/components/ui/panel-header'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { lastSeenText } from '../../../shared/last-seen'
 import type { MobileState } from '../../../main/mobile-bridge'
 import type { WorkerClientStatus } from '../../../main/worker-client'
 import type { DiscoveredWorker } from '../../../main/account'
@@ -99,7 +100,7 @@ export function MobilePanel() {
                   <div key={`${d.name}-${d.lastSeen}`} className="flex items-center gap-2 text-xs">
                     <Smartphone className="size-3.5 text-dim" />
                     <span className="font-medium">{d.name}</span>
-                    <span className="text-faint">connected</span>
+                    <span className="text-faint">{lastSeenText({ online: false, lastSeen: d.lastSeen }, now)}</span>
                   </div>
                 ))}
               </div>
@@ -200,9 +201,15 @@ export function MobilePanel() {
                   <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-faint">Paired with a code</div>
                   <div className="space-y-1.5">
                     {state.devices.map(d => (
-                      <div key={d.id} className="flex items-center gap-3 rounded-lg border border-line bg-raised/60 px-3 py-2">
+                      <div key={d.id} className="flex items-center gap-3 rounded-lg border border-line bg-raised/60 px-3 py-2" data-testid="mobile-device">
                         <Smartphone className="size-4 shrink-0 text-dim" />
-                        <div className="min-w-0 flex-1 truncate font-medium">{d.name}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{d.name}</div>
+                          <div className="flex items-center gap-1.5 text-xs text-faint">
+                            <span className={cn('size-1.5 shrink-0 rounded-full', d.online ? 'bg-emerald-500' : 'bg-faint/60')} />
+                            {lastSeenText(d, now)}
+                          </div>
+                        </div>
                         <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => window.agentshot.mobile.revoke(d.id))}>
                           Remove
                         </Button>

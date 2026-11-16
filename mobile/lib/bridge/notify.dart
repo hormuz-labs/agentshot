@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'problems.dart';
 import 'store.dart';
 
 /// Which notifications the person wants (Settings → Notifications), kept on this phone. All on by default.
@@ -171,7 +172,10 @@ class Notifier with WidgetsBindingObserver {
       } else if (status == 'failed') {
         _show(
           '${j['title'] ?? 'A job'} didn’t finish',
-          '${j['detail'] ?? 'Open AgentShot to see why.'}',
+          readableOr(
+            j['detail'],
+            'Open AgentShot on your computer to see why.',
+          ),
           dir,
         );
       }
@@ -195,7 +199,7 @@ class Notifier with WidgetsBindingObserver {
     if (!_unseen(dir) || NotifyPrefs.on['done'] == false) return;
     final title = _title(dir);
     if (state.error != null) {
-      _show('$title: something went wrong', state.error!, dir);
+      _show('$title: something went wrong', runProblem(state.error!), dir);
       return;
     }
     final said = state.messages

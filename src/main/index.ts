@@ -1658,7 +1658,7 @@ const startup = app.whenReady().then(async () => {
     send('agent:ready')
   } catch (err) {
     console.error('agent failed to start', err)
-    send('notice', `The agent could not start: ${(err as Error).message}`)
+    send('notice', `The agent could not start: ${explain(err)}`)
   }
 })
 
@@ -1675,7 +1675,7 @@ async function startBrowser(resources: string) {
     await browser.startHost()
   } catch (e) {
     console.warn('browser', e)
-    send('notice', `AgentShot's browser could not start: ${(e as Error).message}`)
+    send('notice', `AgentShot's browser could not start: ${explain(e)}`)
   }
 }
 

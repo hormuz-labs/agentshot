@@ -288,6 +288,8 @@ Want it done for you? We take custom work: films made for you, and AgentShot fit
 
 ## Questions
 
+How to do something step by step is in the **[user guide](docs/user-manual.md)** (also under **Help → User Guide** in the app).
+
 <details>
 <summary><b>Does my video get uploaded anywhere?</b></summary>
 <br>
