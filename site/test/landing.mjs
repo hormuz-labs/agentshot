@@ -71,6 +71,13 @@ const pressed = page => page.evaluate(() => [...document.querySelectorAll('#ask 
   await page.locator('#ex .close').click()
   check(!(await page.locator('#ex').evaluate(d => d.open)), 'an example does not close')
 
+  // the six ways: in each row the pictures start on one line, however long each card's text runs
+  for (const width of [1440, 2000, 900]) {
+    await page.setViewportSize({ width, height: 900 })
+    const rows = await page.evaluate(() => { const by = {}; for (const w of document.querySelectorAll('.way')) { const r = Math.round(w.getBoundingClientRect().top + scrollY); (by[r] ||= []).push(Math.round(w.querySelector('.art').getBoundingClientRect().top + scrollY)) } return Object.values(by) })
+    check(rows.every(r => r.every(t => Math.abs(t - r[0]) <= 1)), `at ${width} px the pictures in a row of ways do not line up: ${JSON.stringify(rows)}`)
+  }
+  await page.setViewportSize({ width: 1440, height: 900 })
   // 5. the film opens from the hero and from its poster
   for (const sel of ['.hero [data-film]', '.film-card']) {
     await page.locator(sel).click()
