@@ -28,6 +28,7 @@ export function App() {
   const [settings, setSettings] = useState<Section | null>(null)
   const [ready, setReady] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const clearNotice = useCallback(() => setNotice(null), [])
   useAgent(null) // subscribe to agent events from the start, before any project view mounts
 
   // the sidebar shown, or folded away to its rail
@@ -154,10 +155,7 @@ export function App() {
           <button className="text-xs text-faint hover:text-fg" onClick={() => setReady2update(null)}>Later</button>
         </div>
       )}
-      <ImportProblems project={tabs.active} />
-      {notice && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-bad/30 bg-surface px-4 py-2 text-bad shadow-xl shadow-shade" onClick={() => setNotice(null)}>{notice}</div>
-      )}
+      <ImportProblems project={tabs.active} notice={notice} onNoticeSeen={clearNotice} />
     </TooltipProvider>
   )
 }

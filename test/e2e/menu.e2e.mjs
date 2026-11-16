@@ -27,6 +27,11 @@ try {
     await dialog.locator('button:has(svg.lucide-x)').click()
     await dialog.waitFor({ state: 'detached' })
   }
+  // Help → User Guide opens the manual in the browser
+  const opened = await app.evaluate(({ shell }) => { const urls = []; shell.openExternal = async u => { urls.push(u) }; globalThis.__opened = urls; return true })
+  assert.ok(opened)
+  await click('User Guide')
+  assert.deepEqual(await app.evaluate(() => globalThis.__opened), ['https://github.com/hormuz-labs/agentshot/blob/main/docs/user-manual.md'])
   // menu → settings section
   await click('Keys…')
   await dismissSettingsOnboarding(win)

@@ -73,6 +73,7 @@ class _AgentShotAppState extends State<AgentShotApp> {
     } catch (_) {
       // the system's look, then
     }
+    await BridgeClient.identify();
     try {
       await account.restore();
       store.account = account;

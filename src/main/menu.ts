@@ -3,6 +3,9 @@
 import { app, Menu, shell, webContents, type BrowserWindow, type MenuItemConstructorOptions } from 'electron'
 import { SHORTCUTS } from '../shared/shortcuts'
 
+/** The user manual (docs/user-manual.md), opened from Help → User Guide. */
+export const USER_GUIDE = 'https://github.com/hormuz-labs/agentshot/blob/main/docs/user-manual.md'
+
 export function buildMenu(win: () => BrowserWindow | null) {
   const cmd = (id: string, label: string): MenuItemConstructorOptions =>
     ({ label, accelerator: SHORTCUTS[id], click: () => win()?.webContents.send('menu', id) })
@@ -60,6 +63,7 @@ export function buildMenu(win: () => BrowserWindow | null) {
       { type: 'separator' }, { role: 'minimize' }, { role: 'zoom' }, ...(mac ? [{ type: 'separator' } as MenuItemConstructorOptions, { role: 'front' } as MenuItemConstructorOptions] : []),
     ] },
     { role: 'help', submenu: [
+      { label: 'User Guide', click: () => shell.openExternal(USER_GUIDE) },
       cmd('tour', 'Product Tour'),
       { label: 'Roadmap', click: () => shell.openExternal('https://github.com/hormuz-labs/agentshot/blob/main/ROADMAP.md') },
       { label: 'Report a Problem', click: () => shell.openExternal('https://github.com/hormuz-labs/agentshot/issues/new') },

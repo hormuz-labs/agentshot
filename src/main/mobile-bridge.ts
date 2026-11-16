@@ -44,10 +44,15 @@ type PersistedBridgeState = {
   key: string
   cert: string
   workerSecret: string
-  devices: [string, { id: string; name: string; expiresAt: number }][]
+  devices: [string, PairedDevice][]
   /** On a cloud worker: which lessee made each project (dir → account user). */
   owners?: [string, string][]
 }
+/** A phone paired with a code. [install] is the phone's own id for this install of the app, so pairing it again replaces
+ *  its old entry instead of adding a second one; [lastSeen] is when it last asked this computer anything. */
+type PairedDevice = { id: string; name: string; expiresAt: number; install?: string; lastSeen?: number }
+/** How often a paired phone's "last connected" time is written to disk (it changes on every request). */
+const SEEN_SAVE_EVERY = 60_000
 type UploadSession = { id: string; folder: string; file: string; dir?: string; name: string; size: number; offset: number; busy: boolean; touched: number }
 export const DEFAULT_MOBILE_PORT = 47821
 /** On a cloud worker, the worker's own settings: a lessee neither reads nor changes them. */
@@ -73,7 +78,7 @@ export function reachableIps(ifaces = networkInterfaces()) {
   const ips = Object.values(ifaces).flat().filter(n => n?.family === 'IPv4' && !n.internal && !n.address.startsWith('169.254.')).map(n => n!.address)
   return [...new Set([...ips.filter(ip => !isTailscale(ip)), ...ips.filter(isTailscale)])]
 }
-export type MobileStatus = { running: boolean; addresses: string[]; tailscale?: string; mesh?: string; fingerprint?: string; code?: string; expiresAt?: number; devices: { id: string; name: string }[]
+export type MobileStatus = { running: boolean; addresses: string[]; tailscale?: string; mesh?: string; fingerprint?: string; code?: string; expiresAt?: number; devices: { id: string; name: string; lastSeen?: number; online: boolean }[]
   /** phones and computers signed in to the same AgentShot account, connected in the last two minutes */
   signedIn: { name: string; lastSeen: number }[] }
 /** What Settings → Mobile shows: the bridge, and whether signed-in phones can find this computer through the account. */
@@ -89,7 +94,8 @@ export class MobileBridge {
   private codeTries = 0
   private expiresAt = 0
   private port = 0
-  private devices = new Map<string, { id: string; name: string; expiresAt: number }>()
+  private devices = new Map<string, PairedDevice>()
+  private seenSaved = 0
   private signedIn = new Map<string, { name: string; lastSeen: number }>()
   /** On a cloud worker: who holds the lease now (from the account's answer to the heartbeat), and what each made. */
   private lease?: { userId: string; until: number }
@@ -107,7 +113,11 @@ export class MobileBridge {
     const mesh = this.server ? this.options.meshIp?.() : undefined
     // the mesh node always listens on 47821 (the Headscale ACL allows only that port) and forwards to wherever we bound
     const addresses = this.server ? list.map(ip => `https://${ip}:${ip === mesh ? DEFAULT_MOBILE_PORT : this.port}`) : []
-    return { running: !!this.server, addresses, tailscale: list.find(ip => isTailscale(ip) && ip !== mesh), mesh, fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: [...this.devices.values()].map(({ id, name }) => ({ id, name })), signedIn: this.recentSignedIn() }
+    return { running: !!this.server, addresses, tailscale: list.find(ip => isTailscale(ip) && ip !== mesh), mesh, fingerprint: this.fingerprint, code: this.code, expiresAt: this.expiresAt, devices: this.pairedDevices(), signedIn: this.recentSignedIn() }
+  }
+  private pairedDevices() {
+    const live = new Set(this.clients.values())
+    return [...this.devices].map(([token, { id, name, lastSeen }]) => ({ id, name, lastSeen, online: live.has(token) }))
   }
   private recentSignedIn() {
     // seen lately, or still holding its live event stream open
@@ -158,7 +168,7 @@ export class MobileBridge {
     }
     return this.lease?.userId !== before
   }
-  private verifyAuth(token: string): { id: string; name: string; expiresAt: number; lessee?: string } | undefined {
+  private verifyAuth(token: string): (PairedDevice & { lessee?: string }) | undefined {
     if (!token) return undefined
     const dev = this.devices.get(token)
     if (dev) {
@@ -293,6 +303,7 @@ export class MobileBridge {
     try { this.udp?.close() } catch {}
     this.udp = undefined
     this.code = undefined; this.codeTries = 0
+    if (this.pem) this.saveState() // the phones' last connected times
     if (!this.options.stateFile) this.devices.clear()
     for (const u of this.uploads.values()) await rm(u.folder, { recursive: true, force: true }).catch(() => {})
     this.uploads.clear()
@@ -367,14 +378,20 @@ export class MobileBridge {
         this.failures.set(ip, { count: (attempt && attempt.until > Date.now() ? attempt.count : 0) + 1, until: Date.now() + 60_000 })
         throw new HttpError(401, 'Invalid or expired code. Generate a new 6-digit code on the desktop.')
       }
-      if (this.devices.size >= 10) throw new HttpError(409, 'Remove a paired device first')
-      const token = secret(); this.code = undefined; this.codeTries = 0
-      this.devices.set(token, { id: secret(), name: String(body.name || 'Phone').slice(0, 80), expiresAt: Date.now() + 30 * 24 * 60 * 60_000 })
+      // the same phone pairing again (after Disconnect, or a reinstall that kept its id): it takes its old place
+      const install = typeof body.install === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(body.install) ? body.install : undefined
+      const before = install ? [...this.devices].find(([, d]) => d.install === install) : undefined
+      if (!before && this.devices.size >= 10) {
+        throw new HttpError(409, 'This computer already has 10 paired phones. Remove one in AgentShot → Settings → Mobile, then pair again.')
+      }
+      if (before) { this.devices.delete(before[0]); for (const [stream, t] of this.clients) if (t === before[0]) stream.end() }
+      const token = secret(); this.code = undefined; this.codeTries = 0; const now = Date.now()
+      this.devices.set(token, { id: before?.[1].id ?? secret(), name: String(body.name || 'Phone').slice(0, 80), expiresAt: now + 30 * 24 * 60 * 60_000, install, lastSeen: now })
       this.saveState()
       return reply({ token, protocol: 1, fingerprint: this.fingerprint, urls: this.status().addresses, methods: Object.keys(mobileSchemas) })
     }
     const token = req.headers.authorization?.replace(/^Bearer /, '') || ''; const device = this.verifyAuth(token) ?? await this.leaseBegun(token)
-    if (!device) throw new HttpError(401, 'Reconnect to your desktop')
+    if (!device) throw new HttpError(401, 'This phone is no longer paired with the computer. Pair it again with a new code from AgentShot → Settings → Mobile.')
     if (device.lessee) this.lastActive = Date.now()
     // leased, but the worker is still opening this person's space (it restarts into it): wait, don't reconnect
     if (device.lessee && this.options.session && this.options.session() !== device.lessee) {
@@ -384,6 +401,14 @@ export class MobileBridge {
     if (device.id.startsWith('lease:')) {
       const name = String(req.headers['x-agentshot-device'] || 'Signed-in device').slice(0, 80)
       this.signedIn.set(token, { name, lastSeen: Date.now() })
+    }
+    // a phone paired with a code: when it was last here, and the name it gives now (an older app sent only "Android")
+    const paired = this.devices.get(token)
+    if (paired) {
+      const now = Date.now(), name = req.headers['x-agentshot-device']
+      paired.lastSeen = now
+      if (typeof name === 'string' && name.trim()) paired.name = name.trim().slice(0, 80)
+      if (now - this.seenSaved > SEEN_SAVE_EVERY) { this.seenSaved = now; this.saveState() }
     }
     if (url.pathname === '/hello' && req.method === 'GET') {
       return reply({ urls: this.status().addresses })

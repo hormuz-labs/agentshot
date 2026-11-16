@@ -102,14 +102,18 @@ class _AskCardState extends State<AskCard> {
               )
             else if (q.multiple)
               for (final (label, about) in q.options)
-                CheckboxListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  value: picks[qi].contains(label),
-                  onChanged: done ? null : (_) => pick(qi, label),
-                  title: Text(label),
-                  subtitle: about == null ? null : Text(about),
+                // its own Material: the card's coloured box would otherwise hide the tile's ink
+                Material(
+                  type: MaterialType.transparency,
+                  child: CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: picks[qi].contains(label),
+                    onChanged: done ? null : (_) => pick(qi, label),
+                    title: Text(label),
+                    subtitle: about == null ? null : Text(about),
+                  ),
                 )
             else ...[
               Wrap(

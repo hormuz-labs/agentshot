@@ -631,3 +631,53 @@ describe('cloud & home worker extensions', () => {
     expect(full.body).toContain('space is full')
   })
 })
+
+describe('paired phones in Settings → Mobile', () => {
+  it('shows the phone by its model, when it was last connected, and whether it is connected now', async () => {
+    const f = await fixture()
+    const [phone] = f.bridge.status().devices
+    expect(phone).toMatchObject({ name: 'Test phone', online: false })
+    expect(phone.lastSeen).toBeGreaterThan(Date.now() - 5000)
+    // a newer app names itself on every request: the desktop takes that name over the one it paired with
+    await f.call('/rpc', { token: f.token, headers: { 'x-agentshot-device': 'Samsung Galaxy S23' }, body: { method: 'project:recent', args: [] } })
+    expect(f.bridge.status().devices[0].name).toBe('Samsung Galaxy S23')
+  })
+  it('replaces the old entry when the same phone pairs again, instead of listing it twice', async () => {
+    const f = await fixture()
+    await f.bridge.start()
+    const first = JSON.parse((await f.call('/pair', { body: { code: f.bridge.status().code, name: 'Pixel 8', install: 'install-aaaaaaaa' } })).body).token as string
+    const id = f.bridge.status().devices.find(d => d.name === 'Pixel 8')!.id
+    await f.bridge.start()
+    const again = JSON.parse((await f.call('/pair', { body: { code: f.bridge.status().code, name: 'Google Pixel 8', install: 'install-aaaaaaaa' } })).body).token as string
+    expect(f.bridge.status().devices.map(d => d.name)).toEqual(['Test phone', 'Google Pixel 8'])
+    expect(f.bridge.status().devices[1].id).toBe(id)
+    // the old pairing is gone; the new one works
+    expect((await f.call('/rpc', { token: first, body: { method: 'project:recent', args: [] } })).status).toBe(401)
+    expect((await f.call('/rpc', { token: again, body: { method: 'project:recent', args: [] } })).status).toBe(200)
+    // a different install is a different phone
+    await f.bridge.start()
+    await f.call('/pair', { body: { code: f.bridge.status().code, name: 'Pixel 8', install: 'install-bbbbbbbb' } })
+    expect(f.bridge.status().devices).toHaveLength(3)
+  })
+  it('says what to do when a phone that was removed asks for something', async () => {
+    const f = await fixture()
+    f.bridge.revoke(f.bridge.status().devices[0].id)
+    const res = await f.call('/rpc', { token: f.token, body: { method: 'project:recent', args: [] } })
+    expect(res.status).toBe(401)
+    expect(res.body).toContain('Pair it again')
+  })
+  it('keeps the last connected time across restarts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'agentshot-seen-')); folders.push(root)
+    const opts = { stateFile: join(root, 'bridge.json'), invoke: async () => null, projects: () => [], importFile: async () => null, galleryFile: () => new Response('') }
+    const b1 = new MobileBridge(opts, () => ['127.0.0.1']); bridges.push(b1)
+    const st = await b1.start()
+    const port = new URL(st.addresses[0]).port
+    const body = JSON.stringify({ code: st.code, name: 'Pixel 8', install: 'install-cccccccc' })
+    await new Promise<void>((ok, fail) => { const r = request(`https://127.0.0.1:${port}/pair`, { rejectUnauthorized: false, method: 'POST', headers: { 'content-length': String(Buffer.byteLength(body)) } }, res => { res.resume(); res.on('end', () => ok()) }); r.on('error', fail); r.end(body) })
+    const seen = b1.status().devices[0].lastSeen
+    await b1.stop()
+    const b2 = new MobileBridge(opts, () => ['127.0.0.1']); bridges.push(b2)
+    await b2.start()
+    expect(b2.status().devices[0]).toMatchObject({ name: 'Pixel 8', lastSeen: seen, online: false })
+  })
+})

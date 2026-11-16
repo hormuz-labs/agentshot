@@ -162,7 +162,7 @@ class _AsyncPanelState extends State<AsyncPanel> {
       if (snapshot.hasError) {
         return Column(
           children: [
-            Text('${snapshot.error}'),
+            Text(plain(snapshot.error!)),
             TextButton(onPressed: reload, child: const Text('Try again')),
           ],
         );

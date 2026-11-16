@@ -6,8 +6,10 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
+import 'device_label.dart';
 import 'media_cache.dart';
 import 'mesh.dart';
+import 'problems.dart';
 
 typedef Json = Map<String, dynamic>;
 Json object(dynamic value) => Map<String, dynamic>.from(value as Map);
@@ -170,7 +172,14 @@ class BridgeClient {
   Future<Connection?> Function(Connection expired)? renew;
 
   /// How this phone shows up on the desktop, under Settings → Mobile.
-  static final deviceName = Platform.isIOS ? 'iPhone' : 'Android phone';
+  /// Its model once [identify] has asked the system ("Samsung Galaxy S23", "iPhone 16 Pro").
+  static String deviceName = Platform.isIOS ? 'iPhone' : 'Android phone';
+
+  /// Learns this phone's model for [deviceName]; called once at start.
+  static Future<void> identify() async {
+    final name = await describeThisPhone();
+    if (name != null && name.isNotEmpty) deviceName = name;
+  }
 
   Future<bool> restore() async {
     final saved = await storage.read(key: _storageKey);
@@ -409,7 +418,8 @@ class BridgeClient {
         final result = object(
           await _post('/pair', {
             'code': pairCode,
-            'name': Platform.isIOS ? 'iPhone / iPad' : 'Android',
+            'name': deviceName,
+            'install': await installId(storage),
           }),
         );
         if (result['protocol'] != 1) {
@@ -636,15 +646,16 @@ class BridgeClient {
       result = jsonDecode(content);
     } catch (_) {
       throw BridgeException(
-        'The desktop returned an invalid response.',
+        'Your computer sent something this app couldn’t read. Update the app and AgentShot there, then try again.',
         response.statusCode,
       );
     }
     if (response.statusCode != 200) {
       throw BridgeException(
-        result is Map
-            ? '${result['error'] ?? 'Request failed'}'
-            : 'Request failed',
+        readableOr(
+          result is Map ? result['error'] : null,
+          'Your computer couldn’t do that just now. Try again in a moment.',
+        ),
         response.statusCode,
         result is Map ? result['code'] as String? : null,
       );
