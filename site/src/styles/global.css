@@ -22,8 +22,36 @@
   --max: 1280px;
   --gap: clamp(88px, 12vw, 168px);
   --r: 22px;
+  /* what changes with the theme besides the surfaces: how far accents darken to read as text, the yellow button's hover,
+     the gradient used on words, and the focus ring */
+  --deepen: 0%;
+  --go-hover: #fff;
+  --film-text: var(--film);
+  --focus: var(--yellow);
+  --text-yellow: color-mix(in oklab, var(--yellow), var(--ink) var(--deepen));
+  --text-sky: color-mix(in oklab, var(--sky), var(--ink) var(--deepen));
+  --text-pink: color-mix(in oklab, var(--pink), var(--ink) var(--deepen));
+  --text-mint: color-mix(in oklab, var(--mint), var(--ink) var(--deepen));
   color-scheme: dark;
 }
+/* the same room with the house lights up: warm paper, near-black ink, the film colours kept bright for anything filled
+   and darkened only where they are words. Set before first paint from the visitor's choice or their system's */
+:root[data-theme='light'] {
+  --bg: #f6f3ec;
+  --bg-2: #fffdf8;
+  --bg-3: #ece8df;
+  --line: #ddd7cb;
+  --ink: #16141c;
+  --ink-2: #4b4757;
+  --ink-3: #736e80;
+  --deepen: 42%;
+  --go-hover: #ffd400;
+  --film-text: linear-gradient(100deg, var(--violet), var(--pink) 40%, var(--coral) 72%, #e89400);
+  --focus: var(--ink);
+  color-scheme: light;
+}
+/* an accent set per element (--c) gets its text shade where it is set */
+[style*='--c:'] { --text-c: color-mix(in oklab, var(--c), var(--ink) var(--deepen)); }
 
 /* a stand-in sized to Archivo, so nothing rewraps when the real font arrives */
 @font-face { font-family: 'Archivo Fallback'; src: local('Arial'), local('ArialMT'), local('Roboto'); size-adjust: 101%; }
@@ -43,7 +71,7 @@ button { font: inherit; color: inherit; }
 p { margin: 0; }
 code, .mono { font-family: var(--mono); font-weight: 500; }
 ::selection { background: var(--yellow); color: var(--on-yellow); }
-:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 
 .wrap { width: min(var(--max), 100% - 32px); margin-inline: auto; }
 .sec { position: relative; padding-top: var(--gap); }
@@ -54,7 +82,7 @@ h3 { font-size: clamp(22px, 2.4vw, 32px); line-height: 1.08; letter-spacing: -.0
 .sec-head { position: relative; max-width: 900px; margin-bottom: clamp(36px, 5vw, 64px); }
 .sec-head p { margin-top: 20px; max-width: 640px; font-size: clamp(18px, 1.6vw, 21px); color: var(--ink-2); }
 /* a word in a heading painted with the film gradient */
-.grad { background: var(--film); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.grad { background: var(--film-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 /* { a label } in braces, gsap-style */
 .tag { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; font: 500 13.5px/1 var(--mono); color: var(--ink-2); }
@@ -67,14 +95,14 @@ mark { padding: 0 .12em; background: var(--yellow); color: var(--on-yellow); bor
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; padding: 0 28px; border: 1px solid transparent; border-radius: 999px; font: 700 18px/1.1 var(--sans); text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, transform .15s; }
 .btn.sm { min-height: 40px; padding: 0 18px; font-size: 15px; }
 .btn.go { background: var(--yellow); color: var(--on-yellow); }
-.btn.go:hover { background: #fff; }
+.btn.go:hover { background: var(--go-hover); }
 .btn.ghost { border-color: var(--line); background: var(--bg-2); color: var(--ink); }
 .btn.ghost:hover { background: var(--bg-3); }
 
 /* all three systems. When we know the visitor's, it goes first, says what it does, and is the only yellow one */
 .dl-set { display: flex; flex-wrap: wrap; gap: 8px; }
 .dl-set .btn { flex: 1 1 auto; padding: 0 22px; background: var(--yellow); color: var(--on-yellow); }
-.dl-set .btn:hover { background: #fff; color: var(--on-yellow); }
+.dl-set .btn:hover { background: var(--go-hover); color: var(--on-yellow); }
 .dl-set .pre { display: none; }
 [data-os='mac'] [data-dl='mac'], [data-os='win'] [data-dl='win'], [data-os='linux'] [data-dl='linux'] { order: -1; }
 [data-os='mac'] [data-dl='mac'] .pre, [data-os='win'] [data-dl='win'] .pre, [data-os='linux'] [data-dl='linux'] .pre { display: inline; }
@@ -121,8 +149,16 @@ mark { padding: 0 .12em; background: var(--yellow); color: var(--on-yellow); bor
 .top nav a:hover { background: var(--bg-3); color: var(--ink); }
 .top nav a[aria-current='page'] { background: var(--bg-3); color: var(--ink); }
 [data-os='phone'] .top-cta { display: none; }
+.theme { flex: none; display: grid; place-items: center; width: 40px; height: 40px; margin-left: -18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink-2); cursor: pointer; transition: background .15s, color .15s; }
+.theme:hover { background: var(--bg-3); color: var(--ink); }
+.theme svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+:root:not([data-theme]) .theme { display: none; }   /* no script, no switching: the page stays as it is */
+:root[data-theme='light'] .theme .to-light, :root:not([data-theme='light']) .theme .to-dark { display: none; }
 @media (max-width: 860px) { .top nav .wide { display: none; } }
-@media (max-width: 560px) { .top-cta, .top nav .source-link { display: none; } .top-in { gap: 16px; } .top nav { gap: 0; font-size: 13.5px; } .top nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 10px; } }
+@media (max-width: 560px) { .top-cta, .top nav .source-link { display: none; } .top-in { gap: 16px; } .theme { width: 44px; height: 44px; margin-left: -12px; } .top nav { gap: 0; font-size: 13.5px; } .top nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 10px; } }
+/* the smallest phones: the brand, two links and the theme button still share one row */
+@media (max-width: 380px) { .top-in { gap: 8px; } .brand { font-size: 18px; gap: 8px; } .top nav a { padding-inline: 7px; } .theme { margin-left: -6px; } }
+@media (max-width: 350px) { .top .brand span { display: none; } }
 [data-os='phone'] .has-comparison { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 
 .foot { position: relative; margin-top: 40px; border-top: 1px solid var(--line); padding: 24px 0 26px; font-size: 15px; color: var(--ink-2); }

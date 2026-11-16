@@ -33,7 +33,7 @@ const { competitor } = Astro.props
   .track { display: flex; gap: 4px; margin-top: 6px; }
   .track i { display: block; border-radius: 4px; }
   .footage { height: 46px; }
-  .footage i { flex: 1; border: 1px solid #ffffff18; background: linear-gradient(145deg, #9d87ff, #3e305e); }
+  .footage i { flex: 1; border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); background: linear-gradient(145deg, #9d87ff, #3e305e); }
   .footage i:nth-child(2) { flex: 1.6; background: linear-gradient(145deg, #66d3ff, #234453); }
   .footage i:nth-child(3) { flex: .8; background: linear-gradient(145deg, #ff79bf, #622d4c); }
   .footage i:nth-child(4) { flex: 1.3; background: linear-gradient(145deg, #ff8965, #693c38); }
@@ -45,11 +45,11 @@ const { competitor } = Astro.props
   .playline { position: absolute; top: 23px; bottom: 5px; left: 61%; width: 1px; background: var(--ink); box-shadow: 0 0 10px #f6f3ec33; }
   .playline::before { content: ''; position: absolute; left: -4px; top: -4px; width: 9px; height: 9px; background: var(--ink); clip-path: polygon(0 0, 100% 0, 50% 100%); }
   ul { margin: 0; padding: 0; list-style: none; }
-  li { display: flex; align-items: baseline; gap: 16px; padding: 16px 0; border-top: 1px solid #ffffff0d; }
-  li > .mono { font-size: 12px; color: var(--sky); }
+  li { display: flex; align-items: baseline; gap: 16px; padding: 16px 0; border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
+  li > .mono { font-size: 12px; color: var(--text-sky); }
   li b { display: block; font-size: 15px; font-weight: 700; }
   li div > span { display: block; margin-top: 3px; font-size: 13px; color: var(--ink-2); }
-  .signal-foot { padding-top: 16px; border-top: 1px solid #ffffff0d; color: var(--ink-2); font-size: 12px; }
+  .signal-foot { padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-2); font-size: 12px; }
   @media (max-width: 1000px) and (min-width: 761px) { .signal-title { font-size: 28px; } .signal { padding: 24px; } }
   @media (max-width: 760px) { .signal { padding: 24px; border-radius: 22px; } .signal-title { margin-top: 24px; } .timeline { margin-block: 24px; } }
 </style>

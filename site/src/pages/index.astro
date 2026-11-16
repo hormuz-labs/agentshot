@@ -485,7 +485,9 @@ const faqs = [
   /* one line where there's room for it, two on a phone */
   h1 { font-size: min(8.2vw, 15vh, 108px); line-height: .92; font-weight: 800; letter-spacing: -.045em; }
   h1 :global(.line) { padding-bottom: .04em; }
-  .cuts { color: var(--yellow); }
+  .cuts { color: var(--text-yellow); }
+  /* on paper the yellow can't be the ink, so it becomes the caption it stands for: black on yellow */
+  :global([data-theme='light']) .cuts { padding: 0 .1em .02em; border-radius: .08em; background: var(--yellow); color: var(--on-yellow); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
   .lede { margin-top: 22px; max-width: 620px; font-size: clamp(18px, 1.5vw, 21px); line-height: 1.4; color: var(--ink-2); }
   .hero-cta { margin-top: 26px; width: min(100%, 580px); }
   .under { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px 20px; margin-top: 16px; }
@@ -513,7 +515,7 @@ const faqs = [
   .att .mono { font-size: 12.5px; color: var(--ink-3); }
   .att .mono:empty { display: none; }
   .typed { margin-top: 12px; min-height: 2.6em; font-size: clamp(20px, 2.1vw, 28px); line-height: 1.3; font-weight: 600; letter-spacing: -.015em; }
-  .typed::after { content: ''; display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -.14em; background: var(--yellow); animation: blink 1.1s steps(2) infinite; }
+  .typed::after { content: ''; display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -.14em; background: var(--text-yellow); animation: blink 1.1s steps(2) infinite; }
   .composer-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 14px; color: var(--ink-3); }
   .plus { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); font-size: 20px; line-height: 1; }
   .models { margin-left: auto; }
@@ -543,7 +545,7 @@ const faqs = [
   .facts li { display: grid; align-content: start; gap: 6px; padding: 28px 24px 30px; }
   .facts li + li { border-left: 1px solid var(--line); }
   .facts li:first-child { padding-left: 0; }
-  .facts b { font-size: clamp(26px, 2.6vw, 36px); line-height: 1.05; font-weight: 800; letter-spacing: -.03em; color: var(--c); }
+  .facts b { font-size: clamp(26px, 2.6vw, 36px); line-height: 1.05; font-weight: 800; letter-spacing: -.03em; color: var(--text-c); }
   .facts span { font-size: 15.5px; line-height: 1.4; color: var(--ink-2); }
 
   /* the reason, lighting up as you read it, then the film */
@@ -551,8 +553,8 @@ const faqs = [
   .film-card { position: relative; display: block; width: 100%; margin-top: clamp(36px, 5vw, 64px); padding: 0; border: 0; border-radius: calc(var(--r) + 6px); overflow: hidden; background: #000; cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
   .film-card video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
   .film-card:hover video { transform: scale(1.015); }
-  .fm { position: absolute; left: 18px; bottom: 16px; display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(13, 12, 17, .8); backdrop-filter: blur(8px); font-size: 15px; font-weight: 700; color: var(--ink); }
-  .fm .mono { font-size: 13px; color: var(--ink-3); }
+  .fm { position: absolute; left: 18px; bottom: 16px; display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(13, 12, 17, .8); backdrop-filter: blur(8px); font-size: 15px; font-weight: 700; color: #f6f3ec; }
+  .fm .mono { font-size: 13px; color: #c3bfcf; }
   .film-credit { margin-top: 12px; font-size: 12.5px; line-height: 1.5; color: var(--ink-3); }
 
   /* ------------------------------------------------------------ what it makes: one job on screen at a time */
@@ -564,13 +566,13 @@ const faqs = [
   .tabs label::after { content: ''; position: absolute; inset: auto 18px -1px 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--c); transform: scaleX(0); transform-origin: left; transition: transform .25s; }
   .tabs label:hover { color: var(--ink-2); }
   #jt-0:checked ~ .tabs label[for='jt-0'], #jt-1:checked ~ .tabs label[for='jt-1'], #jt-2:checked ~ .tabs label[for='jt-2'], #jt-3:checked ~ .tabs label[for='jt-3'] { color: var(--ink); }
-  #jt-0:checked ~ .tabs label[for='jt-0'] .mono, #jt-1:checked ~ .tabs label[for='jt-1'] .mono, #jt-2:checked ~ .tabs label[for='jt-2'] .mono, #jt-3:checked ~ .tabs label[for='jt-3'] .mono { color: var(--c); }
+  #jt-0:checked ~ .tabs label[for='jt-0'] .mono, #jt-1:checked ~ .tabs label[for='jt-1'] .mono, #jt-2:checked ~ .tabs label[for='jt-2'] .mono, #jt-3:checked ~ .tabs label[for='jt-3'] .mono { color: var(--text-c); }
   #jt-0:checked ~ .tabs label[for='jt-0']::after, #jt-1:checked ~ .tabs label[for='jt-1']::after, #jt-2:checked ~ .tabs label[for='jt-2']::after, #jt-3:checked ~ .tabs label[for='jt-3']::after { transform: none; }
-  #jt-0:focus-visible ~ .tabs label[for='jt-0'], #jt-1:focus-visible ~ .tabs label[for='jt-1'], #jt-2:focus-visible ~ .tabs label[for='jt-2'], #jt-3:focus-visible ~ .tabs label[for='jt-3'] { outline: 2px solid var(--yellow); outline-offset: 3px; }
+  #jt-0:focus-visible ~ .tabs label[for='jt-0'], #jt-1:focus-visible ~ .tabs label[for='jt-1'], #jt-2:focus-visible ~ .tabs label[for='jt-2'], #jt-3:focus-visible ~ .tabs label[for='jt-3'] { outline: 2px solid var(--focus); outline-offset: 3px; }
   .job { display: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: clamp(24px, 4vw, 64px); align-items: center; padding-top: clamp(24px, 3.4vw, 44px); }
   #jt-0:checked ~ .job[data-i='0'], #jt-1:checked ~ .job[data-i='1'], #jt-2:checked ~ .job[data-i='2'], #jt-3:checked ~ .job[data-i='3'] { display: grid; }
   .lab { display: block; font-size: 12.5px; text-transform: uppercase; color: var(--ink-3); }
-  .lab.did { margin-top: 28px; color: var(--c); }
+  .lab.did { margin-top: 28px; color: var(--text-c); }
   .job q { display: block; margin-top: 12px; font-size: clamp(22px, 2.3vw, 32px); line-height: 1.2; font-weight: 800; letter-spacing: -.025em; quotes: none; text-wrap: balance; }
   .job ol { margin: 12px 0 0; padding: 0; list-style: none; }
   .job li { position: relative; padding: 9px 0 9px 30px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 15.5px; line-height: 1.4; }
@@ -581,12 +583,12 @@ const faqs = [
   .job figcaption { margin-top: 10px; font-size: 13.5px; color: var(--ink-3); }
   .job .tall figcaption { text-align: center; }
 
-  .big { display: inline-block; min-width: 2.2ch; background: var(--film); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .big { display: inline-block; min-width: 2.2ch; background: var(--film-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .reels { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .reels button { position: relative; display: block; width: 100%; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: #000; cursor: pointer; transition: transform .25s cubic-bezier(.2, .9, .3, 1.3); }
   .reels button:hover { transform: scale(1.02); }
   .reels video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
-  .reels button > span { position: absolute; inset: auto 8px 8px; display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 999px; background: rgba(13, 12, 17, .78); backdrop-filter: blur(6px); font-size: 13.5px; color: var(--ink); text-align: left; }
+  .reels button > span { position: absolute; inset: auto 8px 8px; display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 999px; background: rgba(13, 12, 17, .78); backdrop-filter: blur(6px); font-size: 13.5px; color: #f6f3ec; text-align: left; }
   .fine { margin-top: 14px; font-size: 14px; color: var(--ink-3); }
 
   /* ------------------------------------------------------------ how you direct it: six numbered ways, each with a small picture of itself */
@@ -631,7 +633,7 @@ const faqs = [
   .track { display: grid; grid-template-columns: 100px minmax(0, 1.6fr) minmax(0, 1fr); gap: 8px 28px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
   .track:last-child { border-bottom: 0; }
   .track.head { padding: 12px 0; font: 500 13px/1.2 var(--mono); color: var(--ink-3); }
-  .k { font-weight: 800; font-size: 18px; color: var(--c); }
+  .k { font-weight: 800; font-size: 18px; color: var(--text-c); }
   .trace { display: block; height: 28px; }
   .trace :global(svg) { display: block; width: 100%; height: 100%; }
   .trace :global(.p) { fill: color-mix(in srgb, var(--c) 45%, var(--bg-3)); }
@@ -673,7 +675,7 @@ const faqs = [
 
   .source { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 48px; align-items: end; padding: clamp(28px, 5vw, 64px); border-radius: calc(var(--r) + 8px); background: var(--film); color: var(--on-yellow); overflow: hidden; }
   .source p { margin-top: 16px; max-width: 700px; font-size: 18px; color: color-mix(in srgb, var(--on-yellow) 80%, transparent); }
-  .star { position: relative; background: var(--on-yellow); color: var(--ink); }
+  .star { position: relative; background: var(--on-yellow); color: #f6f3ec; }
   .star:hover { background: #000; }
 
   .qs { max-width: 920px; border-top: 1px solid var(--line); }
@@ -700,9 +702,9 @@ const faqs = [
   .last-cta { display: flex; justify-content: center; padding-top: 32px; }
   :global([data-os='phone']) .last-cta { display: none; }
 
-  .player { width: min(1120px, 100% - 24px); max-height: 92vh; padding: 0; border: 0; border-radius: var(--r); background: #000; color: var(--ink); overflow: auto; }
+  .player { width: min(1120px, 100% - 24px); max-height: 92vh; padding: 0; border: 0; border-radius: var(--r); background: var(--bg-2); color: var(--ink); overflow: auto; }
   .player::backdrop { background: rgba(8, 6, 14, .88); backdrop-filter: blur(6px); }
-  .player video { width: 100%; }
+  .player video { width: 100%; background: #000; }
   .close { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .75); color: #fff; font-size: 26px; cursor: pointer; }
   .ex-info { padding: 14px 16px 16px; }
   .ex-title { font-size: 20px; font-weight: 700; }
@@ -718,7 +720,7 @@ const faqs = [
   @media (max-width: 900px) {
     /* two lines, so the download and the message box both start on the first screen */
     h1 { font-size: min(15vw, 15vh, 120px); }
-    .cuts { display: block; }
+    .cuts { display: block; width: fit-content; margin-inline: auto; }
     .hero .tag { font-size: 12.5px; }
     .hero-cta :global([data-send]), .phone-get :global([data-send]), .last-cta :global([data-send]) { width: 100%; }
     .composer { padding: 14px 12px 12px 16px; border-radius: 22px; }
