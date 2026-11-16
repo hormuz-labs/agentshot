@@ -595,7 +595,7 @@ const faqs = [
   .way p { margin-top: 10px; color: var(--ink-2); font-size: 16px; line-height: 1.5; }
   kbd { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--yellow); color: var(--on-yellow); box-shadow: 0 2px 0 #b39c00; font: 600 13px/1 var(--mono); vertical-align: 1px; }
   .art { display: flex; flex-wrap: wrap; align-items: center; align-content: center; gap: 8px; height: 168px; margin-top: auto; padding: 18px; border-radius: 16px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; font-size: 14px; }
-  .way p + .art { margin-top: 22px; }
+  .way p { margin-bottom: 22px; }   /* the picture sits at the foot of its card (margin-top: auto), so a row's pictures line up whatever the length of the text */
   .art-say { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: center; }
   .you { align-self: flex-end; max-width: 92%; padding: 9px 13px; border-radius: 16px 16px 4px 16px; background: var(--pink); color: var(--on-yellow); font-weight: 700; }
   .it { align-self: flex-start; max-width: 92%; padding: 9px 13px; border-radius: 16px 16px 16px 4px; background: var(--bg-3); color: var(--ink-2); }
