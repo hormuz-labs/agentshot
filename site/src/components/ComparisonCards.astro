@@ -27,7 +27,7 @@ const { exclude } = Astro.props
   h3 { margin-top: 22px; font-size: clamp(23px, 2.2vw, 30px); }
   h3 span { font-weight: 500; color: var(--ink-3); }
   p { margin-top: 12px; margin-bottom: 28px; color: var(--ink-2); font-size: 16px; }
-  .read { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 18px; border-top: 1px solid #ffffff0d; font-size: 14px; font-weight: 700; color: var(--ink); }
+  .read { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 18px; border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); font-size: 14px; font-weight: 700; color: var(--ink); }
   .read > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); color: var(--ink-2); }
   @media (max-width: 1000px) { .comparison-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 600px) { .comparison-cards { grid-template-columns: minmax(0, 1fr); } a { min-height: 224px; padding: 24px; } h3 { margin-top: 20px; font-size: 26px; } }

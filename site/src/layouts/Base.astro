@@ -21,6 +21,14 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
   <title>{title}</title>
   <meta name="description" content={description} />
   <meta name="theme-color" content="#0d0c11" />
+  <!-- before first paint, so the page never flashes the wrong theme: the visitor's choice, else their system's -->
+  <script is:inline>(() => {
+    let t
+    try { t = localStorage.getItem('theme') } catch {}
+    if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+    document.documentElement.dataset.theme = t
+    document.querySelector('meta[name="theme-color"]').content = t === 'light' ? '#f6f3ec' : '#0d0c11'
+  })()</script>
   {noindex && <meta name="robots" content="noindex" />}
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png" />
@@ -57,6 +65,10 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
         <a href="/#pricing">Pricing</a>
         <a href={GH} class="source-link">GitHub</a>
       </nav>
+      <button class="theme" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme">
+        <svg class="to-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.2M12 19.3v2.2M4.3 4.3l1.6 1.6M18.1 18.1l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.3 19.7l1.6-1.6M18.1 5.9l1.6-1.6" /></svg>
+        <svg class="to-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4a8.2 8.2 0 1 0 10.6 10.6Z" /></svg>
+      </button>
       <div class="top-cta"><Cta small /></div>
     </div>
   </header>
@@ -108,6 +120,26 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
         if ((e as Error).name !== 'AbortError') location.href = `mailto:?subject=${encodeURIComponent('AgentShot')}&body=${encodeURIComponent(`${text} ${url}`)}`
       }
     }))
+
+    // light or dark: a choice made here sticks; until one is made the page follows the system
+    const root = document.documentElement, themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')!
+    const themeBtn = document.querySelector<HTMLButtonElement>('[data-theme-toggle]')!
+    const setTheme = (t: string) => {
+      root.dataset.theme = t
+      themeMeta.content = t === 'light' ? '#f6f3ec' : '#0d0c11'
+      themeBtn.setAttribute('aria-label', t === 'light' ? 'Switch to dark theme' : 'Switch to light theme')
+    }
+    setTheme(root.dataset.theme || 'dark')
+    themeBtn.addEventListener('click', () => {
+      const t = root.dataset.theme === 'light' ? 'dark' : 'light'
+      setTheme(t)
+      try { localStorage.setItem('theme', t) } catch {}
+    })
+    matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
+      let chosen = null
+      try { chosen = localStorage.getItem('theme') } catch {}
+      if (!chosen) setTheme(e.matches ? 'light' : 'dark')
+    })
 
     document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach(b => b.addEventListener('click', async () => {
       const was = b.textContent

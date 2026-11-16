@@ -142,7 +142,7 @@ const ref = (id: string) => sources.findIndex(s => s.id === id) + 1
   .overview > p { margin-top: 16px; color: var(--ink-2); }
   .chapter { margin-top: clamp(72px, 9vw, 128px); scroll-margin-top: 90px; }
   .references { display: flex; flex-wrap: wrap; gap: 8px; color: var(--ink-2); font-size: 13px; }
-  .references a, .row-refs a { color: var(--sky); }
+  .references a, .row-refs a { color: var(--text-sky); }
   .table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg-2); }
   .scroll-hint, .cell-label { display: none; }
   table { width: 100%; min-width: 760px; border-collapse: collapse; text-align: left; }
@@ -152,12 +152,12 @@ const ref = (id: string) => sources.findIndex(s => s.id === id) + 1
   th:first-child { width: 23%; }
   td { width: 38.5%; color: var(--ink-2); }
   .us { background: color-mix(in srgb, var(--violet) 9%, var(--bg-2)); color: var(--ink); }
-  thead .us { background: color-mix(in srgb, var(--violet) 20%, var(--bg-2)); color: var(--yellow); box-shadow: inset 0 3px var(--yellow); }
+  thead .us { background: color-mix(in srgb, var(--violet) 20%, var(--bg-2)); color: var(--text-yellow); box-shadow: inset 0 3px var(--yellow); }
   .row-refs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; font: 500 12px/1.5 var(--mono); }
   .table-note { margin-top: 14px; max-width: 920px; font-size: 14px; color: var(--ink-2); }
   .advantages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .advantages section { padding: clamp(24px, 3vw, 36px); border: 1px solid var(--line); border-radius: var(--r); background: linear-gradient(145deg, color-mix(in srgb, var(--violet) 5%, var(--bg-2)), var(--bg-2) 60%); }
-  .number { font-size: 12px; color: var(--sky); }
+  .number { font-size: 12px; color: var(--text-sky); }
   .advantages h3 { margin-top: 16px; }
   .advantages p { margin-top: 14px; color: var(--ink-2); }
   .advantages .references { margin-top: 18px; }
@@ -167,7 +167,7 @@ const ref = (id: string) => sources.findIndex(s => s.id === id) + 1
   blockquote { margin: 0; padding: clamp(24px, 4vw, 44px); background: var(--bg-2); border: 1px solid var(--line); border-radius: 26px 26px 6px 26px; box-shadow: 0 36px 100px -60px var(--violet); }
   blockquote .mono { font-size: 12px; color: var(--ink-2); }
   blockquote p { margin-top: 16px; font-size: clamp(22px, 2.5vw, 32px); font-weight: 700; line-height: 1.3; letter-spacing: -.015em; }
-  blockquote a { display: inline-block; margin-top: 24px; color: var(--yellow); font-size: 14px; }
+  blockquote a { display: inline-block; margin-top: 24px; color: var(--text-yellow); font-size: 14px; }
   .fit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .fit section { padding: clamp(24px, 3.5vw, 40px); border: 1px solid var(--line); border-radius: var(--r); background: var(--bg-2); }
   .fit .fit-us { border-color: color-mix(in srgb, var(--yellow) 28%, var(--line)); background: radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--yellow) 5%, transparent), transparent 75%), var(--bg-2); box-shadow: inset 0 3px var(--yellow); }
@@ -177,7 +177,7 @@ const ref = (id: string) => sources.findIndex(s => s.id === id) + 1
   details:first-of-type { border-top: 1px solid var(--line); }
   summary { display: flex; justify-content: space-between; gap: 20px; padding: 22px 0; font-weight: 700; font-size: 19px; cursor: pointer; list-style: none; }
   summary::-webkit-details-marker { display: none; }
-  summary::after { content: '+'; color: var(--yellow); flex: none; }
+  summary::after { content: '+'; color: var(--text-yellow); flex: none; }
   details[open] summary::after { content: '−'; }
   details p { padding-bottom: 24px; max-width: 820px; color: var(--ink-2); }
   .sources { max-width: 920px; padding-top: 24px; border-top: 1px solid var(--line); }
@@ -185,7 +185,7 @@ const ref = (id: string) => sources.findIndex(s => s.id === id) + 1
   .sources p { margin-top: 18px; color: var(--ink-2); font-size: 15px; }
   .sources ol { padding-left: 28px; margin-top: 24px; }
   .sources li { padding: 8px 0 8px 6px; color: var(--ink-2); font-size: 14px; scroll-margin-top: 90px; overflow-wrap: anywhere; }
-  .sources li::marker { color: var(--sky); font-family: var(--mono); }
+  .sources li::marker { color: var(--text-sky); font-family: var(--mono); }
   .related h2 { font-size: clamp(28px, 3.4vw, 44px); margin-bottom: 28px; }
   .try-editor p { margin-top: 20px; color: var(--ink-2); max-width: 700px; }
   .plan-cta { margin-top: 28px; max-width: 580px; }
@@ -217,7 +217,7 @@ const ref = (id: string) => sources.findIndex(s => s.id === id) + 1
     .row-refs { flex: none; margin: 0; gap: 6px; font-size: 12px; }
     td { display: block; padding: 20px; font-size: 15px; line-height: 1.65; }
     .cell-label { display: block; margin-bottom: 8px; color: var(--ink-2); font-size: 12px; }
-    .us .cell-label { color: var(--yellow); }
+    .us .cell-label { color: var(--text-yellow); }
     .table-note { margin-top: 20px; font-size: 13px; }
     .hero-actions .btn { flex: 1 1 auto; min-width: 0; font-size: 15px; }
     .comparison-page { padding-bottom: 32px; }
