@@ -21,6 +21,19 @@ How it compares: AgentShot is the open-source AI video editor for people who wan
 - [Turn long videos into Shorts](https://agentshot.si/long-video-to-shorts/): pick the best moments of a podcast, stream or talk, reframe to 9:16 on the speaker and caption every word.
 - [AI motion graphics from text](https://agentshot.si/ai-motion-graphics/): launch teasers, title cards and explainers built as editable scenes, from a sentence or one of 233 gallery examples.
 
+## Guides
+
+- [How to remove filler words from a video](https://agentshot.si/guides/how-to-remove-filler-words-from-video/)
+- [How to make a product demo video](https://agentshot.si/guides/how-to-make-a-product-demo-video/)
+- [How to turn a podcast into Shorts](https://agentshot.si/guides/how-to-turn-a-podcast-into-shorts/)
+- [How to add captions to a video](https://agentshot.si/guides/how-to-add-captions-to-a-video/)
+- [How to make motion graphics with AI](https://agentshot.si/guides/how-to-make-motion-graphics-with-ai/)
+- [How to edit video with AI](https://agentshot.si/guides/how-to-edit-video-with-ai/)
+
+## Motion examples
+
+- [Motion graphics prompts and examples](https://agentshot.si/examples/): 230 motion videos people made with Claude, each on its own page with the exact prompt behind it and a credit to its maker; browsable by kind (kinetic type, product UI, charts, particles and more).
+
 ## AI video editor comparisons
 
 Published by Hormuz Labs, the makers of AgentShot, and written to argue AgentShot's case. Every claim about another product links to that product's own pages, reviewed November 16, 2026. Hosted products and plans may change; Scarlet sources are pinned to commit 52e200ffddee70e16c7db53ed809921a8e5d8bf6.
@@ -36,6 +49,10 @@ Published by Hormuz Labs, the makers of AgentShot, and written to argue AgentSho
 - [AgentShot vs Submagic](https://agentshot.si/compare/submagic/): captioned Shorts with no per-video credits or length caps, and a full editor for long cuts, motion graphics and demos.
 - [AgentShot vs Captions](https://agentshot.si/compare/captions/): the Captions app (now from Mirage): your real footage edited locally with chat-based editing included free, vs a credit-based app focused on AI avatars.
 - [AgentShot vs Runway](https://agentshot.si/compare/runway/): edit a whole film from real footage on your computer, vs generating and transforming clips of up to 30 seconds on credits.
+- [AgentShot vs DaVinci Resolve](https://agentshot.si/compare/davinci-resolve/): the cut made from plain notes, then opened in Resolve as OpenTimelineIO for the grade; the agent, reframing and shot detection are in the free app.
+- [AgentShot vs Final Cut Pro](https://agentshot.si/compare/final-cut-pro/): the edit made from notes on Mac, Windows or Linux, free, then exported to Final Cut as FCPXML.
+- [AgentShot vs Riverside](https://agentshot.si/compare/riverside/): edit recordings on your own computer with your own model and no watermark, vs an online editor attached to a recording studio.
+- [AgentShot vs HeyGen](https://agentshot.si/compare/heygen/): your real footage and your real product filmed from a URL, vs generated avatar presenters on a credit plan.
 
 ## Pricing
 

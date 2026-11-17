@@ -1,0 +1,120 @@
+---
+// One how-to guide: the job done properly, step by step, then the sentence that does it in AgentShot.
+import Base from '../../layouts/Base.astro'
+import Cta from '../../components/Cta.astro'
+import { GUIDES, PUBLISHED, PUBLISHED_LABEL, guidePath, type Guide } from '../../data/guides'
+
+export function getStaticPaths() {
+  return GUIDES.map(guide => ({ params: { guide: guide.slug }, props: { guide } }))
+}
+interface Props { guide: Guide }
+const { guide: g } = Astro.props
+const url = `https://agentshot.si${guidePath(g.slug)}`
+const others = GUIDES.filter(o => o.slug !== g.slug)
+const org = { '@type': 'Organization', name: 'Hormuz Labs', url: 'https://agentshot.si/' }
+---
+<Base title={`${g.title} · AgentShot`} description={g.description} image={`/og/${g.slug}.jpg`}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'Article', headline: g.title, description: g.description,
+      datePublished: PUBLISHED, dateModified: PUBLISHED, mainEntityOfPage: url, author: org, publisher: org,
+      image: `https://agentshot.si/og/${g.slug}.jpg`,
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'HowTo', name: g.h1, description: g.description,
+      step: g.steps.map((s, i) => ({ '@type': 'HowToStep', position: i + 1, name: s.title, text: s.text })),
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'AgentShot', item: 'https://agentshot.si/' },
+        { '@type': 'ListItem', position: 2, name: 'Guides', item: 'https://agentshot.si/guides/' },
+        { '@type': 'ListItem', position: 3, name: g.h1, item: url },
+      ],
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: g.faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+    })} />
+  </Fragment>
+  <main class="guide wrap" style={`--c: var(--${g.tone})`}>
+    <article>
+      <header>
+        <a class="back mono" href="/guides/">← All guides</a>
+        <h1>{g.h1}</h1>
+        <p class="byline mono">By Hormuz Labs, makers of AgentShot · <time datetime={PUBLISHED}>{PUBLISHED_LABEL}</time> · {g.minutes} min read</p>
+        <p class="intro">{g.intro}</p>
+      </header>
+
+      <section aria-labelledby="why-h"><h2 id="why-h">{g.why.heading}</h2><p>{g.why.text}</p></section>
+
+      <section aria-labelledby="steps-h">
+        <h2 id="steps-h">Step by step</h2>
+        <ol class="steps">{g.steps.map(s => <li><h3>{s.title}</h3><p>{s.text}</p></li>)}</ol>
+      </section>
+
+      <section class="short" aria-labelledby="short-h" data-hero-cta>
+        <span class="tag">the short way</span>
+        <h2 id="short-h">Or say it <span class="grad">in one sentence.</span></h2>
+        <blockquote><span class="mono">You say</span><p>“{g.short.say}”</p></blockquote>
+        <p>{g.short.text}</p>
+        <div class="actions"><a class="btn go" href="/#get">Get AgentShot, free <span aria-hidden="true">↗</span></a><a class="btn ghost" href={g.next.href}>{g.next.label}</a></div>
+      </section>
+
+      <section aria-labelledby="tips-h"><h2 id="tips-h">Tips</h2><ul class="tips">{g.tips.map(t => <li>{t}</li>)}</ul></section>
+
+      <section class="questions" aria-labelledby="questions-h">
+        <h2 id="questions-h">Questions</h2>
+        {g.faqs.map(f => <details><summary>{f.q}</summary><p>{f.a}</p></details>)}
+      </section>
+    </article>
+
+    <section class="more" aria-labelledby="more-h">
+      <h2 id="more-h">More guides</h2>
+      <ul class="others" role="list">{others.map(o => <li style={`--c: var(--${o.tone})`}><a href={guidePath(o.slug)}>{o.h1}</a></li>)}</ul>
+    </section>
+    <section class="try-editor" aria-labelledby="try-h"><h2 id="try-h">Try it on <span class="grad">your next video.</span></h2><p>Free and open source, for macOS, Windows and Linux. Bring your own Claude, Gemini or OpenAI key.</p><div class="plan-cta"><Cta /></div></section>
+  </main>
+</Base>
+
+<style>
+  .guide { padding-top: clamp(32px, 6vw, 72px); padding-bottom: 56px; }
+  article { max-width: 780px; }
+  .back { display: flex; align-items: center; width: fit-content; min-height: 44px; margin-bottom: 12px; color: var(--ink-2); font-size: 12px; text-decoration: none; }
+  .back:hover { color: var(--ink); }
+  h1 { font-size: clamp(36px, 5vw, 64px); line-height: 1.04; letter-spacing: -.035em; }
+  .byline { margin-top: 18px; font-size: 12px; line-height: 1.8; color: var(--ink-2); }
+  .intro { margin-top: 24px; font-size: clamp(18px, 1.7vw, 21px); color: var(--ink-2); }
+  article > section { margin-top: clamp(44px, 6vw, 72px); }
+  article h2 { font-size: clamp(26px, 3vw, 38px); }
+  article > section > p { margin-top: 16px; color: var(--ink-2); }
+  .steps { margin: 20px 0 0; padding: 0; list-style: none; counter-reset: step; }
+  .steps li { position: relative; padding: 20px 0 20px 56px; border-top: 1px solid var(--line); counter-increment: step; }
+  .steps li::before { content: counter(step); position: absolute; left: 0; top: 20px; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: color-mix(in srgb, var(--c) 18%, var(--bg-2)); border: 1px solid color-mix(in srgb, var(--c) 45%, var(--line)); font: 700 15px/1 var(--mono); }
+  .steps h3 { font-size: 20px; }
+  .steps p { margin-top: 8px; color: var(--ink-2); }
+  .short { padding: clamp(24px, 4vw, 44px); border: 1px solid color-mix(in srgb, var(--yellow) 28%, var(--line)); border-radius: var(--r); background: var(--bg-2); box-shadow: inset 0 3px var(--yellow); scroll-margin-top: 90px; }
+  .short h2 { margin-top: 12px; font-size: clamp(30px, 4vw, 48px); }
+  blockquote { margin: 24px 0 0; padding: 20px 24px; border: 1px solid var(--line); border-radius: 22px 22px 6px 22px; background: var(--bg-3); }
+  blockquote .mono { font-size: 12px; color: var(--ink-2); }
+  blockquote p { margin-top: 8px; font-size: clamp(19px, 2.1vw, 25px); font-weight: 700; line-height: 1.3; }
+  .short > p { margin-top: 20px; color: var(--ink-2); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+  .actions .btn { font-size: 16px; padding-inline: 24px; }
+  .tips { margin: 16px 0 0; padding-left: 22px; }
+  .tips li { padding: 6px 0; color: var(--ink-2); }
+  details { border-block-end: 1px solid var(--line); }
+  details:first-of-type { margin-top: 16px; border-top: 1px solid var(--line); }
+  summary { display: flex; justify-content: space-between; gap: 20px; padding: 20px 0; font-weight: 700; font-size: 18px; cursor: pointer; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; color: var(--text-yellow); flex: none; }
+  details[open] summary::after { content: '−'; }
+  details p { padding-bottom: 22px; color: var(--ink-2); }
+  .more { margin-top: clamp(72px, 9vw, 120px); }
+  .more h2 { font-size: clamp(26px, 3vw, 38px); margin-bottom: 20px; }
+  .others { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+  .others a { display: block; height: 100%; padding: 20px 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg-2); box-shadow: inset 3px 0 var(--c); color: var(--ink); font-weight: 700; font-size: 18px; line-height: 1.3; text-decoration: none; }
+  .others a:hover { border-color: color-mix(in srgb, var(--c) 45%, var(--line)); }
+  .try-editor { margin-top: var(--gap); }
+  .try-editor p { margin-top: 20px; color: var(--ink-2); max-width: 700px; }
+  .plan-cta { margin-top: 28px; max-width: 580px; }
+  @media (max-width: 760px) { .others { grid-template-columns: minmax(0, 1fr); } .steps li { padding-left: 48px; } .actions .btn { flex: 1 1 auto; min-width: 0; font-size: 15px; padding-inline: 20px; } summary { font-size: 17px; } }
+</style>
