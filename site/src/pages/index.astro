@@ -525,7 +525,8 @@ const faqs = [
   /* what comes back: AgentShot's face, its answer, and where in the film it landed */
   .answer { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 12px; align-items: start; min-height: 3.1em; margin: 16px 8px 0 22px; transition: opacity .35s, transform .35s; }
   .answer.off { opacity: 0; transform: translateY(6px); }
-  .answer img { border-radius: 50%; background: var(--bg-3); }
+  /* the cat is its own shape now: no badge behind it */
+  .answer img { flex: none; }
   .answer p { padding-top: 4px; font-size: 16.5px; line-height: 1.45; color: var(--ink-2); }
   .answer .mono { padding-top: 8px; font-size: 13px; color: var(--ink-3); white-space: nowrap; }
   .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 22px; }

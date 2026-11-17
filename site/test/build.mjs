@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { card, cards, stamp } from '../scripts/og.mjs'
 import { trim } from '../scripts/examples.mjs'
 import { HOST, KEY, payload } from '../scripts/indexnow.mjs'
+import { ICONS, stamp as iconStamp, trim as trimIcon } from '../scripts/icons.mjs'
 
 const site = join(import.meta.dirname, '..')
 const dist = join(site, 'dist')
@@ -68,6 +69,24 @@ for (const e of examples) {
   assert.ok(e.post.startsWith('https://') && e.source.startsWith('https://'), `${e.id} has no link to credit`)
   assert.ok(existsSync(join(dist, 'examples', e.id, 'index.html')), `${e.id} has no page`)
 }
+
+// --- the icons ---------------------------------------------------------------------------------------------------
+// the trim is the smallest centred square holding everything drawn: a 2 × 1 mark in a 6 × 4 picture
+const alpha = new Uint8Array(24); alpha[1 * 6 + 3] = 255; alpha[1 * 6 + 4] = 255
+assert.deepEqual(trimIcon(alpha, 6, 4), { x: 3, y: 1, side: 2 })
+// faint pixels (an anti-aliased edge of nothing) don't widen it, and an empty picture is left whole
+alpha[0] = 10
+assert.deepEqual(trimIcon(alpha, 6, 4), { x: 3, y: 1, side: 2 })
+assert.deepEqual(trimIcon(new Uint8Array(24), 6, 4), { x: 0, y: 0, side: 4 })
+// every icon is published at its size, and was cut from the app's current icon
+const png = file => { const b = readFileSync(file); assert.equal(b.toString('latin1', 1, 4), 'PNG', `${file} is not a PNG`); return [b.readUInt32BE(16), b.readUInt32BE(20)] }
+for (const icon of ICONS) assert.deepEqual(png(join(dist, icon.file)), [icon.size, icon.size], `${icon.file} is not ${icon.size} px square`)
+assert.equal(JSON.parse(readFileSync(join(site, 'public', 'icons.json'), 'utf8')).source, iconStamp(readFileSync(join(site, '..', 'build', 'icon.png'))), 'site icons are out of date with build/icon.png: run node site/scripts/icons.mjs')
+// the home screen icon must be opaque: iOS paints transparent pixels black (colour type 2 = RGB, no alpha)
+assert.ok(ICONS.find(i => i.file === 'apple-touch-icon.png').background, 'the home screen icon has no background')
+// the old flat-face favicon is gone, and no page still asks for it
+assert.ok(!existsSync(join(dist, 'favicon.svg')), 'the old vector favicon is still published')
+for (const file of pages) assert.ok(!readFileSync(file, 'utf8').includes('favicon.svg'), `${file} still links the old vector favicon`)
 
 // --- the list sent to search engines -----------------------------------------------------------------------------
 const body = payload('<urlset><url><loc>https://agentshot.si/</loc></url><url><loc>https://elsewhere.example/x</loc></url><url><loc>https://agentshot.si/pricing/</loc></url></urlset>')

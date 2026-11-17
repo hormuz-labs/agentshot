@@ -50,7 +50,7 @@ export function cards(root = dist) {
 
 // what a card was drawn from, kept beside the pictures so a changed headline redraws its card and nothing else does
 export const stamp = c => createHash('sha256').update(JSON.stringify([c.eyebrow, c.title, c.accent, TEMPLATE_VERSION])).digest('hex').slice(0, 16)
-const TEMPLATE_VERSION = 2
+const TEMPLATE_VERSION = 3
 
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 // inlined: a page set from a string may not load files from disk
@@ -62,7 +62,7 @@ export const page = c => `<!doctype html><meta charset="utf-8"><style>
   body { width: 1200px; height: 630px; padding: 64px 72px; display: flex; flex-direction: column; background: #0d0c11; color: #f6f3ec; font-family: Archivo, sans-serif; overflow: hidden;
     background-image: radial-gradient(700px 420px at 100% 0, #7b61ff38, transparent 70%), radial-gradient(520px 360px at 0 100%, #ff4fb01f, transparent 70%); }
   .brand { display: flex; align-items: center; gap: 16px; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
-  .brand img { width: 52px; height: 52px; border-radius: 12px; }
+  .brand img { width: 60px; height: 60px; }
   .brand span { margin-left: auto; padding: 8px 18px; border: 1.5px solid #f6f3ec33; border-radius: 999px; font-size: 20px; font-weight: 600; letter-spacing: 0; color: #f6f3ecb3; }
   h1 { margin-top: auto; font-weight: 800; line-height: 1.02; letter-spacing: -.035em; text-wrap: balance; }
   h1 b { display: block; font-weight: 800; background: linear-gradient(100deg, #7b61ff, #ff4fb0 38%, #ff5a36 68%, #ffe01a); -webkit-background-clip: text; color: transparent; padding-bottom: .08em; }
