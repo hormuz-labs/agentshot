@@ -10,12 +10,13 @@ export function getStaticPaths() {
 }
 interface Props { comparison: Comparison }
 const { comparison: c } = Astro.props
-const title = `AgentShot vs ${c.name}: ${c.hook}`
+// titled for the search people make (“Descript alternative”); the hook stays the page's headline
+const title = `AgentShot vs ${c.name}: ${c.slug === 'scarlet' ? 'an' : 'the'} open-source ${c.name} alternative`
 const url = `https://agentshot.si${comparisonPath(c.slug)}`
 const sources = [...AGENTSHOT_SOURCES, ...c.sources]
 const ref = (id: string) => sources.findIndex(s => s.id === id) + 1
 ---
-<Base title={title} description={c.description}>
+<Base title={title} description={c.description} image={`/og/compare-${c.slug}.jpg`}>
   <Fragment slot="head">
     <script type="application/ld+json" set:html={JSON.stringify({
       '@context': 'https://schema.org', '@type': 'Article', headline: title, description: c.description,
@@ -41,7 +42,7 @@ const ref = (id: string) => sources.findIndex(s => s.id === id) + 1
       <header class="comparison-hero">
         <div class="hero-copy">
           <a class="back mono" href="/compare/">← All comparisons</a>
-          <span class="tag">AgentShot vs {c.name}</span>
+          <span class="tag">{c.name} alternative</span>
           <h1>AgentShot vs {c.name}<span class="grad">{c.hook}</span></h1>
           <p class="verdict">{c.verdict}</p>
           <p class="byline mono">By Hormuz Labs, makers of AgentShot · Reviewed <time datetime={REVIEWED}>{REVIEWED_LABEL}</time></p>

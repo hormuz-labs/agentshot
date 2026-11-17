@@ -4,11 +4,11 @@ import Cta from '../../components/Cta.astro'
 import ComparisonCards from '../../components/ComparisonCards.astro'
 import ComparisonSignal from '../../components/ComparisonSignal.astro'
 import { COMPARISONS, REVIEWED_LABEL, comparisonPath } from '../../data/comparisons'
-const title = 'AgentShot vs CapCut, Descript, Premiere Pro, OpusClip & more: AI video editors compared'
+const title = 'AgentShot vs CapCut, Descript, Premiere Pro & more: alternatives compared'
 const description = 'Compare AI video editors with sources. See where AgentShot wins on local processing, model choice and product-demo filming, and where other editors fit better.'
 const url = 'https://agentshot.si/compare/'
 ---
-<Base title={title} description={description}>
+<Base title={title} description={description} image="/og/compare.jpg">
   <Fragment slot="head">
     <script type="application/ld+json" set:html={JSON.stringify({
       '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description, url,

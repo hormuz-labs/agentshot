@@ -4,11 +4,13 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'resources/motion-gallery/catalog.json'
       - '.github/workflows/site.yml'
   pull_request:
     branches: [main]
     paths:
       - 'site/**'
+      - 'resources/motion-gallery/catalog.json'
       - '.github/workflows/site.yml'
   workflow_dispatch:
 
@@ -31,6 +33,10 @@ jobs:
           cache-dependency-path: site/package-lock.json
       - run: npm ci --prefix site
       - run: npm run build --prefix site
+      # the example pages and share cards are generated and committed: fail here if either was left behind
+      - run: node site/scripts/examples.mjs --check
+      - run: node site/scripts/og.mjs --check
+      - run: node site/test/build.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: website
@@ -54,3 +60,8 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy site/dist --project-name=agentshot-site --branch=main
+      # Bing and the other IndexNow engines learn about new pages now, not whenever they next crawl the sitemap.
+      - name: Tell search engines what changed
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.SITE_DEPLOY_ENABLED == 'true'
+        run: node site/scripts/indexnow.mjs
+        continue-on-error: true

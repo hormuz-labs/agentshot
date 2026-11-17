@@ -44,7 +44,7 @@ try {
     const answers = await page.locator('.questions details').evaluateAll(nodes => nodes.map(n => ({ q: n.querySelector('summary').textContent, a: n.querySelector('p').textContent })))
     check(answers.length >= 4 && answers.every((f, i) => f.q === faq?.mainEntity[i]?.name && f.a === faq?.mainEntity[i]?.acceptedAnswer?.text), `${path} FAQ schema differs from its visible questions`)
     check(await page.locator('.steps li').count() === 4, `${path} does not show its four steps`)
-    check((await page.locator('.skill a').getAttribute('href')).startsWith('https://github.com/hormuz-labs/agentshot/'), `${path} does not link its craft skill`)
+    check((await page.locator('.skill:not(.learn) a').getAttribute('href')).startsWith('https://github.com/hormuz-labs/agentshot/'), `${path} does not link its craft skill`)
     // the other job pages and at least one comparison, so no page is a dead end
     for (const other of paths.filter(p => p !== path)) check(await page.locator(`.others a[href="${other}"]`).count() === 1, `${path} does not link ${other}`)
     check(await page.locator('.related .comparison-cards a[href^="/compare/"]').count() >= 1, `${path} links no comparison`)

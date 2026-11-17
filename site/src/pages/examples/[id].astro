@@ -1,0 +1,106 @@
+---
+// One motion example: the video, who made it, and the prompt they published, with how to make your own from it.
+import Base from '../../layouts/Base.astro'
+import Cta from '../../components/Cta.astro'
+import ExampleCards from '../../components/ExampleCards.astro'
+import { EXAMPLES, TAG_WORDS, examplePath, examplePoster, exampleVideo, related, seconds, tagPath, type Example } from '../../data/examples'
+
+export function getStaticPaths() {
+  return EXAMPLES.map(example => ({ params: { id: example.id }, props: { example } }))
+}
+interface Props { example: Example }
+const { example: e } = Astro.props
+const url = `https://agentshot.si${examplePath(e.id)}`
+const kind = e.tags.length ? (TAG_WORDS[e.tags[0]] ?? e.tags[0].toLowerCase()) : 'motion graphics'
+// titles repeat across the gallery ("Motion designer showreel"), so the maker's handle keeps every page's title its own
+const title = `${e.title}: motion graphics prompt by @${e.handle} · AgentShot`
+const description = `The exact prompt behind “${e.title}”, a ${seconds(e.duration)} video of ${kind} that @${e.handle} made with Claude. Read it, copy it, and make your own.`
+const tall = e.height > e.width
+const more = related(e)
+---
+<Base title={title} description={description} image={examplePoster(e.id)}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'VideoObject', name: e.title, description,
+      thumbnailUrl: examplePoster(e.id), contentUrl: exampleVideo(e.id), uploadDate: e.date, duration: `PT${Math.round(e.duration)}S`,
+      creator: { '@type': 'Person', name: e.name, url: `https://x.com/${e.handle}` }, isBasedOn: e.post,
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'AgentShot', item: 'https://agentshot.si/' },
+        { '@type': 'ListItem', position: 2, name: 'Motion examples', item: 'https://agentshot.si/examples/' },
+        { '@type': 'ListItem', position: 3, name: e.title, item: url },
+      ],
+    })} />
+  </Fragment>
+  <main class="example wrap">
+    <article>
+      <header>
+        <a class="back mono" href="/examples/">← All motion examples</a>
+        <h1>{e.title}</h1>
+        <p class="by">A {seconds(e.duration)} motion video by <a href={e.post} rel="noopener">{e.name} (@{e.handle})</a>, made with Claude.</p>
+        {e.tags.length > 0 && <p class="tags">{e.tags.map(t => <a href={tagPath(t)}>{t}</a>)}</p>}
+      </header>
+
+      <figure class:list={{ tall }}>
+        <video src={exampleVideo(e.id)} poster={examplePoster(e.id)} width={e.width} height={e.height} controls playsinline preload="none"></video>
+        <figcaption class="mono">Made by @{e.handle}. <a href={e.post} rel="noopener">Original post <span aria-hidden="true">↗</span></a> · collected by <a href={e.source} rel="noopener">prompt-motion.com</a></figcaption>
+      </figure>
+
+      <section class="prompt" aria-labelledby="prompt-h">
+        <div class="prompt-head"><h2 id="prompt-h">The prompt</h2><button class="btn ghost sm" data-copy={e.prompt}>Copy the prompt</button></div>
+        <pre tabindex="0">{e.prompt}</pre>
+        <p class="note">As @{e.handle} published it. This is what they typed to get the video above.</p>
+      </section>
+
+      <section class="make" aria-labelledby="make-h" data-hero-cta>
+        <h2 id="make-h">Make yours <span class="grad">like this.</span></h2>
+        <ol>
+          <li><b>Pick this example in AgentShot.</b> The gallery sits under the message box. “{e.title}” is in it.</li>
+          <li><b>Say what yours is about.</b> Your product, your words, your logo. AgentShot studies the video and the prompt, and asks for anything it’s missing.</li>
+          <li><b>Approve the storyboard.</b> It builds each scene as real motion graphics, so a note like “the title lands late” changes one scene, not the whole film.</li>
+        </ol>
+        <div class="actions"><a class="btn go" href="/#get">Get AgentShot, free <span aria-hidden="true">↗</span></a><a class="btn ghost" href="/ai-motion-graphics/">How it makes motion graphics</a></div>
+      </section>
+    </article>
+
+    <section class="more" aria-labelledby="more-h"><h2 id="more-h">More like this</h2><ExampleCards examples={more} /></section>
+    <section class="try-editor" aria-labelledby="try-h"><h2 id="try-h">Free with <span class="grad">your own model key.</span></h2><p>AgentShot is open source and runs on your computer, for macOS, Windows and Linux.</p><div class="plan-cta"><Cta /></div></section>
+  </main>
+</Base>
+
+<style>
+  .example { padding-top: clamp(32px, 6vw, 72px); padding-bottom: 56px; }
+  article { max-width: 980px; }
+  .back { display: flex; align-items: center; width: fit-content; min-height: 44px; margin-bottom: 12px; color: var(--ink-2); font-size: 12px; text-decoration: none; }
+  .back:hover { color: var(--ink); }
+  h1 { font-size: clamp(34px, 4.6vw, 60px); line-height: 1.04; letter-spacing: -.035em; overflow-wrap: anywhere; }
+  .by { margin-top: 16px; font-size: 18px; color: var(--ink-2); }
+  .by a, figcaption a, .note a { color: var(--text-sky); }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .tags a { display: inline-flex; align-items: center; min-height: 36px; padding: 4px 14px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); font-size: 13px; font-weight: 700; text-decoration: none; }
+  .tags a:hover { color: var(--ink); border-color: var(--ink-3); }
+  figure { margin: 28px 0 0; }
+  video { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--r); background: #000; }
+  figure.tall video { width: auto; max-width: 100%; max-height: 78vh; }
+  figcaption { margin-top: 10px; font-size: 12px; line-height: 1.7; color: var(--ink-2); }
+  .prompt { margin-top: clamp(40px, 5vw, 64px); }
+  .prompt-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .prompt h2, .more h2 { font-size: clamp(26px, 3vw, 38px); }
+  pre { max-height: 560px; margin: 16px 0 0; padding: clamp(18px, 2.4vw, 28px); overflow: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg-2); font: 500 14.5px/1.65 var(--mono); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .note { margin-top: 12px; font-size: 14px; color: var(--ink-2); }
+  .make { margin-top: clamp(56px, 7vw, 96px); scroll-margin-top: 90px; }
+  .make h2 { font-size: clamp(32px, 4.4vw, 56px); }
+  .make ol { margin: 24px 0 0; padding-left: 24px; }
+  .make li { padding: 8px 0 8px 6px; color: var(--ink-2); }
+  .make li::marker { color: var(--text-yellow); font-weight: 700; }
+  .make b { color: var(--ink); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .actions .btn { font-size: 16px; padding-inline: 24px; }
+  .more { margin-top: clamp(72px, 9vw, 120px); }
+  .more h2 { margin-bottom: 24px; }
+  .try-editor { margin-top: var(--gap); }
+  .try-editor p { margin-top: 20px; color: var(--ink-2); max-width: 700px; }
+  .plan-cta { margin-top: 28px; max-width: 580px; }
+  @media (max-width: 760px) { .by { font-size: 16px; } .actions .btn { flex: 1 1 auto; min-width: 0; font-size: 15px; padding-inline: 20px; } pre { font-size: 13.5px; max-height: 440px; } }
+</style>

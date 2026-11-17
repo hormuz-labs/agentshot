@@ -4,6 +4,8 @@ import Base from '../layouts/Base.astro'
 import Cta from '../components/Cta.astro'
 import ComparisonCards from '../components/ComparisonCards.astro'
 import { JOBS, jobPath, type Job } from '../data/jobs'
+import { GUIDES, guidePath } from '../data/guides'
+import { EXAMPLES } from '../data/examples'
 
 export function getStaticPaths() {
   return JOBS.map(job => ({ params: { job: job.slug }, props: { job } }))
@@ -12,8 +14,10 @@ interface Props { job: Job }
 const { job: j } = Astro.props
 const url = `https://agentshot.si${jobPath(j.slug)}`
 const others = JOBS.filter(o => o.slug !== j.slug)
+// the guides that end on this job, so the product page leads back to the how-to
+const guides = GUIDES.filter(g => g.next.href === jobPath(j.slug) || (j.slug === 'ai-motion-graphics' && g.slug === 'how-to-make-motion-graphics-with-ai'))
 ---
-<Base title={j.title} description={j.description}>
+<Base title={j.title} description={j.description} image={`/og/${j.slug}.jpg`}>
   <Fragment slot="head">
     <script type="application/ld+json" set:html={JSON.stringify({
       '@context': 'https://schema.org', '@type': 'WebPage', name: j.title, description: j.description, url,
@@ -55,6 +59,7 @@ const others = JOBS.filter(o => o.slug !== j.slug)
         <li><span class="number mono">0{i + 1}</span><h3>{s.title}</h3><p>{s.text}</p></li>
       ))}</ol>
       <p class="skill">Every step follows a plain file you can read and change: <a href={j.skill.url}>{j.skill.label} <span aria-hidden="true">↗</span></a></p>
+      <p class="skill learn">{guides.map(g => <a href={guidePath(g.slug)}>Guide: {g.h1.charAt(0).toLowerCase() + g.h1.slice(1)} <span aria-hidden="true">→</span></a>)}{j.slug === 'ai-motion-graphics' && <a href="/examples/">Browse {EXAMPLES.length} examples and their prompts <span aria-hidden="true">→</span></a>}</p>
     </section>
 
     <section class="chapter promise" aria-label="What stays the same">
@@ -106,6 +111,8 @@ const others = JOBS.filter(o => o.slug !== j.slug)
   .steps p { margin-top: 12px; color: var(--ink-2); }
   .skill { margin-top: 18px; font-size: 14px; color: var(--ink-2); }
   .skill a { color: var(--text-sky); }
+  .learn { display: flex; flex-wrap: wrap; gap: 6px 24px; }
+  .learn a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; }
   .promise { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--line); }
   .promise p { padding: 24px; color: var(--ink-2); }
   .promise p:first-child { padding-left: 0; }

@@ -1,0 +1,53 @@
+---
+// The motion gallery: every example AgentShot can start from, each leading to the prompt that made it.
+import Base from '../../layouts/Base.astro'
+import Cta from '../../components/Cta.astro'
+import ExampleCards from '../../components/ExampleCards.astro'
+import ExampleTags from '../../components/ExampleTags.astro'
+import { EXAMPLES, examplePath } from '../../data/examples'
+const title = `${EXAMPLES.length} Motion Graphics Prompts and Examples, made with Claude · AgentShot`
+const description = `${EXAMPLES.length} motion graphics videos people made with Claude, each with the exact prompt behind it: kinetic type, product UI, charts and more. Copy one and make yours.`
+const url = 'https://agentshot.si/examples/'
+---
+<Base title={title} description={description} image="/og/examples.jpg">
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description, url,
+      mainEntity: { '@type': 'ItemList', numberOfItems: EXAMPLES.length, itemListElement: EXAMPLES.map((e, i) => ({ '@type': 'ListItem', position: i + 1, name: e.title, url: `https://agentshot.si${examplePath(e.id)}` })) },
+    })} />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'AgentShot', item: 'https://agentshot.si/' },
+        { '@type': 'ListItem', position: 2, name: 'Motion examples', item: url },
+      ],
+    })} />
+  </Fragment>
+  <main class="examples wrap">
+    <header class="sec-head">
+      <span class="tag">motion examples</span>
+      <h1>{EXAMPLES.length} motion videos. <span class="grad">And the prompt behind each.</span></h1>
+      <p>Every video here was made by someone talking to Claude, and each page shows the exact prompt they used. Pick one, say what yours is about, and AgentShot makes yours the same way.</p>
+      <div class="hero-actions" data-hero-cta><a class="btn go" href="/#get">Get AgentShot, free <span aria-hidden="true">↗</span></a><a class="btn ghost" href="/ai-motion-graphics/">How it makes them</a></div>
+    </header>
+    <ExampleTags />
+    <ExampleCards examples={EXAMPLES} eager={6} />
+    <p class="credit">Made by the people named on each example, and collected by <a href="https://prompt-motion.com">prompt-motion.com</a>. Each page links its maker’s original post.</p>
+    <section class="try-editor" aria-labelledby="try-h"><h2 id="try-h">Make one <span class="grad">about your thing.</span></h2><p>The same gallery sits under the message box in AgentShot. Pick an example and say what yours is about.</p><div class="plan-cta"><Cta /></div></section>
+  </main>
+</Base>
+
+<style>
+  .examples { padding-top: clamp(44px, 7vw, 96px); padding-bottom: 56px; }
+  .sec-head { max-width: 1000px; margin-bottom: 36px; }
+  .sec-head h1 { font-size: clamp(40px, 5.6vw, 76px); line-height: 1; letter-spacing: -.04em; }
+  h1 .grad { display: block; margin-top: 8px; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .hero-actions .btn { font-size: 16px; padding-inline: 24px; }
+  .examples :global(.example-cards) { margin-top: 32px; }
+  .credit { margin-top: 32px; font-size: 14px; color: var(--ink-2); }
+  .credit a { color: var(--text-sky); }
+  .try-editor { margin-top: var(--gap); }
+  .try-editor p { margin-top: 20px; color: var(--ink-2); max-width: 700px; }
+  .plan-cta { max-width: 580px; margin-top: 28px; }
+  @media (max-width: 760px) { .hero-actions .btn { flex: 1 1 auto; min-width: 0; font-size: 15px; padding-inline: 20px; } }
+</style>

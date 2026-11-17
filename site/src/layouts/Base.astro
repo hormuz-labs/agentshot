@@ -10,8 +10,11 @@ interface Props {
   title: string
   description: string
   noindex?: boolean
+  /** the picture shown when the page is shared: a path on this site or a full URL. Defaults to the site's card. */
+  image?: string
 }
-const { title, description, noindex = false } = Astro.props
+const { title, description, noindex = false, image = '/og.jpg' } = Astro.props
+const share = new URL(image, 'https://agentshot.si').href
 const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
 ---
 <!doctype html>
@@ -40,7 +43,7 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
   <meta property="og:url" content={canonical} />
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
-  <meta property="og:image" content="https://agentshot.si/og.jpg" />
+  <meta property="og:image" content={share} />
   <meta name="twitter:card" content="summary_large_image" />
   <!-- before first paint, so the button never shows the wrong system -->
   <script is:inline>(() => {
@@ -84,6 +87,8 @@ const canonical = new URL(Astro.url.pathname, 'https://agentshot.si')
         <a href="/pricing/">Pricing</a>
         <a href="/compare/">Compare editors</a>
         {JOBS.map(j => <a href={`/${j.slug}/`}>{j.tag.charAt(0).toUpperCase() + j.tag.slice(1)}</a>)}
+        <a href="/guides/">Guides</a>
+        <a href="/examples/">Motion examples</a>
         <a href={GH}>GitHub</a>
         <a href={`${GH}/blob/main/ROADMAP.md`}>Roadmap</a>
         <a href={`${GH}/releases`}>Releases</a>

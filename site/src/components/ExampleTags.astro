@@ -1,0 +1,18 @@
+---
+// The gallery's tags as links, with how many examples each has.
+import { TAGS, tagPath } from '../data/examples'
+interface Props { current?: string }
+const { current } = Astro.props
+---
+<nav class="example-tags" aria-label="Kinds of motion example">
+  <a href="/examples/" aria-current={current ? undefined : 'page'}>All</a>
+  {TAGS.map(t => <a href={tagPath(t.tag)} aria-current={t.tag === current ? 'page' : undefined}>{t.tag} <span class="mono">{t.count}</span></a>)}
+</nav>
+
+<style>
+  .example-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-2); font-size: 14px; font-weight: 700; text-decoration: none; }
+  a:hover { color: var(--ink); border-color: var(--ink-3); }
+  a[aria-current] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .mono { font-size: 12px; font-weight: 500; opacity: .7; }
+</style>
