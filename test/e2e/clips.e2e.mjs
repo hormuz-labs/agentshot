@@ -122,7 +122,7 @@ try {
   console.log('editor screenshot:', join(tmp, 'editor.png'))
 
   // history: every step is a point; going back before the drag undoes it (HTML and version)
-  // A version is published before checkpoint() finishes writing its history commit.
+  // A version can be visible through project:open while its checkpoint is still completing.
   // Poll in Node: waitForFunction treats an async predicate's Promise as truthy,
   // even when it resolves to false, so it does not wait for the history commit.
   let log = []

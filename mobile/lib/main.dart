@@ -78,6 +78,7 @@ class _AgentShotAppState extends State<AgentShotApp> {
       await account.restore();
       store.account = account;
       client.renew = account.renew;
+      client.reconnectMesh = () => account.joinPrivateNetwork(client);
       paired = await client.restore();
       // what the phone kept of this computer shows at once, before it answers (or while it can't)
       if (paired) await store.restoreSaved();

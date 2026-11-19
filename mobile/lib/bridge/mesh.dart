@@ -1,7 +1,8 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/services.dart';
 
-/// The embedded Headscale node (Android). Requests to mesh addresses go through its local CONNECT proxy,
+/// The embedded Headscale node (Android and iOS). Requests to mesh addresses go through its local CONNECT proxy,
 /// so TLS (and the desktop's pinned certificate) stays end to end.
 class Mesh {
   static const _channel = MethodChannel('agentshot/native');
@@ -21,7 +22,7 @@ class Mesh {
       final out = await _channel.invokeMethod<String>('meshStart', {
         'control': control,
         'key': key,
-      });
+      }).timeout(const Duration(seconds: 50));
       proxyPort = (jsonDecode(out!) as Map)['proxyPort'] as int;
     } on MissingPluginException {
       throw UnsupportedError('Pairing from anywhere is not available on this device yet.');
@@ -36,6 +37,19 @@ class Mesh {
       await _channel.invokeMethod('meshStop');
     } on MissingPluginException {
       // no embedded mesh on this platform
+    }
+  }
+
+  static Future<void> networkChanged() async {
+    if (proxyPort == null) return;
+    try {
+      await _channel.invokeMethod('meshNetworkChanged').timeout(const Duration(seconds: 6));
+    } on MissingPluginException {
+      // Older native builds recover by restarting the mesh when probes fail.
+    } on PlatformException {
+      // A failed refresh is handled by the normal bounded reconnect path.
+    } on TimeoutException {
+      // Do not stall the event reconnect loop on a native refresh.
     }
   }
 

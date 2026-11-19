@@ -1,11 +1,12 @@
 // AgentShot's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
 import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
-import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell, session as electronSession } from 'electron'
 import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
 import { projectArgument } from './mobile-contract'
 import { rangeNotesContent } from './range-notes'
 import { NOTES_TOGETHER, parseRangeNotes } from '../shared/range-notes'
 import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
+import { initializeNetwork } from './network-electron'
 import { startMeshNode, stopAllMesh, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
 import { closeSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } from 'node:fs'
@@ -220,6 +221,7 @@ function joinMesh() {
       hostname: `manul-${(process.env.MANUL_WORKER_ID || hostname() || 'worker').replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`,
       controlUrl: joined.controlUrl,
       authKey: joined.authKey,
+      resolveProxy: url => electronSession.defaultSession.resolveProxy(url),
       // mesh peers dial 47821 (the only port the Headscale ACL allows), forwarded to wherever the bridge actually bound
       forwardPort: port,
       meshPort: DEFAULT_MOBILE_PORT,
@@ -405,6 +407,7 @@ async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
     priority: process.env.MANUL_WORKER_PRIORITY ? Number(process.env.MANUL_WORKER_PRIORITY) : undefined,
     projects: () => Projects.recent().map(r => r.id),
     sendHeartbeat: workerHeartbeat,
+    reconnectMesh: () => !meshNode ? joinMesh() : undefined,
     // a cloud worker serves one person at a time: when the lease moves on, the last one's AgentShot sign-in (adopted
     // so their notes use their credits) goes with them
     activity: () => mobile.activity(),
@@ -451,8 +454,13 @@ const projectOf = (dir: string) => {
 const publish = async (p: Project) => { await Projects.save(p); send('project', p) }
 /** Save, show, and make this a point in the project's history. */
 const checkpoint = async (p: Project, message: string) => {
-  await publish(p)
-  await new History(p.dir).record(message).catch(e => console.warn('history', e))
+  let saved = false
+  await new History(p.dir).checkpoint(message, async () => { await Projects.save(p); saved = true }).catch(e => {
+    if (!saved) throw e
+    console.warn('history', e)
+  })
+  // Do not expose a completed edit before its undo/history point exists.
+  send('project', p)
 }
 
 // ---------------------------------------------------------------- consent cards: the caller waits until the user answers
@@ -1515,6 +1523,7 @@ function createWindow() {
 }
 
 const startup = app.whenReady().then(async () => {
+  await initializeNetwork()
   void videoEncoder() // tried now, so the agent's first command knows it
   if (quitting) return
   if (process.platform === 'darwin' && WORKER_MODE) app.dock?.hide()

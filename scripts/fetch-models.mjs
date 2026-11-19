@@ -23,7 +23,9 @@ export const MODELS = {
   },
   'speaker-embedding.onnx': {
     url: `${SHERPA}/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx`,
-    sha256: 'aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2',
+    // Upstream replacement, asset 766772457 (2026-11-19); verified against
+    // GitHub's release digest and a separate download. Keep rejecting drift.
+    sha256: '53cab20ba8f2eb2f6e2d89ecc18e88ef3222169b61b4419cbc13666744a4574b',
   },
   'faces-yunet.onnx': {
     url: 'https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/face_detection_yunet_2023mar.onnx',
@@ -43,8 +45,8 @@ export const MODELS = {
 const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'resources', 'models')
 const sha = buf => createHash('sha256').update(buf).digest('hex')
 
-async function fetchOne(name, m) {
-  const target = join(dir, name)
+export async function fetchOne(name, m, destination = dir) {
+  const target = join(destination, name)
   const want = m.fileSha256 || m.sha256
   if (existsSync(target) && sha(readFileSync(target)) === want) return
   const res = await fetch(m.url, { signal: AbortSignal.timeout(600_000) })
@@ -52,7 +54,7 @@ async function fetchOne(name, m) {
   const buf = Buffer.from(await res.arrayBuffer())
   const got = sha(buf)
   if (got !== m.sha256) throw new Error(`${name}: checksum mismatch (got ${got}); refusing to use it`)
-  mkdirSync(dir, { recursive: true })
+  mkdirSync(destination, { recursive: true })
   if (m.member) {
     const tmp = mkdtempSync(join(tmpdir(), 'agentshot-model-'))
     const tar = process.platform === 'win32' ? join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar'

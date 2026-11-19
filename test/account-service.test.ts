@@ -254,6 +254,24 @@ describe('the account service as production runs it', () => {
 })
 
 describe('the account service: headscale mesh and worker pool', () => {
+  it('lists a desktop only for its Google owner, expires stale registrations, and recovers after a new heartbeat', async () => {
+    await ask('good'); await ask('good_2')
+    const body = { id: 'personal-home', name: 'Home', urls: ['https://192.168.1.4:47821'], fingerprint: 'a'.repeat(64), secret: 's'.repeat(48) }
+    const beat = () => call('/v1/workers/heartbeat', { method: 'POST', headers: asKey(), body: JSON.stringify(body) })
+    const list = async (headers = asKey()) => (await (await call('/v1/workers', { headers })).json()).workers
+    expect((await beat()).status).toBe(200)
+    expect(await list()).toHaveLength(1)
+    expect(await list(asKey('sk-bf-vk_2', 'vk_2'))).toEqual([])
+    expect((await wallet.workersFor('manul_user_1', Date.now() + 121_000)).owned).toEqual([])
+    body.urls = ['https://192.168.2.8:47821', 'https://100.64.0.3:47821']
+    body.secret = 'n'.repeat(48)
+    const previous = (await list())[0].token
+    await beat()
+    const fresh = (await list())[0]
+    expect(fresh.urls).toEqual(body.urls)
+    expect(fresh.token).not.toBe(previous)
+    expect(fresh).not.toHaveProperty('secret')
+  })
   const fp = 'a'.repeat(64)
   const secret = 's'.repeat(48)
 

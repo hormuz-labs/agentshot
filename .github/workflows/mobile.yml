@@ -31,6 +31,8 @@ jobs:
         run: ./scripts/build-mesh.sh android
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+      - run: go test -race ./...
+        working-directory: scripts/mesh
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.2'
@@ -52,6 +54,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: scripts/mesh/go.mod
+          cache-dependency-path: scripts/mesh/go.sum
+      - run: ./scripts/build-mesh.sh ios
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.2'

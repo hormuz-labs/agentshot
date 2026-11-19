@@ -644,7 +644,8 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     })
     // that id is another computer's (or a cloud worker's): only that same machine may report under it
     if (!rec) return fail(409, 'This worker id belongs to another computer.')
-    return json({ id: rec.id, pool: rec.pool, ...(await leaseAfterBeat(wallet, rec, isPool ? body.activity : undefined, leaseIdle, leaseLimits)) })
+    const lease = await leaseAfterBeat(wallet, rec, isPool ? body.activity : undefined, leaseIdle, leaseLimits)
+    return json({ id: rec.id, pool: rec.pool, ...lease })
   }
 
   async function listWorkers() {

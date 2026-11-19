@@ -4,14 +4,30 @@
 import * as git from 'isomorphic-git'
 import fs from 'node:fs'
 import { existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 export type HistoryEntry = { id: string; message: string; at: number }
 
 const AUTHOR = { name: 'AgentShot', email: 'history@agentshot.local' }
+// Instances are short-lived IPC helpers, but the index and HEAD are shared by
+// the whole project. Serialize complete checkpoints, not individual git calls.
+const pending = new Map<string, Promise<unknown>>()
 
 export class History {
   constructor(readonly dir: string) {}
+
+  private enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const key = resolve(this.dir)
+    const next = (pending.get(key) || Promise.resolve()).catch(() => {}).then(work)
+    pending.set(key, next)
+    void next.finally(() => { if (pending.get(key) === next) pending.delete(key) }).catch(() => {})
+    return next
+  }
+
+  /** Keep the project save and its history commit in the same ordered operation. */
+  checkpoint(message: string, save: () => Promise<void>): Promise<string | null> {
+    return this.enqueue(async () => { await save(); return this.recordNow(message) })
+  }
 
   /** The files history keeps: project.json and clips/<id>/clip.html. */
   private tracked(): string[] {
@@ -26,7 +42,11 @@ export class History {
   }
 
   /** Record the current state with a message; nothing is recorded when nothing changed. */
-  async record(message: string): Promise<string | null> {
+  record(message: string): Promise<string | null> {
+    return this.enqueue(() => this.recordNow(message))
+  }
+
+  private async recordNow(message: string): Promise<string | null> {
     await this.ready()
     const files = this.tracked()
     for (const f of files) await git.add({ fs, dir: this.dir, filepath: f })
@@ -43,6 +63,7 @@ export class History {
   }
 
   async log(): Promise<HistoryEntry[]> {
+    await pending.get(resolve(this.dir))?.catch(() => {})
     if (!existsSync(join(this.dir, '.git'))) return []
     const commits = await git.log({ fs, dir: this.dir }).catch(() => [])
     return commits.map(c => ({ id: c.oid, message: c.commit.message.trim(), at: c.commit.author.timestamp * 1000 }))

@@ -40,6 +40,43 @@ describe('project history', () => {
     expect((await h.log())).toHaveLength(1)
   })
 
+  it('serializes checkpoints across instances so an unchanged request cannot overwrite an edit commit', async () => {
+    const dir = project()
+    await new History(dir).record('Imported')
+    writeFileSync(join(dir, 'clips', 'title', 'clip.html'), '<h1>Moved</h1>')
+    await Promise.all([
+      new History(dir).record('Moved title in card'),
+      new History(dir).record('Rejected “Name added”'),
+    ])
+    const log = await new History(dir).log()
+    expect(log.map(e => e.message)).toEqual(['Moved title in card', 'Imported'])
+  })
+
+  it('orders project saves with their commits and makes log wait for an in-flight checkpoint', async () => {
+    const dir = project()
+    await new History(dir).record('Imported')
+    let release!: () => void
+    const gate = new Promise<void>(r => { release = r })
+    const first = new History(dir).checkpoint('First edit', async () => {
+      await gate
+      writeFileSync(join(dir, 'project.json'), '{"v":2}')
+    })
+    const second = new History(dir).checkpoint('Second edit', async () => {
+      writeFileSync(join(dir, 'project.json'), '{"v":3}')
+    })
+    const log = new History(dir).log()
+    release()
+    await Promise.all([first, second])
+    expect((await log).map(e => e.message)).toEqual(['Second edit', 'First edit', 'Imported'])
+  })
+
+  it('a failed project save rejects without blocking later checkpoints', async () => {
+    const dir = project()
+    await expect(new History(dir).checkpoint('Failed', async () => { throw new Error('Disk full') })).rejects.toThrow('Disk full')
+    await new History(dir).record('Imported')
+    expect((await new History(dir).log()).map(e => e.message)).toEqual(['Imported'])
+  })
+
   it('restores an earlier point and says which clips changed', async () => {
     const dir = project(); const h = new History(dir)
     await h.record('Imported')

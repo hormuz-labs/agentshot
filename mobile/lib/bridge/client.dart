@@ -170,6 +170,7 @@ class BridgeClient {
 
   /// A fresh connection for a computer in the person's account when its token was turned down (see Account).
   Future<Connection?> Function(Connection expired)? renew;
+  Future<void> Function()? reconnectMesh;
 
   /// How this phone shows up on the desktop, under Settings → Mobile.
   /// Its model once [identify] has asked the system ("Samsung Galaxy S23", "iPhone 16 Pro").
@@ -251,7 +252,8 @@ class BridgeClient {
     final first = await found.future;
     return first == null
         ? target
-        : Connection(first, target.fingerprint, target.token, target.urls);
+        : Connection(first, target.fingerprint, target.token, target.urls,
+            target.machine, target.name);
   }
 
   Future<Connection> _discover({String? host}) async {
@@ -474,6 +476,7 @@ class BridgeClient {
         .toList();
     if (tries.isEmpty) return null;
     final found = Completer<Uri?>();
+    final clients = <HttpClient>[];
     var pending = tries.length;
     for (final candidate in tries) {
       final http = HttpClient(context: SecurityContext(withTrustedRoots: false))
@@ -481,9 +484,11 @@ class BridgeClient {
         ..findProxy = _proxyFor
         ..badCertificateCallback = (certificate, host, port) =>
             sha256.convert(certificate.der).toString() == target.fingerprint;
+      clients.add(http);
       unawaited(() async {
         try {
           final req = await http.getUrl(candidate.replace(path: '/hello'));
+          req.followRedirects = false;
           req.headers.set(
             HttpHeaders.authorizationHeader,
             'Bearer ${target.token}',
@@ -501,7 +506,15 @@ class BridgeClient {
         }
       }());
     }
-    return found.future;
+    try {
+      // Includes TCP, TLS, headers AND the body, not just req.close().
+      return await found.future.timeout(timeout, onTimeout: () => null);
+    } finally {
+      // Cancel losing probes too: they must not outlive this connection attempt.
+      for (final http in clients) {
+        http.close(force: true);
+      }
+    }
   }
 
   Future<void> connectDirect(Connection target) async {
@@ -606,6 +619,8 @@ class BridgeClient {
             current.fingerprint,
             current.token,
             nextUrls,
+            current.machine,
+            current.name,
           );
           await storage.write(
             key: _storageKey,
@@ -724,7 +739,7 @@ class BridgeClient {
   /// that isn't the one in use. True when it did, and listening restarted there.
   Future<bool> _preferReachable(int generation) async {
     final current = connection;
-    if (current == null || current.urls.length < 2) return false;
+    if (current == null) return false;
     // stay where it is while that answers (several may; switching between them would never settle)
     final here = Connection(current.url, current.fingerprint, current.token);
     if (await firstToAnswer(here, timeout: const Duration(seconds: 3)) !=
@@ -867,7 +882,43 @@ class BridgeClient {
           continue;
         }
         // another of its addresses may answer (home Wi-Fi again, or the private network away)
+        await Mesh.networkChanged();
         if (await _preferReachable(generation)) return;
+        if (_disposed || generation != _generation || connection == null) return;
+        if (connection!.urls.any((u) => Mesh.isMeshHost(u.host))) {
+          try {
+            if (reconnectMesh != null) {
+              await reconnectMesh!();
+            } else {
+              final control = await storage.read(key: _meshStorageKey);
+              if (control != null) {
+                await Mesh.stop();
+                await Mesh.start(control);
+              }
+            }
+          } catch (_) {}
+          if (_disposed || generation != _generation) return;
+          if (await _preferReachable(generation)) return;
+        }
+        // Network changes and desktop restarts need fresh routing too,
+        // not just HTTP 401 recovery. Never replay a mutating HTTP request here.
+        final stale = connection;
+        if (renew != null && stale?.machine != null) {
+          try {
+            final fresh = await renew!(stale!);
+            if (_disposed || generation != _generation) return;
+            if (fresh != null) {
+              final first = await firstToAnswer(fresh);
+              if (_disposed || generation != _generation) return;
+              if (first != null) {
+                await connectDirect(Connection(first, fresh.fingerprint, fresh.token,
+                   fresh.urls, fresh.machine, fresh.name));
+                listen();
+                return;
+              }
+            }
+          } catch (_) {}
+        }
         // off, asleep or out of reach: keep trying
         _events.add({
           'channel': 'connection',

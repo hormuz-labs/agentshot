@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve as resolvePath } from 'node:path'
 import { BIN } from './media'
 import { executableName } from './paths'
+import { startMeshProxy } from './mesh-proxy'
 
 export type MeshNode = {
   ip: string
@@ -54,11 +55,13 @@ export async function startMeshNode(opts: {
   meshPort?: number
   /** Called if the helper exits after it came up (crash, kill, mesh logout). */
   onExit?: () => void
+  resolveProxy?: (url: string) => Promise<string>
 }): Promise<MeshNode | null> {
   const bin = meshBinPath()
   if (!existsSync(bin)) return null
   mkdirSync(opts.stateDir, { recursive: true })
   stopStaleHelpers(opts.stateDir, bin)
+  const proxy = opts.resolveProxy ? await startMeshProxy(opts.resolveProxy, opts.controlUrl) : undefined
   const args = [
     '--state-dir',
     opts.stateDir,
@@ -75,13 +78,19 @@ export async function startMeshNode(opts: {
   let child: ChildProcess | undefined
   const timer = setTimeout(() => {
     child?.kill()
+    proxy?.stop()
     resolve(null)
   }, 30_000)
   try {
-    child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+    child = spawn(bin, args, {
+      stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+      env: proxy ? { ...process.env, HTTP_PROXY: proxy.url, HTTPS_PROXY: proxy.url,
+        http_proxy: proxy.url, https_proxy: proxy.url, NO_PROXY: '', no_proxy: '' } : process.env,
+    })
     helpers.add(child)
   } catch {
     clearTimeout(timer)
+    proxy?.stop()
     return null
   }
   let ready = false
@@ -89,17 +98,21 @@ export async function startMeshNode(opts: {
   child.stdout?.setEncoding('utf8')
   child.stdout?.on('data', (chunk: string) => {
     buf += chunk
+    if (buf.length > 64 * 1024) { child?.kill(); return }
+    for (;;) {
     const nl = buf.indexOf('\n')
     if (nl < 0) return
     const line = buf.slice(0, nl).trim()
+    buf = buf.slice(nl + 1)
     try {
       const parsed = JSON.parse(line) as { ip?: string }
-      if (parsed.ip) {
+      if (parsed.ip && !ready) {
         ready = true
         clearTimeout(timer)
         resolve({
           ip: parsed.ip,
           stop: () => {
+            proxy?.stop()
             try {
               child?.kill()
             } catch {}
@@ -107,8 +120,10 @@ export async function startMeshNode(opts: {
         })
       }
     } catch {}
+    }
   })
   child.on('exit', () => {
+    proxy?.stop()
     helpers.delete(child!)
     clearTimeout(timer)
     if (ready) opts.onExit?.()

@@ -567,6 +567,8 @@ export function startWorkerHeartbeat(opts: {
   onLease?: (lease?: { userId: string; until: number }) => void
   /** A cloud worker tells the account how its lessee is using it, so an unused lease is freed. */
   activity?: () => { user: string; idleMs: number; busy: boolean } | undefined
+  /** Retry private-network startup alongside registration, including on personal desktops. */
+  reconnectMesh?: () => Promise<void> | undefined
 }): (() => void) & { beat: () => Promise<void> } {
   let stopped = false
   // said once when heartbeats start failing, and once when they work again: a worker the account can't see is
@@ -574,6 +576,8 @@ export function startWorkerHeartbeat(opts: {
   let failing = false
   const tick = async () => {
     if (stopped) return
+    // Do not delay LAN registration while the private network is joining.
+    void opts.reconnectMesh?.()?.catch(() => {})
     const creds = opts.bridge.workerCredentials()
     if (creds.fingerprint && creds.urls.length) {
       await opts
@@ -597,6 +601,7 @@ export function startWorkerHeartbeat(opts: {
           opts.poolSecret,
         )
         .then(reply => {
+          if (stopped) return
           if (failing) console.log('worker heartbeat: reaching the account again')
           failing = false
           if (!opts.poolSecret || !reply) return

@@ -2,6 +2,7 @@
 # Build the embedded Headscale/Tailscale (tsnet) mesh node from scripts/mesh (Go).
 #   desktop (default): agentshot-mesh for this machine into resources/bin/<platform>-<arch>/
 #   android:           mobile/android/app/libs/agentshotmesh.aar via gomobile (needs the Android SDK + NDK)
+#   ios:               mobile/ios/Frameworks/Mobile.xcframework (macOS + Xcode)
 # tailscale.com is pinned in scripts/mesh/go.mod at the client version the Headscale server supports.
 set -e
 cd "$(dirname "$0")/.."
@@ -29,5 +30,14 @@ case "${1:-desktop}" in
     rm -f mobile/android/app/libs/agentshotmesh-sources.jar
     echo "built mobile/android/app/libs/agentshotmesh.aar"
     ;;
-  *) echo "usage: $0 [desktop|android]"; exit 1 ;;
+  ios)
+    [ "$(uname -s)" = Darwin ] || { echo "iOS mesh needs macOS and Xcode"; exit 1; }
+    export PATH="$PATH:$(go env GOPATH)/bin"
+    (cd scripts/mesh && go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind)
+    mkdir -p mobile/ios/Frameworks
+    (cd scripts/mesh && gomobile bind -target=ios,iossimulator -iosversion 13.0 -trimpath -ldflags='-s -w' \
+      -o ../../mobile/ios/Frameworks/Mobile.xcframework ./mobile)
+    echo "built mobile/ios/Frameworks/Mobile.xcframework"
+    ;;
+  *) echo "usage: $0 [desktop|android|ios]"; exit 1 ;;
 esac

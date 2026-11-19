@@ -130,11 +130,14 @@ class _ComputersScreenState extends State<ComputersScreen> {
       await widget.account.connect(
         widget.client,
         computer,
-        away: () => setState(() => away = true),
+        away: () {
+          if (mounted) setState(() => away = true);
+        },
       );
-      widget.onConnected();
+      if (mounted) widget.onConnected();
     } catch (e) {
       if (mounted) setState(() => error = '$e');
+      if (mounted && !widget.account.signedIn) await widget.onSignOut();
     } finally {
       if (mounted) {
         setState(() {

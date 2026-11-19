@@ -23,6 +23,7 @@ import (
 	"tailscale.com/envknob"
 	"tailscale.com/logtail"
 	"tailscale.com/net/netmon"
+	"tailscale.com/net/tshttpproxy"
 	"tailscale.com/tsnet"
 )
 
@@ -33,8 +34,9 @@ var (
 	ip      string
 	verbose bool
 
-	ifMu       sync.Mutex // netmon asks for interfaces while Up runs
-	interfaces []netmon.Interface
+	ifMu          sync.Mutex // netmon asks for interfaces while Up runs
+	interfaces    []netmon.Interface
+	interfacesSet bool
 )
 
 // SetVerbose writes the node's logs to mesh.log in its state directory; off by default.
@@ -68,6 +70,7 @@ func SetInterfaces(spec string) {
 	}
 	ifMu.Lock()
 	interfaces = list
+	interfacesSet = true
 	ifMu.Unlock()
 }
 
@@ -75,9 +78,22 @@ func init() {
 	// a private Headscale mesh: never upload node logs to Tailscale's log service
 	envknob.SetNoLogsNoSupport()
 	logtail.Disable()
+	log.SetOutput(io.Discard)
 	netmon.RegisterInterfaceGetter(func() ([]netmon.Interface, error) {
 		ifMu.Lock()
 		defer ifMu.Unlock()
+		if !interfacesSet {
+			// iOS permits getifaddrs; Android explicitly provides Java's list.
+			list, err := net.Interfaces()
+			if err != nil {
+				return nil, err
+			}
+			out := make([]netmon.Interface, 0, len(list))
+			for i := range list {
+				out = append(out, netmon.Interface{Interface: &list[i]})
+			}
+			return out, nil
+		}
 		return append([]netmon.Interface(nil), interfaces...), nil
 	})
 }
@@ -135,7 +151,7 @@ func Start(stateDir, hostname, controlURL, authKey string) (string, error) {
 		return "", err
 	}
 	srv, proxy = s, ln
-	go serveProxy(s, ln)
+	go serveProxy(s.Dial, ln)
 	return ready()
 }
 
@@ -158,15 +174,39 @@ func ready() (string, error) {
 }
 
 // serveProxy accepts HTTP CONNECT for mesh addresses only and tunnels the bytes through tsnet.
-func serveProxy(s *tsnet.Server, ln net.Listener) {
+func serveProxy(dial func(context.Context, string, string) (net.Conn, error), ln net.Listener) {
+	slots := make(chan struct{}, 64)
 	for {
 		c, err := ln.Accept()
 		if err != nil {
 			return
 		}
+		select {
+		case slots <- struct{}{}:
+		default:
+			c.Close()
+			continue
+		}
 		go func() {
+			defer func() { <-slots }()
 			defer c.Close()
-			req, err := http.ReadRequest(bufio.NewReader(c))
+			c.SetReadDeadline(time.Now().Add(10 * time.Second))
+			reader := bufio.NewReaderSize(c, 8192)
+			var headers strings.Builder
+			for headers.Len() <= 8192 {
+				line, err := reader.ReadSlice('\n')
+				if err != nil {
+					return
+				}
+				headers.Write(line)
+				if string(line) == "\r\n" {
+					break
+				}
+			}
+			if headers.Len() > 8192 {
+				return
+			}
+			req, err := http.ReadRequest(bufio.NewReader(strings.NewReader(headers.String())))
 			if err != nil || req.Method != http.MethodConnect {
 				io.WriteString(c, "HTTP/1.1 405 Method Not Allowed\r\n\r\n")
 				return
@@ -176,20 +216,40 @@ func serveProxy(s *tsnet.Server, ln net.Listener) {
 				return
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			up, err := s.Dial(ctx, "tcp", req.Host)
+			up, err := dial(ctx, "tcp", req.Host)
 			cancel()
 			if err != nil {
 				io.WriteString(c, "HTTP/1.1 502 Bad Gateway\r\n\r\n")
 				return
 			}
 			defer up.Close()
+			c.SetReadDeadline(time.Time{})
 			io.WriteString(c, "HTTP/1.1 200 Connection Established\r\n\r\n")
 			done := make(chan struct{}, 2)
-			go func() { io.Copy(up, c); done <- struct{}{} }()
+			// Preserve TLS bytes already buffered after the CONNECT headers.
+			go func() { io.Copy(up, reader); done <- struct{}{} }()
 			go func() { io.Copy(c, up); done <- struct{}{} }()
 			<-done
 		}()
 	}
+}
+
+// NetworkChanged is called after OS connectivity changes, with refreshed
+// Android interfaces. Rebind forces tsnet to rediscover endpoints and DERP.
+func NetworkChanged() error {
+	mu.Lock()
+	defer mu.Unlock()
+	tshttpproxy.InvalidateCache()
+	if srv == nil {
+		return nil
+	}
+	lc, err := srv.LocalClient()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return lc.DebugAction(ctx, "rebind")
 }
 
 var meshV4 = netip.MustParsePrefix("100.64.0.0/10")
