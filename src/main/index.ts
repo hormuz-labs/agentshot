@@ -454,8 +454,13 @@ const projectOf = (dir: string) => {
 const publish = async (p: Project) => { await Projects.save(p); send('project', p) }
 /** Save, show, and make this a point in the project's history. */
 const checkpoint = async (p: Project, message: string) => {
-  await publish(p)
-  await new History(p.dir).record(message).catch(e => console.warn('history', e))
+  let saved = false
+  await new History(p.dir).checkpoint(message, async () => { await Projects.save(p); saved = true }).catch(e => {
+    if (!saved) throw e
+    console.warn('history', e)
+  })
+  // Do not expose a completed edit before its undo/history point exists.
+  send('project', p)
 }
 
 // ---------------------------------------------------------------- consent cards: the caller waits until the user answers
