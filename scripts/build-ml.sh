@@ -7,7 +7,6 @@
 # Every download is SHA-256 checked. The models they run come from scripts/fetch-models.mjs. Needs curl + a C/C++ compiler.
 set -e
 SHERPA=1.13.8
-ORT=1.28.2 # the onnxruntime inside that sherpa-onnx release
 VERSION=2-$SHERPA # 2: --embed
 cd "$(dirname "$0")/.."
 case "$(uname -s)-$(uname -m)" in
@@ -36,10 +35,7 @@ LIBS=sherpa-onnx-v$SHERPA-$PKG-static-lib
 get "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$SHERPA/$LIBS.tar.bz2" "$WORK/$LIBS.tar.bz2" $SHA
 [ -d "$WORK/$LIBS/lib" ] || tar -xjf "$WORK/$LIBS.tar.bz2" -C "$WORK"
 get "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v$SHERPA/sherpa-onnx/c-api/c-api.h" "$WORK/inc/sherpa-onnx/c-api/c-api.h" 2a1b95084be8fd1deb3228fcad2fd3f7f0258b64582f7402281ec174c7b7f4ce
-H=https://raw.githubusercontent.com/microsoft/onnxruntime/v$ORT/include/onnxruntime/core/session
-get $H/onnxruntime_c_api.h "$WORK/inc/onnxruntime_c_api.h" b69a133143c0da61782b2b02cc8a620d21ac139231fd211719776d10385135c1
-get $H/onnxruntime_error_code.h "$WORK/inc/onnxruntime_error_code.h" 5ce3b054e798eced8d14f5b86e98692fd33470463f96194ce0700a2d53dd8721
-get $H/onnxruntime_ep_c_api.h "$WORK/inc/onnxruntime_ep_c_api.h" db86df0f846b8d3bdbf429a5c76c5805293196575ca3c475878612591cd18e51
+node scripts/fetch-ort-headers.mjs "$WORK/inc"
 
 L="$WORK/$LIBS/lib"
 SHERPA_LIBS="-lsherpa-onnx-c-api -lsherpa-onnx-core -lkaldi-native-fbank-core -lkissfft-float -lsherpa-onnx-kaldifst-core -lsherpa-onnx-fstfar -lsherpa-onnx-fst -lkaldi-decoder-core -lssentencepiece_core -lpiper_phonemize -lespeak-ng -lucd -lonnxruntime"
