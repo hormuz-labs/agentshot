@@ -26,6 +26,8 @@ import { renderClip, setClipProtocol } from './clips'
 import { buildMenu } from './menu'
 import { startUpdates } from './updates'
 import { CLOUD_WORKER_SECRET, KEYS, keyStatus, loadKeys, setKey } from './keys'
+import { chatGPT, chatGPTStatus } from './chatgpt'
+import { ClaudeCodeConnection } from './claude-code'
 import * as UserSpace from './user-space'
 import { isProviderKeyEnv } from '../shared/providers'
 import { accountStatus, accountWorkers, adoptKey, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, workerHeartbeat } from './account'
@@ -112,6 +114,7 @@ let stopHeartbeat: ReturnType<typeof startWorkerHeartbeat> | null = null
 let meshNode: MeshNode | null = null
 let meshIp: string | undefined
 let agent: AgentHandle | null = null
+let claudeCode: ClaudeCodeConnection | undefined
 let memory: Memory
 let skills: Skills
 let updates: ReturnType<typeof startUpdates> | null = null
@@ -423,6 +426,7 @@ const browserMode = (): BrowserMode => getConfig().browser?.mode ?? 'manul'
 
 function shutdown() {
   quitting = true
+  claudeCode?.cancel()
   for (const c of consents.values()) c.answer(false)
   consents.clear()
   return shutdownTask ??= new Promise<void>(done => {
@@ -1127,6 +1131,35 @@ function wire() {
   })
   ipcMain.handle('keys:list', () => keyStatus())
   ipcMain.handle('keys:set', (_e, name: string, value: string) => { setKey(name, value); agent?.keysChanged(); return keyStatus() })
+  // Subscription administration is desktop-only; never delegate it to a cloud worker or phone.
+  const chatGPTChanged = () => { agent?.keysChanged(); send('agent:ready'); return chatGPTStatus() }
+  const localChatGPT = (e: Electron.IpcMainInvokeEvent) => {
+    if (!win || e.sender !== win.webContents) throw new Error('Manage ChatGPT connections on the local desktop.')
+    return chatGPT()
+  }
+  claudeCode = new ClaudeCodeConnection(join(app.getPath('userData'), 'claude-code.json'))
+  const localClaudeCode = (e: Electron.IpcMainInvokeEvent) => {
+    if (!win || e.sender !== win.webContents) throw new Error('Manage Claude Code on the local desktop.')
+    return claudeCode!
+  }
+  const claudeChanged = async (status: ReturnType<ClaudeCodeConnection['status']>) => { const s = await status; send('agent:ready'); return s }
+  ipcMain.handle('claude-code:status', e => localClaudeCode(e).status())
+  ipcMain.handle('claude-code:signIn', async e => { const c = localClaudeCode(e); await agent?.stopClaudeCode(); return claudeChanged(c.signIn()) })
+  ipcMain.handle('claude-code:connect', e => claudeChanged(localClaudeCode(e).connect()))
+  ipcMain.handle('claude-code:disconnect', async e => { const c = localClaudeCode(e); await agent?.stopClaudeCode(); return claudeChanged(c.disconnect()) })
+  ipcMain.handle('claude-code:cancel', e => localClaudeCode(e).cancel())
+  ipcMain.handle('claude-code:usage', e => { localClaudeCode(e); return shell.openExternal('https://claude.ai/settings/usage') })
+  ipcMain.handle('claude-code:help', e => { localClaudeCode(e); return shell.openExternal('https://code.claude.com/docs/en/authentication') })
+  ipcMain.handle('chatgpt:status', e => { if (!win || e.sender !== win.webContents) return { available: false, accounts: [] }; return chatGPTStatus() })
+  ipcMain.handle('chatgpt:signIn', async (e, id?: string) => {
+    const s = await localChatGPT(e).signIn(url => shell.openExternal(url), id)
+    chatGPTChanged(); app.focus({ steal: true }); return s
+  })
+  ipcMain.handle('chatgpt:cancel', e => localChatGPT(e).cancel())
+  ipcMain.handle('chatgpt:welcome', e => localChatGPT(e).welcome())
+  ipcMain.handle('chatgpt:select', (e, id: string) => { localChatGPT(e).select(id); return chatGPTChanged() })
+  ipcMain.handle('chatgpt:signOut', async (e, id?: string) => { const s = await localChatGPT(e).signOut(id); chatGPTChanged(); return s })
+  ipcMain.handle('chatgpt:usage', e => { localChatGPT(e); return shell.openExternal('https://chatgpt.com/settings/usage') })
   // signing in to AgentShot: the browser, then back here with the person's AgentShot key (account.ts)
   ipcMain.handle('account:status', () => accountStatus())
   ipcMain.handle('account:signIn', async () => {
@@ -1579,6 +1612,7 @@ const startup = app.whenReady().then(async () => {
   mkdirSync(yieldDir(), { recursive: true })
   try {
     agent = await startAgent({
+      claudeCode,
       // which browser the agent's bsk reaches: AgentShot's own (private daemon) unless the user chose their Chrome
       shellEnv: () => {
         const userBsk = findUserBsk({ home: homedir(), bundled: BSK_BIN })

@@ -6,6 +6,8 @@ const PREFER: { provider: string; pick: RegExp[] }[] = [
   { provider: 'anthropic', pick: [/^claude-opus-5/, /^claude-sonnet-5/, /^claude-opus/] },
   { provider: 'google', pick: [/^gemini-3\.8-flash$/, /^gemini-3.*flash$/, /^gemini/] },
   { provider: 'openai', pick: [/^gpt-5\.5$/, /^gpt-5/] },
+  { provider: 'chatgpt', pick: [/^gpt-6/, /^gpt-5/, /./] },
+  { provider: 'claude-code', pick: [/^opus$/, /opus/, /./] },
   { provider: 'manul', pick: [/^manul$/] }, // the AgentShot key (the gateway picks the model), after the user's own keys
 ]
 
@@ -22,7 +24,7 @@ export function chooseModel(all: Available[], pick?: ModelRef | null): ModelRef 
   return available[0] ? { provider: available[0].provider, modelId: available[0].id } : undefined
 }
 
-const LABEL: Record<string, string> = { anthropic: 'Anthropic', google: 'Google', openai: 'OpenAI', manul: 'AgentShot' }
+const LABEL: Record<string, string> = { anthropic: 'Anthropic', google: 'Google', openai: 'OpenAI', chatgpt: 'ChatGPT plan', 'claude-code': 'Claude Code · own billing', manul: 'AgentShot' }
 
 // Not chat models an editing agent can use: research agents, computer use, speech, embeddings, image-only, live audio.
 const NOT_AGENT = /deep-research|computer-use|tts|embedding|-image\b|image-generation|\blive\b|audio|transcribe|realtime/i
@@ -30,6 +32,7 @@ const NOT_AGENT = /deep-research|computer-use|tts|embedding|-image\b|image-gener
 /** labels: provider id → display name, for custom providers (Settings → Keys → Other providers). */
 export const describeModels = (available: Available[], labels: Record<string, string> = {}) => available.filter(m => !NOT_AGENT.test(m.id)).map(m => ({
   provider: m.provider, providerLabel: LABEL[m.provider] || labels[m.provider] || m.provider, modelId: m.id, name: m.name || m.id,
-  context: m.contextWindow, price: m.cost && (m.cost.input || m.cost.output) ? { input: m.cost.input, output: m.cost.output } : undefined,
+  // ChatGPT's account catalog supplies names/slugs, not guaranteed context limits.
+  context: m.provider === 'chatgpt' ? undefined : m.contextWindow, price: m.cost && (m.cost.input || m.cost.output) ? { input: m.cost.input, output: m.cost.output } : undefined,
   images: (m.input || []).includes('image'), reasoning: !!m.reasoning,
 }))

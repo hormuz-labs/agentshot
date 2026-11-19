@@ -40,6 +40,7 @@
     "test:mascot": "electron-vite build && node test/e2e/mascot.e2e.mjs",
     "test:mascot-performance": "electron-vite build && node test/e2e/mascot-performance.e2e.mjs",
     "test:tour": "electron-vite build && node test/e2e/tour.e2e.mjs",
+    "test:chatgpt": "electron-vite build && node scripts/run-headless.mjs node test/e2e/chatgpt.e2e.mjs",
     "test:demo": "electron-vite build && node test/e2e/demo.e2e.mjs",
     "test:walkthrough": "electron-vite build && node test/e2e/walkthrough.e2e.mjs && node test/e2e/walkthrough.e2e.mjs --chrome",
     "test:motion": "electron-vite build && node test/e2e/motion.e2e.mjs",
@@ -98,6 +99,7 @@
   },
   "dependencies": {
     "@ag-ui/core": "^1.0.2",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.328",
     "@earendil-works/chord": "^1.0.4",
     "@earendil-works/pi-ai": "^1.0.4",
     "@earendil-works/pi-durable": "^1.0.4",

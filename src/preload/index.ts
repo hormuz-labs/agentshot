@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BaseEvent } from '@ag-ui/core'
 import type { AccountStatus, Anchor, Balance, BrowserMode, BrowserState, ChromeBsk, ConsentRequest, Job, KeyInfo, OnDemandTool, Project, RecentProject, ToolStatus, Transcript, WhisperConfig, WhisperStatus } from '../shared/types'
 import type { CustomProvider, CustomProviderInfo } from '../shared/providers'
+import type { ChatGPTStatus } from '../shared/chatgpt'
+import type { ClaudeCodeStatus } from '../shared/claude-code'
 import type { Cue } from '../shared/subtitles'
 import type { Edit } from '../shared/timeline'
 import type { PreviewState } from '../shared/proxy'
@@ -162,6 +164,24 @@ const api = {
   keys: {
     list: () => ipcRenderer.invoke('keys:list') as Promise<KeyInfo[]>,
     set: (name: string, value: string) => ipcRenderer.invoke('keys:set', name, value) as Promise<KeyInfo[]>,
+  },
+  chatgpt: {
+    status: () => ipcRenderer.invoke('chatgpt:status') as Promise<ChatGPTStatus>,
+    signIn: (id?: string) => ipcRenderer.invoke('chatgpt:signIn', id) as Promise<ChatGPTStatus & { firstSignIn: boolean }>,
+    cancel: () => ipcRenderer.invoke('chatgpt:cancel') as Promise<void>,
+    welcome: () => ipcRenderer.invoke('chatgpt:welcome') as Promise<void>,
+    select: (id: string) => ipcRenderer.invoke('chatgpt:select', id) as Promise<ChatGPTStatus>,
+    signOut: (id?: string) => ipcRenderer.invoke('chatgpt:signOut', id) as Promise<ChatGPTStatus>,
+    usage: () => ipcRenderer.invoke('chatgpt:usage') as Promise<void>,
+  },
+  claudeCode: {
+    status: () => ipcRenderer.invoke('claude-code:status') as Promise<ClaudeCodeStatus>,
+    signIn: () => ipcRenderer.invoke('claude-code:signIn') as Promise<ClaudeCodeStatus>,
+    connect: () => ipcRenderer.invoke('claude-code:connect') as Promise<ClaudeCodeStatus>,
+    disconnect: () => ipcRenderer.invoke('claude-code:disconnect') as Promise<ClaudeCodeStatus>,
+    cancel: () => ipcRenderer.invoke('claude-code:cancel') as Promise<void>,
+    usage: () => ipcRenderer.invoke('claude-code:usage') as Promise<void>,
+    help: () => ipcRenderer.invoke('claude-code:help') as Promise<void>,
   },
   /** Signing in to AgentShot: brings the person's AgentShot key (stays in the main process); only who is signed in comes back. */
   account: {

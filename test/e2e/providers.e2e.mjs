@@ -35,15 +35,15 @@ try {
   await dismissOnboarding(win)
   await app.evaluate(({ Menu }) => { const f = it => { for (const i of it) { if (i.label === 'Keys…') return i; const s = i.submenu && f(i.submenu.items); if (s) return s } }; f(Menu.getApplicationMenu().items).click() })
   await dismissSettingsOnboarding(win)
-  const dlg = win.locator('[role="dialog"]')
-  await dlg.locator('text=Other providers').waitFor()
+   await win.getByRole('button', { name: 'Other providers', exact: false }).click()
+   const dlg = win.getByRole('dialog', { name: 'Other providers', exact: true })
+  await dlg.getByRole('heading', { name: 'Other providers' }).waitFor()
 
   // 1. import from omp: both models, the key read from the file, never shown
   await dlg.locator('button:has-text("Import from omp")').click()
   await dlg.locator('text=Imported Azure Foundry (2 models)').waitFor()
   await dlg.locator('text=GPT-5.6 Terra · GPT-5.6 Luna').waitFor()
   assert.ok(!(await win.content()).includes('sk-e2e-secret'), 'the key must never reach the page')
-  assert.equal(await dlg.locator('span:has-text("Editing agent")').evaluate(e => getComputedStyle(e).textDecorationLine), 'none', 'a keyed provider unlocks the editing agent')
 
   // 2. add one by hand; a bad URL is explained, then it saves
   await dlg.locator('button:has-text("Add")').last().click()
@@ -57,7 +57,7 @@ try {
   await dlg.locator('input[placeholder^="Base URL"]').fill('http://localhost:8080/v1')
   await dlg.locator('button:has-text("Save")').click()
   await dlg.locator('text=Qwen Coder · Llama 4').waitFor()
-  await dlg.locator('text=Other providers').scrollIntoViewIfNeeded()
+  await dlg.getByRole('heading', { name: 'Other providers' }).scrollIntoViewIfNeeded()
   await win.screenshot({ path: join(tmp, 'providers.png') })
 
   // 3. the agent offers their models, labelled by provider

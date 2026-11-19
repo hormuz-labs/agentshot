@@ -44,7 +44,7 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger type="button" disabled={disabled} aria-label={dir ? 'Choose project model' : 'Choose model for new project'} className="inline-flex h-6 max-w-[150px] items-center gap-1 rounded-md px-1.5 text-[11px] text-dim hover:bg-hover hover:text-fg disabled:opacity-50" title={dir ? 'Model for this project' : 'Model for your new project'}>
-        <span className="truncate">{cur?.name || current?.modelId || 'Choose model'}</span><ChevronDown className="size-3 shrink-0" />
+        <span className="truncate">{current?.provider === 'chatgpt' ? `Using ChatGPT plan · ${cur?.name || current.modelId}` : cur?.name || current?.modelId || 'Choose model'}</span><ChevronDown className="size-3 shrink-0" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="end" sideOffset={6} className="z-50 w-80 rounded-card border border-line bg-panel shadow-2xl shadow-shade">
@@ -53,6 +53,8 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
             <input autoFocus aria-label="Find a model" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a model" className="h-6 flex-1 bg-transparent text-xs outline-none placeholder:text-faint" />
           </div>
           <div className="max-h-80 overflow-y-auto p-1">
+            {current?.provider === 'chatgpt' && <div className="px-2 py-2 text-xs text-dim">Using ChatGPT plan <button type="button" className="ml-2 underline" onClick={() => window.agentshot.chatgpt.usage()}>Manage usage</button></div>}
+            {current?.provider === 'claude-code' && <div className="px-2 py-2 text-xs text-dim">Using Claude Code · own billing <button type="button" className="ml-2 underline" onClick={() => window.agentshot.claudeCode.usage()}>Manage usage</button></div>}
             <button type="button" disabled={disabled} onClick={() => choose(null)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-dim hover:bg-hover hover:text-fg">
               <span className="flex-1">Best available (automatic)</span>{!picked && <Check className="size-3.5 text-amber" />}
             </button>
@@ -70,7 +72,7 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
                 </button>
               )
             })}
-            {error ? <p role="alert" className="px-2 py-2 text-xs text-bad">{error}</p> : !info ? <p role="status" className="px-2 py-2 text-xs text-faint">Loading models…</p> : !info.models.length ? <p className="px-2 py-2 text-xs text-faint">Add an API key in Settings → Keys to choose a model.</p> : !list.length ? <p className="px-2 py-2 text-xs text-faint">No models match your search.</p> : null}
+            {error ? <p role="alert" className="px-2 py-2 text-xs text-bad">{error}</p> : !info ? <p role="status" className="px-2 py-2 text-xs text-faint">Loading models…</p> : !info.models.length ? <p className="px-2 py-2 text-xs text-faint">Connect ChatGPT or add an API key in Settings → Keys to choose a model.</p> : !list.length ? <p className="px-2 py-2 text-xs text-faint">No models match your search.</p> : null}
           </div>
         </Popover.Content>
       </Popover.Portal>
