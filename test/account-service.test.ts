@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { handle, NEW_KEY, sync, syncAll, type Env } from '../account/src/index'
 import { costForCredits, creditsForCost, STARTER_CREDITS } from '../account/src/plans'
 import { memoryWallet } from '../account/src/wallet'
-import { verifyRelayTicket } from '../src/shared/relay-ticket'
 
 // The account service against fake Clerk (userinfo, users, metadata), fake Bifrost (customers, virtual keys), fake
 // Dodo Payments (checkouts, customers, portal) and the wallet in memory (Pitch's ledger, in production).
@@ -12,7 +11,6 @@ const env: Env = {
   CLERK_ISSUER: 'https://clerk.test', CLERK_SECRET_KEY: 'sk_clerk', BIFROST_URL: 'https://gw.test', BIFROST_AUTH: 'Basic YWRtaW46cHc=',
   DODO_API: 'https://dodo.test', DODO_API_KEY: 'dodo_key', DODO_PRODUCT_PRO_TEST: 'pdt_pro', DODO_PRODUCT_MAX_TEST: 'pdt_max', DODO_PRODUCT_FLEX_TEST: 'pdt_flex',
   HEADSCALE_URL: 'https://hs.test', HEADSCALE_PUBLIC_URL: 'https://mesh.agentshot.si', HEADSCALE_API_KEY: 'hs_secret', WORKER_POOL_SECRET: 'pool_secret_123',
-  RELAY_URL: 'wss://relay.test', RELAY_SECRET: 's'.repeat(48),
 }
 let metadata: any
 let keys: Record<string, any>
@@ -295,8 +293,6 @@ describe('the account service: headscale mesh and worker pool', () => {
       body: JSON.stringify({ id: 'home-mac', name: 'Home Mac Studio', urls: ['https://100.64.0.2:47821'], fingerprint: fp, secret, capabilities: { gpu: 'videotoolbox' } }),
     })
     expect(hbOwn.status).toBe(200)
-    const ownRoute = (await hbOwn.json()).relay
-    expect(verifyRelayTicket(env.RELAY_SECRET!, ownRoute.ticket)).toMatchObject({ role: 'worker', owner: 'manul_user_1', worker: 'home-mac' })
 
     // Two shared pool workers (one cloud, one home pool with cached project)
     await call('/v1/workers/heartbeat', {
@@ -315,13 +311,11 @@ describe('the account service: headscale mesh and worker pool', () => {
     expect(listed.workers).toHaveLength(1)
     expect(listed.workers[0]).toMatchObject({ id: 'home-mac', name: 'Home Mac Studio', pool: false, urls: ['https://100.64.0.2:47821'] })
     expect(listed.workers[0].token).toMatch(/^lease\.\d+\./)
-    expect(verifyRelayTicket(env.RELAY_SECRET!, listed.workers[0].relay.ticket)).toMatchObject({ role: 'client', owner: 'manul_user_1' })
 
     // Leasing picks the higher-priority / sticky-cache home-pool-1 worker first
     const leased = await (await call('/v1/workers/lease', { method: 'POST', headers: asKey(), body: JSON.stringify({ projectId: 'proj_abc' }) })).json()
     expect(leased.worker).toMatchObject({ id: 'home-pool-1', pool: true, urls: ['https://100.64.0.11:47821'] })
     expect(leased.worker.token).toMatch(/^lease\.\d+\./)
-    expect(verifyRelayTicket(env.RELAY_SECRET!, leased.worker.relay.ticket)).toMatchObject({ role: 'client', owner: 'manul_user_1', worker: 'home-pool-1' })
 
     // the worker learns who holds it from its next heartbeat (and enforces it)
     const poolBeat = (id: string) => call('/v1/workers/heartbeat', {
@@ -333,14 +327,12 @@ describe('the account service: headscale mesh and worker pool', () => {
     expect(held.pool).toBe(true)
     expect(held.leasedTo).toBeTruthy()
     expect(held.leasedUntil).toBeGreaterThan(Date.now())
-    expect(verifyRelayTicket(env.RELAY_SECRET!, held.relay.ticket)?.owner).toBe(held.leasedTo)
 
     // Releasing frees it back to the pool, and the worker hears so
     const rel = await (await call('/v1/workers/release', { method: 'POST', headers: asKey(), body: JSON.stringify({ workerId: 'home-pool-1' }) })).json()
     expect(rel).toEqual({ released: true })
     const freed = await poolBeat('home-pool-1')
     expect(!freed.leasedTo || freed.leasedUntil <= Date.now()).toBe(true)
-    expect(verifyRelayTicket(env.RELAY_SECRET!, freed.relay.ticket)?.owner).toBe('pool-idle')
   })
 
   it('sends a phone signing in back into the app with the code, and nothing else', async () => {

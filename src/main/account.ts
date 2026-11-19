@@ -169,7 +169,7 @@ export async function meshJoin(role: 'client' | 'worker', poolSecret?: string, o
 }
 
 /** What the account says back to a worker's heartbeat: whether it's a cloud worker and who leases it, until when. */
-export type HeartbeatReply = { pool?: boolean; leasedTo?: string | null; leasedUntil?: number | null; relay?: import('./relay').RelayCredentials }
+export type HeartbeatReply = { pool?: boolean; leasedTo?: string | null; leasedUntil?: number | null }
 
 export async function workerHeartbeat(body: Record<string, unknown>, poolSecret?: string): Promise<HeartbeatReply> {
   if (poolSecret) {

@@ -562,8 +562,7 @@ export function startWorkerHeartbeat(opts: {
   poolSecret?: string
   priority?: number
   projects: () => string[]
-  sendHeartbeat: (body: Record<string, unknown>, poolSecret?: string) => Promise<{ leasedTo?: string | null; leasedUntil?: number | null; relay?: import('./relay').RelayCredentials } | void>
-  onRelay?: (credentials: import('./relay').RelayCredentials) => void
+  sendHeartbeat: (body: Record<string, unknown>, poolSecret?: string) => Promise<{ leasedTo?: string | null; leasedUntil?: number | null } | void>
   /** A cloud worker hears who leases it with every heartbeat. */
   onLease?: (lease?: { userId: string; until: number }) => void
   /** A cloud worker tells the account how its lessee is using it, so an unused lease is freed. */
@@ -605,7 +604,6 @@ export function startWorkerHeartbeat(opts: {
           if (stopped) return
           if (failing) console.log('worker heartbeat: reaching the account again')
           failing = false
-          if (reply?.relay) opts.onRelay?.(reply.relay)
           if (!opts.poolSecret || !reply) return
           opts.onLease?.(reply.leasedTo && reply.leasedUntil ? { userId: reply.leasedTo, until: reply.leasedUntil } : undefined)
         })

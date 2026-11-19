@@ -3,6 +3,8 @@ package si.agentshot.app
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.os.Build
+import android.net.ConnectivityManager
+import android.net.Network
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,11 +16,30 @@ import si.agentshot.mesh.mobile.Mobile
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
     private val worker = Executors.newSingleThreadExecutor()
+    private var connectivity: ConnectivityManager? = null
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) = refreshNetwork()
+        override fun onLost(network: Network) = refreshNetwork()
+        override fun onLinkPropertiesChanged(network: Network, properties: android.net.LinkProperties) = refreshNetwork()
+    }
+
+    private fun refreshNetwork() {
+        worker.execute {
+            try {
+                Mobile.setInterfaces(interfaces())
+                Mobile.networkChanged()
+            } catch (_: Exception) { /* Reconnect path reports unavailable peers. */ }
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "agentshot/native")
         channel = ch
+        if (connectivity == null) {
+            connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivity?.registerDefaultNetworkCallback(networkCallback)
+        }
         ch.setMethodCallHandler { call, result ->
             when (call.method) {
                 "initialLink" -> result.success(intent?.takeIf { it.action == Intent.ACTION_VIEW }?.dataString)
@@ -42,9 +63,24 @@ class MainActivity : FlutterActivity() {
                     Mobile.stop()
                     runOnUiThread { result.success(null) }
                 }
+                "meshNetworkChanged" -> worker.execute {
+                    try {
+                        Mobile.setInterfaces(interfaces())
+                        Mobile.networkChanged()
+                        runOnUiThread { result.success(null) }
+                    } catch (e: Exception) {
+                        runOnUiThread { result.error("mesh", "Could not refresh the mesh network", null) }
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
+    }
+
+    override fun onDestroy() {
+        connectivity?.unregisterNetworkCallback(networkCallback)
+        connectivity = null
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

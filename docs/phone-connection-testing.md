@@ -2,28 +2,29 @@
 
 Google discovery is account-based, not UDP pairing discovery. The desktop sends a heartbeat every 30 seconds; the account lists only registrations heard from within two minutes. The phone probes the certificate-pinned `/hello` endpoint with an account-issued token.
 
-## Outbound relay (Android and iPhone)
+## One remote transport: Headscale / tsnet (Android and iPhone)
 
-Both the desktop and phone connect outbound to `wss://relay.agentshot.si` on port 443. A loopback CONNECT proxy on the phone carries the existing certificate-pinned TLS session through opaque binary WebSocket frames to the desktop bridge. The public relay cannot read HTTP, footage, tokens inside TLS, or events. No inbound port forwarding or phone access to the desktop VPN is required. Google/account authentication issues short-lived, role- and owner-bound routing tickets; the bridge separately verifies its own application token.
+LAN remains available; remote connections use the embedded userspace Tailscale mesh coordinated by Headscale. Tailscale prefers direct peer connections and uses its standard DERP fallback when NAT/firewalls prevent direct traffic. The separate application WSS router has been removed. Existing certificate-pinned TLS stays end to end inside the mesh, including relayed video traffic. Headscale itself does not transfer videos.
 
-Worker tickets renew in place without restarting active downloads or SSE. A pool lessee change closes previous tunnels, and new routes are tied to the current lessee. Replaced desktop instances do not compete for the same identity. Direct LAN discovery stays available; Android retains its legacy mesh fallback. Intentionally blocked outbound WebSockets, captive portals and unavailable internet still cannot be bypassed.
+Desktop helpers retry startup and stop stale instances. The phone restarts a failed saved mesh and refreshes account routes after connection failure. Android now refreshes Java-provided interfaces on connectivity changes; Android and iOS notify tsnet to rebind after network changes. The iOS bridge uses the same Go userspace node, not a separate OS VPN; persistent device state stays in Application Support. This does not grant indefinite iOS background execution.
 
-Coverage: `test/relay.test.ts` covers authorization, binary forwarding, replacement, renewal, revocation, duplicate streams and oversized frames. `mobile/test/relay_connection_test.dart` uses a real Node HTTPS desktop behind an unresolvable hostname to verify Dart CONNECT, TLS pinning, bridge authorization, route serialization and proxy restart.
+`scripts/mesh/mobile/mobile_test.go` verifies mesh-only CONNECT targets and preservation of TLS bytes buffered after headers. `scripts/mesh/derp_test.go` runs two real upstream DERP clients through authenticated HTTP CONNECT, with proxy-side DNS and certificate verification. This tests DERP transport, **not** a full Headscale/direct-to-DERP network transition.
 
 ## Desktop internet proxies
 
-Desktop internet fetches use Electron's Chromium stack (system proxy/PAC discovery); Node HTTP and relay WebSockets use a proxy-aware agent with dynamic system resolution. `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` (and lowercase equivalents) override system discovery; `NO_PROXY` is honored. Basic proxy credentials embedded in proxy URLs are supported and are not logged. Localhost, LAN and mesh connections remain direct. No TLS verification is disabled: institutional TLS inspection requires a properly trusted institutional CA. Native mesh helpers and unrelated external CLI tools have their own proxy capabilities; the WSS relay does not depend on the mesh helper succeeding.
+Desktop internet fetches use Electron's Chromium stack (system proxy/PAC discovery); Node HTTP uses a proxy-aware agent. The Go mesh helper receives a private, authenticated loopback CONNECT adapter that resolves the actual system/PAC proxy separately for each control/DERP destination. This adapter only carries mesh infrastructure traffic and is **not** a public application relay. Direct peer UDP remains managed by tsnet. `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` (and lowercase equivalents) override system discovery; `NO_PROXY` is honored. Basic proxy credentials embedded in environment proxy URLs are supported and are not logged by the helper. Localhost, LAN and mesh application requests remain direct. No TLS verification is disabled: institutional TLS inspection requires a properly trusted institutional CA. Unrelated external CLI tools have their own proxy capabilities.
 
 `test/network.test.ts` covers policy, local bypass, credentials and real authenticated HTTPS CONNECT with proxy-side DNS. `test/e2e/network.e2e.ts` tests actual Electron streaming fetch through a proxy for URL and Request inputs. Physical tests are still needed for institution-specific PAC failover, NTLM/Kerberos or interactive proxy authentication, and TLS-inspecting networks; these are not certified by the local Basic-auth test.
 
-## Relay deployment (not yet deployed)
+`test/mesh-proxy.test.ts` verifies the native adapter's authentication, destination restrictions and large opaque transfers through an authenticated upstream proxy.
 
-1. Generate at least 32 random characters for `RELAY_SECRET` and place it in `manul-secrets` (or `gateway/.env`, then `gateway/k8s/set-secrets.sh`). Never commit the secret.
-2. Point DNS `relay.agentshot.si` to the existing global gateway ingress IP. The GKE managed certificate must become active before WSS is usable.
-3. Run the existing deployment workflow `gateway/k8s/deploy.sh`. It now bundles and applies `gateway/k8s/relay.yaml` and supplies account and relay with the same secret.
-4. Check HTTPS `/healthz`, worker registration and real WSS upgrades from outside the cluster. Then ship both updated desktop and mobile builds.
+## Build and infrastructure checks
 
-The router currently requires **one replica**, with `Recreate` deployment strategy: sockets and routing state are in memory. Multiple replicas behind a random load balancer will break stream pairing. Restarts cause bounded reconnects but are not zero-downtime/high-availability. A load balancer can close long-lived WSS connections despite ping keepalives; clients must reconnect. Do not claim production reliability before the physical/network matrix below is completed.
+- Desktop: `scripts/build-mesh.sh desktop`; Android: `scripts/build-mesh.sh android` with SDK/NDK and JDK available.
+- iOS: on macOS with Xcode and Go, run `scripts/build-mesh.sh ios` before Flutter builds. It generates the linked `mobile/ios/Frameworks/Mobile.xcframework` for devices and simulators; binaries are ignored. The mobile CI workflow now builds this framework before its iOS simulator build.
+- Headscale must remain publicly reachable at `mesh.agentshot.si` over port 443 with its ts2021 HTTP upgrade preserved (the existing Caddy/TCP load balancer, not GKE's ordinary HTTPS ingress).
+- Headscale currently advertises Tailscale's public DERP map. Confirm the returned map and reachability of its DERP hosts from the actual college proxy. An HTTP CONNECT proxy must permit the Headscale and DERP hostnames on port 443. Explicitly blocked upgrades/CONNECT cannot be guaranteed accessible.
+- No new public WSS service, DNS name or relay secret is required. Updated desktop and mobile binaries are still required. Full Headscale + forced-DERP + physical iOS validation remains outstanding.
 
 ## Automated coverage
 
@@ -49,15 +50,16 @@ The router currently requires **one replica**, with `Recreate` deployment strate
 Run:
 
 ```sh
-npx vitest run test/network.test.ts test/relay.test.ts test/worker-heartbeat.test.ts test/account.test.ts test/account-service.test.ts test/mobile-bridge.test.ts test/wallet-workers.test.ts
+npx vitest run test/network.test.ts test/mesh-proxy.test.ts test/mesh.test.ts test/worker-heartbeat.test.ts test/account.test.ts test/account-service.test.ts test/mobile-bridge.test.ts test/wallet-workers.test.ts
+(cd scripts/mesh && go test -race ./...)
 cd mobile
-flutter test --no-pub test/account_connection_test.dart test/connection_probe_test.dart test/relay_connection_test.dart
+flutter test --no-pub test/account_connection_test.dart test/connection_probe_test.dart test/mesh_lifecycle_test.dart
 ```
 
 ## Device/network validation still required
 
 - Android phone and desktop on the same home Wi-Fi, then on separate networks/mobile data.
-- Guest Wi-Fi with client isolation, office firewall, VPN and captive portal. Verify outbound relay fallback where permitted; networks that block all routes must report failure rather than bypass TLS.
+- Guest Wi-Fi with client isolation, office firewall, VPN and captive portal. Verify mesh DERP fallback where permitted; networks that block all routes must report failure rather than bypass TLS.
 - Desktop suspend/resume, Wi-Fi reconnect, DHCP change, mesh-helper exit, and startup without internet followed by internet restoration.
 - Phone background/resume and Wi-Fi/mobile-data switching during connection; Google account sign-out and sign-in on both devices.
 - iOS and Android same-Wi-Fi and away connectivity, including a desktop behind the college VPN. Verify Wi-Fi/mobile-data switching and background/resume on each platform.

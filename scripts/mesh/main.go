@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -36,6 +37,8 @@ func main() {
 	// a private Headscale mesh: never upload node logs to Tailscale's log service
 	envknob.SetNoLogsNoSupport()
 	logtail.Disable()
+	// Upstream proxy diagnostics can include proxy URLs/auth; never log them.
+	log.SetOutput(io.Discard)
 
 	if *stateDir == "" {
 		fmt.Fprintln(os.Stderr, "--state-dir is required")

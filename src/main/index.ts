@@ -1,12 +1,11 @@
 // AgentShot's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
 import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
-import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell, session as electronSession } from 'electron'
 import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
 import { projectArgument } from './mobile-contract'
 import { rangeNotesContent } from './range-notes'
 import { NOTES_TOGETHER, parseRangeNotes } from '../shared/range-notes'
 import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
-import { DesktopRelay } from './relay'
 import { initializeNetwork } from './network-electron'
 import { startMeshNode, stopAllMesh, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
@@ -207,7 +206,6 @@ const mobile = new MobileBridge(
 )
 
 let meshJoining: Promise<void> | undefined
-const desktopRelay = new DesktopRelay(() => mobile.listenPort())
 let meshRetry: ReturnType<typeof setInterval> | undefined
 // joins Headscale in the background: the pairing code must not wait on the mesh (up to ~90 s when the control server is slow)
 function joinMesh() {
@@ -223,6 +221,7 @@ function joinMesh() {
       hostname: `manul-${(process.env.MANUL_WORKER_ID || hostname() || 'worker').replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`,
       controlUrl: joined.controlUrl,
       authKey: joined.authKey,
+      resolveProxy: url => electronSession.defaultSession.resolveProxy(url),
       // mesh peers dial 47821 (the only port the Headscale ACL allows), forwarded to wherever the bridge actually bound
       forwardPort: port,
       meshPort: DEFAULT_MOBILE_PORT,
@@ -291,7 +290,6 @@ function syncAccountPhones() {
 const mobileState = () => ({ ...mobile.status(), account: { signedIn: !!getConfig().account?.keyId, email: getConfig().account?.email, phones: getConfig().accountPhones !== false } })
 
 function stopMesh() {
-  desktopRelay.stop()
   stopHeartbeat?.()
   stopHeartbeat = null
   meshNode?.stop()
@@ -410,7 +408,6 @@ async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
     projects: () => Projects.recent().map(r => r.id),
     sendHeartbeat: workerHeartbeat,
     reconnectMesh: () => !meshNode ? joinMesh() : undefined,
-    onRelay: credentials => desktopRelay.update(credentials),
     // a cloud worker serves one person at a time: when the lease moves on, the last one's AgentShot sign-in (adopted
     // so their notes use their credits) goes with them
     activity: () => mobile.activity(),

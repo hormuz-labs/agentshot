@@ -12,7 +12,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'client.dart';
 import 'mesh.dart';
-import 'relay.dart';
 
 /// Production by default; the end-to-end tests point these at stand-ins with --dart-define.
 const _issuer = String.fromEnvironment(
@@ -66,7 +65,6 @@ class Computer {
       'token': json['token'],
       'machine': json['id'],
       'name': name,
-      'relay': json['relay'],
     });
     return Computer(
       json['id'] as String,
@@ -309,15 +307,7 @@ class Account {
         first = await client.firstToAnswer(target);
       }
     }
-    // Outbound WSS works on iOS too and needs no inbound firewall/VPN access.
-    if (first == null && target.relay != null) {
-      away?.call();
-      try {
-        await openRelay(client, target);
-        first = await client.firstToAnswer(target, timeout: const Duration(seconds: 20));
-      } catch (_) {}
-    }
-    // Legacy deployments retain their private-network fallback.
+    // One remote transport: the mesh prefers direct peers and falls back to DERP.
     if (first == null && target.urls.any((u) => Mesh.isMeshHost(u.host))) {
       away?.call();
       try {
@@ -326,7 +316,6 @@ class Account {
         final fresh = await renew(target);
         if (fresh != null) {
           target = fresh;
-          if (target.relay != null) await openRelay(client, target);
         }
         first = await client.firstToAnswer(
           target,
@@ -335,7 +324,7 @@ class Account {
       } on BridgeException catch (e) {
         if (e.status == 401) rethrow;
       } catch (_) {
-        // no private network here (iOS for now, or the account service has none)
+        // Native build or control service unavailable; leave a bounded error.
       }
     }
     // a cloud worker opens this person's space first (it restarts into it, a few seconds): keep trying a while, often
@@ -369,13 +358,9 @@ class Account {
         target.urls,
         target.machine,
         target.name,
-        target.relay,
       ),
     );
   }
-
-  Future<void> openRelay(BridgeClient client, Connection target) =>
-      RelayProxy.start(target.relay!, target.url);
 
   Future<Json> _asKey(String method, String path, {Json? body}) async {
     if (!signedIn) throw BridgeException('Sign in first.');
