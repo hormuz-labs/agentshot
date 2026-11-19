@@ -120,13 +120,14 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     const a = anchor
     const still = a ? stage.current?.still(a.box) : undefined
     try {
-      await window.agentshot.agent.send(p.dir, { text, anchor: a, still, files })
+      const shown = p.versions.find(v => v.id === (p.proposal && compare === 'after' ? p.proposal : p.current))
+      await window.agentshot.agent.send(p.dir, { text, anchor: a, still, files, playhead: stage.current?.video?.currentTime, media: shown?.path })
     } catch (e) { alert((e as Error).message); return false }
     setAnchor(undefined)
     setDrawing(false)
     clearAttached(p.dir)
     return true
-  }, [anchor, attached, p.dir])
+  }, [anchor, attached, p.dir, p.versions, p.current, p.proposal, compare])
 
   // Startup files belong to the submitted request, or to the first draft when no request was typed.
   // Handle that handoff once, including StrictMode's replay of mount effects.

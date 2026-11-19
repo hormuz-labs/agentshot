@@ -43,6 +43,10 @@ class _RemotePlayerState extends State<RemotePlayer> {
   }
 
   Future<void> _load() async {
+    final old = controller;
+    controller = null;
+    old?.removeListener(_tick);
+    await old?.dispose();
     VideoPlayerController? next;
     try {
       final uri = await widget.uri();
@@ -68,6 +72,10 @@ class _RemotePlayerState extends State<RemotePlayer> {
 
   void _tick() {
     if (mounted) {
+      if (controller!.value.hasError) {
+        setState(() => error = 'The preview stopped. Retry to load the latest version from your computer.');
+        return;
+      }
       widget.onPosition?.call(controller!.value.position.inMilliseconds / 1000);
       setState(() {});
     }

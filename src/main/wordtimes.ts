@@ -175,6 +175,9 @@ export function snapWords<T extends Word>(words: T[], env: Float32Array): T[] {
       s[i + 1] = Math.max(e[i], on - PAD)
     }
   }
+  // Repeated DTW anchors can follow a cut snapped a few milliseconds forward. Keep
+  // those starts monotonic before capping each preceding word at the next start.
+  for (let i = 1; i < N; i++) s[i] = Math.max(s[i - 1], s[i])
   return words.map((w, i) => {
     const a = round(s[i]), b = round(Math.max(e[i], s[i] + 0.01))
     return { ...w, s: a, e: i + 1 < N ? Math.min(b, round(s[i + 1])) : b }

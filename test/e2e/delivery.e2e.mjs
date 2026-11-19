@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { bundledBinary } from './helpers.mjs'
+import { bundledBinary, recordedIdentity, transcriptPath } from './helpers.mjs'
 
 const root = join(import.meta.dirname, '..', '..')
 const tmp = mkdtempSync(join(tmpdir(), 'agentshot-delivery-'))
@@ -183,18 +183,25 @@ try {
   await app.close()
   const project = JSON.parse(readFileSync(join(dir, 'project.json'), 'utf8'))
   const src = project.versions.find(v => v.id === project.current).path
-  const baseCache = `transcripts/${basename(src, '.mp4')}.json`
+  const baseCache = transcriptPath(src)
   const largeCache = baseCache.replace(/\.json$/, '.large-v3.json')
   const transcript = (model, text) => ({ media: basename(src), model, language: 'en', createdAt: 1, segments: [{ s: 0, e: 0.8, text, words: text.split(' ').map((w, i) => ({ w, s: i * 0.2, e: (i + 1) * 0.2 })) }] })
   mkdirSync(join(dir, 'transcripts'), { recursive: true })
-  const baseText = JSON.stringify(transcript('whisper.cpp · base (bundled)', 'Base caption fixture'))
+  const baseEngine = { engine: 'system', binary: process.execPath, model: join(tmp, 'ggml-recorded.bin'), label: 'whisper.cpp · recorded' }
+  writeFileSync(baseEngine.model, '')
+  const configPath = join(tmp, 'ud', 'config.json')
+  const config = JSON.parse(readFileSync(configPath, 'utf8'))
+  writeFileSync(configPath, JSON.stringify({ ...config, whisper: { ...baseEngine, mode: 'custom' } }))
+  const baseText = JSON.stringify({ ...transcript(baseEngine.label, 'Base caption fixture'), ...await recordedIdentity(join(dir, src), baseEngine) })
   writeFileSync(join(dir, baseCache), baseText)
-  writeFileSync(join(dir, largeCache), JSON.stringify(transcript('whisper.cpp · large-v3 (export)', 'Large caption fixture')))
   project.transcripts = { ...project.transcripts, [src]: baseCache }
   writeFileSync(join(dir, 'project.json'), JSON.stringify(project))
   mkdirSync(join(tools, 'whisper-large-v3'), { recursive: true })
   writeFileSync(join(tools, 'whisper-large-v3', '.installed.json'), '{"version":"test-cache-fixture"}')
   writeFileSync(join(tools, 'whisper-large-v3', 'ggml-large-v3.bin'), '')
+  const largeEngine = { engine: 'system', binary: existsSync(bundledBinary('whisper-cli')) ? bundledBinary('whisper-cli') : baseEngine.binary,
+    model: join(tools, 'whisper-large-v3', 'ggml-large-v3.bin'), label: 'whisper.cpp · large-v3 (export)' }
+  writeFileSync(join(dir, largeCache), JSON.stringify({ ...transcript(largeEngine.label, 'Large caption fixture'), ...await recordedIdentity(join(dir, src), largeEngine) }))
   app = await launch()
   win = await app.firstWindow()
   await win.waitForSelector('video')

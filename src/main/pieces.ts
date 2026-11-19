@@ -52,7 +52,18 @@ const run = (ffmpeg: string, args: string[], cwd: string, signal?: AbortSignal) 
   execFile(ffmpeg, ['-y', '-loglevel', 'error', ...args], { cwd, signal, maxBuffer: 1 << 24, windowsHide: true }, (e, _o, stderr) => (e ? fail(new Error(stderr.slice(-1500) || e.message)) : ok())))
 
 /** What a file's content is, as far as a name goes. */
-const stamp = async (cwd: string, rel: string) => { const s = await stat(join(cwd, rel)); return [rel, s.size, s.mtimeMs] }
+const stamp = async (cwd: string, rel: string) => {
+  const s = await stat(join(cwd, rel), { bigint: true })
+  return [rel, ...[s.dev, s.ino, s.size, s.mtimeNs, s.ctimeNs].map(String)]
+}
+
+/** Hash the actual sound graph and its inputs, not picture framing, overlays or encoder settings. */
+export async function audioKey(o: RenderPieces): Promise<string> {
+  const args = composeArgs(o.tl, { ...o, out: 'audio-cache-output', soundOnly: true })
+  const files = args.flatMap((arg, i) => arg === '-i' ? [args[i + 1]] : [])
+  return createHash('sha256').update(JSON.stringify(['audio-v1', o.ffmpeg, args,
+    await Promise.all(files.map(f => stamp(o.cwd, f)))])).digest('hex').slice(0, 32)
+}
 
 /**
  * Pieces land on whole frames. A piece's frame count follows the film's clock, which a cut earlier on can shift by a frame,
@@ -100,16 +111,25 @@ export async function renderPieces(o: RenderPieces) {
     step(frames[i])
   }), encoder.parallel)
 
-  // the sound whole (it doesn't take long, and music and fades know nothing of pieces), then everything joined
-  const tag = randomUUID(), sound = join(cache, `.${tag}.m4a`), list = join(cache, `.${tag}.txt`)
+  // Audio is independent of the picture: a visual edit must not re-encode hours of unchanged sound.
+  // Keep the whole graph for continuous fades/camera sync; publish only complete tracks.
+  const soundName = `audio-${await audioKey(o)}.m4a`, sound = join(cache, soundName)
+  const tag = randomUUID(), tempSound = join(cache, `.${tag}.m4a`), list = join(cache, `.${tag}.txt`)
   try {
-    await run(o.ffmpeg, composeArgs(tl, { ...o, out: sound, soundOnly: true }), cwd, signal)
+    const cached = await stat(sound).then(s => s.size > 0, () => false)
+    if (!cached) {
+      const key = soundName
+      await run(o.ffmpeg, composeArgs(tl, { ...o, out: tempSound, soundOnly: true }), cwd, signal)
+      if (`audio-${await audioKey(o)}.m4a` !== key) throw new Error('Audio source changed during rendering. Please retry.')
+      await rename(tempSound, sound)
+    }
     await writeFile(list, ['ffconcat version 1.0', ...wanted.map(i => `file ${nameOf(i, frames[i])}`)].join('\n') + '\n')
     await run(o.ffmpeg, ['-f', 'concat', '-safe', '0', '-i', list, '-i', sound, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-t', String(duration(tl)), '-movflags', '+faststart', o.out], cwd, signal)
-  } finally { await Promise.all([rm(sound, { force: true }), rm(list, { force: true })]) }
+  } finally { await Promise.all([rm(tempSound, { force: true }), rm(list, { force: true })]) }
 
   const now = new Date()
   await Promise.all(wanted.map(i => utimes(join(cache, nameOf(i, frames[i])), now, now)))
+  await utimes(sound, now, now)
   await trim(cache)
   return 1 - fresh / total
 }

@@ -1,14 +1,14 @@
 // Rendering a film in pieces: a change encodes only the pieces it touches, and the film comes out as long and whole as
 // one rendered at a go.
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { isPackaged: false, getPath: () => tmpdir() } }))
 import { SOFTWARE, encodersFor } from '../src/shared/encoders'
-import { chooseFrames, piecesOf, renderPieces } from '../src/main/pieces'
+import { audioKey, chooseFrames, piecesOf, renderPieces } from '../src/main/pieces'
 import { FFMPEG, FFPROBE } from '../src/main/media'
 import { cameraLayout } from '../src/shared/demo'
 import { composeArgs, type Item, type Timeline } from '../src/shared/timeline'
@@ -48,7 +48,7 @@ describe('rendering in pieces', () => {
   const seconds = (f: string, stream: string) => Number(execFileSync(FFPROBE, ['-v', 'error', '-select_streams', stream, '-count_frames', '-show_entries', 'stream=duration', '-of', 'csv=p=0', join(dir, f)]).toString().split('\n')[0])
   const frames = (f: string) => Number(execFileSync(FFPROBE, ['-v', 'error', '-select_streams', 'v:0', '-count_frames', '-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0', join(dir, f)]).toString().trim())
   const render = (tl: Timeline, out: string) => renderPieces({ ffmpeg: FFMPEG, cwd: dir, cache, tl, out, encoder: SOFTWARE, inputOf: i => (i as { src: string }).src, hasAudio: () => true, overlayOf: () => 'ov.mov' })
-  const kept = () => readdirSync(cache).filter(f => !f.startsWith('.')).length
+  const kept = () => readdirSync(cache).filter(f => !f.startsWith('.') && f.endsWith('.mp4')).length
 
   beforeAll(() => {
     dir = mkdtempSync(join(tmpdir(), 'pieces-'))
@@ -61,6 +61,8 @@ describe('rendering in pieces', () => {
     const tl: Timeline = { ...format, items: [media('a.mp4', 1, 4), media('a.mp4', 6.013, 9.2), media('a.mp4', 12, 14)] }
     expect(await render(tl, 'one.mp4')).toBe(0)
     expect(kept()).toBe(3)
+    const audio = readdirSync(cache).find(f => f.startsWith('audio-'))!
+    const audioIdentity = statSync(join(cache, audio)).ino
     ff(...composeArgs(tl, { inputOf: i => (i as { src: string }).src, hasAudio: () => true, out: 'full.mp4' }))
     expect(Math.abs(frames('one.mp4') - frames('full.mp4'))).toBeLessThanOrEqual(1)
     expect(seconds('one.mp4', 'a:0')).toBeCloseTo(seconds('full.mp4', 'a:0'), 1)
@@ -68,15 +70,64 @@ describe('rendering in pieces', () => {
     const same = await render(tl, 'same.mp4')
     expect(same).toBe(1)
     expect(kept()).toBe(3)
+    expect(statSync(join(cache, audio)).ino).toBe(audioIdentity)
 
     // the middle scene trimmed: the others are kept although the last one moved earlier
     const trimmed: Timeline = { ...tl, items: [tl.items[0], media('a.mp4', 6.013, 8), tl.items[2]] }
     const reused = await render(trimmed, 'two.mp4')
     expect(reused).toBeGreaterThan(0.5)
     expect(kept()).toBe(4)
+    expect(readdirSync(cache).filter(f => f.startsWith('audio-'))).toHaveLength(2)
     expect(Math.abs(frames('two.mp4') - Math.round((3 + 1.987 + 2) * 30))).toBeLessThanOrEqual(1)
     // whole: every frame decodes, the joins included
     expect(execFileSync(FFMPEG, ['-v', 'error', '-i', join(dir, 'two.mp4'), '-f', 'null', '-'], { stdio: ['ignore', 'pipe', 'pipe'] }).toString()).toBe('')
+  }, 60_000)
+
+  it('keys audio independently of visuals but invalidates cuts, levels, audio availability and source changes', async () => {
+    const tl: Timeline = { ...format, items: [media('a.mp4', 0, 3)] }
+    const key = (timeline: Timeline, hasAudio = true) => audioKey({ ffmpeg: FFMPEG, cwd: dir, cache, tl: timeline, out: 'ignored.mp4', encoder: SOFTWARE,
+      inputOf: i => (i as { src: string }).src, hasAudio: () => hasAudio, overlayOf: () => 'ov.mov' })
+    const base = await key(tl)
+    expect(await key({ ...tl, width: 640, fps: 24, overlays: [{ id: 'title', clip: 'missing', start: 1, dur: 1 }] })).toBe(base)
+    expect(await key({ ...tl, items: [{ ...tl.items[0], id: 'renamed', framing: { mode: 'cover' } } as Item] })).toBe(base)
+    expect(await key({ ...tl, items: [media('a.mp4', 1, 3)] })).not.toBe(base)
+    expect(await key({ ...tl, items: [{ ...tl.items[0], db: -6 } as Item] })).not.toBe(base)
+    expect(await key({ ...tl, items: [{ ...tl.items[0], muted: true } as Item] })).not.toBe(base)
+    expect(await key(tl, false)).not.toBe(base)
+    writeFileSync(join(dir, 'identity.mp4'), 'first')
+    const stamp = new Date('2020-01-01T00:00:00Z')
+    utimesSync(join(dir, 'identity.mp4'), stamp, stamp)
+    const identity: Timeline = { ...tl, items: [media('identity.mp4', 0, 3)] }
+    const before = await key(identity)
+    writeFileSync(join(dir, 'identity.mp4'), 'other')
+    // Rapid writes can share a filesystem clock tick, especially on Windows.
+    utimesSync(join(dir, 'identity.mp4'), stamp, new Date(stamp.getTime() + 2000))
+    expect(await key(identity)).not.toBe(before)
+  })
+
+  it('includes camera audio and synchronization but ignores camera layout', async () => {
+    const tl: Timeline = { ...format, items: [media('a.mp4', 1, 4)], demo: {
+      screen: 'a.mp4', camera: 'a.mp4', cameraDuration: 30, audio: 'camera', layout: cameraLayout(320, 180),
+      sync: { offset: 0, rate: 1, confidence: 1, reliable: true, residual: 0, anchors: [], overlap: [0, 30], method: 'fixture' },
+    } as Timeline['demo'] }
+    const key = (timeline: Timeline) => audioKey({ ffmpeg: FFMPEG, cwd: dir, cache, tl: timeline, out: '', encoder: SOFTWARE,
+      inputOf: i => (i as { src: string }).src, hasAudio: () => true, overlayOf: () => '' })
+    const base = await key(tl)
+    expect(await key({ ...tl, demo: { ...tl.demo!, layout: cameraLayout(320, 180, { hidden: true }) } })).toBe(base)
+    expect(await key({ ...tl, demo: { ...tl.demo!, sync: { ...tl.demo!.sync, offset: 0.5 } } })).not.toBe(base)
+    expect(await key({ ...tl, demo: { ...tl.demo!, audio: 'screen' } })).not.toBe(base)
+  })
+
+  it('reuses audio for a real visual-only edit and keeps the result decodable', async () => {
+    const tl: Timeline = { ...format, items: [media('a.mp4', 17, 19)] }
+    await render(tl, 'visual-before.mp4')
+    const sound = `audio-${await audioKey({ ffmpeg: FFMPEG, cwd: dir, cache, tl, out: '', encoder: SOFTWARE,
+      inputOf: i => (i as { src: string }).src, hasAudio: () => true, overlayOf: () => 'ov.mov' })}.m4a`
+    const inode = statSync(join(cache, sound)).ino
+    await render({ ...tl, width: 640 }, 'visual-after.mp4')
+    expect(statSync(join(cache, sound)).ino).toBe(inode)
+    expect(seconds('visual-after.mp4', 'a:0')).toBeCloseTo(2, 1)
+    expect(execFileSync(FFMPEG, ['-v', 'error', '-i', join(dir, 'visual-after.mp4'), '-f', 'null', '-']).length).toBe(0)
   }, 60_000)
 
   it('frames a camera in its circle and ring just as a film rendered at a go', async () => {

@@ -47,7 +47,7 @@ jobs:
           cache: npm
       - name: Install build tools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake rpm
+        run: sudo apt-get update && sudo apt-get install -y cmake rpm libvulkan-dev glslc
       - name: Install build tools (macOS)
         if: runner.os == 'macOS'
         run: brew install cmake
@@ -87,6 +87,12 @@ jobs:
           fi
       - run: npm ci
       - run: npm run build:whisper
+      - name: Install Vulkan SDK (Windows)
+        if: runner.os == 'Windows'
+        run: ./scripts/install-vulkan-sdk.ps1
+      - name: Build vendor-neutral GPU speech backend
+        if: runner.os != 'macOS'
+        run: npm run build:whisper:gpu
       - uses: actions/setup-go@v5
         if: runner.os != 'Windows'
         with:

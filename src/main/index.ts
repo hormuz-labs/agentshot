@@ -4,6 +4,10 @@ import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, po
 import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
 import { projectArgument } from './mobile-contract'
 import { rangeNotesContent } from './range-notes'
+import { z } from 'zod'
+import { fileRevision, wordsInRange } from './transcript-chunks'
+import { speechProfile } from './whisper-hardware'
+import { canMapTranscript, transcriptFromTimeline, transcriptSourcesCurrent } from './transcript-timeline'
 import { NOTES_TOGETHER, parseRangeNotes } from '../shared/range-notes'
 import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
 import { initializeNetwork } from './network-electron'
@@ -523,20 +527,44 @@ function useConversation(p: Project, id: string) {
 const inflight = new Map<string, Promise<Transcript>>()
 
 /** The transcript of a project's media file: read it if made, else make it (asking to download an engine if none). */
-async function transcriptOf(p: Project, mediaRel: string, opts: { ask: boolean }): Promise<Transcript | null> {
+async function transcriptOf(p: Project, mediaRel: string, opts: { ask: boolean; range?: Whisper.TranscriptRange; background?: boolean; seen?: Set<string> }): Promise<Transcript | null> {
+  if (opts.range && (!Number.isFinite(opts.range.t0) || !Number.isFinite(opts.range.t1) || opts.range.t0 < 0 || opts.range.t1 <= opts.range.t0)) throw new Error('Invalid transcription range.')
+  if (opts.seen?.has(mediaRel)) throw new Error('Cyclic transcript source timeline.')
+  const seen = new Set(opts.seen).add(mediaRel)
+  const version = p.versions.find(v => v.path === mediaRel)
+  if (version?.timeline && canMapTranscript(version.timeline, mediaRel) && await transcriptSourcesCurrent(p.dir, version.timeline, mediaRel, version.transcriptSources)) {
+    const mapped = await transcriptFromTimeline(version.timeline, mediaRel, (src, range) => transcriptOf(p, src, { ...opts, range, seen }), opts.range)
+    if (mapped && await transcriptSourcesCurrent(p.dir, version.timeline, mediaRel, version.transcriptSources)) return mapped
+  }
   const rel = p.transcripts?.[mediaRel]
-  if (rel && existsSync(join(p.dir, rel))) return JSON.parse(await readFile(join(p.dir, rel), 'utf8')) as Transcript
-  const key = `${p.dir}|${mediaRel}`
-  const busy = inflight.get(key)
-  if (busy) return busy
+  if (rel && existsSync(join(p.dir, rel))) {
+    try {
+      const cached = JSON.parse(await readFile(join(p.dir, rel), 'utf8')) as Transcript
+      if (await Whisper.transcriptCurrent(cached, join(p.dir, mediaRel))) return opts.range ? { ...cached, segments: wordsInRange(cached.segments, opts.range) } : cached
+    } catch { /* legacy, changed source or corrupt transcript: rebuild from checkpoints */ }
+  }
+  if (opts.range) {
+    if (p.media[mediaRel]?.hasAudio !== false && !(await Whisper.resolveEngine())) {
+      if (!opts.ask) return null
+      await Tools.ensure(Whisper.toolToInstall(), askTool(p.dir))
+    }
+    return Whisper.transcribeRange(join(p.dir, mediaRel), join(p.dir, '.cache', 'transcript-ranges'), opts.range,
+      `Transcribing ${mediaRel.split('/').pop()} · ${opts.range.t0}–${opts.range.t1}s`, p.dir, opts.background)
+  }
   if (p.media[mediaRel] && !p.media[mediaRel].hasAudio) opts = { ask: false } // silent: transcribe() returns an empty transcript without an engine
   else if (!(await Whisper.resolveEngine())) {
     if (!opts.ask) return null
     await Tools.ensure(Whisper.toolToInstall(), askTool(p.dir))
   }
+  const engine = await Whisper.resolveEngine()
+  const settings = speechProfile()
+  const key = JSON.stringify([p.dir, mediaRel, engine && await Whisper.profileFor(engine, settings), await fileRevision(join(p.dir, mediaRel))])
+  const busy = inflight.get(key)
+  if (busy) { if (!opts.background) Whisper.prioritizeTranscription(join(p.dir, mediaRel)); return busy }
   const out = Whisper.transcriptPathFor(mediaRel)
-  const job = Whisper.transcribe(join(p.dir, mediaRel), join(p.dir, out), `Transcribing ${mediaRel.split('/').pop()}`, p.dir)
+  const job = Whisper.transcribe(join(p.dir, mediaRel), join(p.dir, out), `Transcribing ${mediaRel.split('/').pop()}`, p.dir, engine, opts.background, settings)
     .then(async t => {
+      if (!(await Whisper.transcriptCurrent(t, join(p.dir, mediaRel)))) return t
       p.transcripts = { ...p.transcripts, [mediaRel]: out }
       if (p.subtitles?.[mediaRel]) await checkSubtitles(p, mediaRel, t)
       await publish(p)
@@ -626,7 +654,7 @@ const ensureProxy = (p: Project, media: string) => previews.ensure(p, media).cat
 /** After an import: transcribe in the background when an engine is ready (never asks to download on its own). */
 const autoTranscribe = (p: Project, mediaRel: string) => {
   const info = p.media[mediaRel]
-  if (info?.hasAudio) transcriptOf(p, mediaRel, { ask: false }).catch(e => console.warn('transcription failed', e))
+  if (info?.hasAudio) transcriptOf(p, mediaRel, { ask: false, background: true }).catch(e => console.warn('transcription failed', e))
 }
 
 // ---------------------------------------------------------------- motion clips and timeline renders
@@ -659,10 +687,19 @@ async function bakeClip(p: Project, id: string, title?: string) {
 }
 
 /** Transcripts already made for the timeline's media (never asks; speech without a transcript just isn't ducked). */
-async function transcriptsFor(p: Project, tl: Timeline) {
+async function transcriptsFor(p: Project, tl: Timeline, cachedOnly = false) {
   const out: Record<string, Transcript | undefined> = {}
-  for (const it of tl.items) if (it.kind === 'media' && !(it.src in out)) out[it.src] = (await transcriptOf(p, it.src, { ask: false }).catch(() => null)) || undefined
-  if (tl.demo?.audio === 'camera') out[tl.demo.camera] = (await transcriptOf(p, tl.demo.camera, { ask: false }).catch(() => null)) || undefined
+  const get = async (src: string) => {
+    if (!cachedOnly) return (await transcriptOf(p, src, { ask: false }).catch(() => null)) || undefined
+    const rel = p.transcripts?.[src]
+    if (!rel) return undefined
+    try {
+      const t = JSON.parse(await readFile(join(p.dir, rel), 'utf8')) as Transcript
+      return await Whisper.transcriptCurrent(t, join(p.dir, src)) ? t : undefined
+    } catch { return undefined }
+  }
+  for (const it of tl.items) if (it.kind === 'media' && !(it.src in out)) out[it.src] = await get(it.src)
+  if (tl.demo?.audio === 'camera') out[tl.demo.camera] = await get(tl.demo.camera)
   return out
 }
 
@@ -976,13 +1013,21 @@ const describe = (a: Anchor) =>
   (a.clip ? `, clip ${a.clip.id}${a.clip.element ? ` element ${a.clip.element}` : ''}` : '')
 
 /** [notes]: several notes given together (the phone's batch), done as one piece of work. */
-type AgentMessage = { text: string; anchor?: Anchor; still?: string; files?: string[]; notes?: { text: string; anchor?: Anchor }[] }
+type AgentMessage = { text: string; anchor?: Anchor; still?: string; files?: string[]; playhead?: number; media?: string; notes?: { text: string; anchor?: Anchor }[] }
 
 // A message to the agent, optionally anchored (time / range / box) with a frame still (JPEG data URL).
 // What the user attached (files in media/, versions of the film, motion clips) follows the text, each with what it is.
 async function sendToAgent(dir: string, msg: AgentMessage) {
   const p = projectOf(dir)
   const selections = parseRangeNotes(msg.text).filter(n => n.text && n.anchor.t1 > n.anchor.t0)
+  // Explicit selections/anchored notes warm the same chunks used by indexing, before the agent calls a tool.
+  const currentMedia = p.versions.find(v => v.path === msg.media)?.path || p.versions.find(v => v.id === p.current)?.path
+  const anchors = [...selections.map(n => n.anchor), ...(msg.anchor ? [msg.anchor] : []), ...(msg.notes || []).flatMap(n => n.anchor ? [n.anchor] : [])]
+  if (!anchors.length && Number.isFinite(msg.playhead) && msg.playhead! >= 0) anchors.push({ t0: msg.playhead!, t1: msg.playhead! + 20 })
+  if (currentMedia) for (const anchor of anchors.slice(0, 8)) {
+    const range = { t0: Math.max(0, anchor.t0 - (anchor.t1 == null ? 10 : 0)), t1: anchor.t1 ?? anchor.t0 + 20 }
+    if (range.t1 > range.t0) void transcriptOf(p, currentMedia, { ask: false, range }).catch(e => console.warn('Selected transcript:', e instanceof Error ? e.message : e))
+  }
   const ranges = selections.length ? await rangeNotesContent(selections, note => Projects.addNote(p, note)) : ''
   const videos = Object.fromEntries(Object.keys(p.files || {}).filter(f => p.files![f].kind === 'video' && p.media[f]).map(f => [f, p.media[f]]))
   const body = joinAttached(msg.text, Files.refLines(msg.files || [], p)) + demoHint(msg.files || [], videos, skills.enabled().some(s => s.id === 'demo-editor'))
@@ -1108,6 +1153,12 @@ function wire() {
   ipcMain.handle('memory:save', (_e, name: string, description: string, body: string) => { memory.remember(name, description, body); return memory.list() })
   ipcMain.handle('memory:forget', (_e, name: string) => { memory.forget(name); return memory.list() })
   ipcMain.handle('whisper:status', () => Whisper.whisperStatus())
+  ipcMain.handle('whisper:performance', (_e, settings) => {
+    const performance = z.object({ threads: z.number().int().min(1).max(16).optional(), beam: z.union([z.literal(1), z.literal(5)]).optional(),
+      vad: z.boolean().optional(), device: z.enum(['auto', 'cpu']).optional() }).strict().parse(settings)
+    setConfig({ speechPerformance: performance })
+    return Whisper.whisperStatus()
+  })
   ipcMain.handle('whisper:set', (_e, c) => Whisper.setWhisper(c))
   ipcMain.handle('whisper:pick', async (_e, what: 'binary' | 'model') => {
     const r = await dialog.showOpenDialog(win!, what === 'model'
@@ -1387,7 +1438,7 @@ function wire() {
     const p = projectOf(dir)
     // 'edit': the edit by hand, playing from its pieces
     const tl = versionId === 'edit' ? p.timeline! : p.versions.find(v => v.id === (versionId || p.current))?.timeline || p.timeline!
-    return regionsOnTimeline(tl, await transcriptsFor(p, tl))
+    return regionsOnTimeline(tl, await transcriptsFor(p, tl, true))
   })
   ipcMain.handle('history:log', (_e, dir: string) => new History(projectOf(dir).dir).log())
   ipcMain.handle('history:restore', async (_e, dir: string, id: string) => {
@@ -1647,7 +1698,7 @@ const startup = app.whenReady().then(async () => {
           await publish(p)
         },
         seek: (dir, t) => send('seek', dir, t),
-        transcript: (dir, mediaRel) => transcriptOf(projectOf(dir), mediaRel, { ask: true }),
+        transcript: (dir, mediaRel, range) => transcriptOf(projectOf(dir), mediaRel, { ask: true, range }),
         speakers: async (dir, mediaRel, count) => {
           const p = projectOf(dir)
           const result = (await speakersOf(p, mediaRel, { make: true, count }))!
@@ -1723,6 +1774,7 @@ async function startBrowser(resources: string) {
 }
 
 app.on('before-quit', e => {
+  Whisper.stopTranscription()
   if (allowQuit) return
   e.preventDefault()
   if (quitRequested) return

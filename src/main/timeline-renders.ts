@@ -4,6 +4,7 @@ import { mkdir, rename, rm } from 'node:fs/promises'
 import { join, posix } from 'node:path'
 import { sameCut, type Timeline } from '../shared/timeline'
 import type { Project, Version } from '../shared/types'
+import { fileRevision } from './transcript-chunks'
 
 type Output = { final: string; out: string }
 
@@ -52,9 +53,18 @@ export class TimelineRenders {
     const snapshot = structuredClone(tl), before = structuredClone(p.timeline), base = p.current
     const work: Work = { base, timeline: snapshot, clips, by, propose, promise: undefined! }
     work.promise = Promise.resolve().then(async () => {
+      const sources = [...new Set(snapshot.items.flatMap(i => i.kind === 'media' ? [i.src] : []))]
+      const revisions = await Promise.all(sources.map(async src => [src, await fileRevision(join(p.dir, src))] as const)).catch(() => null)
       const files = await this.deps.render(p, snapshot, title, signal)
       signal?.throwIfAborted()
       const v = await this.deps.addVersion(p, join(p.dir, files.final), title, work.by, snapshot, files.dry && join(p.dir, files.dry))
+      if (revisions) {
+        try {
+          if ((await Promise.all(revisions.map(async ([src, rev]) => rev === await fileRevision(join(p.dir, src))))).every(Boolean)) {
+            v.transcriptSources = { ...Object.fromEntries(revisions), [v.path]: await fileRevision(join(p.dir, v.path)) }
+          }
+        } catch { /* Incomplete provenance: listen to the rendered file instead. */ }
+      }
       v.by = work.by
       // A late render may be saved/exported, but must not reset newer live edits or a version the user switched to.
       if (this.latest.get(p) === work && p.current === base && sameCut(p.timeline, before)) {

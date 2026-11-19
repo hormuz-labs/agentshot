@@ -15,6 +15,7 @@ import { mobileArgs, mobileSchemas, projectArgument } from './mobile-contract'
 import { emptyAgentState, reduce, type AgentState } from '../shared/agui-state'
 import { SpaceError } from './user-space'
 import { forPhone } from './explain'
+import { serveMobileMedia } from './mobile-media'
 type Options = {
   invoke(method: string, args: unknown[]): Promise<unknown>
   projects(): { dir: string }[]
@@ -557,21 +558,8 @@ export class MobileBridge {
       await pipeline(createReadStream(file), res); return
     }
     if (url.pathname === '/media' && (req.method === 'GET' || req.method === 'HEAD')) {
-      const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee); const file = await artifactPath(dir, url.searchParams.get('file') || ''); const info = await stat(file), size = info.size
-      // the phone keeps the films it has played and only fetches one again when it changed (a new render in its place)
-      if (fresh(req, res, info)) return
-      const mime: Record<string, string> = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' }
-      res.setHeader('content-type', mime[extname(file).toLowerCase()] || 'application/octet-stream'); res.setHeader('accept-ranges', 'bytes')
-      let start = 0, end = size - 1
-      if (req.headers.range) {
-        const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range)
-        start = match?.[1] ? Number(match[1]) : Math.max(0, size - Number(match?.[2])); end = match?.[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1
-        if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= size) { res.writeHead(416, { 'content-range': `bytes */${size}` }); res.end(); return }
-        res.statusCode = 206; res.setHeader('content-range', `bytes ${start}-${end}/${size}`)
-      }
-      res.setHeader('content-length', String(Math.max(0, end - start + 1)))
-      if (req.method === 'HEAD' || !size) { res.end(); return }
-      await pipeline(createReadStream(file, { start, end }), res); return
+      const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee)
+      await serveMobileMedia(req, res, await artifactPath(dir, url.searchParams.get('file') || '')); return
     }
     if (url.pathname === '/project/manifest' && req.method === 'GET') {
       const dir = this.authorizeProject(url.searchParams.get('project'), device.lessee)

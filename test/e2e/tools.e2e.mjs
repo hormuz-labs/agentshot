@@ -18,6 +18,12 @@ try {
   await win.waitForSelector('text=Downloaded when needed')
   // cloud jobs are offered in Export, where they're used, and only once the worker offers them: nothing here says "Coming soon"
   const text = await win.getByRole('dialog').innerText()
+  await win.getByLabel('Processing', { exact: true }).selectOption('cpu')
+  await win.getByLabel('CPU threads per worker').selectOption('8')
+  const performance = await win.evaluate(async () => (await window.agentshot.whisper.status()).performance)
+  if (performance.device !== 'cpu' || performance.threads !== 8) throw new Error('Speech settings did not persist')
+  await win.getByLabel('Processing', { exact: true }).selectOption('auto')
+  await win.getByLabel('CPU threads per worker').selectOption('4')
   await win.screenshot({ path: join(out, 'tools.png') })
   if (/In the cloud|Coming soon/.test(text)) throw new Error(`Tools still lists cloud placeholders: ${text}`)
   console.log('tools e2e ok:', join(out, 'tools.png'))

@@ -13,14 +13,30 @@ Future<void> sendToAgent(
   String dir,
   Json message,
 ) async {
+  Future<void> send() async {
+    try {
+      await store.client.call('agent:send', [dir, message]);
+    } on BridgeException catch (e) {
+      // Older desktops reject the optional playback hints before dispatching the message.
+      if (e.status != 400 ||
+          (!message.containsKey('playhead') && !message.containsKey('media'))) {
+        rethrow;
+      }
+      message = Map<String, dynamic>.from(message)
+        ..remove('playhead')
+        ..remove('media');
+      await store.client.call('agent:send', [dir, message]);
+    }
+  }
+
   try {
-    await store.client.call('agent:send', [dir, message]);
+    await send();
   } on BridgeException catch (e) {
     if (e.code != 'needs-key' || !context.mounted) rethrow;
     // signed in here: their AgentShot credits, without a question, and the note goes
     if (await adoptCredits(store).catchError((Object _) => false)) {
       try {
-        await store.client.call('agent:send', [dir, message]);
+        await send();
         return;
       } on BridgeException catch (again) {
         if (again.code != 'needs-key') rethrow;
@@ -33,7 +49,7 @@ Future<void> sendToAgent(
       );
     }
     try {
-      await store.client.call('agent:send', [dir, message]);
+      await send();
     } on BridgeException catch (again) {
       // the keys were closed without adding one
       if (again.code != 'needs-key') rethrow;

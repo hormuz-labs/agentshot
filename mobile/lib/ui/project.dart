@@ -77,6 +77,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
   (Object, File)? voiceError;
   final composerKey = GlobalKey<ComposerState>();
   double position = 0;
+  String? playingMedia;
   Json? anchor;
   void addRange(double start, double end) {
     setState(() {
@@ -429,8 +430,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
     final seconds = (object(p['media'] ?? {})[path]?['duration'] as num?)
         ?.toDouble();
     final waiting = p['proposal'] != null;
-    // on the phone before it's tapped, so it opens at once
-    if (version != null && version['path'] != null) keepFilm(cutPlay(version));
     final line = !store.connected
         ? 'Offline · what was here last'
         : !hasFilm
@@ -508,42 +507,16 @@ class _ProjectScreenState extends State<ProjectScreen> {
                             style: text.titleSmall,
                           ),
                           const SizedBox(height: 2),
-                          // the film coming onto the phone: how far, until it plays from here
-                          ValueListenableBuilder<Map<String, double>>(
-                            valueListenable: store.client.keeping,
-                            builder: (context, keeping, _) {
-                              final coming = version == null || path == null
-                                  ? null
-                                  : keeping['$dir\n${cutPlay(version)}'];
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    coming == null
-                                        ? line
-                                        : 'Saving to phone · ${(coming * 100).round()}%',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: text.bodySmall?.copyWith(
-                                      color: waiting || !store.connected
-                                          ? studio.accent
-                                          : studio.text3,
-                                      fontFeatures: tabular,
-                                    ),
-                                  ),
-                                  if (coming != null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: LinearProgressIndicator(
-                                        key: const ValueKey('film-saving'),
-                                        value: coming,
-                                        minHeight: 2,
-                                      ),
-                                    ),
-                                ],
-                              );
-                            },
+                          Text(
+                            line,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodySmall?.copyWith(
+                              color: waiting || !store.connected
+                                  ? studio.accent
+                                  : studio.text3,
+                              fontFeatures: tabular,
+                            ),
                           ),
                         ],
                       ),
@@ -574,8 +547,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
         .where((v) => v['id'] == p['proposal'])
         .firstOrNull;
     final film = kept ?? proposal!;
-    keepFilm(cutPlay(film));
-    if (proposal != null) keepFilm(cutPlay(proposal));
     final state = store.agent(dir);
     final shots = [
       for (final item in objects(object(p['timeline'] ?? {})['items']))
@@ -600,8 +571,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 : 'Thinking')
           : null,
       connected: store.connected,
-      onNote: (text, at) =>
-          sendToAgent(context, store, dir, {'text': text, 'anchor': ?at}),
+      onNote: (text, at) => sendToAgent(context, store, dir, {
+        'text': text,
+        'anchor': ?at,
+        'playhead': position,
+        'media': playingMedia ?? film['path'],
+      }),
       onBatch: sendBatch,
       suggestions: suggestionsOf(state.messages),
       onActivity: openActivity,
@@ -611,6 +586,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
       menu: menuItems,
       onAction: action,
       onPosition: (at) => position = at,
+      onShowingProposal: (after) =>
+          playingMedia = (after ? proposal : film)?['path'] as String?,
     );
   }
 
@@ -620,7 +597,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
       for (final (text, at) in notes) {'text': text, 'anchor': ?at},
     ];
     try {
-      await sendToAgent(context, store, dir, {'text': '', 'notes': all});
+      await sendToAgent(context, store, dir, {
+        'text': '',
+        'notes': all,
+        'playhead': position,
+        'media': ?playingMedia,
+      });
     } on BridgeException catch (e) {
       if (e.status != 400) rethrow;
       for (final note in all) {
@@ -1441,21 +1423,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   bool get hasFilm => shownProxy != null;
 
-  /// Films already asked onto the phone this visit (see [BridgeClient.keep]).
-  final keeping = <String>{};
-
-  /// The film comes to the phone whole, once: every play after (and offline) is from here.
-  void keepFilm(String path) {
-    if (keeping.add('$dir:$path')) store.client.keep(dir, path).ignore();
-  }
-
   /// The film is on screen (above the tabs, or beside the conversation), with its bar for a new cut.
   bool filmInSight = false;
 
   /// The film, playing; notes in time and boxes on the picture go from here into the next note.
   Widget player({double maxHeight = .48}) {
     final proxy = shownProxy!;
-    keepFilm(proxy);
     return RemotePlayer(
       key: ValueKey('$dir:$proxy'),
       uri: () => store.client.media(dir, proxy),

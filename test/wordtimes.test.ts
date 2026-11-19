@@ -177,6 +177,14 @@ describe('snapWords', () => {
     expect(snapWords([{ w: 'hi', s: 1.03, e: 1.3, p: 0.9 }], env)[0].p).toBe(0.9)
     expect(snapWords([], env)).toEqual([])
   })
+  it('keeps repeated alignment anchors ordered after a boundary snaps forward', () => {
+    const flat = new Float32Array(4000).fill(-20)
+    const result = snapWords([w('let', 13.63), w('me', 13.63), w('think', 14.29), w('like', 14.29), w('hmm', 14.29)], flat)
+    for (let i = 0; i < result.length; i++) {
+      expect(result[i].e).toBeGreaterThanOrEqual(result[i].s)
+      if (i) expect(result[i].s).toBeGreaterThanOrEqual(result[i - 1].e)
+    }
+  })
 })
 
 describe('snapSegments', () => {

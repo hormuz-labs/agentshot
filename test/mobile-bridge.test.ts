@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { request } from 'node:https'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
+import * as fs from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { isTailscale, MobileBridge, reachableIps } from '../src/main/mobile-bridge'
@@ -8,6 +9,8 @@ import { mobileArgs } from '../src/main/mobile-contract'
 import { WorkerClient } from '../src/main/worker-client'
 import { signWorkerToken } from '../account/src/index'
 import { SpaceError } from '../src/main/user-space'
+import { MAX_MEDIA_BLOCK } from '../src/main/mobile-media'
+vi.mock('node:fs/promises', async (original) => ({ ...await original<typeof import('node:fs/promises')>() }))
 const bridges: MobileBridge[] = []
 const folders: string[] = []
 afterEach(async () => { await Promise.all(bridges.splice(0).map(b => b.stop())); await Promise.all(folders.splice(0).map(d => rm(d, { recursive: true, force: true }))) })
@@ -35,6 +38,64 @@ async function fixture() {
 }
 
 describe('mobile TLS bridge', () => {
+  it('caps verified blocks and detects writes during a block read', async () => {
+    const f = await fixture(), file = join(f.dir, 'film.mp4')
+    await writeFile(file, Buffer.alloc(MAX_MEDIA_BLOCK + 1, 65))
+    const path = `/media?${new URLSearchParams({ project: f.dir, file: 'film.mp4' })}`
+    const head = await f.call(path, { token: f.token, method: 'HEAD' })
+    const headers = { 'if-match': head.headers.etag as string, 'x-agentshot-range-cache': '1' }
+    for (const range of [`bytes=0-${MAX_MEDIA_BLOCK}`, 'bytes=0-', 'bytes=-4']) {
+      expect((await f.call(path, { token: f.token, headers: { ...headers, range } })).status).toBe(400)
+    }
+    const max = await f.call(path, { token: f.token, headers: { ...headers, range: `bytes=0-${MAX_MEDIA_BLOCK - 1}` } })
+    expect(max.status).toBe(206); expect(max.body.length).toBe(MAX_MEDIA_BLOCK)
+    const handle = await open(file, 'r'), read = handle.read.bind(handle)
+    const reading = vi.spyOn(handle, 'read').mockImplementation(async (...args: Parameters<typeof read>) => {
+      const result = await read(...args)
+      await writeFile(file, Buffer.alloc(MAX_MEDIA_BLOCK + 1, 66))
+      return result
+    })
+    const opening = vi.spyOn(fs, 'open').mockResolvedValueOnce(handle)
+    try {
+      const changed = await f.call(path, { token: f.token, headers: { ...headers, range: 'bytes=0-1023' } })
+      expect(changed.status).toBe(412); expect(changed.body).toBe('')
+    } finally { reading.mockRestore(); opening.mockRestore(); await handle.close() }
+  })
+  it('does not follow a replaced path in the middle of a verified read', async () => {
+    const f = await fixture(), file = join(f.dir, 'film.mp4'), replacement = join(f.dir, 'new.mp4')
+    const path = `/media?${new URLSearchParams({ project: f.dir, file: 'film.mp4' })}`
+    const head = await f.call(path, { token: f.token, method: 'HEAD' })
+    await writeFile(replacement, 'ABCDEFGHIJ')
+    let replacementBlocked = false
+    const handle = await open(file, 'r'), read = handle.read.bind(handle)
+    const reading = vi.spyOn(handle, 'read').mockImplementation(async (...args: Parameters<typeof read>) => {
+      const result = await read(...args)
+      try { await rename(replacement, file) }
+      catch (e) {
+        // Windows can refuse replacing an open file. Still verify that the pinned
+        // handle returns its original bytes, and exercise replacement after close.
+        if (process.platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes((e as NodeJS.ErrnoException).code || '')) throw e
+        replacementBlocked = true
+      }
+      return result
+    })
+    const opening = vi.spyOn(fs, 'open').mockResolvedValueOnce(handle)
+    try {
+      const result = await f.call(path, { token: f.token, headers: {
+        'if-match': head.headers.etag as string, 'x-agentshot-range-cache': '1', range: 'bytes=0-9',
+      } })
+      // Removing the inode's directory entry may change ctime: either the old bytes or a conservative rejection.
+      expect([206, 412]).toContain(result.status)
+      expect(result.body).toBe(result.status === 206 ? '0123456789' : '')
+    } finally { reading.mockRestore(); opening.mockRestore(); await handle.close() }
+    if (replacementBlocked) {
+      await rename(replacement, file)
+      const stale = await f.call(path, { token: f.token, headers: {
+        'if-match': head.headers.etag as string, 'x-agentshot-range-cache': '1', range: 'bytes=0-9',
+      } })
+      expect(stale.status).toBe(412); expect(stale.body).toBe('')
+    }
+  })
   it('reports the Headscale mesh IP apart from Tailscale and the port it bound', async () => {
     let mesh: string | undefined = '100.64.0.9'
     const bridge = new MobileBridge({ invoke: async () => null, projects: () => [], importFile: async () => null, galleryFile: () => new Response(''), meshIp: () => mesh }, () => ['192.168.1.4', '100.64.0.9']); bridges.push(bridge)
@@ -110,7 +171,7 @@ describe('mobile TLS bridge', () => {
     expect((await f.call(path, { token: f.token, headers: { range: 'bytes=20-' } })).status).toBe(416)
     // a film the phone kept: the same version answers 304 (nothing sent), a changed one comes in full
     const tag = range.headers.etag as string
-    expect(tag).toMatch(/^"[a-z0-9]+-[a-z0-9]+"$/)
+    expect(tag).toMatch(/^"[a-f0-9]{64}"$/)
     const same = await f.call(path, { token: f.token, headers: { 'if-none-match': tag } })
     expect(same.status).toBe(304); expect(same.body).toBe('')
     expect((await f.call(path, { token: f.token, method: 'HEAD', headers: { 'if-none-match': tag } })).status).toBe(304)
@@ -121,6 +182,28 @@ describe('mobile TLS bridge', () => {
     expect(upload.status).toBe(200); expect(JSON.parse(upload.body)).toEqual({ name: 'phone.mp4', content: 'real footage bytes' })
     const file = f.importFile.mock.calls[0][0]
     await expect(readFile(file)).rejects.toThrow()
+  })
+  it('pins cached ranges to a revision and rejects same-size rewrites even with restored mtime', async () => {
+    const f = await fixture(), file = join(f.dir, 'film.mp4')
+    const path = `/media?${new URLSearchParams({ project: f.dir, file: 'film.mp4' })}`
+    const first = await f.call(path, { token: f.token, method: 'HEAD' })
+    expect(first.headers['x-agentshot-range-cache']).toBe('1')
+    const headers = { range: 'bytes=2-5', 'if-match': first.headers.etag as string, 'x-agentshot-range-cache': '1' }
+    const block = await f.call(path, { token: f.token, headers })
+    expect(block.status).toBe(206); expect(block.body).toBe('2345')
+    const before = await stat(file)
+    await writeFile(file, 'ABCDEFGHIJ'); await utimes(file, before.atime, before.mtime)
+    expect((await f.call(path, { token: f.token, headers })).status).toBe(412)
+    const changed = await f.call(path, { token: f.token, method: 'HEAD' })
+    expect(changed.headers.etag).not.toBe(first.headers.etag)
+    expect((await f.call(path, { token: f.token, headers: { ...headers, 'if-match': changed.headers.etag as string } })).body).toBe('CDEF')
+    expect((await f.call(path, { token: f.token, headers: { 'x-agentshot-range-cache': '1' } })).status).toBe(400)
+    for (const range of ['bytes=-0', 'bytes=5-2', 'bytes=0-1,4-5', 'bytes=9007199254740992-']) {
+      expect((await f.call(path, { token: f.token, headers: { range } })).status).toBe(416)
+    }
+    // Standard If-Range mismatch falls back to the whole representation for older players.
+    const fallback = await f.call(path, { token: f.token, headers: { range: 'bytes=0-1', 'if-range': first.headers.etag as string } })
+    expect(fallback.status).toBe(200); expect(fallback.body).toBe('ABCDEFGHIJ')
   })
   it('tags what the phone keeps, and says "unchanged" in a few bytes when it already has it', async () => {
     const f = await fixture()

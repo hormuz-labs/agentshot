@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { listJobs, onJobs } from '../src/main/jobs'
+import { fileRevision } from '../src/main/transcript-chunks'
 
 vi.mock('../src/main/media', () => ({
   WHISPER_CLI: process.execPath,
@@ -44,11 +45,11 @@ describe('optional Large-v3 export captions', () => {
     expect(probe).not.toHaveBeenCalled()
   })
 
-  it('reuses only the Large-v3 export cache and leaves the normal engine choice alone', async () => {
+  it('rebuilds legacy Large-v3 caches without source/model identity and leaves the editing engine alone', async () => {
     installed()
     writeFileSync(cache, JSON.stringify(transcript(LARGE_EXPORT_LABEL)))
-    expect(await exportTranscript('film.mp4', cache, 'Captions')).toEqual(transcript(LARGE_EXPORT_LABEL))
-    expect(probe).not.toHaveBeenCalled()
+    expect((await exportTranscript('film.mp4', cache, 'Captions'))?.model).toBe('no audio track')
+    expect(probe).toHaveBeenCalledTimes(1)
     expect(await resolveEngine({ binaries: async () => [], models: () => [] })).toBeNull()
   })
 
@@ -102,11 +103,14 @@ describe('optional Large-v3 export captions', () => {
 
   it('reuses no-audio caches and rebuilds corrupt JSON rather than failing the export', async () => {
     installed()
-    writeFileSync(cache, JSON.stringify(transcript('no audio track')))
-    expect(await exportTranscript('film.mp4', cache, 'Captions')).toEqual(transcript('no audio track'))
+    const file = join(dir, 'silent.mp4')
+    writeFileSync(file, 'silent source')
+    const saved = { ...transcript('no audio track'), revision: await fileRevision(file) }
+    writeFileSync(cache, JSON.stringify(saved))
+    expect(await exportTranscript(file, cache, 'Captions')).toEqual(saved)
     expect(probe).not.toHaveBeenCalled()
     writeFileSync(cache, '{broken JSON')
-    expect((await exportTranscript('film.mp4', cache, 'Captions'))?.model).toBe('no audio track')
+    expect((await exportTranscript(file, cache, 'Captions'))?.model).toBe('no audio track')
     expect(probe).toHaveBeenCalledTimes(1)
     expect(JSON.parse(readFileSync(cache, 'utf8')).model).toBe('no audio track')
   })

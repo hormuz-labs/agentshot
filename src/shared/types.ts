@@ -29,6 +29,8 @@ export type Version = {
   by: 'import' | 'agent' | 'user'
   /** The timeline this version was rendered from (accepting it makes it the project's timeline). */
   timeline?: Timeline
+  /** Source/output revisions captured when rendering; only matching audio provenance can reuse transcripts. */
+  transcriptSources?: Record<string, string>
   /** When the version has a mix: the same film before mixing (picture + its own sound), which the player uses so the
    *  live mix can change levels without stacking on the rendered mix. */
   dry?: string
@@ -201,9 +203,11 @@ export type WhisperConfig = {
   binary?: string
   model?: string
 }
+export type SpeechPerformance = { threads?: number; beam?: 1 | 5; vad?: boolean; device?: 'auto' | 'cpu' }
 
 /** What the Tools dialog shows about speech recognition. */
 export type WhisperStatus = {
+  performance?: SpeechPerformance
   config?: WhisperConfig
   /** The engine that would run right now, or null when one must be installed first. */
   active: { engine: 'system' | 'bundled' | 'managed'; binary?: string; model?: string; label: string } | null
@@ -217,7 +221,7 @@ export type WhisperStatus = {
 
 export type Word = { w: string; s: number; e: number; p?: number }
 export type Segment = { s: number; e: number; text: string; words: Word[] }
-export type Transcript = { media: string; language: string; model: string; segments: Segment[]; createdAt: number }
+export type Transcript = { media: string; language: string; model: string; segments: Segment[]; createdAt: number; /** source identity for restart-safe caches */ revision?: string; /** engine/model/settings identity */ profile?: string }
 
 // ---------------------------------------------------------------- the agent's browser
 /** recording: a product walkthrough is filming this tab */

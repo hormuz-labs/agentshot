@@ -47,13 +47,24 @@ describe('engine choice with the bundled engine', () => {
     expect(Tools.isInstalled('whisper')).toBe(false)
   })
 
-  it.skipIf(!built)('still prefers whisper.cpp already on the computer', async () => {
+  it.skipIf(!built)('uses system whisper.cpp when the bundled model is missing', async () => {
     mkdirSync(join(process.env.MANUL_TOOLS!, 'whisper-model'), { recursive: true })
     writeFileSync(join(process.env.MANUL_TOOLS!, 'whisper-model', '.installed.json'), '{}')
     const model = join(process.env.MANUL_TOOLS!, 'x.bin')
     const sys = { binaries: async () => [WHISPER_CLI], models: () => [model] }
     writeFileSync(model, '')
     expect((await resolveEngine(sys))?.engine).toBe('system')
+  })
+  it.skipIf(!built)('prefers bundled GPU-capable inference in auto mode while respecting custom paths', async () => {
+    mkdirSync(join(process.env.MANUL_TOOLS!, 'whisper-model'), { recursive: true })
+    writeFileSync(join(process.env.MANUL_TOOLS!, 'whisper-model', '.installed.json'), '{}')
+    writeFileSync(Tools.whisperModelPath(), '')
+    const model = join(process.env.MANUL_TOOLS!, 'custom.bin')
+    writeFileSync(model, '')
+    setConfig({ whisper: { engine: 'system', mode: 'auto', binary: process.execPath, model } })
+    expect((await resolveEngine(none))?.engine).toBe('bundled')
+    setConfig({ whisper: { engine: 'system', mode: 'custom', binary: process.execPath, model } })
+    expect(await resolveEngine(none)).toMatchObject({ engine: 'system', binary: process.execPath, model })
   })
 
   it('the model download is pinned and small', async () => {

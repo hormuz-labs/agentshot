@@ -1,32 +1,45 @@
-// The phone's media relay with its cache, against a stand-in computer (pinned TLS, ETags and ranges like the desktop's
-// bridge): a film comes over once, plays from the phone after that, comes again only when it changed, and still plays
-// with the computer out of reach.
+// Real TLS sockets through the production phone relay. Synthetic media keeps multi-GB cases cheap and deterministic.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:agentshot_mobile/bridge/client.dart';
 import 'package:agentshot_mobile/bridge/media_cache.dart';
+import 'package:agentshot_mobile/bridge/media_ranges.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  // real sockets: the test binding's own HTTP stand-in answers 400 to everything
   HttpOverrides.global = null;
   FlutterSecureStorage.setMockInitialValues({});
-
   late Directory tmp;
   late HttpServer computer;
+  late BridgeClient client;
+  late MediaCache cache;
+  late Directory cacheRoot;
+  late SecurityContext tls;
   late String fingerprint;
-  var film = utf8.encode('0123456789'), etag = '"v1"';
-  // a computer from before tags (every release so far): no ETag, no 304
-  var tags = true;
-  final asked = <String>[];
+  var size = 8 * 1024 * 1024 + 17,
+      version = 1,
+      transferred = 0,
+      active = 0,
+      peak = 0;
+  var supportsBlocks = true, denied = false, malformed = false;
+  var truncated = false;
+  var chunkDelay = Duration.zero;
+  Completer<void>? blockStarted, releaseBlock;
+  int? mutateAfter;
+  final ranges = <String>[];
+  final http = HttpClient();
+  List<int> content(int start, int length, int v) =>
+      List.generate(length, (i) => (start + i + v) % 251);
 
   setUpAll(() async {
     tmp = await Directory.systemTemp.createTemp('media-relay-test-');
-    // where a shared film is copied out to
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('plugins.flutter.io/path_provider'),
@@ -49,220 +62,424 @@ void main() {
     ]);
     expect(made.exitCode, 0, reason: '${made.stderr}');
     final pem = await File('${tmp.path}/cert.pem').readAsString();
-    final der = base64.decode(
-      pem
-          .split('\n')
-          .where((l) => l.isNotEmpty && !l.startsWith('-----'))
-          .join(),
-    );
-    fingerprint = sha256.convert(der).toString();
-    final context = SecurityContext()
+    fingerprint = sha256
+        .convert(
+          base64.decode(
+            pem
+                .split('\n')
+                .where((l) => l.isNotEmpty && !l.startsWith('-----'))
+                .join(),
+          ),
+        )
+        .toString();
+    tls = SecurityContext()
       ..useCertificateChain('${tmp.path}/cert.pem')
       ..usePrivateKey('${tmp.path}/key.pem');
+  });
+  setUp(() async {
+    size = 8 * 1024 * 1024 + 17;
+    version = 1;
+    transferred = 0;
+    active = 0;
+    peak = 0;
+    supportsBlocks = true;
+    denied = false;
+    malformed = false;
+    mutateAfter = null;
+    ranges.clear();
+    truncated = false;
+    chunkDelay = Duration.zero;
+    blockStarted = null;
+    releaseBlock = null;
     computer = await HttpServer.bindSecure(
       InternetAddress.loopbackIPv4,
       0,
-      context,
+      tls,
     );
     computer.listen((req) async {
       final res = req.response;
-      if (req.uri.path == '/hello') {
-        res.write('{}');
-        await res.close();
-        return;
+      try {
+        if (req.uri.path == '/hello' || req.uri.path == '/unpair') {
+          res.write('{}');
+          await res.close();
+          return;
+        }
+        if (denied) {
+          res.statusCode = 401;
+          await res.close();
+          return;
+        }
+        final tag = '"v$version"', v = version;
+        res.headers
+          ..set('etag', tag)
+          ..set('accept-ranges', 'bytes')
+          ..contentType = ContentType('video', 'mp4');
+        if (supportsBlocks) res.headers.set('x-agentshot-range-cache', '1');
+        if (req.headers.value('if-match') != null &&
+            req.headers.value('if-match') != tag) {
+          res.statusCode = 412;
+          await res.close();
+          return;
+        }
+        if (req.headers.value('if-none-match') == tag) {
+          res.statusCode = 304;
+          await res.close();
+          return;
+        }
+        final header = req.headers.value('range');
+        final range = header == null
+            ? (start: 0, end: size - 1)
+            : playbackRange(header, size);
+        if (range == null) {
+          res.statusCode = 416;
+          await res.close();
+          return;
+        }
+        if (header != null) {
+          res.statusCode = 206;
+          res.headers.set(
+            'content-range',
+            malformed
+                ? 'bytes 0-0/$size'
+                : 'bytes ${range.start}-${range.end}/$size',
+          );
+        }
+        res.contentLength = range.end - range.start + 1;
+        if (req.method == 'HEAD') {
+          await res.close();
+          return;
+        }
+        ranges.add(header ?? 'whole');
+        active++;
+        peak = max(peak, active);
+        try {
+          if (blockStarted?.isCompleted == false) blockStarted!.complete();
+          await releaseBlock?.future;
+          for (var offset = range.start; offset <= range.end; offset += 65536) {
+            final n = min(65536, range.end - offset + 1);
+            transferred += n;
+            res.add(content(offset, n, v));
+            await res.flush();
+            if (truncated) {
+              res.deadline = Duration.zero;
+              return;
+            }
+            if (chunkDelay != Duration.zero) {
+              await Future<void>.delayed(chunkDelay);
+            }
+          }
+          await res.close();
+          if (mutateAfter == ranges.length) version++;
+        } finally {
+          active--;
+        }
+      } catch (_) {
+        res.deadline = Duration.zero;
       }
-      final range = req.headers.value('range');
-      asked.add(
-        '${req.method} ${range ?? 'whole'} ${req.headers.value('if-none-match') ?? ''}'
-            .trim(),
-      );
-      res.headers
-        ..set('accept-ranges', 'bytes')
-        ..contentType = ContentType('video', 'mp4');
-      if (tags) res.headers.set('etag', etag);
-      if (tags && req.headers.value('if-none-match') == etag) {
-        res.statusCode = 304;
-        await res.close();
-        return;
-      }
-      var bytes = film;
-      if (range != null) {
-        final m = RegExp(r'bytes=(\d+)-(\d*)').firstMatch(range)!;
-        final a = int.parse(m.group(1)!),
-            b = m.group(2)!.isEmpty ? film.length - 1 : int.parse(m.group(2)!);
-        bytes = film.sublist(a, b + 1);
-        res.statusCode = 206;
-        res.headers.set('content-range', 'bytes $a-$b/${film.length}');
-      }
-      res.contentLength = bytes.length;
-      if (req.method != 'HEAD') res.add(bytes);
-      await res.close();
     });
+    cacheRoot = Directory(
+      '${tmp.path}/cache-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    cache = MediaCache(root: () async => cacheRoot);
+    client = BridgeClient(cache: cache);
+    await client.connectDirect(
+      Connection(
+        Uri.parse('https://127.0.0.1:${computer.port}'),
+        fingerprint,
+        'token',
+      ),
+    );
   });
-
-  tearDownAll(() async {
+  tearDown(() async {
+    await client.dispose();
     await computer.close(force: true);
+  });
+  tearDownAll(() async {
+    http.close(force: true);
+    await Future<void>.delayed(const Duration(milliseconds: 500));
     await tmp.delete(recursive: true);
   });
 
-  Future<(int, String)> play(Uri uri, String range) async {
-    final http = HttpClient();
-    try {
-      final req = await http.getUrl(uri);
-      req.headers.set('range', range);
-      final res = await req.close();
-      return (res.statusCode, await utf8.decodeStream(res));
-    } finally {
-      http.close(force: true);
-    }
+  Future<(int, List<int>)> play(
+    Uri uri,
+    String range, {
+    String method = 'GET',
+  }) async {
+    final req = await http.openUrl(method, uri);
+    req.headers.set('range', range);
+    final res = await req.close();
+    final bytes = await res.fold<BytesBuilder>(
+      BytesBuilder(),
+      (b, chunk) => b..add(chunk),
+    );
+    return (res.statusCode, bytes.takeBytes());
   }
 
-  test(
-    'leaving does not wait on a computer that takes the connection and never answers',
-    () async {
-      final cache = MediaCache(
-        root: () async => Directory('${tmp.path}/leaving'),
-      );
-      final client = BridgeClient(cache: cache)
-        ..unpairWait = const Duration(seconds: 1);
-      // a cloud worker shutting down: its port still takes connections, but nothing answers them
-      final port = (await ServerSocket.bind(InternetAddress.loopbackIPv4, 0));
-      final held = <Socket>[];
-      port.listen(held.add);
-      await client.connectDirect(
-        Connection(
-          Uri.parse('https://127.0.0.1:${computer.port}'),
-          fingerprint,
-          'token',
-        ),
-      );
-      // the same client, now pointed at the silent one
-      client.connection = Connection(
-        Uri.parse('https://127.0.0.1:${port.port}'),
-        fingerprint,
-        'token',
-      );
-      final began = DateTime.now();
-      await client.disconnect().timeout(const Duration(seconds: 10));
-      expect(
-        DateTime.now().difference(began),
-        lessThan(const Duration(seconds: 5)),
-      );
+  test('leaving does not wait on a computer that never answers', () async {
+    client.unpairWait = const Duration(milliseconds: 200);
+    final port = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final held = <Socket>[];
+    port.listen(held.add);
+    client.connection = Connection(Uri.parse('https://127.0.0.1:${port.port}'), fingerprint, 'token');
+    try {
+      await client.disconnect().timeout(const Duration(seconds: 3));
       expect(client.connection, isNull);
-      for (final socket in held) {
-        socket.destroy();
-      }
+      expect(await cache.size(), 0);
+    } finally {
+      for (final socket in held) { socket.destroy(); }
       await port.close();
-    },
-  );
+    }
+  });
+
+  test('an unwritable cache does not prevent online playback', () async {
+    await client.dispose();
+    final unavailable = File('${tmp.path}/not-a-directory');
+    await unavailable.writeAsString('occupied');
+    cache = MediaCache(root: () async => Directory(unavailable.path));
+    client = BridgeClient(cache: cache);
+    expect(await client.restore(), isTrue);
+    final uri = await client.media('/p', 'film.mp4');
+    expect((await play(uri, 'bytes=0-3')).$2, content(0, 4, 1));
+    expect(ranges, hasLength(1));
+  });
+
+  test('a range crossing the last block preserves exact byte order and length', () async {
+    size = MediaRanges.blockSize + 17;
+    final uri = await client.media('/p', 'film.mp4');
+    final start = MediaRanges.blockSize - 7;
+    final result = await play(uri, 'bytes=$start-${size + 100}');
+    expect(result.$1, 206);
+    expect(result.$2, content(start, 24, 1));
+    expect(transferred, size);
+    expect(ranges, ['bytes=0-${MediaRanges.blockSize - 1}', 'bytes=${MediaRanges.blockSize}-${size - 1}']);
+  });
 
   test(
-    'a computer without tags still has its films kept, versioned by their size',
+    'short previews of a 20 GiB film fetch only touched blocks; replay and suffix seek reuse them',
     () async {
-      final cache = MediaCache(
-        root: () async => Directory('${tmp.path}/untagged'),
-      );
-      final client = BridgeClient(cache: cache);
-      await client.connectDirect(
-        Connection(
-          Uri.parse('https://127.0.0.1:${computer.port}'),
-          fingerprint,
-          'token',
-        ),
-      );
-      tags = false;
-      try {
-        // the film opened is fetched whole, without anyone playing it
-        await client.keep('/p', 'renders/old.mp4');
-        expect(await cache.size(), film.length);
-        asked.clear();
-        final uri = await client.media('/p', 'renders/old.mp4');
-        final http = HttpClient();
-        final req = await http.getUrl(uri);
-        req.headers.set('range', 'bytes=2-5');
-        final res = await req.close();
-        expect((res.statusCode, await utf8.decodeStream(res)), (206, '2345'));
-        http.close(force: true);
-        // played from the phone: nothing asked of the computer
-        expect(asked, isEmpty);
-      } finally {
-        tags = true;
-        await client.dispose();
-      }
+      size = 20 * 1024 * 1024 * 1024;
+      final uri = await client.media('/p', 'film.mp4');
+      final result = await play(uri, 'bytes=2-5');
+      expect(result.$1, 206);
+      expect(result.$2, content(2, 4, 1));
+      expect(transferred, MediaRanges.blockSize);
+      expect((await play(uri, 'bytes=3-7')).$2, content(3, 5, 1));
+      expect(transferred, MediaRanges.blockSize);
+      expect((await play(uri, 'bytes=-17')).$2, content(size - 17, 17, 1));
+      expect(transferred, 2 * MediaRanges.blockSize);
+      expect(ranges.every((r) => r != 'whole'), isTrue);
+      expect(await cache.size(), lessThan(3 * MediaRanges.blockSize));
     },
   );
-
   test(
-    'a film comes over once, then plays from the phone until it changes, and offline too',
+    'concurrent overlap is downloaded once and remote concurrency stays bounded',
     () async {
-      final cache = MediaCache(
-        root: () async => Directory('${tmp.path}/cache'),
+      final uri = await client.media('/p', 'film.mp4');
+      await Future.wait(
+        List.generate(8, (i) => play(uri, 'bytes=${i * 2}-${i * 2 + 1}')),
       );
-      final client = BridgeClient(cache: cache);
-      await client.connectDirect(
-        Connection(
-          Uri.parse('https://127.0.0.1:${computer.port}'),
-          fingerprint,
-          'token',
+      expect(ranges, hasLength(1));
+      await Future.wait(
+        List.generate(
+          5,
+          (i) => play(
+            uri,
+            'bytes=${(i + 1) * MediaRanges.blockSize}-${(i + 1) * MediaRanges.blockSize + 1}',
+          ),
         ),
       );
-      final uri = await client.media('/p', 'renders/cut.mp4');
-
-      // first play: streamed from the computer in parts, and fetched whole behind it
-      expect(await play(uri, 'bytes=0-3'), (206, '0123'));
-      for (var i = 0; i < 50 && await cache.size() == 0; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(peak, lessThanOrEqualTo(2));
+    },
+  );
+  test(
+    'old player URLs cannot splice new renders into cached old blocks',
+    () async {
+      final old = await client.media('/p', 'film.mp4');
+      await play(old, 'bytes=0-3');
+      version = 2;
+      expect(
+        (await play(
+          old,
+          'bytes=${MediaRanges.blockSize}-${MediaRanges.blockSize + 3}',
+        )).$1,
+        502,
+      );
+      expect((await play(old, 'bytes=0-3')).$2, content(0, 4, 1));
+      final fresh = await client.media('/p', 'film.mp4');
+      expect(fresh, isNot(old));
+      expect((await play(fresh, 'bytes=0-3')).$2, content(0, 4, 2));
+    },
+  );
+  test(
+    'a version change during a multi-block response fails instead of returning mixed bytes',
+    () async {
+      final uri = await client.media('/p', 'film.mp4');
+      mutateAfter = 1;
+      await expectLater(
+        play(uri, 'bytes=0-${2 * MediaRanges.blockSize - 1}'),
+        throwsA(isA<HttpException>()),
+      );
+      expect(ranges, hasLength(1));
+    },
+  );
+  test('malformed blocks are not cached and can be retried', () async {
+    final uri = await client.media('/p', 'film.mp4');
+    malformed = true;
+    expect((await play(uri, 'bytes=0-3')).$1, 502);
+    malformed = false;
+    expect((await play(uri, 'bytes=0-3')).$2, content(0, 4, 1));
+    expect(ranges, hasLength(2));
+  });
+  test(
+    'HEAD and invalid ranges transfer no media; eviction respects the shared disk budget',
+    () async {
+      cache.limit = MediaRanges.blockSize + 4096;
+      final uri = await client.media('/p', 'film.mp4');
+      expect((await play(uri, 'bytes=0-3', method: 'HEAD')).$2, isEmpty);
+      for (final range in [
+        'bytes=-0',
+        'bytes=4-2',
+        'bytes=0-1,4-5',
+        'bytes=$size-',
+      ]) {
+        expect((await play(uri, range)).$1, 416);
       }
-      expect(await cache.size(), 10);
-      expect(asked, ['GET bytes=0-3', 'GET whole']);
-
-      // again: from the phone, nothing asked of the computer
-      asked.clear();
-      expect(await play(uri, 'bytes=2-5'), (206, '2345'));
-      expect(await play(uri, 'bytes=-3'), (206, '789'));
-      expect(asked, isEmpty);
-
-      Future<void> settle(bool Function() done) async {
-        for (var i = 0; i < 100 && !done(); i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-        }
-      }
-
-      // checked with the computer by its tag behind what's already playing: unchanged costs a 304, nothing more
-      MediaCache.recheck = Duration.zero;
-      expect(await play(uri, 'bytes=0-1'), (206, '01'));
-      await settle(() => asked.isNotEmpty);
-      expect(asked, ['HEAD whole "v1"']);
-
-      // a new render in its place: the kept one plays at once, the new one comes behind it, and its picture reloads
-      asked.clear();
-      film = utf8.encode('ABCDEFGHIJKL');
-      etag = '"v2"';
-      final changed = client.mediaChanged.first;
-      expect(await play(uri, 'bytes=0-3'), (206, '0123'));
-      expect(await changed.timeout(const Duration(seconds: 5)), (
-        '/p',
-        'renders/cut.mp4',
-      ));
-      expect(asked, ['HEAD whole "v1"', 'GET whole']);
-      expect(await cache.size(), 12);
-      final fresh = await client.media('/p', 'renders/cut.mp4');
-      expect(fresh, isNot(uri));
-      MediaCache.recheck = const Duration(minutes: 2);
-      expect(await play(fresh, 'bytes=0-3'), (206, 'ABCD'));
-
-      // sharing it needs no network: the kept file, copied out
-      asked.clear();
-      MediaCache.recheck = const Duration(minutes: 2);
-      final shared = await client.download('/p', 'renders/cut.mp4');
-      expect(await shared.readAsString(), 'ABCDEFGHIJKL');
-      expect(asked, isEmpty);
-
-      // the computer out of reach: what's kept still plays
-      MediaCache.recheck = Duration.zero;
-      await computer.close(force: true);
-      expect(await play(uri, 'bytes=4-7'), (206, 'EFGH'));
+      expect(transferred, 0);
+      await play(uri, 'bytes=0-3');
+      await play(
+        uri,
+        'bytes=${MediaRanges.blockSize}-${MediaRanges.blockSize + 3}',
+      );
+      expect(await cache.size(), lessThanOrEqualTo(cache.limit));
+      await play(uri, 'bytes=0-3');
+      expect(ranges, hasLength(3));
+    },
+  );
+  test(
+    'legacy desktops stream only the requested range without full-film background downloads',
+    () async {
+      supportsBlocks = false;
+      final uri = await client.media('/p', 'film.mp4');
+      expect((await play(uri, 'bytes=2-5')).$2, content(2, 4, 1));
+      expect(transferred, 4);
+      expect(ranges, ['bytes=2-5']);
+    },
+  );
+  test(
+    'cached blocks survive restart and work offline; new uncached blocks fail',
+    () async {
+      final uri = await client.media('/p', 'film.mp4');
+      await play(uri, 'bytes=0-3');
       await client.dispose();
+      cache = MediaCache(root: () async => cacheRoot);
+      client = BridgeClient(cache: cache);
+      expect(await client.restore(), isTrue);
+      await computer.close(force: true);
+      final offline = await client.media('/p', 'film.mp4');
+      expect((await play(offline, 'bytes=2-5')).$2, content(2, 4, 1));
+      expect(
+        (await play(
+          offline,
+          'bytes=${MediaRanges.blockSize}-${MediaRanges.blockSize + 3}',
+        )).$1,
+        502,
+      );
     },
   );
+  test(
+    'metadata authorization failures do not silently serve offline data',
+    () async {
+      final uri = await client.media('/p', 'film.mp4');
+      await play(uri, 'bytes=0-3');
+      denied = true;
+      await expectLater(client.media('/p', 'film.mp4'), throwsA(anything));
+    },
+  );
+  test('explicit export still downloads a complete file', () async {
+    size = 4096;
+    cache.limit = 100;
+    final file = await client.download('/p', 'film.mp4');
+    expect(await file.readAsBytes(), content(0, size, 1));
+    expect(ranges, ['whole']);
+    expect(await cache.size(), 0);
+  });
+  test(
+    'cancelled open-ended playback stops within bounded read-ahead',
+    () async {
+      size = 20 * 1024 * 1024 * 1024;
+      chunkDelay = const Duration(milliseconds: 2);
+      final uri = await client.media('/p', 'film.mp4');
+      final player = HttpClient();
+      final req = await player.getUrl(uri);
+      req.headers.set('range', 'bytes=0-');
+      final response = await req.close();
+      await response.first;
+      player.close(force: true);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      final stopped = transferred;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(transferred, stopped);
+      expect(transferred, lessThanOrEqualTo(3 * MediaRanges.blockSize));
+      expect(active, 0);
+    },
+  );
+  test(
+    'truncated blocks are discarded and a later request retries them',
+    () async {
+      final uri = await client.media('/p', 'film.mp4');
+      truncated = true;
+      expect((await play(uri, 'bytes=0-3')).$1, 502);
+      truncated = false;
+      expect((await play(uri, 'bytes=0-3')).$2, content(0, 4, 1));
+      expect(ranges, hasLength(2));
+    },
+  );
+  test(
+    'clearing during a remote read prevents that block from repopulating the cache',
+    () async {
+      final uri = await client.media('/p', 'film.mp4');
+      blockStarted = Completer<void>();
+      releaseBlock = Completer<void>();
+      final playing = play(uri, 'bytes=0-3');
+      await blockStarted!.future;
+      await cache.clear();
+      releaseBlock!.complete();
+      expect((await playing).$2, content(0, 4, 1));
+      expect(await cache.size(), 0);
+      await play(uri, 'bytes=0-3');
+      expect(ranges, hasLength(2));
+    },
+  );
+  test('interrupted exports leave no partial file', () async {
+    truncated = true;
+    await expectLater(client.download('/p', 'broken.mp4'), throwsA(anything));
+    final exports = Directory('${tmp.path}/agentshot-exports');
+    expect(
+      await exports.list().where((f) => f.path.contains('broken.mp4')).toList(),
+      isEmpty,
+    );
+  });
+  test('slow duplicate readers have a bounded admission queue', () async {
+    final uri = await client.media('/p', 'film.mp4');
+    blockStarted = Completer<void>();
+    releaseBlock = Completer<void>();
+    final players = List.generate(40, (_) => HttpClient());
+    final replies = players.map((p) async {
+      final req = await p.getUrl(uri);
+      req.headers.set('range', 'bytes=0-3');
+      final response = await req.close();
+      await response.drain<void>();
+      return response.statusCode;
+    }).toList();
+    await blockStarted!.future;
+    // The overload response must arrive while the admitted readers are still blocked.
+    expect(await Future.any(replies).timeout(const Duration(seconds: 3)), 503);
+    releaseBlock!.complete();
+    final statuses = await Future.wait(replies);
+    expect(statuses.where((s) => s == 206).length, lessThanOrEqualTo(16));
+    expect(ranges, hasLength(1));
+    for (final p in players) {
+      p.close(force: true);
+    }
+  });
 }

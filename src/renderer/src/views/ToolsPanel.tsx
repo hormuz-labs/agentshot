@@ -57,6 +57,27 @@ function SpeechSection({ onChange }: { onChange(): void }) {
         {st.bundledReady && engineButton('bundled', 'Use built-in')}
         {st.managedInstalled && engineButton('managed', 'Use Python engine')}
       </div>
+      <div className="mt-3 space-y-2 border-t border-line pt-3 text-xs text-dim">
+        <label className="flex items-center justify-between gap-2">Processing
+          <select aria-label="Processing" className="rounded border border-line bg-bg p-1 text-fg" value={st.performance?.device || 'auto'}
+            onChange={async e => setSt(await window.agentshot.whisper.performance({ ...st.performance, device: e.target.value as 'auto' | 'cpu' }))}>
+            <option value="auto">Automatic GPU / CPU fallback</option><option value="cpu">CPU only</option>
+          </select>
+        </label>
+        <label className="flex items-center justify-between gap-2">CPU threads per worker
+          <select aria-label="CPU threads per worker" className="rounded border border-line bg-bg p-1 text-fg" value={st.performance?.threads || 4}
+            onChange={async e => setSt(await window.agentshot.whisper.performance({ ...st.performance, threads: Number(e.target.value) }))}>
+            {[1, 2, 4, 8, 12, 16].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+        {st.active?.engine === 'managed' && <>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={st.performance?.beam === 1}
+            onChange={async e => setSt(await window.agentshot.whisper.performance({ ...st.performance, beam: e.target.checked ? 1 : 5 }))} />Faster decoding (may change wording)</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={st.performance?.vad === true}
+            onChange={async e => setSt(await window.agentshot.whisper.performance({ ...st.performance, vad: e.target.checked }))} />Skip long silence (experimental)</label>
+        </>}
+        <p className="text-faint">Completed one-minute chunks survive restarts. Selected ranges go first; background work yields between chunks during renders. Setting changes apply to new requests.</p>
+      </div>
     </div>
   )
 }

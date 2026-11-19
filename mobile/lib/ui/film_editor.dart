@@ -43,6 +43,7 @@ class FilmEditor extends StatefulWidget {
 
   /// Where the film is, for whoever asks next (a range note's start).
   final ValueChanged<double>? onPosition;
+  final ValueChanged<bool>? onShowingProposal;
   const FilmEditor({
     super.key,
     required this.title,
@@ -62,6 +63,7 @@ class FilmEditor extends StatefulWidget {
     this.menu = const [],
     required this.onAction,
     this.onPosition,
+    this.onShowingProposal,
   });
 
   @override
@@ -153,6 +155,7 @@ class _FilmEditorState extends State<FilmEditor> with WidgetsBindingObserver {
         controller = next?..addListener(_tick);
         error = null;
       });
+      widget.onShowingProposal?.call(after && widget.proposal != null);
       old?.removeListener(_tick);
       await old?.dispose();
     } catch (e) {
@@ -165,6 +168,13 @@ class _FilmEditorState extends State<FilmEditor> with WidgetsBindingObserver {
 
   void _tick() {
     if (!mounted) return;
+    if (controller?.value.hasError == true) {
+      setState(
+        () => error =
+            'The preview stopped. Retry to load the latest version from your computer.',
+      );
+      return;
+    }
     widget.onPosition?.call(position);
     setState(() {});
   }
@@ -469,12 +479,25 @@ class _FilmEditorState extends State<FilmEditor> with WidgetsBindingObserver {
   Widget picture(VideoPlayerController? c, Studio studio) {
     if (error != null) {
       return Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(Space.xl),
-          child: Text(
-            error!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() => error = null);
+                  _load(position);
+                },
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry preview'),
+              ),
+            ],
           ),
         ),
       );
