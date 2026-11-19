@@ -1,7 +1,7 @@
 // Rendering a film in pieces: a change encodes only the pieces it touches, and the film comes out as long and whole as
 // one rendered at a go.
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -95,9 +95,13 @@ describe('rendering in pieces', () => {
     expect(await key({ ...tl, items: [{ ...tl.items[0], muted: true } as Item] })).not.toBe(base)
     expect(await key(tl, false)).not.toBe(base)
     writeFileSync(join(dir, 'identity.mp4'), 'first')
+    const stamp = new Date('2020-01-01T00:00:00Z')
+    utimesSync(join(dir, 'identity.mp4'), stamp, stamp)
     const identity: Timeline = { ...tl, items: [media('identity.mp4', 0, 3)] }
     const before = await key(identity)
     writeFileSync(join(dir, 'identity.mp4'), 'other')
+    // Rapid writes can share a filesystem clock tick, especially on Windows.
+    utimesSync(join(dir, 'identity.mp4'), stamp, new Date(stamp.getTime() + 2000))
     expect(await key(identity)).not.toBe(before)
   })
 

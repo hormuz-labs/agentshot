@@ -8,25 +8,28 @@ import { gpuBuildFlags } from '../scripts/build-whisper-gpu.mjs'
 
 afterEach(() => setConfig({ speechPerformance: undefined }))
 describe('portable speech GPU selection', () => {
-  it('tries CUDA then Vulkan before CPU, keeping the working GPU for the next chunk', async () => {
+  it('uses the host GPU backends before CPU, keeping the working GPU for the next chunk', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gpu-order-'))
-    const binary = join(dir, 'whisper-cli')
-    for (const backend of ['cuda', 'vulkan']) writeFileSync(join(dir, `whisper-cli-${backend}`), '')
+    const ext = process.platform === 'win32' ? '.exe' : ''
+    const binary = join(dir, `whisper-cli${ext}`)
+    const cuda = join(dir, `whisper-cli-cuda${ext}`), vulkan = join(dir, `whisper-cli-vulkan${ext}`)
+    for (const sibling of [cuda, vulkan]) writeFileSync(sibling, '')
     const run = vi.fn(async (o: { binary: string; flags: string[] }) => {
-      if (o.binary.endsWith('-cuda')) throw new Error('No CUDA device')
+      if (o.binary === cuda) throw new Error('No CUDA device')
     })
     try {
       await speechBackend(binary, run, 'auto')
-      expect(run.mock.calls.map(c => c[0].binary)).toEqual([join(dir, 'whisper-cli-cuda'), join(dir, 'whisper-cli-vulkan')])
+      expect(run.mock.calls.map(c => c[0].binary)).toEqual(process.platform === 'darwin' ? [binary] : [cuda, vulkan])
       run.mockClear()
       await speechBackend(binary, run, 'auto')
-      expect(run).toHaveBeenCalledExactlyOnceWith({ binary: join(dir, 'whisper-cli-vulkan'), flags: [] })
+      expect(run).toHaveBeenCalledExactlyOnceWith({ binary: process.platform === 'darwin' ? binary : vulkan, flags: [] })
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
   it('offers CUDA and vendor-neutral Vulkan siblings on Linux and Windows, Metal in the Mac binary', () => {
-    expect(backendCandidates('/bin/whisper-cli', 'linux', () => true)).toEqual(['/bin/whisper-cli-cuda', '/bin/whisper-cli-vulkan', '/bin/whisper-cli'])
-    expect(backendCandidates('/bin/whisper-cli.exe', 'win32', () => true)).toEqual(['/bin/whisper-cli-cuda.exe', '/bin/whisper-cli-vulkan.exe', '/bin/whisper-cli.exe'])
-    expect(backendCandidates('/bin/whisper-cli', 'darwin', () => true)).toEqual(['/bin/whisper-cli'])
+    const path = (name: string) => join(tmpdir(), name)
+    expect(backendCandidates(path('whisper-cli'), 'linux', () => true)).toEqual(['whisper-cli-cuda', 'whisper-cli-vulkan', 'whisper-cli'].map(path))
+    expect(backendCandidates(path('whisper-cli.exe'), 'win32', () => true)).toEqual(['whisper-cli-cuda.exe', 'whisper-cli-vulkan.exe', 'whisper-cli.exe'].map(path))
+    expect(backendCandidates(path('whisper-cli'), 'darwin', () => true)).toEqual([path('whisper-cli')])
   })
   it('retries a failed accelerated inference on CPU and remembers the failure', async () => {
     const run = vi.fn(async (o: { flags: string[] }) => { if (!o.flags.includes('-ng')) throw new Error('GPU out of memory') })
