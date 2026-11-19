@@ -1,12 +1,13 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import { FFMPEG } from '../src/main/media'
 import { renderOutput, TimelineRenders } from '../src/main/timeline-renders'
+import { transcriptSourcesCurrent } from '../src/main/transcript-timeline'
 import { applyEdit, fromMedia } from '../src/shared/timeline'
 import { cameraLayout } from '../src/shared/demo'
 import type { Project, Version } from '../src/shared/types'
@@ -39,6 +40,27 @@ function fixture() {
 }
 
 describe('timeline render coordination', () => {
+  it.each([false, true])('captures transcript provenance only for unchanged render sources (mutate=%s)', async mutate => {
+    const f = fixture(), dir = await mkdtemp(join(tmpdir(), 'agentshot-provenance-'))
+    try {
+      f.p.dir = dir
+      await mkdir(join(dir, 'media')); await mkdir(join(dir, 'renders'))
+      await writeFile(join(dir, 'media/screen.mp4'), 'original')
+      f.render.mockImplementationOnce(async () => {
+        if (mutate) await writeFile(join(dir, 'media/screen.mp4'), 'changed during render')
+        await writeFile(join(dir, 'renders/new.mp4'), 'rendered')
+        return { final: 'renders/new.mp4' }
+      })
+      await f.renders.request(f.p, f.p.timeline!, 'Render')
+      const v = f.p.versions.at(-1)!
+      expect(await transcriptSourcesCurrent(dir, v.timeline!, v.path, v.transcriptSources)).toBe(!mutate)
+      if (mutate) expect(v.transcriptSources).toBeUndefined()
+      else {
+        await writeFile(join(dir, v.path), 'output replaced')
+        expect(await transcriptSourcesCurrent(dir, v.timeline!, v.path, v.transcriptSources)).toBe(false)
+      }
+    } finally { await rm(dir, { recursive: true, force: true }) }
+  })
   it('shares a chat layout render with Save/Export and preserves the linked sync, framing and cuts', async () => {
     const f = fixture(), expected = structuredClone(f.p.timeline)
     const chat = f.renders.request(f.p, f.p.timeline!, 'Layout adjusted')

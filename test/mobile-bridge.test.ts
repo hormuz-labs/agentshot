@@ -66,10 +66,17 @@ describe('mobile TLS bridge', () => {
     const path = `/media?${new URLSearchParams({ project: f.dir, file: 'film.mp4' })}`
     const head = await f.call(path, { token: f.token, method: 'HEAD' })
     await writeFile(replacement, 'ABCDEFGHIJ')
+    let replacementBlocked = false
     const handle = await open(file, 'r'), read = handle.read.bind(handle)
     const reading = vi.spyOn(handle, 'read').mockImplementation(async (...args: Parameters<typeof read>) => {
       const result = await read(...args)
-      await rename(replacement, file)
+      try { await rename(replacement, file) }
+      catch (e) {
+        // Windows can refuse replacing an open file. Still verify that the pinned
+        // handle returns its original bytes, and exercise replacement after close.
+        if (process.platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes((e as NodeJS.ErrnoException).code || '')) throw e
+        replacementBlocked = true
+      }
       return result
     })
     const opening = vi.spyOn(fs, 'open').mockResolvedValueOnce(handle)
@@ -81,6 +88,13 @@ describe('mobile TLS bridge', () => {
       expect([206, 412]).toContain(result.status)
       expect(result.body).toBe(result.status === 206 ? '0123456789' : '')
     } finally { reading.mockRestore(); opening.mockRestore(); await handle.close() }
+    if (replacementBlocked) {
+      await rename(replacement, file)
+      const stale = await f.call(path, { token: f.token, headers: {
+        'if-match': head.headers.etag as string, 'x-agentshot-range-cache': '1', range: 'bytes=0-9',
+      } })
+      expect(stale.status).toBe(412); expect(stale.body).toBe('')
+    }
   })
   it('reports the Headscale mesh IP apart from Tailscale and the port it bound', async () => {
     let mesh: string | undefined = '100.64.0.9'

@@ -16,7 +16,8 @@ if ($signature.Status -ne 'Valid' -or
     $signerSubject -notmatch '(?:^|,\s*)O=Microsoft Corporation(?:\s*,|$)') {
     throw 'Bundled VCRUNTIME140.dll must have a valid Microsoft signature'
 }
-foreach ($name in @('ffmpeg.exe', 'ffprobe.exe', 'bsk.exe', 'whisper-cli.exe')) {
+$optional = @(Get-ChildItem -LiteralPath $Bin -Filter 'whisper-cli-vulkan.exe' | ForEach-Object { $_.Name })
+foreach ($name in (@('ffmpeg.exe', 'ffprobe.exe', 'bsk.exe', 'whisper-cli.exe') + $optional)) {
     $exe = Join-Path $Bin $name
     if (!(Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Missing $exe" }
     $output = & dumpbin /DEPENDENTS $exe 2>&1
@@ -27,6 +28,8 @@ foreach ($name in @('ffmpeg.exe', 'ffprobe.exe', 'bsk.exe', 'whisper-cli.exe')) 
     })
     if ($dlls.Count -eq 0) { throw "No PE imports found for $exe" }
     foreach ($dll in $dlls) {
+        # Optional sibling only: the GPU driver supplies this loader; baseline CPU startup never loads it.
+        if ($name -eq 'whisper-cli-vulkan.exe' -and $dll -ieq 'vulkan-1.dll') { continue }
         if ($name -eq 'bsk.exe' -and $dll -ieq 'VCRUNTIME140.dll') {
             if (!(Test-Path -LiteralPath $runtime)) { throw 'BrowserSkill runtime is not bundled' }
             continue

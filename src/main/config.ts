@@ -2,10 +2,12 @@
 import { app } from 'electron'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserMode, WhisperConfig } from '../shared/types'
+import type { BrowserMode, SpeechPerformance, WhisperConfig } from '../shared/types'
 
 export type Config = {
   whisper?: WhisperConfig
+  /** Measured speech settings; auto GPU, Base beam 5, and conservative CPU use by default. */
+  speechPerformance?: SpeechPerformance
   /** open project tabs, restored on launch */
   tabs?: { open: string[]; active: string | null }
   /** which browser the agent's bsk drives (default: AgentShot's own) */

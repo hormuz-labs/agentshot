@@ -1,7 +1,7 @@
 // The renderer's only door to the main process. Keys never come back through here: only whether they are set.
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BaseEvent } from '@ag-ui/core'
-import type { AccountStatus, Anchor, Balance, BrowserMode, BrowserState, ChromeBsk, ConsentRequest, Job, KeyInfo, OnDemandTool, Project, RecentProject, ToolStatus, Transcript, WhisperConfig, WhisperStatus } from '../shared/types'
+import type { AccountStatus, Anchor, Balance, BrowserMode, BrowserState, ChromeBsk, ConsentRequest, Job, KeyInfo, OnDemandTool, Project, RecentProject, SpeechPerformance, ToolStatus, Transcript, WhisperConfig, WhisperStatus } from '../shared/types'
 import type { CustomProvider, CustomProviderInfo } from '../shared/providers'
 import type { ChatGPTStatus } from '../shared/chatgpt'
 import type { ClaudeCodeStatus } from '../shared/claude-code'
@@ -97,6 +97,7 @@ const api = {
   },
   whisper: {
     status: () => ipcRenderer.invoke('whisper:status') as Promise<WhisperStatus>,
+    performance: (settings: SpeechPerformance) => ipcRenderer.invoke('whisper:performance', settings) as Promise<WhisperStatus>,
     set: (c: Partial<WhisperConfig> & { mode: WhisperConfig['mode'] }) => ipcRenderer.invoke('whisper:set', c) as Promise<WhisperStatus>,
     pick: (what: 'binary' | 'model') => ipcRenderer.invoke('whisper:pick', what) as Promise<string | null>,
   },
@@ -255,7 +256,7 @@ const api = {
   agent: {
     ready: () => ipcRenderer.invoke('agent:ready') as Promise<boolean>,
     attach: (dir: string) => ipcRenderer.invoke('agent:attach', dir),
-    send: (dir: string, msg: { text: string; anchor?: Anchor; still?: string; files?: string[] }) => ipcRenderer.invoke('agent:send', dir, msg),
+    send: (dir: string, msg: { text: string; anchor?: Anchor; still?: string; files?: string[]; playhead?: number; media?: string }) => ipcRenderer.invoke('agent:send', dir, msg),
     stop: (dir: string) => ipcRenderer.invoke('agent:stop', dir),
     /** a voice note recorded here, as the words said (speech recognition on this computer) */
     hear: (dir: string, audio: Uint8Array) => ipcRenderer.invoke('voice:note', dir, audio) as Promise<string>,

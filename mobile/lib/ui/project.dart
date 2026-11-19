@@ -77,6 +77,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
   (Object, File)? voiceError;
   final composerKey = GlobalKey<ComposerState>();
   double position = 0;
+  String? playingMedia;
   Json? anchor;
   void addRange(double start, double end) {
     setState(() {
@@ -570,8 +571,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 : 'Thinking')
           : null,
       connected: store.connected,
-      onNote: (text, at) =>
-          sendToAgent(context, store, dir, {'text': text, 'anchor': ?at}),
+      onNote: (text, at) => sendToAgent(context, store, dir, {
+        'text': text,
+        'anchor': ?at,
+        'playhead': position,
+        'media': playingMedia ?? film['path'],
+      }),
       onBatch: sendBatch,
       suggestions: suggestionsOf(state.messages),
       onActivity: openActivity,
@@ -581,6 +586,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
       menu: menuItems,
       onAction: action,
       onPosition: (at) => position = at,
+      onShowingProposal: (after) =>
+          playingMedia = (after ? proposal : film)?['path'] as String?,
     );
   }
 
@@ -590,7 +597,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
       for (final (text, at) in notes) {'text': text, 'anchor': ?at},
     ];
     try {
-      await sendToAgent(context, store, dir, {'text': '', 'notes': all});
+      await sendToAgent(context, store, dir, {
+        'text': '',
+        'notes': all,
+        'playhead': position,
+        'media': ?playingMedia,
+      });
     } on BridgeException catch (e) {
       if (e.status != 400) rethrow;
       for (final note in all) {

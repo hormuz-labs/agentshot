@@ -50,6 +50,7 @@
     "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "fetch:bsk": "node scripts/fetch-bsk.mjs",
     "build:whisper": "node scripts/build-whisper.mjs",
+    "build:whisper:gpu": "node scripts/build-whisper-gpu.mjs",
     "version:tag": "node scripts/version-from-tag.mjs",
     "test:packaging": "node --test test/packaging/windows.test.mjs test/packaging/mac.test.mjs",
     "phone:build": "node scripts/phone-build.mjs",

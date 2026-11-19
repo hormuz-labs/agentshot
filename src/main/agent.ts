@@ -75,7 +75,7 @@ export type Bridge = {
   resolveNote(dir: string, id: string, reply: string): Promise<void>
   seek(dir: string, t: number): void
   /** Makes the transcript if needed (may ask the user to download speech recognition). */
-  transcript(dir: string, mediaRel: string): Promise<Transcript | null>
+  transcript(dir: string, mediaRel: string, range?: { t0: number; t1: number }): Promise<Transcript | null>
   /** Who speaks when (made if needed; with count, for exactly that many people), its file and the names given. */
   speakers(dir: string, mediaRel: string, count?: number): Promise<{ result: Speakers; file: string; names: SpeakerNames }>
   /** Name voices (id → name, "" clears); the same name on two voices makes them one person. */
@@ -603,7 +603,7 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       defineTool({
         name: 'transcript',
         description: 'What is said in a media file, with word timings (seconds), fillers (um, uh) included. Word starts and ends are cut points already placed in the quiet around each word: cut exactly on them, no extra room needed. Made on first use; if no speech recognition is installed the user is asked to download it. ' +
-          'Lines are "start–end  text" per sentence, then each word as word@start-end. Use t0/t1 to read part of a long file, search to find words.',
+          'Lines are "start–end  text" per sentence, then each word as word@start-end. For a local edit, supply t0 AND t1: only that excerpt is transcribed, with source-file word times. Without a bounded range, the whole file must be transcribed; search alone also needs the whole file.',
         parameters: Type.Object({
           media: Type.Optional(Type.String({ description: 'project-relative path; default the current version' })),
           t0: Type.Optional(Type.Number()), t1: Type.Optional(Type.Number()),
@@ -613,7 +613,8 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
           const p = proj(api)
           const media = args.media || p.versions.find(v => v.id === p.current)!.path
           inProject(p, media)
-          const t = await bridge.transcript(p.dir, media)
+          const range = args.t1 != null ? { t0: args.t0 ?? 0, t1: args.t1 } : undefined
+          const t = await bridge.transcript(p.dir, media, range)
           if (!t) return text('No transcript: speech recognition is not installed.')
           const q = args.search?.toLowerCase()
           // who says each sentence, when speakers has been worked out already (never waits for it)
@@ -622,7 +623,7 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
           const names = p.speakerNames?.[media] || {}
           const segs = t.segments.map((s, i) => ({ ...s, who: who[i] })).filter(s => (args.t0 == null || s.e >= args.t0) && (args.t1 == null || s.s <= args.t1) && (!q || s.text.toLowerCase().includes(q)))
           const n = (x: number) => x.toFixed(2)
-          return text(`${media} · ${t.language} · ${t.model} · ${t.segments.length} sentences${sp ? ' · [speaker] before each sentence' : ''}\n` +
+          return text(`${media} · ${t.language} · ${t.model} · ${t.segments.length} sentences${range ? ` · requested excerpt ${range.t0}–${range.t1}s (not a whole-file search)` : ''}${sp ? ' · [speaker] before each sentence' : ''}\n` +
             segs.map(s => `${n(s.s)}–${n(s.e)}  ${s.who ? `[${nameOf(s.who, names)}] ` : ''}${s.text}\n  ${s.words.map(w => `${w.w}@${n(w.s)}-${n(w.e)}`).join(' ')}`).join('\n'))
         },
       }),
