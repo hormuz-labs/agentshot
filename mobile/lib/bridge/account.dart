@@ -12,6 +12,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'client.dart';
 import 'mesh.dart';
+import 'relay.dart';
 
 /// Production by default; the end-to-end tests point these at stand-ins with --dart-define.
 const _issuer = String.fromEnvironment(
@@ -65,6 +66,7 @@ class Computer {
       'token': json['token'],
       'machine': json['id'],
       'name': name,
+      'relay': json['relay'],
     });
     return Computer(
       json['id'] as String,
@@ -210,10 +212,20 @@ class Account {
   Future<List<Computer>> computers() async {
     final data = await _asKey('GET', '/v1/workers');
     poolFree = (data['poolAvailable'] as num?)?.toInt() ?? 0;
-    return objects(data['workers'])
-        .where((w) => (w['urls'] as List?)?.isNotEmpty == true)
-        .map(Computer.fromJson)
-        .toList();
+    return parseComputers(data['workers']);
+  }
+
+  /// One obsolete or malformed registration must not hide every other computer.
+  static List<Computer> parseComputers(dynamic workers) {
+    final result = <Computer>[];
+    for (final worker in workers is List ? workers : const []) {
+      try {
+        result.add(Computer.fromJson(object(worker)));
+      } catch (_) {
+        // Only fully validated connections may be dialled.
+      }
+    }
+    return result;
   }
 
   /// Leases a cloud worker: for when none of the person's computers is on.
@@ -261,6 +273,22 @@ class Account {
     return (await lease()).connection;
   }
 
+  /// Restarts the private network after all existing routes failed.
+  Future<void> joinPrivateNetwork(BridgeClient client) async {
+    final join = await _asKey(
+      'POST',
+      '/v1/mesh/join',
+      body: {'role': 'client', 'persistent': true},
+    );
+    // A non-null port may belong to a proxy that died or lost its network.
+    await Mesh.stop();
+    await Mesh.start(
+      join['controlUrl'] as String,
+      join['authKey'] as String,
+    ).timeout(const Duration(seconds: 50));
+    await client.rememberMesh(join['controlUrl'] as String);
+  }
+
   /// Opens [computer]: through the private network when it isn't on this Wi-Fi.
   Future<void> connect(
     BridgeClient client,
@@ -270,30 +298,42 @@ class Account {
     /// A cloud worker is opening this person's space (it restarts into it): a few seconds more.
     void Function()? opening,
   }) async {
-    final target = computer.connection;
+    var target = computer.connection;
     // at home: every address at once, the first to answer wins (about a second)
     var first = await client.firstToAnswer(target);
-    // away: only then the private network, which takes longer to join
-    if (first == null &&
-        target.urls.any((u) => Mesh.isMeshHost(u.host)) &&
-        Mesh.proxyPort == null) {
+    if (first == null) {
+      // A list can be stale after a restart, token expiry or a Wi-Fi change.
+      final fresh = await renew(target);
+      if (fresh != null) {
+        target = fresh;
+        first = await client.firstToAnswer(target);
+      }
+    }
+    // Outbound WSS works on iOS too and needs no inbound firewall/VPN access.
+    if (first == null && target.relay != null) {
       away?.call();
       try {
-        final join = await _asKey(
-          'POST',
-          '/v1/mesh/join',
-          body: {'role': 'client', 'persistent': true},
-        );
-        // never longer than its own limit: a start stuck underneath doesn't hold the person here
-        await Mesh.start(
-          join['controlUrl'] as String,
-          join['authKey'] as String,
-        ).timeout(const Duration(seconds: 50));
-        await client.rememberMesh(join['controlUrl'] as String);
+        await openRelay(client, target);
+        first = await client.firstToAnswer(target, timeout: const Duration(seconds: 20));
+      } catch (_) {}
+    }
+    // Legacy deployments retain their private-network fallback.
+    if (first == null && target.urls.any((u) => Mesh.isMeshHost(u.host))) {
+      away?.call();
+      try {
+        await joinPrivateNetwork(client);
+        // The desktop may have finished joining while the phone was joining.
+        final fresh = await renew(target);
+        if (fresh != null) {
+          target = fresh;
+          if (target.relay != null) await openRelay(client, target);
+        }
         first = await client.firstToAnswer(
           target,
           timeout: const Duration(seconds: 15),
         );
+      } on BridgeException catch (e) {
+        if (e.status == 401) rethrow;
       } catch (_) {
         // no private network here (iOS for now, or the account service has none)
       }
@@ -305,6 +345,8 @@ class Account {
       final end = DateTime.now().add(const Duration(seconds: 60));
       while (first == null && DateTime.now().isBefore(end)) {
         await Future<void>.delayed(const Duration(seconds: 1));
+        final fresh = await renew(target);
+        if (fresh != null) target = fresh;
         first = await client.firstToAnswer(
           target,
           timeout: const Duration(seconds: 5),
@@ -327,9 +369,13 @@ class Account {
         target.urls,
         target.machine,
         target.name,
+        target.relay,
       ),
     );
   }
+
+  Future<void> openRelay(BridgeClient client, Connection target) =>
+      RelayProxy.start(target.relay!, target.url);
 
   Future<Json> _asKey(String method, String path, {Json? body}) async {
     if (!signedIn) throw BridgeException('Sign in first.');
@@ -379,7 +425,10 @@ class Account {
         req.write(jsonEncode(json));
       }
       final res = await req.close().timeout(const Duration(seconds: 30));
-      final text = await utf8.decoder.bind(res).join();
+      final text = await utf8.decoder
+          .bind(res)
+          .join()
+          .timeout(const Duration(seconds: 30));
       Json data = {};
       try {
         data = object(jsonDecode(text));
@@ -396,7 +445,7 @@ class Account {
     } catch (e) {
       throw BridgeException(isBlockedNetwork(e) ? blockedNetwork : failure);
     } finally {
-      http.close();
+      http.close(force: true);
     }
   }
 }

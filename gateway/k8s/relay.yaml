@@ -1,0 +1,55 @@
+# Applied from deploy.sh along with manul.yaml. In-memory routing requires ONE
+# instance; do not add replicas without deterministic worker/stream sharding.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: relay, namespace: manul }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: relay } }
+  template:
+    metadata: { labels: { app: relay } }
+    spec:
+      nodeSelector: { pool: system }
+      securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+      containers:
+        - name: relay
+          image: node:24.11.1-alpine
+          command: [node, /app/server.mjs]
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            - { name: RELAY_SECRET, valueFrom: { secretKeyRef: { name: manul-secrets, key: RELAY_SECRET } } }
+          volumeMounts: [{ name: code, mountPath: /app, readOnly: true }]
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 512Mi }
+      volumes:
+        - name: code
+          configMap: { name: relay-code }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: relay
+  namespace: manul
+  annotations:
+    cloud.google.com/backend-config: '{"default": "relay"}'
+spec:
+  selector: { app: relay }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata: { name: relay, namespace: manul }
+spec:
+  timeoutSec: 3600
+  connectionDraining: { drainingTimeoutSec: 30 }
+  healthCheck: { type: HTTP, requestPath: /healthz, port: 8080 }
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata: { name: manul-relay, namespace: manul }
+spec:
+  domains: [relay.agentshot.si]

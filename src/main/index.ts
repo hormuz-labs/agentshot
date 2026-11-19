@@ -6,6 +6,8 @@ import { projectArgument } from './mobile-contract'
 import { rangeNotesContent } from './range-notes'
 import { NOTES_TOGETHER, parseRangeNotes } from '../shared/range-notes'
 import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-client'
+import { DesktopRelay } from './relay'
+import { initializeNetwork } from './network-electron'
 import { startMeshNode, stopAllMesh, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
 import { closeSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } from 'node:fs'
@@ -205,6 +207,7 @@ const mobile = new MobileBridge(
 )
 
 let meshJoining: Promise<void> | undefined
+const desktopRelay = new DesktopRelay(() => mobile.listenPort())
 let meshRetry: ReturnType<typeof setInterval> | undefined
 // joins Headscale in the background: the pairing code must not wait on the mesh (up to ~90 s when the control server is slow)
 function joinMesh() {
@@ -288,6 +291,7 @@ function syncAccountPhones() {
 const mobileState = () => ({ ...mobile.status(), account: { signedIn: !!getConfig().account?.keyId, email: getConfig().account?.email, phones: getConfig().accountPhones !== false } })
 
 function stopMesh() {
+  desktopRelay.stop()
   stopHeartbeat?.()
   stopHeartbeat = null
   meshNode?.stop()
@@ -405,6 +409,8 @@ async function startBridgeAndMesh(opts: { waitForMesh?: boolean } = {}) {
     priority: process.env.MANUL_WORKER_PRIORITY ? Number(process.env.MANUL_WORKER_PRIORITY) : undefined,
     projects: () => Projects.recent().map(r => r.id),
     sendHeartbeat: workerHeartbeat,
+    reconnectMesh: () => !meshNode ? joinMesh() : undefined,
+    onRelay: credentials => desktopRelay.update(credentials),
     // a cloud worker serves one person at a time: when the lease moves on, the last one's AgentShot sign-in (adopted
     // so their notes use their credits) goes with them
     activity: () => mobile.activity(),
@@ -1515,6 +1521,7 @@ function createWindow() {
 }
 
 const startup = app.whenReady().then(async () => {
+  await initializeNetwork()
   void videoEncoder() // tried now, so the agent's first command knows it
   if (quitting) return
   if (process.platform === 'darwin' && WORKER_MODE) app.dock?.hide()

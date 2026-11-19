@@ -25,6 +25,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { createHmac, randomUUID } from 'node:crypto'
+import { signRelayTicket } from '../../src/shared/relay-ticket.ts'
 import { brandPage } from '../../src/shared/brand-page.ts'
 import { costForCredits, creditsForCost, creditsForPrice, DISCOUNT, isPaid, PLANS, productEnv, providerConfigs, STARTER_CREDITS, TIERS, tiersFor, TOPUPS, type PlanKey, type TopupKey } from './plans.ts'
 import { LEASE_LIMITS, LeaseCapped, planOf, type LeaseLimits, type Wallet, type WorkerCapabilities, type WorkerRecord } from './wallet.ts'
@@ -74,6 +75,9 @@ export interface Env {
   HEADSCALE_API_KEY?: string
   /** Shared secret for registering pooled workers (cloud or home pool) */
   WORKER_POOL_SECRET?: string
+  /** Outbound encrypted tunnel service; unset keeps existing LAN/mesh-only clients compatible. */
+  RELAY_URL?: string
+  RELAY_SECRET?: string
   /** Shared with the cloud jobs server (hormuz-labs/agentshot-worker), which takes and returns a job's credits with it.
    *  Unset: the /v1/worker endpoints don't exist. */
   WORKER_JOBS_SECRET?: string
@@ -644,7 +648,13 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
     })
     // that id is another computer's (or a cloud worker's): only that same machine may report under it
     if (!rec) return fail(409, 'This worker id belongs to another computer.')
-    return json({ id: rec.id, pool: rec.pool, ...(await leaseAfterBeat(wallet, rec, isPool ? body.activity : undefined, leaseIdle, leaseLimits)) })
+    const expiresAt = Date.now() + 10 * 60_000
+    const lease = await leaseAfterBeat(wallet, rec, isPool ? body.activity : undefined, leaseIdle, leaseLimits)
+    const relay = env.RELAY_URL && env.RELAY_SECRET ? {
+      url: env.RELAY_URL, expiresAt,
+      ticket: signRelayTicket(env.RELAY_SECRET, { role: 'worker', worker: rec.id, owner: rec.ownerId || lease.leasedTo || 'pool-idle', expires: expiresAt }),
+    } : undefined
+    return json({ id: rec.id, pool: rec.pool, ...(relay ? { relay } : {}), ...lease })
   }
 
   async function listWorkers() {
@@ -664,6 +674,11 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
         token: signWorkerToken(w.secret, userId, w.pool, expiresAt),
         capabilities: w.capabilities,
         expiresAt,
+        ...(env.RELAY_URL && env.RELAY_SECRET ? { relay: {
+          url: env.RELAY_URL,
+          expiresAt: Date.now() + 10 * 60_000,
+          ticket: signRelayTicket(env.RELAY_SECRET, { role: 'client', worker: w.id, owner: userId, expires: Date.now() + 10 * 60_000 }),
+        } } : {}),
       }
     }
     return json({ workers: [...owned.map(toClient), ...leased.map(toClient)], poolAvailable })
@@ -700,6 +715,10 @@ export async function handle(req: Request, env: Env, wallet?: Wallet): Promise<R
         token: signWorkerToken(leased.secret, userId, true, expiresAt),
         capabilities: leased.capabilities,
         expiresAt,
+        ...(env.RELAY_URL && env.RELAY_SECRET ? { relay: {
+          url: env.RELAY_URL, expiresAt: Date.now() + 10 * 60_000,
+          ticket: signRelayTicket(env.RELAY_SECRET, { role: 'client', worker: leased.id, owner: userId, expires: Date.now() + 10 * 60_000 }),
+        } } : {}),
       },
     })
   }

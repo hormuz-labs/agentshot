@@ -5,3 +5,8 @@ await build({
   bundle: true, platform: 'node', format: 'esm', target: 'node24',
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
 })
+await build({
+  entryPoints: ['relay/run.ts'], outfile: 'out/relay/server.mjs',
+  bundle: true, platform: 'node', format: 'esm', target: 'node24',
+  banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
+})

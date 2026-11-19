@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'device_label.dart';
 import 'media_cache.dart';
 import 'mesh.dart';
+import 'relay.dart';
 import 'problems.dart';
 
 typedef Json = Map<String, dynamic>;
@@ -73,6 +74,7 @@ class Connection {
 
   /// What the computer is called, when the account said so.
   final String? name;
+  final RelayRoute? relay;
   Connection(
     this.url,
     this.fingerprint,
@@ -80,6 +82,7 @@ class Connection {
     List<Uri>? urls,
     this.machine,
     this.name,
+    this.relay,
   ]) : urls = <Uri>[
          url,
          ...?urls?.where((u) => u.toString() != url.toString()),
@@ -125,6 +128,7 @@ class Connection {
       extra,
       json['machine'] as String?,
       json['name'] as String?,
+      json['relay'] is Map ? RelayRoute.fromJson(object(json['relay'])) : null,
     );
   }
   Json toJson() => {
@@ -134,6 +138,7 @@ class Connection {
     'token': token,
     'machine': ?machine,
     'name': ?name,
+    'relay': ?relay?.toJson(),
   };
 }
 
@@ -186,6 +191,10 @@ class BridgeClient {
     if (saved == null) return false;
     try {
       _configure(Connection.fromJson(object(jsonDecode(saved))));
+      final route = connection?.relay;
+      if (route != null && route.expiresAt > DateTime.now().millisecondsSinceEpoch) {
+        await RelayProxy.start(route, connection!.url);
+      }
       // rejoin the mesh in the background; the reconnect loop retries until it is up
       final mesh = await storage.read(key: _meshStorageKey);
       if (mesh != null) {
@@ -217,7 +226,9 @@ class BridgeClient {
   static const defaultPort = 47821;
 
   static String _proxyFor(Uri uri) =>
-      Mesh.proxyPort != null && Mesh.isMeshHost(uri.host)
+      RelayProxy.handles(uri)
+      ? 'PROXY 127.0.0.1:${RelayProxy.port}'
+      : Mesh.proxyPort != null && Mesh.isMeshHost(uri.host)
       ? 'PROXY 127.0.0.1:${Mesh.proxyPort}'
       : 'DIRECT';
 
@@ -251,7 +262,8 @@ class BridgeClient {
     final first = await found.future;
     return first == null
         ? target
-        : Connection(first, target.fingerprint, target.token, target.urls);
+        : Connection(first, target.fingerprint, target.token, target.urls,
+            target.machine, target.name, target.relay);
   }
 
   Future<Connection> _discover({String? host}) async {
@@ -470,10 +482,11 @@ class BridgeClient {
     Duration timeout = const Duration(seconds: 4),
   }) async {
     final tries = target.urls
-        .where((u) => Mesh.proxyPort != null || !Mesh.isMeshHost(u.host))
+        .where((u) => RelayProxy.handles(u) || Mesh.proxyPort != null || !Mesh.isMeshHost(u.host))
         .toList();
     if (tries.isEmpty) return null;
     final found = Completer<Uri?>();
+    final clients = <HttpClient>[];
     var pending = tries.length;
     for (final candidate in tries) {
       final http = HttpClient(context: SecurityContext(withTrustedRoots: false))
@@ -481,9 +494,11 @@ class BridgeClient {
         ..findProxy = _proxyFor
         ..badCertificateCallback = (certificate, host, port) =>
             sha256.convert(certificate.der).toString() == target.fingerprint;
+      clients.add(http);
       unawaited(() async {
         try {
           final req = await http.getUrl(candidate.replace(path: '/hello'));
+          req.followRedirects = false;
           req.headers.set(
             HttpHeaders.authorizationHeader,
             'Bearer ${target.token}',
@@ -501,7 +516,15 @@ class BridgeClient {
         }
       }());
     }
-    return found.future;
+    try {
+      // Includes TCP, TLS, headers AND the body, not just req.close().
+      return await found.future.timeout(timeout, onTimeout: () => null);
+    } finally {
+      // Cancel losing probes too: they must not outlive this connection attempt.
+      for (final http in clients) {
+        http.close(force: true);
+      }
+    }
   }
 
   Future<void> connectDirect(Connection target) async {
@@ -515,6 +538,7 @@ class BridgeClient {
           target.urls,
           target.machine,
           target.name,
+          target.relay,
         ),
       );
       try {
@@ -606,6 +630,9 @@ class BridgeClient {
             current.fingerprint,
             current.token,
             nextUrls,
+            current.machine,
+            current.name,
+            current.relay,
           );
           await storage.write(
             key: _storageKey,
@@ -742,6 +769,7 @@ class BridgeClient {
         current.urls,
         current.machine,
         current.name,
+        current.relay,
       ),
     );
     await storage.write(
@@ -788,6 +816,7 @@ class BridgeClient {
             try {
               final fresh = await renew!(expired!);
               if (fresh != null && !_disposed) {
+                if (fresh.relay != null) await RelayProxy.start(fresh.relay!, fresh.url);
                 // a cloud worker taken anew may first restart into this person's space: give it a minute
                 final end = DateTime.now().add(const Duration(seconds: 60));
                 for (;;) {
@@ -808,6 +837,7 @@ class BridgeClient {
                         [first, ...fresh.urls.where((u) => u != first)],
                         fresh.machine,
                         fresh.name,
+                        fresh.relay,
                       ),
                     );
                     break;
@@ -868,6 +898,26 @@ class BridgeClient {
         }
         // another of its addresses may answer (home Wi-Fi again, or the private network away)
         if (await _preferReachable(generation)) return;
+        // Network changes and short-lived relay tickets need fresh routing too,
+        // not just HTTP 401 recovery. Never replay a mutating HTTP request here.
+        final stale = connection;
+        if (renew != null && stale?.machine != null) {
+          try {
+            final fresh = await renew!(stale!);
+            if (_disposed || generation != _generation) return;
+            if (fresh != null) {
+              if (fresh.relay != null) await RelayProxy.start(fresh.relay!, fresh.url);
+              final first = await firstToAnswer(fresh);
+              if (_disposed || generation != _generation) return;
+              if (first != null) {
+                await connectDirect(Connection(first, fresh.fingerprint, fresh.token,
+                  fresh.urls, fresh.machine, fresh.name, fresh.relay));
+                listen();
+                return;
+              }
+            }
+          } catch (_) {}
+        }
         // off, asleep or out of reach: keep trying
         _events.add({
           'channel': 'connection',
@@ -1341,6 +1391,7 @@ class BridgeClient {
     await storage.delete(key: _storageKey);
     await storage.delete(key: _meshStorageKey);
     await Mesh.stop();
+    await RelayProxy.stop();
     // what was kept of that computer's films goes with it
     await cache.clear().catchError((_) {});
   }
@@ -1350,6 +1401,7 @@ class BridgeClient {
     _generation++;
     _http?.close(force: true);
     await _relay?.close(force: true);
+    await RelayProxy.stop();
     await _events.close();
   }
 }

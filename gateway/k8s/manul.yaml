@@ -86,6 +86,8 @@ spec:
           ports: [{ name: http, containerPort: 8080 }]
           env:
             - { name: CLERK_ISSUER, value: https://clerk.agentshot.si }          # Clerk production
+            - { name: RELAY_URL, value: "wss://relay.agentshot.si" }
+            - { name: RELAY_SECRET, valueFrom: { secretKeyRef: { name: manul-secrets, key: RELAY_SECRET } } }
             - { name: BIFROST_URL, value: "http://bifrost:8080" }   # the admin API, over the cluster network
             - { name: BIFROST_PROVIDERS, value: "anthropic,gemini,openai,azure" }
             - { name: CLERK_SECRET_KEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: CLERK_SECRET_KEY } } }
@@ -361,12 +363,16 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: gce
     kubernetes.io/ingress.global-static-ip-name: manul-gateway
-    networking.gke.io/managed-certificates: manul,manul-admin,manul-mesh,cutting-room
+    networking.gke.io/managed-certificates: manul,manul-admin,manul-mesh,manul-relay,cutting-room
     networking.gke.io/v1beta1.FrontendConfig: manul
 spec:
   defaultBackend:                 # anything else gets the account service's 404
     service: { name: account, port: { number: 8080 } }
   rules:
+    - host: relay.agentshot.si
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: relay, port: { number: 8080 } } } }
     # Cutting Room, sharing this load balancer: the Service and certificate are in hormuz-labs/video-worker, deploy/door.yaml
     - host: youtube.trypitch.tech
       http:
