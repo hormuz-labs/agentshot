@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { execFile } from 'node:child_process'
 import { ClaudeCodeConnection } from '../src/main/claude-code'
 import { ClaudeCodeRun } from '../src/main/claude-code-agent'
 import { codingExtension, editorExtension, startAgent } from '../src/main/agent'
@@ -10,15 +11,16 @@ import { Skills } from '../src/main/skills'
 import { AguiAdapter } from '../src/main/agui'
 
 const sdk = vi.hoisted(() => ({ query: vi.fn(), tools: [] as any[] }))
+vi.mock('node:child_process', async importOriginal => ({ ...await importOriginal<typeof import('node:child_process')>(), execFile: vi.fn() }))
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: sdk.query,
   startup: vi.fn(),
   tool: (name: string, description: string, schema: unknown, handler: unknown) => ({ name, description, schema, handler }),
   createSdkMcpServer: (options: any) => { sdk.tools = options.tools; return options },
 }))
-afterEach(() => { sdk.query.mockReset(); sdk.tools = [] })
+afterEach(() => { sdk.query.mockReset(); sdk.tools = []; vi.mocked(execFile).mockReset() })
 
-function fixture(extensions: any[] = []) {
+function fixture(extensions: any[] = [], reasoningLevel?: 'low' | 'high') {
   const entries: any[] = [], events: any[] = []
   const conv = { id: 1, waitForIdle: async () => {}, agent: async () => ({}),
     context: async () => ({ messages: entries.flatMap(e => e.model) }),
@@ -26,13 +28,22 @@ function fixture(extensions: any[] = []) {
   }
   let run: ClaudeCodeRun
   const adapter = new AguiAdapter('1', e => events.push(e))
-  run = new ClaudeCodeRun({ conv: conv as never, model: 'opus', executable: '/published/claude', dir: '/project', extensions,
+  run = new ClaudeCodeRun({ conv: conv as never, model: 'opus', reasoningLevel, executable: '/published/claude', dir: '/project', extensions,
     env: { cwd: '/project' } as never, update: () => adapter.update(run.view({ entries, docs: {} })) })
   return { run, entries, events }
 }
 function stream(iterable: AsyncGenerator<any>) { return Object.assign(iterable, { close: vi.fn() }) }
 
 describe('Claude Code backend', () => {
+  it.each([undefined, 'low', 'high'] as const)('passes reasoning effort to the official SDK: %s', async level => {
+    sdk.query.mockImplementation(({ options }) => stream((async function* () {
+      if (level) expect(options.effort).toBe(level)
+      else expect(options).not.toHaveProperty('effort')
+      yield { type: 'result', subtype: 'success', is_error: false }
+    })()))
+    await fixture([], level).run.start('hello')
+    expect(sdk.query).toHaveBeenCalledOnce()
+  })
   it('persists Claude turns in the real SQLite harness and replays them after restart', async () => {
     const root = mkdtempSync(join(tmpdir(), 'agentshot-claude-durable-')), dir = join(root, 'project')
     const events: any[] = []
@@ -137,10 +148,16 @@ describe('Claude Code connection preferences', () => {
   it('stores only opt-in, never authentication, and disconnect does not logout Claude Code', async () => {
     const root = mkdtempSync(join(tmpdir(), 'agentshot-claude-'))
     const bin = join(root, 'claude'), prefs = join(root, 'prefs.json')
-    writeFileSync(bin, '#!/bin/sh\necho \'{"loggedIn":true,"authMethod":"claude.ai","email":"user@example.test"}\'\n', { mode: 0o700 })
+    writeFileSync(bin, '')
+    const exec = vi.mocked(execFile).mockImplementation(((file: string, args: string[], _options: unknown, callback: Function) => {
+      expect(file).toBe(bin); expect(args).toEqual(['auth', 'status'])
+      callback(null, JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'user@example.test' }), '')
+      return {} as import('node:child_process').ChildProcess
+    }) as typeof execFile)
     const c = new ClaudeCodeConnection(prefs, bin)
     expect(await c.connect()).toMatchObject({ enabled: true, connected: true, subscription: true })
     expect(JSON.parse(readFileSync(prefs, 'utf8'))).toEqual({ enabled: true })
     expect(await c.disconnect()).toMatchObject({ enabled: false, connected: true })
+    expect(exec).toHaveBeenCalledTimes(2)
   })
 })

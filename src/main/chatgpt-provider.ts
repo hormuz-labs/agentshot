@@ -3,6 +3,8 @@ import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.l
 import type { Model, ProviderStreams } from '@earendil-works/pi-ai'
 import { CHATGPT_PROVIDER } from '../shared/chatgpt'
 import type { ChatGPTAuth, ChatGPTModel } from './chatgpt-auth'
+import { defaultReasoningPayload } from './models'
+import { REASONING_LEVELS } from '../shared/models'
 
 const UNSUPPORTED = ['background', 'conversation', 'max_output_tokens', 'max_tool_calls', 'metadata', 'moderation', 'multi_agent',
   'prompt', 'prompt_cache_retention', 'prompt_cache_options', 'safety_identifier', 'temperature', 'top_logprobs', 'top_p', 'truncation', 'user', 'previous_response_id']
@@ -32,13 +34,14 @@ export function chatGPTProvider(auth: ChatGPTAuth, catalog: ChatGPTModel[]) {
     id: m.slug, name: m.display_name, api: 'openai-responses', provider: CHATGPT_PROVIDER, baseUrl: 'https://api.openai.com/v1',
     input: m.input_modalities?.includes('image') ? ['text', 'image'] : ['text'],
     reasoning: !!m.supported_reasoning_levels?.length,
-    ...(m.supported_reasoning_levels?.length ? { thinkingLevelMap: { off: m.supported_reasoning_levels.find(l => l.effort === 'high')?.effort || m.supported_reasoning_levels[0].effort } } : {}),
+    thinkingLevelMap: Object.fromEntries(REASONING_LEVELS.map(level => [level,
+      level !== 'off' && m.supported_reasoning_levels?.some(l => l.effort === level) ? level : null])),
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: Number.isInteger(m.context_window) && m.context_window! > 1 ? m.context_window! : 128_000, maxTokens: 32_000,
     compat: { supportsAdditionalTools: true, supportsToolSearch: false, supportsDeveloperRole: true, supportsMaxOutputTokens: false },
   }))
   const api = openAIResponsesApi()
-  const options = (o: any) => ({ ...o, maxRetries: 0, onPayload: chatGPTPayload,
+  const options = (o: any) => ({ ...o, maxRetries: 0, onPayload: (payload: any, model: Model<any>) => chatGPTPayload(o?.reasoning || o?.reasoningEffort ? payload : defaultReasoningPayload(payload, model)),
     onProviderStreamEvent: (event: any) => {
       if (event.type === 'response.incomplete') throw new Error('ChatGPT returned an incomplete response. Please retry; no unfinished tool calls were applied.')
       if (USAGE_CODES.has(event.response?.error?.code) || (event.type === 'error' && USAGE_CODES.has(event.code))) throw usageError()

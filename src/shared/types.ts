@@ -96,7 +96,7 @@ export type Project = {
   /** media path → the subtitles that go with it, and how well they match what's said */
   subtitles?: Record<string, SubtitleLink>
   /** The model the user picked for this project (else the best available). */
-  model?: { provider: string; modelId: string }
+  model?: import('./models').ModelRef
   /** The project's durable agent conversation on screen. */
   conversation?: string
   /** Every conversation in this project (newest last); titles come from the first message. */

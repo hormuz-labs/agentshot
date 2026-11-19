@@ -237,6 +237,20 @@ describe('ChatGPT inference compatibility', () => {
     await f.auth.signOut()
     expect(await models.getAvailable()).toEqual([])
   })
+  it.each([undefined, 'low', 'high'] as const)('sends the selected ChatGPT effort, or omits it for Default: %s', async level => {
+    const f = fixture()
+    const provider = chatGPTProvider(f.auth, [{ slug: 'reasoner', display_name: 'Reasoner', visibility: 'list', supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }] }])
+    const models = createModels(); models.setProvider(provider)
+    const fetcher = vi.fn(async (_input, init) => {
+      const body = JSON.parse(init!.body as string)
+      if (level) expect(body.reasoning.effort).toBe(level)
+      else expect(body).not.toHaveProperty('reasoning')
+      return new Response('data: {"type":"response.completed","response":{"id":"resp_test","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}\n\ndata: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const response = await models.completeSimple(provider.getModels()[0], { messages: [{ role: 'user', content: 'Hello', timestamp: Date.now() }] }, level ? { reasoning: level } : {})
+    expect(response.stopReason).toBe('stop'); expect(fetcher).toHaveBeenCalledOnce()
+  })
   it.each(['completed', 'incomplete', 'failed', 'interrupted'])('consumes a real Responses SSE stream: %s', async terminal => {
     const f = fixture()
     const provider = chatGPTProvider(f.auth, await f.auth.models())

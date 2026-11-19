@@ -67,6 +67,25 @@ commercial terms and published hosting conditions. This implementation does not
 establish a commercial agreement. Real-account login and editing smoke tests are
 required before release.
 
+## Reasoning and model discovery
+
+The model picker shows a compact reasoning selector beside reasoning-capable
+models. New selections start at **Default**, which leaves reasoning controls to
+the provider rather than turning thinking off. Explicit choices are persisted
+per project and applied on the next request. Switching models resets the choice.
+Only supported transport/catalog levels are offered; unknown thinking models
+show Default only. Stale or unsupported choices are rejected, not silently
+clamped to a different effort.
+
+ChatGPT levels come from the signed-in account's catalog; Claude Code levels
+come from its official supported-model handshake. API models use the installed
+provider's capability metadata. Google models are refreshed from its authenticated,
+paginated model-list endpoint, preserving available version IDs. Gemini 4 controls
+are grounded in Google's published thinking table. Discovery caches for five
+minutes, invalidates when keys change, and shows a warning with a last-known or
+bundled fallback if discovery fails. New models without known prices do not show
+a price estimate.
+
 ## Provider references
 
 - https://developers.openai.com/siwc/token-sharing-open-source

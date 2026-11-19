@@ -1486,10 +1486,10 @@ function wire() {
   })
   ipcMain.handle('clip:render', (_e, dir: string, id: string) =>
     asJob(`Rendering clip ${id}`, 'render', j => renderClip(projectOf(dir).dir, id, j), { project: dir, doneTitle: `Rendered clip ${id}` }))
-  ipcMain.handle('agent:models', async (_e, dir?: string) => ({ models: (await agent?.models()) || [], current: (await agent?.model(dir)) || null }))
-  ipcMain.handle('agent:setModel', async (_e, dir: string, model: { provider: string; modelId: string } | null) => {
+  ipcMain.handle('agent:models', async (_e, dir?: string) => ({ models: (await agent?.models()) || [], current: (await agent?.model(dir)) || null, warning: agent?.modelWarning() }))
+  ipcMain.handle('agent:setModel', async (_e, dir: string, model: Project['model'] | null) => {
     const p = projectOf(dir)
-    p.model = model || undefined
+    p.model = model ? await agent!.validateModel(model) : undefined
     await publish(p)
     return agent?.model(dir)
   })

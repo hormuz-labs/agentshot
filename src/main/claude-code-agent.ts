@@ -21,7 +21,7 @@ export class ClaudeCodeRun {
   private generation: Any | undefined
   private running: string[] = []
   private busy = false
-  constructor(private options: { conv: Conversation; model: string; executable: string; dir: string;
+  constructor(private options: { conv: Conversation; model: string; reasoningLevel?: Options['effort']; executable: string; dir: string;
     extensions: readonly Extension[]; env: ExecutionEnv; update(): void }) {}
   view(view: Any) {
     return this.busy ? { ...view, docs: { ...view.docs, 'pi.live': { run: true,
@@ -78,6 +78,7 @@ export class ClaudeCodeRun {
         return { role: m.role === 'assistant' ? 'assistant' : 'user', content: convertBlocks(m.content) }
       })
       const options: Options = { pathToClaudeCodeExecutable: executable, cwd: dir, model,
+        ...(this.options.reasoningLevel ? { effort: this.options.reasoningLevel } : {}),
         abortController: this.controller, tools: [], settingSources: [], persistSession: false,
         systemPrompt: sections.join('\n\n'), includePartialMessages: true,
         mcpServers: { agentshot: createSdkMcpServer({ name: 'agentshot', tools: mcpTools }) },

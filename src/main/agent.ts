@@ -7,7 +7,6 @@ import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context'
 import { Type } from '@earendil-works/pi-ai'
 import { createModels } from '@earendil-works/pi-ai/models'
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic'
-import { googleProvider } from '@earendil-works/pi-ai/providers/google'
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
 import { createRegistry, defineExtension, defineTool, Harness, section } from '@earendil-works/pi-durable'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
@@ -19,7 +18,7 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { AguiAdapter } from './agui'
 import { liveEnv } from './bsk'
 import { isWithinDir } from './paths'
-import { chooseModel, describeModels } from './models'
+import { chooseModel, describeModels, validateModelChoice, withDefaultReasoning } from './models'
 import { buildProviders, listProviders } from './providers'
 import { chatGPT, chatGPTAvailable } from './chatgpt'
 import { chatGPTProvider } from './chatgpt-provider'
@@ -27,6 +26,7 @@ import { CHATGPT_PROVIDER } from '../shared/chatgpt'
 import { CLAUDE_CODE_PROVIDER } from '../shared/claude-code'
 import type { ClaudeCodeConnection } from './claude-code'
 import { ClaudeCodeRun } from './claude-code-agent'
+import { GeminiModels } from './gemini-models'
 import { encoderNow } from './encoders'
 import { agentshotProvider } from './gateway'
 import type { Memory } from './memory'
@@ -984,13 +984,15 @@ export async function startAgent(opts: {
   claudeCode?: ClaudeCodeConnection
 }) {
   const models = createModels({ authContext: { env: async (n: string) => process.env[n], fileExists: async (p: string) => existsSync(p) } })
-  for (const p of [anthropicProvider, googleProvider, openaiProvider, agentshotProvider]) models.setProvider(p())
+  for (const p of [anthropicProvider, openaiProvider, agentshotProvider]) models.setProvider(withDefaultReasoning(p()))
+  const gemini = new GeminiModels()
+  models.setProvider(withDefaultReasoning(gemini.provider()))
   // custom providers (Azure AI Foundry, gateways, local servers): rebuilt when they or their keys change
   let custom: string[] = []
   const loadCustom = () => {
     for (const id of custom) models.deleteProvider(id)
     const built = buildProviders()
-    for (const p of built) models.setProvider(p as any)
+    for (const p of built) models.setProvider(withDefaultReasoning(p as any))
     custom = built.map(p => p.id)
   }
   loadCustom()
@@ -1041,9 +1043,12 @@ export async function startAgent(opts: {
 
   const available = async () => {
     await loadChatGPT()
+    await gemini.refresh()
+    models.setProvider(withDefaultReasoning(gemini.provider()))
     const all = (await models.getAvailable().catch(() => [])) as unknown as { provider: string; id: string }[]
     const claude = await opts.claudeCode?.models().catch(() => []) || []
-    return [...all, ...claude.map(m => ({ provider: CLAUDE_CODE_PROVIDER, id: m.value, name: m.displayName, input: ['text', 'image'], reasoning: !!m.supportsAdaptiveThinking }))]
+    return [...all, ...claude.map(m => ({ provider: CLAUDE_CODE_PROVIDER, id: m.value, name: m.displayName, input: ['text', 'image'], reasoning: !!m.supportsAdaptiveThinking || !!m.supportsEffort,
+      reasoningLevels: m.supportsEffort ? m.supportedEffortLevels || [] : [] }))]
   }
   /** The project's picked model when its key is set, else the best available. */
   const pickModel = async (dir?: string) => chooseModel(await available(), dir ? opts.bridge.project(dir)?.model : undefined)
@@ -1080,8 +1085,9 @@ export async function startAgent(opts: {
     const h = await harnessFor(dir)
     let conv: Any | undefined = convId && !fresh ? await h.conversation(Number(convId) as never, ctx).catch(() => undefined) : undefined
     if (!conv && convId && !fresh && h !== harness) conv = await harness.conversation(Number(convId) as never, ctx).catch(() => undefined)
-    if (!conv) conv = await h.createConversation({ ownership: { kind: 'ownerless' }, agent: { ...(model && model.provider !== CLAUDE_CODE_PROVIDER ? { model } : {}), cwd: dir } } as never, ctx)
-    else if (model && model.provider !== CLAUDE_CODE_PROVIDER) await conv.configure({ model, cwd: dir }, ctx)
+    const config = model && model.provider !== CLAUDE_CODE_PROVIDER ? { model: { provider: model.provider, modelId: model.modelId }, thinkingLevel: model.reasoningLevel ?? null, cwd: dir } : { cwd: dir }
+    if (!conv) conv = await h.createConversation({ ownership: { kind: 'ownerless' }, agent: config } as never, ctx)
+    else if (model && model.provider !== CLAUDE_CODE_PROVIDER) await conv.configure(config, ctx)
     convDir.set(String(conv.id), dir)
     const view = await conv.viewState(ctx)
     const adapter = new AguiAdapter(String(conv.id), e => opts.onEvent(dir, e))
@@ -1124,8 +1130,10 @@ export async function startAgent(opts: {
     hasModel: async () => !!(await pickModel()),
     model: (dir?: string) => pickModel(dir),
     models: async () => describeModels(await available(), Object.fromEntries(listProviders().map(p => [p.id, p.name]))),
+    validateModel: async (model: import('../shared/models').ModelRef) => validateModelChoice(await available(), model),
+    modelWarning: () => gemini.warning,
     /** keys or custom providers changed: built-in models are re-read on every use, custom providers are rebuilt */
-    keysChanged: loadCustom,
+    keysChanged: () => { loadCustom(); gemini.invalidate() },
     async stopClaudeCode() { await Promise.all([...live.values()].map(l => l.claude?.stop())) },
     async send(dir: string, content: string | Any[]) {
       const l = live.get(dir)
@@ -1147,13 +1155,13 @@ export async function startAgent(opts: {
         const connection = opts.claudeCode
         const status = await connection?.status()
         if (!connection?.executable || !status?.connected || !status.enabled) throw new Error('Connect Claude Code in Settings → Keys first.')
-        l.claude = new ClaudeCodeRun({ conv: l.conv as never, dir, model: model.modelId, executable: connection.executable,
+        l.claude = new ClaudeCodeRun({ conv: l.conv as never, dir, model: model.modelId, reasoningLevel: model.reasoningLevel as import('@anthropic-ai/claude-agent-sdk').Options['effort'], executable: connection.executable,
           extensions: makeRegistry(dirOf).snapshot().installed(), env: envFor({ cwd: dir }), update: () => updateClaude(dir) })
         void l.claude.start(content)
         return
       }
       await l.claude?.stop()
-      await l.conv.configure({ model, cwd: dir }, ctx)
+      await l.conv.configure({ model: { provider: model.provider, modelId: model.modelId }, thinkingLevel: model.reasoningLevel ?? null, cwd: dir }, ctx)
       await l.conv.submit({ type: 'input', content, whenBusy: 'steer' }, ctx)
     },
     async stop(dir: string) { await live.get(dir)?.claude?.stop(); await live.get(dir)?.conv.abort(ctx) },
