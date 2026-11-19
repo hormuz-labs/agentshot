@@ -165,6 +165,10 @@ class _FilmEditorState extends State<FilmEditor> with WidgetsBindingObserver {
 
   void _tick() {
     if (!mounted) return;
+    if (controller?.value.hasError == true) {
+      setState(() => error = 'The preview stopped. Retry to load the latest version from your computer.');
+      return;
+    }
     widget.onPosition?.call(position);
     setState(() {});
   }
@@ -469,12 +473,21 @@ class _FilmEditorState extends State<FilmEditor> with WidgetsBindingObserver {
   Widget picture(VideoPlayerController? c, Studio studio) {
     if (error != null) {
       return Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(Space.xl),
-          child: Text(
-            error!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() => error = null);
+                  _load(position);
+                },
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry preview'),
+              ),
+            ],
           ),
         ),
       );
