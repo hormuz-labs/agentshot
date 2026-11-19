@@ -1,0 +1,81 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { GeminiModels } from '../src/main/gemini-models'
+import { reasoningLevels, withDefaultReasoning } from '../src/main/models'
+import { createModels } from '@earendil-works/pi-ai/models'
+
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+const json = (v: any) => new Response(JSON.stringify(v), { headers: { 'content-type': 'application/json' } })
+const row = (id: string, extra = {}) => ({ name: `models/${id}`, displayName: id, inputTokenLimit: 1048576, outputTokenLimit: 65536, thinking: true, supportedGenerationMethods: ['generateContent'], ...extra })
+describe('Gemini model discovery', () => {
+  it.each([undefined, 'low', 'xhigh'] as const)('sends Gemini 4 thinking controls through the real adapter: %s', async level => {
+    vi.stubEnv('GEMINI_API_KEY', 'secret')
+    const catalog = new GeminiModels(vi.fn().mockResolvedValue(json({ models: [row('gemini-4-hydrogen')] })))
+    await catalog.refresh()
+    const registry = createModels(); registry.setProvider(withDefaultReasoning(catalog.provider()))
+    const fetcher = vi.fn(async (_input, init) => {
+      const body = JSON.parse(init.body)
+      if (level) expect(body.generationConfig.thinkingConfig.thinkingLevel).toBe(level.toUpperCase())
+      else expect(body.generationConfig).not.toHaveProperty('thinkingConfig')
+      return new Response('data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Done"}]},"finishReason":"STOP"}]}\n\n', { headers: { 'content-type': 'text/event-stream' } })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const response = await registry.completeSimple(registry.getModel('google', 'gemini-4-hydrogen')!, { messages: [{ role: 'user', content: 'Hello', timestamp: Date.now() }] }, { ...(level ? { reasoning: level } : {}) })
+    expect(response.stopReason).toBe('stop'); expect(fetcher).toHaveBeenCalledOnce()
+  })
+  it('fetches all pages, preserves version IDs, and excludes non-generation models', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'secret')
+    const fetcher = vi.fn(async (url: URL, init: RequestInit) => {
+      expect(url.toString()).not.toContain('secret')
+      expect(init.headers).toEqual({ 'x-goog-api-key': 'secret' })
+      return url.searchParams.has('pageToken') ? json({ models: [row('gemini-4-hydrogen'), row('gemini-4-hydrogen-001')] })
+        : json({ models: [row('gemini-4-carbon'), row('embedding', { supportedGenerationMethods: ['embedContent'] })], nextPageToken: 'page2' })
+    })
+    const catalog = new GeminiModels(fetcher as any); await catalog.refresh()
+    const models = catalog.provider().getModels()
+    expect(models.map(m => m.id)).toEqual(['gemini-4-carbon', 'gemini-4-hydrogen', 'gemini-4-hydrogen-001'])
+    expect(reasoningLevels(models[0])).toEqual(['low', 'medium', 'high'])
+    expect(reasoningLevels(models[1])).toEqual(['low', 'medium', 'high', 'xhigh'])
+    expect(reasoningLevels(models[2])).toEqual([])
+    expect(models[1].maxTokens).toBe(65536)
+    await catalog.refresh(); expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+  it('retains the last good catalog on failure and clears it on key changes', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'one')
+    const fetcher = vi.fn().mockResolvedValueOnce(json({ models: [row('gemini-4-hydrogen')] })).mockResolvedValue(new Response(null, { status: 403 }))
+    const catalog = new GeminiModels(fetcher); await catalog.refresh(); catalog.invalidate(); await catalog.refresh()
+    expect(catalog.provider().getModels().map(m => m.id)).toEqual(['gemini-4-hydrogen'])
+    expect(catalog.warning).toContain('Could not refresh')
+    vi.stubEnv('GEMINI_API_KEY', 'two'); await catalog.refresh()
+    expect(catalog.provider().getModels().some(m => m.id === 'gemini-4-hydrogen')).toBe(false)
+  })
+  it('does not request models without a key', async () => {
+    vi.stubEnv('GEMINI_API_KEY', '')
+    const fetcher = vi.fn(); await new GeminiModels(fetcher).refresh(); expect(fetcher).not.toHaveBeenCalled()
+  })
+  it('shares concurrent refreshes and ignores an old key response during a key switch', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'one')
+    let finish!: (value: Response) => void
+    const fetcher = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
+      .mockResolvedValueOnce(json({ models: [row('gemini-4-neon')] }))
+    const catalog = new GeminiModels(fetcher)
+    const first = catalog.refresh(), shared = catalog.refresh()
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    vi.stubEnv('GEMINI_API_KEY', 'two')
+    const second = catalog.refresh()
+    finish(json({ models: [row('gemini-4-carbon')] }))
+    await Promise.all([first, shared, second])
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(catalog.provider().getModels().map(m => m.id)).toEqual(['gemini-4-neon'])
+    expect(catalog.warning).toBeUndefined()
+  })
+  it('keeps the last good catalog when pagination repeats', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'secret')
+    const fetcher = vi.fn().mockResolvedValueOnce(json({ models: [row('gemini-4-carbon')] }))
+      .mockImplementation(async () => json({ models: [row('gemini-4-neon')], nextPageToken: 'same' }))
+    const catalog = new GeminiModels(fetcher)
+    await catalog.refresh(); catalog.invalidate(); await catalog.refresh()
+    expect(catalog.provider().getModels().map(m => m.id)).toEqual(['gemini-4-carbon'])
+    expect(catalog.warning).toContain('Could not refresh')
+    expect(fetcher).toHaveBeenCalledTimes(3)
+  })
+})

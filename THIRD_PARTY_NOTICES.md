@@ -6,6 +6,20 @@ themselves GPL-3.0-or-later because they are built together with GPL code — th
 (`scripts/beats`, `scripts/ml`, `scripts/ffmpeg`) and the GPL text in [LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt).
 On request we provide the exact sources of every GPL program we ship.
 
+## Claude Code and Claude Agent SDK 0.3.328
+
+The optional desktop connection runs Anthropic's published Claude Code binary
+as a separate process, without modifying its authentication methods or binary.
+The official `@anthropic-ai/claude-agent-sdk` package and platform binary keep
+their own terms; they are not relicensed under AgentShot's GPL.
+Use and distribution are subject to Anthropic's Commercial Terms and Claude
+Code hosting conditions. Users authenticate and are billed directly by Anthropic
+or their selected inference provider; AgentShot does not resell that usage.
+
+- https://github.com/anthropics/claude-agent-sdk-typescript
+- https://www.anthropic.com/legal/commercial-terms
+- https://code.claude.com/docs/en/legal-and-compliance
+
 ## FFmpeg 9.0.2 (ffmpeg, ffprobe)
 
 AgentShot runs FFmpeg as separate programs; it does not link against it.

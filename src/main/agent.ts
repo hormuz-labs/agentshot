@@ -7,7 +7,6 @@ import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context'
 import { Type } from '@earendil-works/pi-ai'
 import { createModels } from '@earendil-works/pi-ai/models'
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic'
-import { googleProvider } from '@earendil-works/pi-ai/providers/google'
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
 import { createRegistry, defineExtension, defineTool, Harness, section } from '@earendil-works/pi-durable'
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node'
@@ -19,8 +18,15 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { AguiAdapter } from './agui'
 import { liveEnv } from './bsk'
 import { isWithinDir } from './paths'
-import { chooseModel, describeModels } from './models'
+import { chooseModel, describeModels, validateModelChoice, withDefaultReasoning } from './models'
 import { buildProviders, listProviders } from './providers'
+import { chatGPT, chatGPTAvailable } from './chatgpt'
+import { chatGPTProvider } from './chatgpt-provider'
+import { CHATGPT_PROVIDER } from '../shared/chatgpt'
+import { CLAUDE_CODE_PROVIDER } from '../shared/claude-code'
+import type { ClaudeCodeConnection } from './claude-code'
+import { ClaudeCodeRun } from './claude-code-agent'
+import { GeminiModels } from './gemini-models'
 import { encoderNow } from './encoders'
 import { agentshotProvider } from './gateway'
 import type { Memory } from './memory'
@@ -975,18 +981,31 @@ export async function startAgent(opts: {
   browserPrompt?: () => string
   /** Fence the agent's files and shell to the project (and these). Without it, nothing is fenced (tests). */
   fence?: FenceConfig
+  claudeCode?: ClaudeCodeConnection
 }) {
   const models = createModels({ authContext: { env: async (n: string) => process.env[n], fileExists: async (p: string) => existsSync(p) } })
-  for (const p of [anthropicProvider, googleProvider, openaiProvider, agentshotProvider]) models.setProvider(p())
+  for (const p of [anthropicProvider, openaiProvider, agentshotProvider]) models.setProvider(withDefaultReasoning(p()))
+  const gemini = new GeminiModels()
+  models.setProvider(withDefaultReasoning(gemini.provider()))
   // custom providers (Azure AI Foundry, gateways, local servers): rebuilt when they or their keys change
   let custom: string[] = []
   const loadCustom = () => {
     for (const id of custom) models.deleteProvider(id)
     const built = buildProviders()
-    for (const p of built) models.setProvider(p as any)
+    for (const p of built) models.setProvider(withDefaultReasoning(p as any))
     custom = built.map(p => p.id)
   }
   loadCustom()
+
+  const loadChatGPT = async () => {
+    if (!chatGPTAvailable()) return
+    try {
+      const auth = chatGPT()
+      const catalog = await auth.models()
+      models.setProvider(chatGPTProvider(auth, catalog))
+    } catch { models.deleteProvider(CHATGPT_PROVIDER) }
+  }
+  await loadChatGPT()
 
   const convDir = new Map<string, string>() // conversation id → project dir
   const demoBriefs = new DemoBriefs()
@@ -1022,14 +1041,29 @@ export async function startAgent(opts: {
     return p
   }
 
-  const available = async () => (await models.getAvailable().catch(() => [])) as unknown as { provider: string; id: string }[]
+  const available = async () => {
+    await loadChatGPT()
+    await gemini.refresh()
+    models.setProvider(withDefaultReasoning(gemini.provider()))
+    const all = (await models.getAvailable().catch(() => [])) as unknown as { provider: string; id: string }[]
+    const claude = await opts.claudeCode?.models().catch(() => []) || []
+    return [...all, ...claude.map(m => ({ provider: CLAUDE_CODE_PROVIDER, id: m.value, name: m.displayName, input: ['text', 'image'], reasoning: !!m.supportsAdaptiveThinking || !!m.supportsEffort,
+      reasoningLevels: m.supportsEffort ? m.supportedEffortLevels || [] : [] }))]
+  }
   /** The project's picked model when its key is set, else the best available. */
   const pickModel = async (dir?: string) => chooseModel(await available(), dir ? opts.bridge.project(dir)?.model : undefined)
 
-  const live = new Map<string, { conv: Any; off: () => void; view: Any; adapter: AguiAdapter }>()
+  const live = new Map<string, { conv: Any; off: () => void; view: Any; adapter: AguiAdapter; claude?: ClaudeCodeRun }>()
+  const visible = (l: { view: Any; claude?: ClaudeCodeRun }) => l.claude?.view(l.view.value) || l.view.value
+  const updateClaude = (dir: string) => {
+    const l = live.get(dir)
+    if (!l) return
+    l.adapter.update(visible(l))
+    for (const v of viewers.get(dir) || []) v.adapter?.update(visible(l))
+  }
   // Other viewers of a project's conversation (the phone): each gets its own adapter, so one (re)connecting replays
   // only to itself. They outlive the conversation and follow the project to whichever one it opens next.
-  type Viewer = { emit: (e: BaseEvent) => void; off?: () => void }
+  type Viewer = { emit: (e: BaseEvent) => void; off?: () => void; adapter?: AguiAdapter }
   const viewers = new Map<string, Set<Viewer>>()
 
   function watch(dir: string, v: Viewer) {
@@ -1037,25 +1071,27 @@ export async function startAgent(opts: {
     const l = live.get(dir)
     if (!l) { v.off = undefined; return }
     const adapter = new AguiAdapter(String(l.conv.id), v.emit)
-    v.off = l.view.subscribe((s: Any) => adapter.update(s))
-    adapter.replay(l.view.value)
+    v.adapter = adapter
+    v.off = l.view.subscribe(() => adapter.update(visible(l)))
+    adapter.replay(visible(l))
   }
 
   /** Show a project's conversation (the given one, the open one, or a new one); the renderer gets a full replay. */
   async function open(dir: string, convId?: string, fresh = false) {
     const l = live.get(dir)
-    if (l && !fresh && (convId == null || String(l.conv.id) === String(convId))) { l.adapter.replay(l.view.value); return String(l.conv.id) }
-    if (l) detach(dir)
+    if (l && !fresh && (convId == null || String(l.conv.id) === String(convId))) { l.adapter.replay(visible(l)); return String(l.conv.id) }
+    if (l) { await l.claude?.stop(); detach(dir) }
     const model = await pickModel(dir)
     const h = await harnessFor(dir)
     let conv: Any | undefined = convId && !fresh ? await h.conversation(Number(convId) as never, ctx).catch(() => undefined) : undefined
     if (!conv && convId && !fresh && h !== harness) conv = await harness.conversation(Number(convId) as never, ctx).catch(() => undefined)
-    if (!conv) conv = await h.createConversation({ ownership: { kind: 'ownerless' }, agent: { ...(model ? { model } : {}), cwd: dir } } as never, ctx)
-    else if (model) await conv.configure({ model, cwd: dir }, ctx)
+    const config = model && model.provider !== CLAUDE_CODE_PROVIDER ? { model: { provider: model.provider, modelId: model.modelId }, thinkingLevel: model.reasoningLevel ?? null, cwd: dir } : { cwd: dir }
+    if (!conv) conv = await h.createConversation({ ownership: { kind: 'ownerless' }, agent: config } as never, ctx)
+    else if (model && model.provider !== CLAUDE_CODE_PROVIDER) await conv.configure(config, ctx)
     convDir.set(String(conv.id), dir)
     const view = await conv.viewState(ctx)
     const adapter = new AguiAdapter(String(conv.id), e => opts.onEvent(dir, e))
-    const off = view.subscribe((v: Any) => adapter.update(v))
+    const off = view.subscribe(() => { const current = live.get(dir); adapter.update(current ? visible(current) : view.value) })
     live.set(dir, { conv, off, view, adapter })
     adapter.replay(view.value)
     for (const v of viewers.get(dir) || []) watch(dir, v)
@@ -1065,6 +1101,7 @@ export async function startAgent(opts: {
   function detach(dir: string) {
     const l = live.get(dir)
     if (!l) return
+    void l.claude?.stop()
     for (const v of viewers.get(dir) || []) { v.off?.(); v.off = undefined }
     l.off(); l.view.dispose?.(); live.delete(dir)
   }
@@ -1093,23 +1130,44 @@ export async function startAgent(opts: {
     hasModel: async () => !!(await pickModel()),
     model: (dir?: string) => pickModel(dir),
     models: async () => describeModels(await available(), Object.fromEntries(listProviders().map(p => [p.id, p.name]))),
+    validateModel: async (model: import('../shared/models').ModelRef) => validateModelChoice(await available(), model),
+    modelWarning: () => gemini.warning,
     /** keys or custom providers changed: built-in models are re-read on every use, custom providers are rebuilt */
-    keysChanged: loadCustom,
+    keysChanged: () => { loadCustom(); gemini.invalidate() },
+    async stopClaudeCode() { await Promise.all([...live.values()].map(l => l.claude?.stop())) },
     async send(dir: string, content: string | Any[]) {
       const l = live.get(dir)
       if (!l) throw new Error('This project is not open.')
       const model = await pickModel(dir)
+      if (opts.bridge.project(dir)?.model?.provider === CLAUDE_CODE_PROVIDER && model?.provider !== CLAUDE_CODE_PROVIDER) {
+        throw new Error('Your selected Claude Code model is unavailable. Reconnect Claude Code in Settings → Keys or explicitly choose another model. No API credits have been used.')
+      }
+      if (opts.bridge.project(dir)?.model?.provider === CHATGPT_PROVIDER && model?.provider !== CHATGPT_PROVIDER) {
+        throw new Error('Your selected ChatGPT plan model is unavailable. Reconnect ChatGPT in Settings → Keys or explicitly choose another model. No API credits have been used.')
+      }
       // code: the phone offers AgentShot credits or its own key for this (mobile-bridge.ts)
-      if (!model) throw Object.assign(new Error('Add an API key first (Settings → Keys).'), { code: 'needs-key' })
+      if (!model) throw Object.assign(new Error('Connect ChatGPT or add an API key first (Settings → Keys).'), { code: 'needs-key' })
       const inputText = typeof content === 'string' ? content : content.filter(c => c.type === 'text').map(c => c.text || '').join('\n')
       demoBriefs.input(String(l.conv.id), inputText.split(ATTACHED)[0])
       inspections.reset(String(l.conv.id))
-      await l.conv.configure({ model, cwd: dir }, ctx)
+      if (model.provider === CLAUDE_CODE_PROVIDER) {
+        if (l.claude && l.claude.view(l.view.value) !== l.view.value) throw new Error('Claude Code is still working. Stop the current request before sending another.')
+        const connection = opts.claudeCode
+        const status = await connection?.status()
+        if (!connection?.executable || !status?.connected || !status.enabled) throw new Error('Connect Claude Code in Settings → Keys first.')
+        l.claude = new ClaudeCodeRun({ conv: l.conv as never, dir, model: model.modelId, reasoningLevel: model.reasoningLevel as import('@anthropic-ai/claude-agent-sdk').Options['effort'], executable: connection.executable,
+          extensions: makeRegistry(dirOf).snapshot().installed(), env: envFor({ cwd: dir }), update: () => updateClaude(dir) })
+        void l.claude.start(content)
+        return
+      }
+      await l.claude?.stop()
+      await l.conv.configure({ model: { provider: model.provider, modelId: model.modelId }, thinkingLevel: model.reasoningLevel ?? null, cwd: dir }, ctx)
       await l.conv.submit({ type: 'input', content, whenBusy: 'steer' }, ctx)
     },
-    async stop(dir: string) { await live.get(dir)?.conv.abort(ctx) },
+    async stop(dir: string) { await live.get(dir)?.claude?.stop(); await live.get(dir)?.conv.abort(ctx) },
     close: detach,
     async shutdown() {
+      await Promise.all([...live.values()].map(l => l.claude?.stop()))
       for (const d of [...live.keys()]) this.close(d)
       await Promise.all([...projectHarnesses.values()].map(p => p.then(h => h.close(ctx)).catch(() => {})))
       projectHarnesses.clear()

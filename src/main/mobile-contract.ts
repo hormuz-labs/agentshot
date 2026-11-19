@@ -1,12 +1,13 @@
 // An explicit network surface, independent of Electron's broader IPC surface.
 import { z } from 'zod'
+import { REASONING_LEVELS } from '../shared/models'
 const text = z.string().max(100_000)
 const id = z.string().min(1).max(1024)
 const dir = z.string().min(1).max(4096)
 const rel = z.string().min(1).max(4096).refine(s => !s.startsWith('/') && !s.includes('\\') && !s.split('/').some(p => p === '..' || p.startsWith('.')) && !s.includes('\0') && !/^[a-z]:/i.test(s))
 const num = z.number().finite()
 const time = num.min(0).max(86400)
-const model = z.object({ provider: id, modelId: id }).strict()
+const model = z.object({ provider: id, modelId: id, reasoningLevel: z.enum(REASONING_LEVELS).optional() }).strict()
 const anchor = z.object({ t0: time, t1: time.optional(), box: z.object({ x: num.min(0).max(1), y: num.min(0).max(1), w: num.positive().max(1), h: num.positive().max(1) }).strict().refine(b => b.x + b.w <= 1.001 && b.y + b.h <= 1.001).optional(), clip: z.object({ id: id.regex(/^[a-z0-9][a-z0-9-]{0,40}$/), element: id.optional() }).strict().optional() }).strict().refine(a => a.t1 === undefined || a.t1 >= a.t0)
 const mix = z.object({ filmDb: num.min(-40).max(12), music: z.object({ src: rel, db: num.min(-40).max(12), duckDb: num.min(0).max(40) }).strict().optional() }).strict()
 const edit = z.discriminatedUnion('op', [

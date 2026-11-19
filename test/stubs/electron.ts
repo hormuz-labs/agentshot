@@ -10,6 +10,8 @@ export const app = {
   getVersion: () => '0.0.0-test',
 }
 export const safeStorage = {
+  isEncryptionAvailable: () => false, // Subscription tests inject storage; no real desktop keychain in Node.
+  getSelectedStorageBackend: () => 'basic_text',
   encryptString: (s: string) => Buffer.from(`enc:${s}`),
   decryptString: (b: Buffer) => b.toString().replace(/^enc:/, ''),
 }

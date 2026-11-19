@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BaseEvent } from '@ag-ui/core'
 import type { AccountStatus, Anchor, Balance, BrowserMode, BrowserState, ChromeBsk, ConsentRequest, Job, KeyInfo, OnDemandTool, Project, RecentProject, ToolStatus, Transcript, WhisperConfig, WhisperStatus } from '../shared/types'
 import type { CustomProvider, CustomProviderInfo } from '../shared/providers'
+import type { ChatGPTStatus } from '../shared/chatgpt'
+import type { ClaudeCodeStatus } from '../shared/claude-code'
 import type { Cue } from '../shared/subtitles'
 import type { Edit } from '../shared/timeline'
 import type { PreviewState } from '../shared/proxy'
@@ -26,7 +28,7 @@ type CloudOffer = { kind: 'upscale' | 'voice'; name: string; credits: number | n
 /** One of the person's own skills as they write it; with an id, one they are changing. */
 type OwnSkill = { id?: string; name: string; description: string; body: string }
 
-type ModelInfo = { provider: string; providerLabel: string; modelId: string; name: string; context?: number; price?: { input: number; output: number }; images: boolean; reasoning: boolean }
+type ModelInfo = { provider: string; providerLabel: string; modelId: string; name: string; context?: number; price?: { input: number; output: number }; images: boolean; reasoning: boolean; reasoningLevels: import('../shared/models').ReasoningLevel[] }
 
 type UpdateState = { mode: string; why?: string; status: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'none' | 'error'; version?: string; progress?: number; error?: string }
 
@@ -163,6 +165,24 @@ const api = {
     list: () => ipcRenderer.invoke('keys:list') as Promise<KeyInfo[]>,
     set: (name: string, value: string) => ipcRenderer.invoke('keys:set', name, value) as Promise<KeyInfo[]>,
   },
+  chatgpt: {
+    status: () => ipcRenderer.invoke('chatgpt:status') as Promise<ChatGPTStatus>,
+    signIn: (id?: string) => ipcRenderer.invoke('chatgpt:signIn', id) as Promise<ChatGPTStatus & { firstSignIn: boolean }>,
+    cancel: () => ipcRenderer.invoke('chatgpt:cancel') as Promise<void>,
+    welcome: () => ipcRenderer.invoke('chatgpt:welcome') as Promise<void>,
+    select: (id: string) => ipcRenderer.invoke('chatgpt:select', id) as Promise<ChatGPTStatus>,
+    signOut: (id?: string) => ipcRenderer.invoke('chatgpt:signOut', id) as Promise<ChatGPTStatus>,
+    usage: () => ipcRenderer.invoke('chatgpt:usage') as Promise<void>,
+  },
+  claudeCode: {
+    status: () => ipcRenderer.invoke('claude-code:status') as Promise<ClaudeCodeStatus>,
+    signIn: () => ipcRenderer.invoke('claude-code:signIn') as Promise<ClaudeCodeStatus>,
+    connect: () => ipcRenderer.invoke('claude-code:connect') as Promise<ClaudeCodeStatus>,
+    disconnect: () => ipcRenderer.invoke('claude-code:disconnect') as Promise<ClaudeCodeStatus>,
+    cancel: () => ipcRenderer.invoke('claude-code:cancel') as Promise<void>,
+    usage: () => ipcRenderer.invoke('claude-code:usage') as Promise<void>,
+    help: () => ipcRenderer.invoke('claude-code:help') as Promise<void>,
+  },
   /** Signing in to AgentShot: brings the person's AgentShot key (stays in the main process); only who is signed in comes back. */
   account: {
     status: () => ipcRenderer.invoke('account:status') as Promise<AccountStatus>,
@@ -242,8 +262,8 @@ const api = {
     newConversation: (dir: string) => ipcRenderer.invoke('agent:newConversation', dir) as Promise<Project>,
     switchConversation: (dir: string, id: string) => ipcRenderer.invoke('agent:switch', dir, id) as Promise<Project>,
     renameConversation: (dir: string, id: string, title: string) => ipcRenderer.invoke('agent:rename', dir, id, title) as Promise<Project>,
-    models: (dir?: string) => ipcRenderer.invoke('agent:models', dir) as Promise<{ models: ModelInfo[]; current: { provider: string; modelId: string } | null }>,
-    setModel: (dir: string, model: { provider: string; modelId: string } | null) => ipcRenderer.invoke('agent:setModel', dir, model) as Promise<{ provider: string; modelId: string } | undefined>,
+    models: (dir?: string) => ipcRenderer.invoke('agent:models', dir) as Promise<{ models: ModelInfo[]; current: import('../shared/models').ModelRef | null; warning?: string }>,
+    setModel: (dir: string, model: import('../shared/models').ModelRef | null) => ipcRenderer.invoke('agent:setModel', dir, model) as Promise<import('../shared/models').ModelRef | undefined>,
     onEvent: on<[string, BaseEvent]>('agui'),
     onReady: on<[]>('agent:ready'),
   },

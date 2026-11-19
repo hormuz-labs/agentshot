@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { Check, ChevronDown, Image as ImageIcon, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { ModelRef, ReasoningLevel } from '../../../shared/models'
 
 type Info = Awaited<ReturnType<typeof window.agentshot.agent.models>>
 
@@ -11,9 +12,9 @@ const k = (n?: number) => (n == null ? '' : n >= 1e6 ? `${(n / 1e6).toFixed(n % 
 
 export function ModelPicker({ dir, picked, onPick, disabled = false }: {
   dir?: string
-  picked?: { provider: string; modelId: string }
+   picked?: ModelRef
   /** A new-project draft chooses locally; an existing project persists its choice through IPC. */
-  onPick?(model: { provider: string; modelId: string } | undefined): void
+   onPick?(model: ModelRef | undefined): void
   disabled?: boolean
 }) {
   const [info, setInfo] = useState<Info | null>(null)
@@ -33,7 +34,7 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
   const cur = info?.models.find(m => m.provider === current?.provider && m.modelId === current?.modelId)
   // only the AgentShot key: the gateway picks the model, there's nothing to choose
   if (dir && info?.models.length === 1 && info.current?.provider === 'manul') return <span className="inline-flex h-6 items-center px-1.5 text-[11px] text-dim" title="AgentShot picks the model">{cur?.name || 'AgentShot'}</span>
-  const choose = async (m: { provider: string; modelId: string } | null) => {
+  const choose = async (m: ModelRef | null) => {
     if (disabled) return
     if (onPick) { onPick(m ?? undefined); setOpen(false); setQ(''); return }
     if (!dir) return
@@ -42,9 +43,10 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
   }
 
   return (
+    <span className="inline-flex items-center gap-1">
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger type="button" disabled={disabled} aria-label={dir ? 'Choose project model' : 'Choose model for new project'} className="inline-flex h-6 max-w-[150px] items-center gap-1 rounded-md px-1.5 text-[11px] text-dim hover:bg-hover hover:text-fg disabled:opacity-50" title={dir ? 'Model for this project' : 'Model for your new project'}>
-        <span className="truncate">{cur?.name || current?.modelId || 'Choose model'}</span><ChevronDown className="size-3 shrink-0" />
+        <span className="truncate">{current?.provider === 'chatgpt' ? `Using ChatGPT plan · ${cur?.name || current.modelId}` : cur?.name || current?.modelId || 'Choose model'}</span><ChevronDown className="size-3 shrink-0" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="end" sideOffset={6} className="z-50 w-80 rounded-card border border-line bg-panel shadow-2xl shadow-shade">
@@ -53,6 +55,9 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
             <input autoFocus aria-label="Find a model" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a model" className="h-6 flex-1 bg-transparent text-xs outline-none placeholder:text-faint" />
           </div>
           <div className="max-h-80 overflow-y-auto p-1">
+            {info?.warning && <p role="status" className="px-2 py-2 text-xs text-dim">{info.warning}</p>}
+            {current?.provider === 'chatgpt' && <div className="px-2 py-2 text-xs text-dim">Using ChatGPT plan <button type="button" className="ml-2 underline" onClick={() => window.agentshot.chatgpt.usage()}>Manage usage</button></div>}
+            {current?.provider === 'claude-code' && <div className="px-2 py-2 text-xs text-dim">Using Claude Code · own billing <button type="button" className="ml-2 underline" onClick={() => window.agentshot.claudeCode.usage()}>Manage usage</button></div>}
             <button type="button" disabled={disabled} onClick={() => choose(null)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-dim hover:bg-hover hover:text-fg">
               <span className="flex-1">Best available (automatic)</span>{!picked && <Check className="size-3.5 text-amber" />}
             </button>
@@ -70,10 +75,18 @@ export function ModelPicker({ dir, picked, onPick, disabled = false }: {
                 </button>
               )
             })}
-            {error ? <p role="alert" className="px-2 py-2 text-xs text-bad">{error}</p> : !info ? <p role="status" className="px-2 py-2 text-xs text-faint">Loading models…</p> : !info.models.length ? <p className="px-2 py-2 text-xs text-faint">Add an API key in Settings → Keys to choose a model.</p> : !list.length ? <p className="px-2 py-2 text-xs text-faint">No models match your search.</p> : null}
+            {error ? <p role="alert" className="px-2 py-2 text-xs text-bad">{error}</p> : !info ? <p role="status" className="px-2 py-2 text-xs text-faint">Loading models…</p> : !info.models.length ? <p className="px-2 py-2 text-xs text-faint">Connect ChatGPT or add an API key in Settings → Keys to choose a model.</p> : !list.length ? <p className="px-2 py-2 text-xs text-faint">No models match your search.</p> : null}
           </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+    {cur?.reasoning && <select aria-label="Reasoning level" title="Reasoning level" disabled={disabled || !cur.reasoningLevels.length}
+      value={current?.reasoningLevel ?? ''} onChange={e => { if (current) void choose({ provider: current.provider, modelId: current.modelId,
+        ...(e.target.value ? { reasoningLevel: e.target.value as ReasoningLevel } : {}) }) }}
+      className="h-6 max-w-24 rounded-md bg-transparent px-1 text-[11px] text-dim outline-none hover:bg-hover focus-visible:ring-1 focus-visible:ring-amber disabled:opacity-50">
+      <option value="">Default</option>
+      {cur.reasoningLevels.map(level => <option key={level} value={level}>{({ off: 'Off', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' })[level]}</option>)}
+    </select>}
+    </span>
   )
 }

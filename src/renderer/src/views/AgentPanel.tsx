@@ -334,7 +334,7 @@ function MentionList({ items, query, pick, onPick, onHover }: { items: Mention[]
 export function AgentPanel({ project, projectInfo, model, agent, anchor, text, onText: setText, onClearAnchor, attached = [], onAttach, onDetach, onAdd, onSend, onStop, ready, onKeys, inputRef, active = true, demoTools, demoToolsMessage }: {
   project: string
   projectInfo: Project
-  model?: { provider: string; modelId: string }
+  model?: import('../../../shared/models').ModelRef
   agent: AgentState
   active?: boolean
   anchor?: Anchor
