@@ -29,7 +29,7 @@ function fixture() {
     timeline: applyEdit(timeline, { op: 'camera', layout: { shape: 'circle', framing: { fit: 'cover', zoom: 1.26, x: 0.14, y: -0.08 } } }),
   }
   const gate = deferred()
-  const render = vi.fn(async () => { await gate.promise; return { final: 'renders/new.mp4' } })
+  const render = vi.fn(async (_project: Project, _timeline: NonNullable<Project['timeline']>, _title: string) => { await gate.promise; return { final: 'renders/new.mp4' } })
   const addVersion = vi.fn(async (project: Project, file: string, title: string, by: Version['by'], tl: Project['timeline'], dry?: string) => {
     const v: Version = { id: `v${project.versions.length}`, path: relative(project.dir, file), title, by, createdAt: 1, timeline: tl, dry }
     project.versions.push(v)
@@ -110,8 +110,11 @@ describe('timeline render coordination', () => {
   })
   it('does not let an older proposal supersede a newer render completed first', async () => {
     const f = fixture(), second = deferred()
-    f.render.mockImplementationOnce(async () => { await f.gate.promise; return { final: 'renders/one.mp4' } })
-    f.render.mockImplementationOnce(async () => { await second.promise; return { final: 'renders/two.mp4' } })
+    // Source revision reads may finish in either order; bind each gate to its request.
+    f.render.mockImplementation(async (_p, _tl, title) => {
+      await (title === 'One' ? f.gate : second).promise
+      return { final: title === 'One' ? 'renders/one.mp4' : 'renders/two.mp4' }
+    })
     const one = f.renders.request(f.p, f.p.timeline!, 'One')
     const twoTimeline = structuredClone(f.p.timeline!); twoTimeline.demo!.layout.width = 110
     const two = f.renders.request(f.p, twoTimeline, 'Two')
