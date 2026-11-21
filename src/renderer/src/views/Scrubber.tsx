@@ -23,6 +23,8 @@ type Props = {
   fps: number
   duration: number
   time: number
+  /** a moment gone to on purpose (a typed time): a zoomed strip scrolls to show it */
+  reveal?: { t: number; key: number }
   notes: Note[]
   range?: { t0: number; t1?: number }
   ranges?: { t0: number; t1: number }[]
@@ -60,13 +62,14 @@ type Props = {
 type Move = { id: string; x0: number; y0: number; x: number; y: number; moved: boolean; before: string | null;
   width: number; height: number; grabX: number; grabY: number; frames: { src: string; left: string; width: string }[] }
 
-export function Scrubber({ dir, revision, fps: rate, duration, time, notes, range, ranges = [], track, clips, voiceoverAssets = [], liveVoiceover, onAttachVoiceover, selected = null, onSelect, moveMode = false, onExitMove, status, onSeek, onRange, onRangeEnd, ask, onNote, onOpenClip, movable = false, onMove, onInsert, onEdit }: Props) {
+export function Scrubber({ dir, revision, fps: rate, duration, time, reveal, notes, range, ranges = [], track, clips, voiceoverAssets = [], liveVoiceover, onAttachVoiceover, selected = null, onSelect, moveMode = false, onExitMove, status, onSeek, onRange, onRangeEnd, ask, onNote, onOpenClip, movable = false, onMove, onInsert, onEdit }: Props) {
   const bar = useRef<HTMLDivElement>(null)
   const root = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(1)
   const [view, setView] = useState({ width: 1, left: 0 })
-  const center = useRef<number | null>(null)
+  // what stays put on screen while zooming: a fraction of the strip, at a pixel offset into the viewport
+  const center = useRef<{ at: number; x: number } | null>(null)
   const [drag, setDrag] = useState<{ start: number; moved: boolean } | null>(null)
   const [move, setMove] = useState<Move | null>(null)
   const [drop, setDrop] = useState<number | null>(null)
@@ -89,16 +92,25 @@ export function Scrubber({ dir, revision, fps: rate, duration, time, notes, rang
   const d = (duration || lengthOf(track)) || 1
   const fps = rate || 30
   const maxZoom = frameZoom(view.width, d, fps)
-  const changeZoom = (value: number) => {
+  /** zoom about clientX (the pointer, when scrolling to zoom) or the middle of the view */
+  const changeZoom = (value: number, clientX?: number) => {
     const el = viewport.current!
-    center.current = (el.scrollLeft + el.clientWidth / 2) / el.scrollWidth
+    const x = clientX != null ? Math.max(0, Math.min(el.clientWidth, clientX - el.getBoundingClientRect().left)) : el.clientWidth / 2
+    center.current = { at: (el.scrollLeft + x) / el.scrollWidth, x }
     setZoom(Math.max(1, Math.min(maxZoom, value)))
   }
   useLayoutEffect(() => {
     const el = viewport.current
-    if (el && center.current != null) el.scrollLeft = center.current * el.scrollWidth - el.clientWidth / 2
+    if (el && center.current != null) el.scrollLeft = center.current.at * el.scrollWidth - center.current.x
     center.current = null
   }, [zoom])
+  // a typed time on a zoomed strip: bring it into view (in the middle) if it's off screen
+  useLayoutEffect(() => {
+    const el = viewport.current
+    if (!el || !reveal?.key || zoom <= 1) return
+    const x = (Math.max(0, Math.min(reveal.t, d)) / d) * el.scrollWidth
+    if (x < el.scrollLeft || x > el.scrollLeft + el.clientWidth) el.scrollLeft = x - el.clientWidth / 2
+  }, [reveal?.key])
   useLayoutEffect(() => { setZoom(1); if (viewport.current) viewport.current.scrollLeft = 0 }, [revision])
   useEffect(() => {
     const el = viewport.current!
@@ -114,7 +126,7 @@ export function Scrubber({ dir, revision, fps: rate, duration, time, notes, rang
     const wheel = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
-      changeZoom(zoom * Math.exp(-e.deltaY * 0.01))
+      changeZoom(zoom * Math.exp(-e.deltaY * 0.01), e.clientX)
     }
     el.addEventListener('wheel', wheel, { passive: false })
     return () => el.removeEventListener('wheel', wheel)
