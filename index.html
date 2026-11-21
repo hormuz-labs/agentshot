@@ -1,0 +1,7 @@
+<!doctype html><meta charset="utf-8"><title>AgentShot apt repository</title>
+<body style="font:16px/1.5 system-ui;max-width:46rem;margin:3rem auto;padding:0 1rem">
+<h1>AgentShot apt repository</h1>
+<pre style="white-space:pre-wrap">curl -fsSL https://apt.agentshot.si/manul.gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/manul.gpg &amp;&amp;
+echo "deb [signed-by=/usr/share/keyrings/manul.gpg] https://apt.agentshot.si stable main" | sudo tee /etc/apt/sources.list.d/manul.list &amp;&amp;
+sudo apt update &amp;&amp; sudo apt install manul</pre>
+<p><a href="https://github.com/hormuz-labs/agentshot">AgentShot on GitHub</a></p>
