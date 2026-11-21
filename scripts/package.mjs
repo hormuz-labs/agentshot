@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
@@ -74,6 +74,8 @@ export async function notarizeDmgs(dist, env = process.env, {
   // this build's DMGs, as its feed lists them: an older build's DMG may still sit in dist/ locally
   const dmgs = [...feed.matchAll(/^  - url: (.+\.dmg)$/gm)].map(m => m[1])
   if (!dmgs.length) throw new Error(`latest-mac.yml in ${dist} lists no .dmg to notarize`)
+  const missing = dmgs.filter(name => !existsSync(join(dist, name)))
+  if (missing.length) throw new Error(`latest-mac.yml lists ${missing.join(', ')}, not found in ${dist}`)
   for (const name of dmgs) {
     const dmg = join(dist, name)
     console.log(`notarizing ${name}`)

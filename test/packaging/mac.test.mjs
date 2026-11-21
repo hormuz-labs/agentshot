@@ -113,6 +113,14 @@ test('notarizing DMGs fails loudly when the feed lists none', async () => {
   await assert.rejects(notarizeDmgs(dist, apiKey, { notarize: async () => {}, blockmap: async () => ({}) }), /lists no \.dmg/)
 })
 
+test('a DMG the feed lists but dist lacks fails before anything is sent to Apple', async () => {
+  const dist = mkdtempSync(join(tmpdir(), 'dmg-'))
+  writeFileSync(join(dist, 'latest-mac.yml'), feed)
+  let sent = 0
+  await assert.rejects(notarizeDmgs(dist, apiKey, { notarize: async () => { sent++ }, blockmap: async () => ({}) }), /AgentShot-1\.2\.3-arm64\.dmg, not found/)
+  assert.equal(sent, 0)
+})
+
 test('the real blockmap builder gives the file\'s own sha512 and size', async () => {
   const dist = mkdtempSync(join(tmpdir(), 'dmg-'))
   const dmg = join(dist, 'AgentShot-1.2.3-arm64.dmg')
