@@ -520,7 +520,9 @@ try {
     if (test === 'signin' && !run.status) {
       // the desktop saw the phone that signed in; then it signs out, so the agent goes back to the scripted model
       const st = await win.evaluate(() => window.agentshot.mobile.status())
-      assert.ok(st.signedIn.some(p => p.name === 'Android phone'), `the desktop lists the signed-in phone (${JSON.stringify(st.signedIn)})`)
+      // by its model since phones name themselves (an emulator: "Google sdk_gphone64_x86_64"), and only once
+      assert.equal(st.signedIn.length, 1, `the desktop lists the signed-in phone once (${JSON.stringify(st.signedIn)})`)
+      assert.ok(st.signedIn[0].name && st.signedIn[0].name !== 'Signed-in device', `by the name it gives (${JSON.stringify(st.signedIn)})`)
       await win.evaluate(() => window.agentshot.account.signOut())
     }
     assert.equal(run.status, 0, `mobile ${test} test failed (${bridgeNow}) (desktop log: ${desktopLog}; the model answered: ${turns.join(' | ') || 'nothing'})`)

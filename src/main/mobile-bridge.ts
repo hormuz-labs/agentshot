@@ -97,7 +97,9 @@ export class MobileBridge {
   private port = 0
   private devices = new Map<string, PairedDevice>()
   private seenSaved = 0
-  private signedIn = new Map<string, { name: string; lastSeen: number }>()
+  /** Phones signed in to the same account, one entry per phone (its install id, else its name), not per token: a
+   * phone's account token changes when it's renewed, and the phone must not then show up twice. */
+  private signedIn = new Map<string, { name: string; lastSeen: number; token: string }>()
   /** On a cloud worker: who holds the lease now (from the account's answer to the heartbeat), and what each made. */
   private lease?: { userId: string; until: number }
   /** When the person leasing this worker last asked it something. */
@@ -123,7 +125,7 @@ export class MobileBridge {
   private recentSignedIn() {
     // seen lately, or still holding its live event stream open
     const since = Date.now() - 2 * 60_000, live = new Set(this.clients.values())
-    return [...this.signedIn].filter(([token, d]) => d.lastSeen > since || live.has(token)).map(([, { name, lastSeen }]) => ({ name, lastSeen }))
+    return [...this.signedIn.values()].filter(d => d.lastSeen > since || live.has(d.token)).map(({ name, lastSeen }) => ({ name, lastSeen }))
   }
   /** The port the bridge actually bound (47821 unless that was taken). */
   listenPort() {
@@ -401,7 +403,9 @@ export class MobileBridge {
     // signed in to the same account (an account lease, not a pairing): remember it for Settings → Mobile
     if (device.id.startsWith('lease:')) {
       const name = String(req.headers['x-agentshot-device'] || 'Signed-in device').slice(0, 80)
-      this.signedIn.set(token, { name, lastSeen: Date.now() })
+      const install = req.headers['x-agentshot-install']
+      const key = typeof install === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(install) ? `install:${install}` : `name:${name}`
+      this.signedIn.set(key, { name, lastSeen: Date.now(), token })
     }
     // a phone paired with a code: when it was last here, and the name it gives now (an older app sent only "Android")
     const paired = this.devices.get(token)

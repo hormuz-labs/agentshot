@@ -178,10 +178,26 @@ class BridgeClient {
   /// Its model once [identify] has asked the system ("Samsung Galaxy S23", "iPhone 16 Pro").
   static String deviceName = Platform.isIOS ? 'iPhone' : 'Android phone';
 
-  /// Learns this phone's model for [deviceName]; called once at start.
-  static Future<void> identify() async {
+  /// This install of the app ([installId]), sent with [deviceName] so the desktop lists the phone once even when its
+  /// account token is renewed. Empty until [identify] has read it.
+  static String installTag = '';
+
+  /// Learns this phone's model for [deviceName], and its [installTag]; called once at start.
+  static Future<void> identify([
+    FlutterSecureStorage storage = const FlutterSecureStorage(),
+  ]) async {
     final name = await describeThisPhone();
     if (name != null && name.isNotEmpty) deviceName = name;
+    try {
+      installTag = await installId(storage);
+    } catch (_) {
+      // the desktop falls back to the name
+    }
+  }
+
+  static void _identifyOn(HttpHeaders headers) {
+    headers.set('x-agentshot-device', deviceName);
+    if (installTag.isNotEmpty) headers.set('x-agentshot-install', installTag);
   }
 
   Future<bool> restore() async {
@@ -498,7 +514,7 @@ class BridgeClient {
             HttpHeaders.authorizationHeader,
             'Bearer ${target.token}',
           );
-          req.headers.set('x-agentshot-device', deviceName);
+          _identifyOn(req.headers);
           final res = await req.close().timeout(timeout);
           await res.drain<void>();
           if (res.statusCode == 200 && !found.isCompleted) {
@@ -542,7 +558,7 @@ class BridgeClient {
           HttpHeaders.authorizationHeader,
           'Bearer ${target.token}',
         );
-        req.headers.set('x-agentshot-device', deviceName);
+        _identifyOn(req.headers);
         final res = await req.close().timeout(const Duration(seconds: 6));
         if (res.statusCode != 200) {
           throw BridgeException(
@@ -655,7 +671,7 @@ class BridgeClient {
         'Bearer ${target.token}',
       );
     }
-    request.headers.set('x-agentshot-device', deviceName);
+    _identifyOn(request.headers);
     return request;
   }
 
