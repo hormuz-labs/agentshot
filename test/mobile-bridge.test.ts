@@ -152,6 +152,26 @@ describe('mobile TLS bridge', () => {
     await f.call('/hello', { token: f.token, headers: { 'x-agentshot-device': 'Paired phone' } })
     expect(f.bridge.status().signedIn.map(d => d.name)).toEqual(['Android phone'])
   })
+  it('lists a signed-in phone once when its account token is renewed', async () => {
+    const f = await fixture()
+    const { secret } = f.bridge.workerCredentials()
+    const lease = (until: number) => signWorkerToken(secret, 'user_1', false, until)
+    // by its install id: the same phone with a new token, and a second phone of the same model
+    const first = lease(Date.now() + 60_000), renewed = lease(Date.now() + 120_000)
+    expect(first).not.toBe(renewed)
+    const phone = { 'x-agentshot-device': 'Google Pixel 9', 'x-agentshot-install': 'install_aaaaaaaa' }
+    expect((await f.call('/hello', { token: first, headers: phone })).status).toBe(200)
+    expect((await f.call('/hello', { token: renewed, headers: phone })).status).toBe(200)
+    expect(f.bridge.status().signedIn.map(d => d.name)).toEqual(['Google Pixel 9'])
+    await f.call('/hello', { token: renewed, headers: { ...phone, 'x-agentshot-install': 'install_bbbbbbbb' } })
+    expect(f.bridge.status().signedIn.map(d => d.name)).toEqual(['Google Pixel 9', 'Google Pixel 9'])
+    // an older app that sends only its name: one entry per name
+    const g = await fixture()
+    const old = (until: number) => signWorkerToken(g.bridge.workerCredentials().secret, 'user_1', false, until)
+    await g.call('/hello', { token: old(Date.now() + 60_000), headers: { 'x-agentshot-device': 'Android phone' } })
+    await g.call('/hello', { token: old(Date.now() + 120_000), headers: { 'x-agentshot-device': 'Android phone' } })
+    expect(g.bridge.status().signedIn.map(d => d.name)).toEqual(['Android phone'])
+  })
   it('denies unknown projects, arbitrary IPC, traversal and symlink escapes', async () => {
     const f = await fixture()
     expect((await f.call('/rpc', { token: f.token, body: { method: 'project:open', args: ['/etc'] } })).status).toBe(403)
