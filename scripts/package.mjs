@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
@@ -61,6 +62,35 @@ export async function notarizeMac(appPath, env = process.env, {
   }
 }
 
+// electron-builder notarizes the app but not the .dmg it is shipped in, so a downloaded disk image had no signature
+// and no ticket. Each DMG is signed by electron-builder (dmg.sign), then notarized and stapled here. Stapling changes
+// the file, so its blockmap and its sha512/size in latest-mac.yml are written again to match.
+export async function notarizeDmgs(dist, env = process.env, {
+  notarize = notarizeMac,
+  blockmap = async (file, out) => (await import('app-builder-lib/out/targets/blockmap/blockmap.js')).buildBlockMap(file, 'gzip', out),
+} = {}) {
+  const feedPath = join(dist, 'latest-mac.yml')
+  let feed = readFileSync(feedPath, 'utf8')
+  // this build's DMGs, as its feed lists them: an older build's DMG may still sit in dist/ locally
+  const dmgs = [...feed.matchAll(/^  - url: (.+\.dmg)$/gm)].map(m => m[1])
+  if (!dmgs.length) throw new Error(`latest-mac.yml in ${dist} lists no .dmg to notarize`)
+  for (const name of dmgs) {
+    const dmg = join(dist, name)
+    console.log(`notarizing ${name}`)
+    await notarize(dmg, env)
+    const { sha512, size } = await blockmap(dmg, `${dmg}.blockmap`)
+    const lines = feed.split('\n')
+    const at = lines.indexOf(`  - url: ${name}`)
+    if (!lines[at + 1]?.startsWith('    sha512: ') || !lines[at + 2]?.startsWith('    size: '))
+      throw new Error(`latest-mac.yml has no sha512 and size for ${name}`)
+    lines[at + 1] = `    sha512: ${sha512}`
+    lines[at + 2] = `    size: ${size}`
+    feed = lines.join('\n')
+  }
+  writeFileSync(feedPath, feed)
+  return dmgs
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { build, Platform } = await import('electron-builder')
   // Empty CI secrets must not be interpreted as certificate file paths.
@@ -73,7 +103,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const config = process.platform === 'win32' ? { win: windowsSigning() } : mac ? {
     // signed by electron-builder, notarized by notarizeMac (above), which tries stapling again when Apple's end drops
     mac: { ...mac, notarize: false },
+    ...(mac.notarize ? { dmg: { sign: true } } : {}),
     ...(mac.notarize ? { afterSign: ctx => notarizeMac(join(ctx.appOutDir, `${ctx.packager.appInfo.productFilename}.app`)) } : {}),
   } : {}
   await build({ targets: platform.createTarget(dir ? ['dir'] : undefined), config, publish: 'never' })
+  if (mac?.notarize && !dir) await notarizeDmgs(join(fileURLToPath(new URL('..', import.meta.url)), 'dist'))
 }

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fails unless every packaged AgentShot.app under <dist> is Developer ID signed (bundled tools included), notarized with
+# Fails unless every packaged AgentShot.app (and every .dmg) under <dist> is Developer ID signed (bundled tools included), notarized with
 # the ticket stapled, and accepted by Gatekeeper, i.e. a downloaded copy opens without "can't be opened" or "damaged".
 #   scripts/check-mac-signature.sh dist
 set -eu
@@ -30,3 +30,20 @@ for app in "$dist"/mac*/AgentShot.app; do
   spctl --assess --type execute --verbose=2 "$app" 2>&1 | tee /dev/stderr | grep -q 'source=Notarized Developer ID' || { echo "Gatekeeper does not accept it as notarized"; exit 1; }
 done
 [ "$found" = 1 ] || { echo "no AgentShot.app under $dist"; exit 1; }
+# the .dmg people download: signed, notarized with the ticket stapled, so the disk image itself passes Gatekeeper
+found=0
+for dmg in "$dist"/*.dmg; do
+  [ -f "$dmg" ] || continue
+  found=1
+  echo "== $dmg"
+  codesign -dvv "$dmg" 2>&1 | grep -q '^Authority=Developer ID Application:' || { echo "the disk image is not signed with a Developer ID Application certificate"; exit 1; }
+  tries=0
+  until xcrun stapler validate "$dmg"; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 5 ] || { echo "the disk image's stapled ticket did not validate"; exit 1; }
+    echo "stapler validate failed; trying again in 15 s ($tries/5)"
+    sleep 15
+  done
+  spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg" 2>&1 | tee /dev/stderr | grep -q 'source=Notarized Developer ID' || { echo "Gatekeeper does not accept the disk image as notarized"; exit 1; }
+done
+[ "$found" = 1 ] || { echo "no .dmg under $dist"; exit 1; }
