@@ -67,6 +67,13 @@ export class ClaudeCodeConnection {
     // Disconnect only AgentShot; don't log the user out of their other Claude Code sessions.
     return this.status()
   }
+  /** Lists an MCP server (AgentShot's own, src/main/mcp.ts) in the person's Claude Code, for every folder, in place of
+   *  an older entry of that name. The token is Claude Code's to keep from then on. */
+  async addServer(name: string, url: string, token: string) {
+    await this.removeServer(name)
+    await this.run(['mcp', 'add', '--scope', 'user', '--transport', 'http', name, url, '--header', `Authorization: Bearer ${token}`])
+  }
+  async removeServer(name: string) { await this.run(['mcp', 'remove', '--scope', 'user', name]).catch(() => { /* wasn't listed */ }) }
   async models(): Promise<ModelInfo[]> {
     if (!this.enabled || !(await this.status()).connected) return []
     if (this.catalog && Date.now() - this.catalog.at < 300_000) return this.catalog.models

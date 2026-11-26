@@ -104,6 +104,7 @@ jobs:
           ./scripts/build-beats.sh
           ./scripts/build-ml.sh
           ./scripts/build-mesh.sh
+          node scripts/build-launcher.mjs
       - name: Verify target-native tools and models before release
         if: runner.os != 'Windows'
         run: npm run check:native

@@ -65,6 +65,10 @@ export type FileInfo = {
   summary: string
   /** Fonts: the family name (ASS Fontname, what libass matches) and style. */
   font?: { family: string; style: string }
+  /** What the agent wrote down after looking at or listening to it (what's where, with times), so it needn't look again. */
+  notes?: string
+  /** Where a file fetched from the web came from, and the licence it is used under (also in media/Sources.txt). */
+  source?: { page: string; licence: string }
 }
 
 export type Project = {

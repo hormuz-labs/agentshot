@@ -28,12 +28,18 @@ try {
   await win.waitForSelector('video')
   await loadRecordedTranscript(win, words)
 
-  const exportAs = async (label, captions, file) => {
+  const exportAs = async (label, captions, file, loud) => {
     await app.evaluate(({ dialog }, f) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }) }, join(tmp, file))
     await win.getByRole('button', { name: 'Export', exact: true }).click()
     const dialog = win.getByRole('dialog')
     await dialog.getByRole('button', { name: new RegExp(label) }).click()
     await dialog.getByRole('button', { name: captions, exact: true }).click()
+    // how loud: the sound as mixed unless a level is asked for
+    const levels = dialog.getByRole('radiogroup', { name: 'How loud' })
+    assert.deepEqual(await levels.getByRole('radio').allInnerTexts(), ['As it is', 'Online video', 'Podcast'])
+    assert.equal(await levels.getByRole('radio', { name: 'As it is' }).getAttribute('aria-checked'), 'true')
+    if (loud) await levels.getByRole('radio', { name: loud }).click()
+    if (process.env.E2E_SHOTS) await win.screenshot({ path: join(process.env.E2E_SHOTS, `export-${file}.png`) })
     await dialog.getByRole('button', { name: 'Export', exact: true }).click()
     await dialog.getByRole('button', { name: 'Show', exact: true }).waitFor({ timeout: 120000 }).catch(async e => {
       throw new Error(`${e.message}\nExport dialog: ${await dialog.innerText()}`)
@@ -49,7 +55,7 @@ try {
   assert.match(srt, /^1\n00:00:0\d,\d{3} --> 00:00:0\d,\d{3}\n/)
   assert.match(srt.toLowerCase(), /welcome back/)
 
-  await exportAs('16:9', 'In the picture', 'landscape.mp4')
+  await exportAs('16:9', 'In the picture', 'landscape.mp4', 'Online video')
   const l = probe(join(tmp, 'landscape.mp4'))
   assert.equal(l.width, 1920); assert.equal(l.height, 1080)
   assert.ok(!existsSync(join(tmp, 'landscape.srt')), 'burned captions leave no .srt behind')

@@ -51,6 +51,27 @@ export const PRESETS: { id: PresetId; label: string; hint: string; size?: [numbe
   { id: 'square', label: '1:1 · 1080×1080', hint: 'Feeds', size: [1080, 1080] },
 ]
 
+export type LoudnessId = 'none' | 'online' | 'podcast'
+/** How loud the finished film is: as it was mixed, or brought to the level a place plays things at. */
+export const LOUDNESS: { id: LoudnessId; label: string; hint: string; lufs?: number }[] = [
+  { id: 'none', label: 'As it is', hint: 'The sound exactly as mixed' },
+  { id: 'online', label: 'Online video', hint: 'The level YouTube, Reels, Shorts and TikTok play at', lufs: -14 },
+  { id: 'podcast', label: 'Podcast', hint: 'The level podcast apps expect', lufs: -16 },
+]
+
+/**
+ * The one change of level (dB) that brings a film measured at `lufs`, with its loudest peak at `peak` dBFS, to the
+ * target. It is a plain gain over the whole film, never a limiter or a compressor, so nothing pumps: where the full
+ * gain would push the loudest peak past -1 dB (and clip), the film stops short of the target instead.
+ * 0 when there is nothing to measure or the change would be too small to hear.
+ */
+export function loudnessGain(id: LoudnessId | undefined, measured: { lufs: number; peak: number } | null | undefined) {
+  const target = LOUDNESS.find(l => l.id === id)?.lufs
+  if (target == null || !measured || !Number.isFinite(measured.lufs) || !Number.isFinite(measured.peak)) return 0
+  const gain = Math.min(target - measured.lufs, -1 - measured.peak)
+  return Math.abs(gain) < 0.3 ? 0 : Math.round(gain * 10) / 10
+}
+
 export type ExportOptions = {
   preset: PresetId
   /** how a different shape is filled: a blurred copy behind the picture (default) or a centre crop */
@@ -63,13 +84,16 @@ export type ExportOptions = {
   /** folder with fonts for burned captions (Inter ships with AgentShot) */
   fontsDir?: string
   captionColor?: string
+  /** change the sound's level by this many dB (loudnessGain) */
+  gainDb?: number
 }
 
 /** ffmpeg arguments (after "ffmpeg -y") for one export. */
 export function exportArgs(o: ExportOptions): string[] {
   const preset = PRESETS.find(p => p.id === o.preset)!
-  // No resize/captions: export the finished edit without a second lossy encode.
-  if (!preset.size && !o.burnCaptions) return ['-i', o.input, '-map', '0:v', '-map', '0:a?', '-c', 'copy', '-movflags', '+faststart', o.out]
+  const level = o.gainDb ? ['-af', `volume=${o.gainDb}dB`] : []
+  // No resize/captions: export the finished edit without a second lossy encode (of the picture, when the level changes).
+  if (!preset.size && !o.burnCaptions) return ['-i', o.input, '-map', '0:v', '-map', '0:a?', ...(o.gainDb ? ['-c:v', 'copy', ...level, '-c:a', 'aac', '-b:a', '192k'] : ['-c', 'copy']), '-movflags', '+faststart', o.out]
   const [W, H] = preset.size || [o.source.width - (o.source.width % 2), o.source.height - (o.source.height % 2)]
   const filters: string[] = []
   let label = '0:v'
@@ -103,7 +127,7 @@ export function exportArgs(o: ExportOptions): string[] {
     ...(filters.length ? ['-filter_complex', filters.join(';'), '-map', `[${label}]`] : ['-map', '0:v']),
     '-map', '0:a?',
     '-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart',
+    ...level, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart',
     o.out,
   ]
 }

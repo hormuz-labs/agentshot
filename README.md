@@ -161,6 +161,9 @@ The agent is durable: it runs on a pi-durable harness backed by SQLite, so a con
 | “sync the second camera” | audio cross-correlation (GCC-PHAT) with clock-drift fitting |
 | “captions are always yellow” | memory: said once, every later project knows |
 | “send this to Premiere” | the cut as FCPXML, Premiere XML and OpenTimelineIO, with its footage: every cut keeps its in and out points |
+| “find the bit with the dog” | a search across every file: faces and objects by sight, speech by its words, and the agent's own notes on each file |
+| “loud enough for YouTube” | the export is measured and brought to the level online video plays at, with one change of level that can't clip |
+| “find me some music for this” | a track from the web is added only with the page it came from and its licence, kept in `media/Sources.txt` |
 | “put @logo.png bottom right” | <kbd>@</kbd> picks any file, kept version or title by name |
 
 It also knows how different films are cut: talking heads, tutorials, Shorts and Reels, promos, montages, motion graphics, cleanup and repair. These skills are plain files you can read and change.
@@ -194,6 +197,12 @@ Not a timeline to operate. Not a slot machine.
 Notes like “tighter” or “say step 3 differently” don't film anything again.
 
 <sub>Filming goes through <a href="https://github.com/Tencent/BrowserSkill">BrowserSkill</a>, with no setup. Turn on Chrome's remote debugging for up to 60 frames a second instead of about 10. The agent's overlay never shows on film, and filming pauses while you sign in.</sub>
+
+## From Claude Code or Codex
+
+Already working in Claude Code, Codex or another agent? Switch on **Settings → Keys → Edit from Claude Code or Codex** and press **Add to Claude Code**, **Add to the Claude app** or **Add to Codex** (or copy the setup for any other agent). That agent can then edit the project you have open, with AgentShot's own tools: the transcript, the measurements, the timeline, motion clips and exports. Its cuts arrive in AgentShot as a Before / After to keep or send back, like any other, and AgentShot says who is at work on the film while it happens.
+
+<sub>AgentShot is an MCP server here. It listens on your own computer only, needs a password AgentShot makes, and is off until you switch it on. The Claude app and Codex reach it through a small launcher (<code>agentshot-mcp</code>, in Rust), which opens AgentShot when it's closed. That launcher ships for macOS and Linux for now.</sub>
 
 ## On your phone
 
@@ -344,7 +353,7 @@ Publish straight to YouTube, or generate camera shots. Both are on the [roadmap]
 | --- | --- |
 | [`src/`](src) | the desktop app: Electron and React, the agent and its tools (`src/main/agent.ts`), the media pipeline |
 | [`mobile/`](mobile/README.md) | the phone app, in Flutter, with the private-network node built in |
-| [`scripts/`](scripts) | builds of the native helpers: `agentshot-mesh` (tsnet), `-speakers` (sherpa-onnx), `-vision` (YuNet, YOLOX), `-beats` (aubio), `-fence` (Landlock), whisper.cpp, FFmpeg |
+| [`scripts/`](scripts) | builds of the native helpers: `agentshot-mesh` (tsnet), `-mcp` (the launcher other agents start), `-speakers` (sherpa-onnx), `-vision` (YuNet, YOLOX), `-beats` (aubio), `-fence` (Landlock), whisper.cpp, FFmpeg |
 | [`account/`](account/README.md) | the account service: sign-in, credits, your computers, the private network's keys |
 | [`gateway/`](gateway/README.md) | the AI gateway behind AgentShot's credits |
 | [`site/`](site/README.md) | [agentshot.si](https://agentshot.si) |

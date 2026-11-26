@@ -20,7 +20,7 @@ extraResources:
     to: icon.png
   - from: resources/bin/${platform}-${arch}
     to: bin
-    filter: ["ffmpeg", "ffprobe", "whisper-cli", "agentshot-beats", "agentshot-speakers", "agentshot-vision", "agentshot-fence", "agentshot-mesh", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
+    filter: ["ffmpeg", "ffprobe", "whisper-cli", "agentshot-beats", "agentshot-speakers", "agentshot-vision", "agentshot-fence", "agentshot-mesh", "agentshot-mcp", "bsk", "*.exe", "*.dll", "*.DLL", "*-LICENSE.txt", "*-README.txt"]
   - from: resources/lib
     to: lib
   - from: resources/models
