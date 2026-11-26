@@ -92,6 +92,7 @@ export class Launcher {
     this.from = (o.from || 'Another agent').replace(/[^A-Za-z0-9 ]/g, '').slice(0, 40) || 'Another agent'
   }
   private get toolsFile() { return join(dirname(this.o.stateFile), 'outside-tools.json') }
+  private get resourcesFile() { return join(dirname(this.o.stateFile), 'outside-resources.json') }
 
   private async trySend(line: string): Promise<Sent> {
     const s = await readState(this.o.stateFile)
@@ -102,7 +103,7 @@ export class Launcher {
   private async answerClosed(msg: { id: Id; method: string; params?: { protocolVersion?: unknown } }) {
     if (msg.method === 'initialize') {
       const asked = msg.params?.protocolVersion
-      return result(msg.id, { protocolVersion: typeof asked === 'string' ? asked : PROTOCOL, capabilities: { tools: {} }, serverInfo: { name: 'agentshot', version: VERSION }, instructions: INSTRUCTIONS })
+      return result(msg.id, { protocolVersion: typeof asked === 'string' ? asked : PROTOCOL, capabilities: { tools: {}, resources: {} }, serverInfo: { name: 'agentshot', version: VERSION }, instructions: INSTRUCTIONS })
     }
     if (msg.method === 'ping') return result(msg.id, {})
     if (msg.method === 'tools/list') {
@@ -110,6 +111,15 @@ export class Launcher {
         const tools = JSON.parse(await readFile(this.toolsFile, 'utf8'))
         if (Array.isArray(tools)) return result(msg.id, { tools })
       } catch { /* none kept yet: AgentShot has to answer */ }
+    }
+    // the editor page shown in the chat, as AgentShot last gave it (none before it ever did)
+    if (msg.method === 'resources/list' || msg.method === 'resources/read') {
+      let kept: { resources?: unknown; read?: Record<string, unknown> } = {}
+      try { kept = JSON.parse(await readFile(this.resourcesFile, 'utf8')) } catch { /* none yet */ }
+      if (msg.method === 'resources/list') return result(msg.id, { resources: Array.isArray(kept.resources) ? kept.resources : [] })
+      const uri = (msg.params as { uri?: unknown } | undefined)?.uri
+      const page = typeof uri === 'string' && kept.read && Object.hasOwn(kept.read, uri) ? kept.read[uri] : undefined
+      if (page && typeof page === 'object') return result(msg.id, page)
     }
     return undefined
   }

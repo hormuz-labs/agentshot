@@ -53,7 +53,7 @@ describe('while AgentShot is closed', () => {
     const open = vi.fn()
     const l = new Launcher({ stateFile: join(folder(), 'outside.json'), openApp: open, ...fast })
     const init = parse(await l.handle(msg({ id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'c', version: '1' } } })))
-    expect(init).toMatchObject({ id: 1, result: { protocolVersion: '2025-03-26', capabilities: { tools: {} }, serverInfo: { name: 'agentshot' } } })
+    expect(init).toMatchObject({ id: 1, result: { protocolVersion: '2025-03-26', capabilities: { tools: {}, resources: {} }, serverInfo: { name: 'agentshot' } } })
     expect(init.result.instructions).toMatch(/AgentShot/)
     expect(parse(await l.handle(msg({ id: 2, method: 'ping' })))).toEqual({ jsonrpc: '2.0', id: 2, result: {} })
     expect(await l.handle(msg({ method: 'notifications/initialized' }))).toBeUndefined()
@@ -65,6 +65,25 @@ describe('while AgentShot is closed', () => {
     writeFileSync(join(dir, 'outside-tools.json'), JSON.stringify([{ name: 'project_state', description: 'x', inputSchema: { type: 'object' } }]))
     const l = new Launcher({ stateFile: join(dir, 'outside.json'), ...fast })
     expect(parse(await l.handle(msg({ id: 'a', method: 'tools/list' })))).toEqual({ jsonrpc: '2.0', id: 'a', result: { tools: [{ name: 'project_state', description: 'x', inputSchema: { type: 'object' } }] } })
+  })
+
+  it('shows the editor page as AgentShot last gave it, without opening AgentShot', async () => {
+    const dir = folder(), open = vi.fn()
+    const page = { contents: [{ uri: 'ui://agentshot/editor.html', mimeType: 'text/html;profile=mcp-app', text: '<!doctype html>' }] }
+    writeFileSync(join(dir, 'outside-resources.json'), JSON.stringify({ resources: [{ uri: 'ui://agentshot/editor.html', name: 'AgentShot editor' }], read: { 'ui://agentshot/editor.html': page } }))
+    const l = new Launcher({ stateFile: join(dir, 'outside.json'), openApp: open, ...fast })
+    expect(parse(await l.handle(msg({ id: 1, method: 'resources/list' })))).toEqual({ jsonrpc: '2.0', id: 1, result: { resources: [{ uri: 'ui://agentshot/editor.html', name: 'AgentShot editor' }] } })
+    expect(parse(await l.handle(msg({ id: 2, method: 'resources/read', params: { uri: 'ui://agentshot/editor.html' } })))).toEqual({ jsonrpc: '2.0', id: 2, result: page })
+    expect(open).not.toHaveBeenCalled()
+    // a page it doesn't have is AgentShot's to answer
+    expect(parse(await l.handle(msg({ id: 3, method: 'resources/read', params: { uri: 'ui://agentshot/other.html' } }))).error.message).toBe(SWITCH_ON)
+  })
+
+  it('has no pages before AgentShot ever gave one, and doesn’t open AgentShot to say so', async () => {
+    const open = vi.fn()
+    const l = new Launcher({ stateFile: join(folder(), 'outside.json'), openApp: open, ...fast })
+    expect(parse(await l.handle(msg({ id: 1, method: 'resources/list' })))).toEqual({ jsonrpc: '2.0', id: 1, result: { resources: [] } })
+    expect(open).not.toHaveBeenCalled()
   })
 
   it('says to switch editing from agents on when it never was, or was switched off', async () => {

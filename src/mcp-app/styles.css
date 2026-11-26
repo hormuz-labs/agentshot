@@ -1,0 +1,5 @@
+/* The app's own styles (src/renderer), with Tailwind told where the film panel's classes are: this page is built from
+   src/mcp-app, so on its own Tailwind would only look here and leave out the panel's. */
+@import "../renderer/src/styles.css";
+@source "../renderer/src";
+@source "./";

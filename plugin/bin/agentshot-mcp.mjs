@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 
 // plugin/src/version.ts
-var VERSION = "0.1.0";
+var VERSION = "0.2.0";
 
 // plugin/src/launcher.ts
 var PROTOCOL = "2025-06-18";
@@ -91,6 +91,9 @@ var Launcher = class {
   get toolsFile() {
     return join(dirname(this.o.stateFile), "outside-tools.json");
   }
+  get resourcesFile() {
+    return join(dirname(this.o.stateFile), "outside-resources.json");
+  }
   async trySend(line) {
     const s = await readState(this.o.stateFile);
     return s && s.enabled && s.port && s.token ? send(s, this.from, line) : "closed";
@@ -99,7 +102,7 @@ var Launcher = class {
   async answerClosed(msg) {
     if (msg.method === "initialize") {
       const asked = msg.params?.protocolVersion;
-      return result(msg.id, { protocolVersion: typeof asked === "string" ? asked : PROTOCOL, capabilities: { tools: {} }, serverInfo: { name: "agentshot", version: VERSION }, instructions: INSTRUCTIONS });
+      return result(msg.id, { protocolVersion: typeof asked === "string" ? asked : PROTOCOL, capabilities: { tools: {}, resources: {} }, serverInfo: { name: "agentshot", version: VERSION }, instructions: INSTRUCTIONS });
     }
     if (msg.method === "ping") return result(msg.id, {});
     if (msg.method === "tools/list") {
@@ -108,6 +111,17 @@ var Launcher = class {
         if (Array.isArray(tools)) return result(msg.id, { tools });
       } catch {
       }
+    }
+    if (msg.method === "resources/list" || msg.method === "resources/read") {
+      let kept = {};
+      try {
+        kept = JSON.parse(await readFile(this.resourcesFile, "utf8"));
+      } catch {
+      }
+      if (msg.method === "resources/list") return result(msg.id, { resources: Array.isArray(kept.resources) ? kept.resources : [] });
+      const uri = msg.params?.uri;
+      const page = typeof uri === "string" && kept.read && Object.hasOwn(kept.read, uri) ? kept.read[uri] : void 0;
+      if (page && typeof page === "object") return result(msg.id, page);
     }
     return void 0;
   }

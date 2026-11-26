@@ -29,7 +29,9 @@ needed: there is no code or password to pass on.
      `propose_version`. Make one proposal per request.
    - Titles, lower thirds and captions are motion clips: `create_clip`, then `insert_clip` or `overlay_clip`.
    - A file from elsewhere on this computer: `add_files` (an absolute path) first.
-4. **Review.** Tell the user what changed and ask them to keep it or send it back in AgentShot. Use `decide_version`
+4. **Review.** Tell the user what changed and ask them to keep it or send it back. Where the chat can show it (the
+   Claude app, ChatGPT), `open_editor` brings AgentShot's editor into the chat: the film plays there, its pieces can
+   be split, silenced or taken out, and a new cut plays Before / After with Keep and Send back. Use `decide_version`
    to keep or drop a proposal only when they ask you to.
 5. **Export.** `export_video` when they want the file.
 

@@ -5,7 +5,7 @@ import * as fs from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { isTailscale, MobileBridge, reachableIps } from '../src/main/mobile-bridge'
-import { mobileArgs } from '../src/main/mobile-contract'
+import { mobileArgs, projectArgument } from '../src/main/mobile-contract'
 import { WorkerClient } from '../src/main/worker-client'
 import { signWorkerToken } from '../account/src/index'
 import { SpaceError } from '../src/main/user-space'
@@ -281,6 +281,16 @@ it('takes several notes given together, and no more than a batch', () => {
   expect(() => mobileArgs('agent:send', ['/p', { text: '', notes: [] }])).toThrow()
   expect(() => mobileArgs('agent:send', ['/p', { text: '', notes: Array(21).fill({ text: 'x' }) }])).toThrow()
   expect(() => mobileArgs('agent:send', ['/p', { text: '', notes: [{ text: 'x', extra: 1 }] }])).toThrow()
+})
+
+it('runs the MCP tools for the hosted server, on one of the caller’s own projects', () => {
+  // AgentShot in Claude or ChatGPT (chat-host) lists and calls the same tools as the MCP server on a computer
+  expect(mobileArgs('outside:tools', [])).toEqual([])
+  expect(mobileArgs('outside:call', ['/space/p', 'edit_timeline', { edits: [{ op: 'split', at: 2 }] }])).toEqual(['/space/p', 'edit_timeline', { edits: [{ op: 'split', at: 2 }] }])
+  expect(projectArgument('outside:call')).toBe(true) // a lessee's own project only, as for every project call
+  expect(() => mobileArgs('outside:call', ['/space/p', 'Edit Timeline!', {}])).toThrow()
+  expect(() => mobileArgs('outside:call', ['/space/p', 'x'.repeat(65), {}])).toThrow()
+  expect(() => mobileArgs('outside:call', ['/space/p', 'projects', 'not an object'])).toThrow()
 })
 
 it('validates anchors and rejects path-bearing or unknown fields', () => {

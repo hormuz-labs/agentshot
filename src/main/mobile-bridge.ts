@@ -63,7 +63,7 @@ const CREATES_PROJECT = new Set(['project:create', 'project:createMotion'])
 /** Answers the phone keeps and asks for again often (lists, projects, conversations): tagged, so an unchanged one isn't sent again. */
 const VERSIONED = new Set(['project:recent', 'project:open', 'project:peek', 'jobs:list', 'consent:list', 'agent:attach'])
 /** What starts new work that writes into the project (refused for a cloud lessee whose space is full). */
-const WRITES = new Set(['project:create', 'project:createMotion', 'agent:send', 'timeline:edit', 'mobile:export', 'export:run', 'clip:overlay', 'clip:save',
+const WRITES = new Set(['outside:call', 'project:create', 'project:createMotion', 'agent:send', 'timeline:edit', 'mobile:export', 'export:run', 'clip:overlay', 'clip:save',
   'clip:insert', 'clip:move', 'clip:render', 'demo:create', 'mix:speech'])
 /** An upload nobody has sent a chunk to for this long no longer counts as work running; after [UPLOAD_GONE], it's dropped. */
 const UPLOAD_IDLE = 10 * 60_000, UPLOAD_GONE = 60 * 60_000

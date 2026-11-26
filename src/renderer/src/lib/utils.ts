@@ -17,8 +17,12 @@ export const timecode = (s: number, tenths = true) => {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
 }
 
-/** File path → manul:// URL served by the main process (with Range support). */
-export const mediaUrl = encodeMediaPath
+let mediaResolver: ((path: string) => string) | undefined
+/** File path → manul:// URL served by the main process (with Range support). The editor inside a chat (src/mcp-app)
+ *  has no main process beside it, so it plays the same files from where its MCP server says they are. */
+export const mediaUrl = (path: string) => (mediaResolver ? mediaResolver(path) : encodeMediaPath(path))
+/** Where files play from outside the app window (src/mcp-app). */
+export const setMediaResolver = (fn: (path: string) => string) => { mediaResolver = fn }
 
 /** Typing in a field: keys and menu commands are its own (undo is the field's). */
 export const typing = () => !!(document.activeElement as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]')

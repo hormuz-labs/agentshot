@@ -13,13 +13,13 @@ import { startWorkerHeartbeat, WorkerClient, type SavedWorker } from './worker-c
 import { initializeNetwork } from './network-electron'
 import { startMeshNode, stopAllMesh, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
-import { closeSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { appendFile, copyFile, mkdtemp, readFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import { artifactPath } from './artifacts'
 import { explain, forPhone } from './explain'
 import { voiceText } from './voice'
-import { startAgent, type AgentHandle } from './agent'
+import { editedOf, startAgent, type AgentHandle } from './agent'
 import { renderCuts } from './cuts'
 import { videoEncoder } from './encoders'
 import { renderPieces } from './pieces'
@@ -32,7 +32,7 @@ import { startUpdates } from './updates'
 import { CLOUD_WORKER_SECRET, KEYS, keyStatus, loadKeys, setKey } from './keys'
 import { chatGPT, chatGPTStatus } from './chatgpt'
 import { ClaudeCodeConnection } from './claude-code'
-import { OutsideAccess, SERVER_NAME } from './mcp'
+import { callTool, OutsideAccess, SERVER_NAME, toolList, WORKER_MEDIA, type Editor } from './mcp'
 import { claudeAppConfig, codexConfig, installedAgents, setClaudeAppServer, setCodexServer, type Launch } from './outside-agents'
 import type { OutsideAgent } from '../shared/outside'
 import * as UserSpace from './user-space'
@@ -82,6 +82,7 @@ import * as Speakers from './speakers'
 import { duckEnvelope, mixArgs, mixCommands, regionsOnTimeline, type Mix } from '../shared/mix'
 import { spawn } from 'node:child_process'
 import { BIN, FFMPEG, FFPROBE, probe } from './media'
+import { ChatPreviews } from './chat-previews'
 import { exportForEditors } from './handoff'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -1207,7 +1208,10 @@ function wire() {
   const claudeChanged = async (status: ReturnType<ClaudeCodeConnection['status']>) => { const s = await status; send('agent:ready'); return s }
   // Editing from an agent outside AgentShot (Claude Code, Codex…): an MCP server on this computer only, off until
   // switched on. Its token goes to the clipboard or to Claude Code, never to the window.
-  outside = new OutsideAccess(join(app.getPath('userData'), 'outside.json'), {
+  // light copies for the editor page when the chat won't load video from this computer
+  const chatPreviews = new ChatPreviews(join(app.getPath('userData'), 'chat-previews'), (args, signal) => new Promise<void>((ok, fail) =>
+    execFile(FFMPEG, args, { maxBuffer: 1 << 24, signal, windowsHide: true }, (err, _o, stderr) => (err ? fail(new Error(String(stderr).slice(-1500) || err.message)) : ok()))))
+  const outsideEditor: Editor = {
     tools: () => agent?.outside.tools() || [],
     call: (dir, name, args, signal) => { if (!agent) throw new Error('AgentShot is still starting. Try again in a moment.'); return agent.outside.call(dir, name, args, signal) },
     projects: () => [...open.values()].map(p => ({ dir: p.dir, title: p.title })),
@@ -1219,8 +1223,27 @@ function wire() {
       return Files.attachedLines(rels, p.files || {}, 30, p.subtitles)
     },
     seen: (who, dir, tool) => send('outside:activity', { dir, who, tool, at: Date.now() }),
-  })
+    // the editor page inside Claude or ChatGPT (src/mcp-app, built beside this file by electron.vite.config.ts)
+    snapshot: dir => { const p = open.get(dir); return p && { project: p, edited: editedOf(p) } },
+    page: () => readFileSync(join(import.meta.dirname, 'mcp-app', 'editor.html'), 'utf8'),
+    preview: (dir, rel, signal) => chatPreviews.get(dir, rel, signal),
+    // the film panel's own calls, run as the window's are (mcp.ts checks which and with what, as the phone's bridge does)
+    invoke: async (method, args) => {
+      const handler = handlers.get(method)
+      if (!handler) throw new Error('Operation unavailable')
+      return handler(undefined as unknown as Electron.IpcMainInvokeEvent, ...args)
+    },
+  }
+  outside = new OutsideAccess(join(app.getPath('userData'), 'outside.json'), outsideEditor)
   if (!WORKER_MODE) void outside.start()
+  // The same tools for AgentShot in Claude or ChatGPT (chat-host), through the bridge: on a cloud worker that's the
+  // lessee's own projects (the bridge checks the folder). The page's files come from the hosted server, which puts its
+  // own address where WORKER_MEDIA stands.
+  ipcMain.handle('outside:tools', () => toolList(outsideEditor))
+  ipcMain.handle('outside:call', async (_e, dir: string, name: string, args: Record<string, unknown>) => {
+    if (!open.has(dir)) await handlers.get('project:open')!(undefined as unknown as Electron.IpcMainInvokeEvent, dir)
+    return callTool(outsideEditor, name, { ...args, project: dir }, AbortSignal.timeout(30 * 60_000), 'Chat', () => WORKER_MEDIA)
+  })
   // the Claude app and Codex speak MCP over stdin and stdout: they start AgentShot's small launcher, which reaches the
   // server above and opens AgentShot when it is closed
   const launcher = join(BIN, executableName('agentshot-mcp'))

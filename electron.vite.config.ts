@@ -20,9 +20,22 @@ function extensionPreloads(): Plugin {
   }
 }
 
+// The editor page AgentShot shows inside Claude and ChatGPT (an MCP App, src/mcp-app): one HTML file next to index.js,
+// which the MCP server (src/main/mcp.ts) serves.
+function editorPage(): Plugin {
+  return {
+    name: 'agentshot-mcp-app',
+    async closeBundle() {
+      // @ts-expect-error a plain .mjs build script
+      const { writeEditorPage } = await import('./scripts/build-mcp-app.mjs')
+      await writeEditorPage(resolve('out/main/mcp-app/editor.html'))
+    },
+  }
+}
+
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), editorPage()],
     // Release builds only (see telemetry/README.md); without them a build reports nothing and never asks.
     define: {
       __MANUL_TELEMETRY_URL__: JSON.stringify(process.env.MANUL_TELEMETRY_URL || ''),
