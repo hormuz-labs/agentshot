@@ -13,15 +13,18 @@ const launch = { command: '/Applications/AgentShot.app/Contents/Resources/bin/ag
 const tmp = () => mkdtempSync(join(tmpdir(), 'agentshot-agents-'))
 
 describe('where each agent keeps its servers', () => {
+  // join() gives "\\" on Windows, so the paths are compared with one kind of separator
+  const slashes = (p: string) => p.replace(/\\/g, '/')
   it('is the Claude app’s own settings file on each system', () => {
-    expect(claudeAppConfig('/Users/me', 'darwin', {})).toBe('/Users/me/Library/Application Support/Claude/claude_desktop_config.json')
-    expect(claudeAppConfig('/home/me', 'linux', {})).toBe('/home/me/.config/Claude/claude_desktop_config.json')
-    expect(claudeAppConfig('/home/me', 'linux', { XDG_CONFIG_HOME: '/cfg' })).toBe('/cfg/Claude/claude_desktop_config.json')
-    expect(claudeAppConfig('C:/Users/me', 'win32', { APPDATA: 'C:/Roaming' }).replace(/\\/g, '/')).toBe('C:/Roaming/Claude/claude_desktop_config.json')
+    expect(slashes(claudeAppConfig('/Users/me', 'darwin', {}))).toBe('/Users/me/Library/Application Support/Claude/claude_desktop_config.json')
+    expect(slashes(claudeAppConfig('/home/me', 'linux', {}))).toBe('/home/me/.config/Claude/claude_desktop_config.json')
+    expect(slashes(claudeAppConfig('/home/me', 'linux', { XDG_CONFIG_HOME: '/cfg' }))).toBe('/cfg/Claude/claude_desktop_config.json')
+    expect(slashes(claudeAppConfig('C:/Users/me', 'win32', { APPDATA: 'C:/Roaming' }))).toBe('C:/Roaming/Claude/claude_desktop_config.json')
+    expect(slashes(claudeAppConfig('C:/Users/me', 'win32', {}))).toBe('C:/Users/me/AppData/Roaming/Claude/claude_desktop_config.json')
   })
   it('is Codex’s config.toml, wherever CODEX_HOME says', () => {
-    expect(codexConfig('/Users/me', {})).toBe('/Users/me/.codex/config.toml')
-    expect(codexConfig('/Users/me', { CODEX_HOME: '/elsewhere' })).toBe('/elsewhere/config.toml')
+    expect(slashes(codexConfig('/Users/me', {}))).toBe('/Users/me/.codex/config.toml')
+    expect(slashes(codexConfig('/Users/me', { CODEX_HOME: '/elsewhere' }))).toBe('/elsewhere/config.toml')
   })
   it('counts an agent as installed once its settings folder exists', () => {
     const home = tmp()
