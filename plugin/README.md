@@ -39,6 +39,22 @@ Claude Code ──stdio──▶ plugin launcher ──HTTP, 127.0.0.1, token─
 Environment: `AGENTSHOT_STATE` (the state file, when it isn't in the usual place), `AGENTSHOT_APP` (the app to open),
 `AGENTSHOT_FROM` (who AgentShot says is at work; the plugin sets "Claude Code").
 
+## What it runs and sends
+
+- **It runs one thing:** `node bin/agentshot-mcp.mjs`, the launcher in this folder (built from `src/`, not minified).
+  It starts nothing else, except AgentShot itself when it's closed: on macOS by opening the installed AgentShot app,
+  elsewhere only the app named in `AGENTSHOT_APP`.
+- **It reads two files:** AgentShot's `outside.json` (whether editing from agents is on, the port and the token) and
+  `outside-tools.json` (the tool list AgentShot last gave), both in AgentShot's settings folder.
+- **It connects to one place:** AgentShot's own MCP server at `http://127.0.0.1:<port>/mcp` on your computer. It
+  passes Claude Code's messages there unchanged and passes the answers back. Nothing goes to any other host, and the
+  plugin itself sends nothing to Anthropic, AgentShot's makers or anyone else.
+- **It keeps nothing:** no logs, no files, no credentials of its own. The token stays in AgentShot's file and is
+  never written to Claude Code's settings.
+
+What Claude does with AgentShot's tools happens in AgentShot, under its own settings: your footage stays on your
+computer, and the AI model AgentShot uses is the one you chose there.
+
 ## Developing
 
 The sources are in `src/`. `bin/agentshot-mcp.mjs` is a committed, dependency-free bundle, because Claude Code

@@ -9,6 +9,11 @@
   "homepage": "https://agentshot.si",
   "repository": "https://github.com/hormuz-labs/agentshot",
   "license": "GPL-3.0-or-later",
+  "network": {
+    "hosts": [
+      "127.0.0.1"
+    ]
+  },
   "keywords": [
     "video",
     "video-editing",

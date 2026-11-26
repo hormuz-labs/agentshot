@@ -1,7 +1,8 @@
 // The AgentShot plugin as Claude Code installs it: marketplace → plugin manifest → .mcp.json → the committed bundle,
 // started for real and driven against AgentShot's own MCP server (src/main/mcp.ts).
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -61,6 +62,40 @@ describe('Claude plugin packaging', () => {
     expect(manifest.license).toBe(json('package.json').license)
     expect(manifest.description.length).toBeGreaterThan(20)
     expect(manifest.repository).toMatch(/^https:\/\/github\.com\//)
+  })
+
+  it('has a square listing icon the directory accepts', () => {
+    const icon = readFileSync(join(root, 'plugin', '.claude-plugin', 'icon.png'))
+    expect(icon.subarray(1, 4).toString()).toBe('PNG')
+    const width = icon.readUInt32BE(16), height = icon.readUInt32BE(20)
+    expect(width).toBe(height)
+    expect(width).toBeGreaterThanOrEqual(512); expect(width).toBeLessThanOrEqual(2048)
+    expect(icon.length).toBeLessThan(2 * 1024 * 1024)
+  })
+
+  it('declares that it reaches AgentShot on this computer, and nothing else', () => {
+    expect(json('plugin/.claude-plugin/plugin.json').network).toEqual({ hosts: ['127.0.0.1'] })
+    const readme = readFileSync(join(root, 'plugin', 'README.md'), 'utf8')
+    expect(readme).toMatch(/## What it runs and sends/)
+    expect(readme).toContain('127.0.0.1')
+  })
+
+  it('ships readable source, not a minified bundle', () => {
+    const bundle = readFileSync(BUNDLE, 'utf8')
+    expect(bundle.split('\n').length).toBeGreaterThan(100)
+    expect(bundle).toMatch(/\bLauncher = class\b|class Launcher\b/)
+    expect(bundle).toContain('SWITCH_ON')
+  })
+
+  it('keeps the plugin folder to what the directory takes: small text files and the icon', () => {
+    const files = (execFileSync('git', ['ls-files', 'plugin'], { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean))
+    expect(files.length).toBeLessThan(512)
+    for (const f of files) {
+      const size = statSync(join(root, f)).size
+      if (f.endsWith('.png')) continue
+      expect(size, f).toBeLessThan(256 * 1024)
+      expect(/\.(ts|mjs|js|json|md)$/.test(f), f).toBe(true)
+    }
   })
 
   it('starts the committed bundle under the name AgentShot’s server goes by, with no token in it', () => {

@@ -1,3 +1,195 @@
 #!/usr/bin/env node
-import{spawn as k}from"node:child_process";import{homedir as j}from"node:os";import{request as O}from"node:http";import{readFile as S}from"node:fs/promises";import{dirname as b,join as u}from"node:path";import{createInterface as N}from"node:readline";var m="0.1.0";var T="2025-06-18",g=`Editing from other agents is switched off in AgentShot. Ask the user to open AgentShot's Settings \u2192 Keys and switch on "Edit from Claude Code or Codex".`,v="AgentShot isn't open. Ask the user to open it, then try again.",E="AgentShot is a video editor on this computer. These tools edit the project the user has open in it; start with project_state.";function y(n,e,t){return n.AGENTSHOT_STATE?n.AGENTSHOT_STATE:e==="darwin"?u(t,"Library","Application Support","AgentShot","outside.json"):e==="win32"?u(n.APPDATA||u(t,"AppData","Roaming"),"AgentShot","outside.json"):u(n.XDG_CONFIG_HOME||u(t,".config"),"AgentShot","outside.json")}async function l(n){try{let e=JSON.parse(await S(n,"utf8")),t=Number(e?.port);return{enabled:e?.enabled===!0,port:Number.isInteger(t)&&t>0&&t<65536?t:0,token:typeof e?.token=="string"?e.token:""}}catch{return}}function I(n,e,t){return new Promise((o,r)=>{let s=!1,i=O({host:"127.0.0.1",port:n.port,path:"/mcp",method:"POST",agent:!1,headers:{host:`127.0.0.1:${n.port}`,authorization:`Bearer ${n.token}`,"content-type":"application/json",accept:"application/json, text/event-stream","user-agent":"agentshot-mcp","x-agentshot-from":e,"content-length":String(Buffer.byteLength(t)),connection:"close"}},a=>{let h=[];a.on("data",A=>h.push(A)),a.on("end",()=>o({status:a.statusCode||0,body:Buffer.concat(h).toString("utf8").trim()})),a.on("error",r)}),d=setTimeout(()=>{s||i.destroy(Object.assign(new Error("timeout"),{code:"ETIMEDOUT"}))},2e3);i.on("socket",a=>a.once("connect",()=>{s=!0,clearTimeout(d)})),i.on("error",a=>{clearTimeout(d),s?r(a):o("closed")}),i.end(t)})}var c=(n,e,t=-32e3)=>JSON.stringify({jsonrpc:"2.0",id:n,error:{code:t,message:e}}),f=(n,e)=>JSON.stringify({jsonrpc:"2.0",id:n,result:e});function P(n){try{return JSON.stringify(JSON.parse(n))}catch{return n.replace(/\r?\n/g," ")}}var p=class{constructor(e){this.o=e;this.from=(e.from||"Another agent").replace(/[^A-Za-z0-9 ]/g,"").slice(0,40)||"Another agent"}opened=!1;from;get toolsFile(){return u(b(this.o.stateFile),"outside-tools.json")}async trySend(e){let t=await l(this.o.stateFile);return t&&t.enabled&&t.port&&t.token?I(t,this.from,e):"closed"}async answerClosed(e){if(e.method==="initialize"){let t=e.params?.protocolVersion;return f(e.id,{protocolVersion:typeof t=="string"?t:T,capabilities:{tools:{}},serverInfo:{name:"agentshot",version:m},instructions:E})}if(e.method==="ping")return f(e.id,{});if(e.method==="tools/list")try{let t=JSON.parse(await S(this.toolsFile,"utf8"));if(Array.isArray(t))return f(e.id,{tools:t})}catch{}}async handle(e){let t;try{t=JSON.parse(e)}catch{return c(null,"Not JSON.",-32700)}if(!t||typeof t!="object")return c(null,"Not JSON.",-32700);let o=t.id??null,r;try{r=await this.trySend(e)}catch(i){return o===null?void 0:c(o,`AgentShot stopped answering (${i.message}).`)}if(r==="closed"){if(o===null||typeof t.method!="string")return;let i=await this.answerClosed({id:o,method:t.method,params:t.params});if(i)return i;if(!(await l(this.o.stateFile))?.enabled)return c(o,g);if(this.o.openApp&&!this.opened){this.opened=!0;try{this.o.openApp()}catch{}let d=Date.now()+(this.o.waitMs??4e4);for(;r==="closed"&&Date.now()<d;){await new Promise(a=>setTimeout(a,this.o.intervalMs??250));try{r=await this.trySend(e)}catch(a){return c(o,`AgentShot stopped answering (${a.message}).`)}}}if(r==="closed"){let d=await l(this.o.stateFile);return c(o,d?.enabled?v:g)}}if(r.status===200&&r.body)return P(r.body);if(r.status>=200&&r.status<300||o===null)return;let s;try{s=JSON.parse(r.body)?.error?.message}catch{}return c(o,typeof s=="string"&&s?s:"AgentShot refused the request.")}};async function w(n,e,t){let o=N({input:n,crlfDelay:1/0});for await(let r of o){let s=r.trim();if(!s)continue;let i=await t.handle(s);i!==void 0&&!e.write(`${i}
-`)&&await new Promise(d=>e.once("drain",d))}}function F(n){let e=(o,r)=>()=>{let s=k(o,r,{detached:!0,stdio:"ignore"});s.on("error",()=>{}),s.unref()},t=n.AGENTSHOT_APP;return process.platform==="darwin"?e("/usr/bin/open",["-g","-a",t||"AgentShot"]):t?e(t,[]):void 0}var C=new p({stateFile:y(process.env,process.platform,j()),from:process.env.AGENTSHOT_FROM||"Claude Code",openApp:F(process.env)});await w(process.stdin,process.stdout,C);
+
+// plugin/src/main.ts
+import { spawn } from "node:child_process";
+import { homedir } from "node:os";
+
+// plugin/src/launcher.ts
+import { request } from "node:http";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { createInterface } from "node:readline";
+
+// plugin/src/version.ts
+var VERSION = "0.1.0";
+
+// plugin/src/launcher.ts
+var PROTOCOL = "2025-06-18";
+var SWITCH_ON = `Editing from other agents is switched off in AgentShot. Ask the user to open AgentShot's Settings \u2192 Keys and switch on "Edit from Claude Code or Codex".`;
+var NOT_OPEN = "AgentShot isn't open. Ask the user to open it, then try again.";
+var INSTRUCTIONS = "AgentShot is a video editor on this computer. These tools edit the project the user has open in it; start with project_state.";
+function defaultStateFile(env, platform, home) {
+  if (env.AGENTSHOT_STATE) return env.AGENTSHOT_STATE;
+  if (platform === "darwin") return join(home, "Library", "Application Support", "AgentShot", "outside.json");
+  if (platform === "win32") return join(env.APPDATA || join(home, "AppData", "Roaming"), "AgentShot", "outside.json");
+  return join(env.XDG_CONFIG_HOME || join(home, ".config"), "AgentShot", "outside.json");
+}
+async function readState(file) {
+  try {
+    const v = JSON.parse(await readFile(file, "utf8"));
+    const port = Number(v?.port);
+    return { enabled: v?.enabled === true, port: Number.isInteger(port) && port > 0 && port < 65536 ? port : 0, token: typeof v?.token === "string" ? v.token : "" };
+  } catch {
+    return void 0;
+  }
+}
+function send(state, from, message) {
+  return new Promise((ok, fail) => {
+    let connected = false;
+    const req = request({
+      host: "127.0.0.1",
+      port: state.port,
+      path: "/mcp",
+      method: "POST",
+      agent: false,
+      headers: {
+        host: `127.0.0.1:${state.port}`,
+        authorization: `Bearer ${state.token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        "user-agent": "agentshot-mcp",
+        "x-agentshot-from": from,
+        "content-length": String(Buffer.byteLength(message)),
+        connection: "close"
+      }
+    }, (res) => {
+      const parts = [];
+      res.on("data", (p) => parts.push(p));
+      res.on("end", () => ok({ status: res.statusCode || 0, body: Buffer.concat(parts).toString("utf8").trim() }));
+      res.on("error", fail);
+    });
+    const timer = setTimeout(() => {
+      if (!connected) req.destroy(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" }));
+    }, 2e3);
+    req.on("socket", (s) => s.once("connect", () => {
+      connected = true;
+      clearTimeout(timer);
+    }));
+    req.on("error", (e) => {
+      clearTimeout(timer);
+      connected ? fail(e) : ok("closed");
+    });
+    req.end(message);
+  });
+}
+var error = (id, message, code = -32e3) => JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } });
+var result = (id, value) => JSON.stringify({ jsonrpc: "2.0", id, result: value });
+function oneLine(body) {
+  try {
+    return JSON.stringify(JSON.parse(body));
+  } catch {
+    return body.replace(/\r?\n/g, " ");
+  }
+}
+var Launcher = class {
+  constructor(o) {
+    this.o = o;
+    this.from = (o.from || "Another agent").replace(/[^A-Za-z0-9 ]/g, "").slice(0, 40) || "Another agent";
+  }
+  opened = false;
+  from;
+  get toolsFile() {
+    return join(dirname(this.o.stateFile), "outside-tools.json");
+  }
+  async trySend(line) {
+    const s = await readState(this.o.stateFile);
+    return s && s.enabled && s.port && s.token ? send(s, this.from, line) : "closed";
+  }
+  /** What can be answered without AgentShot: getting ready, and the tools as it last listed them. */
+  async answerClosed(msg) {
+    if (msg.method === "initialize") {
+      const asked = msg.params?.protocolVersion;
+      return result(msg.id, { protocolVersion: typeof asked === "string" ? asked : PROTOCOL, capabilities: { tools: {} }, serverInfo: { name: "agentshot", version: VERSION }, instructions: INSTRUCTIONS });
+    }
+    if (msg.method === "ping") return result(msg.id, {});
+    if (msg.method === "tools/list") {
+      try {
+        const tools = JSON.parse(await readFile(this.toolsFile, "utf8"));
+        if (Array.isArray(tools)) return result(msg.id, { tools });
+      } catch {
+      }
+    }
+    return void 0;
+  }
+  /** The line to write back for one message, if it is owed an answer. */
+  async handle(line) {
+    let msg;
+    try {
+      msg = JSON.parse(line);
+    } catch {
+      return error(null, "Not JSON.", -32700);
+    }
+    if (!msg || typeof msg !== "object") return error(null, "Not JSON.", -32700);
+    const id = msg.id ?? null;
+    let sent;
+    try {
+      sent = await this.trySend(line);
+    } catch (e) {
+      return id === null ? void 0 : error(id, `AgentShot stopped answering (${e.message}).`);
+    }
+    if (sent === "closed") {
+      if (id === null || typeof msg.method !== "string") return void 0;
+      const ready = await this.answerClosed({ id, method: msg.method, params: msg.params });
+      if (ready) return ready;
+      if (!(await readState(this.o.stateFile))?.enabled) return error(id, SWITCH_ON);
+      if (this.o.openApp && !this.opened) {
+        this.opened = true;
+        try {
+          this.o.openApp();
+        } catch {
+        }
+        const until = Date.now() + (this.o.waitMs ?? 4e4);
+        while (sent === "closed" && Date.now() < until) {
+          await new Promise((ok) => setTimeout(ok, this.o.intervalMs ?? 250));
+          try {
+            sent = await this.trySend(line);
+          } catch (e) {
+            return error(id, `AgentShot stopped answering (${e.message}).`);
+          }
+        }
+      }
+      if (sent === "closed") {
+        const s = await readState(this.o.stateFile);
+        return error(id, !s?.enabled ? SWITCH_ON : NOT_OPEN);
+      }
+    }
+    if (sent.status === 200 && sent.body) return oneLine(sent.body);
+    if (sent.status >= 200 && sent.status < 300) return void 0;
+    if (id === null) return void 0;
+    let said;
+    try {
+      said = JSON.parse(sent.body)?.error?.message;
+    } catch {
+    }
+    return error(id, typeof said === "string" && said ? said : "AgentShot refused the request.");
+  }
+};
+async function serve(input, output, launcher2) {
+  const lines = createInterface({ input, crlfDelay: Infinity });
+  for await (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const answer = await launcher2.handle(line);
+    if (answer !== void 0 && !output.write(`${answer}
+`)) await new Promise((ok) => output.once("drain", ok));
+  }
+}
+
+// plugin/src/main.ts
+function opener(env) {
+  const start = (command, args) => () => {
+    const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    child.on("error", () => {
+    });
+    child.unref();
+  };
+  const app = env.AGENTSHOT_APP;
+  if (process.platform === "darwin") return start("/usr/bin/open", ["-g", "-a", app || "AgentShot"]);
+  return app ? start(app, []) : void 0;
+}
+var launcher = new Launcher({
+  stateFile: defaultStateFile(process.env, process.platform, homedir()),
+  from: process.env.AGENTSHOT_FROM || "Claude Code",
+  openApp: opener(process.env)
+});
+await serve(process.stdin, process.stdout, launcher);
