@@ -1,0 +1,69 @@
+# AgentShot in Claude and ChatGPT on the web (chat-host/README.md), next to the account service. Its code and the editor
+# page come from ConfigMaps (gateway/k8s/deploy-chat-host.sh). A Tailscale sidecar puts the pod on the mesh (Headscale),
+# where the cloud workers are.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-host
+  namespace: manul
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: chat-host }
+  template:
+    metadata:
+      labels: { app: chat-host }
+    spec:
+      nodeSelector: { pool: system }
+      containers:
+        - name: chat-host
+          image: node:24.11.1-alpine
+          command: [node, /app/server.mjs]
+          securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            - { name: PUBLIC_URL, value: https://mcp.agentshot.si }
+            - { name: CLERK_ISSUER, value: https://clerk.agentshot.si }
+            - { name: ACCOUNT_URL, value: "http://account:8080" }
+            - { name: EDITOR_PAGE, value: /page/editor.html }
+            - { name: LINK_SECRET, valueFrom: { secretKeyRef: { name: manul-secrets, key: CHAT_LINK_SECRET } } }
+          volumeMounts:
+            - { name: code, mountPath: /app, readOnly: true }
+            - { name: page, mountPath: /page, readOnly: true }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+        # on the mesh: the workers' addresses (mesh.manul.internal) route through this node
+        - name: mesh
+          image: tailscale/tailscale:v1.80.3
+          securityContext: { capabilities: { add: [NET_ADMIN] } }
+          env:
+            - { name: TS_AUTHKEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: CHAT_MESH_AUTHKEY } } }
+            - { name: TS_EXTRA_ARGS, value: "--login-server=http://headscale:8080" }
+            - { name: TS_USERSPACE, value: "false" }
+            - { name: TS_STATE_DIR, value: /var/lib/tailscale }
+            - { name: TS_HOSTNAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+          volumeMounts:
+            - { name: tun, mountPath: /dev/net/tun }
+            - { name: mesh-state, mountPath: /var/lib/tailscale }
+          resources:
+            requests: { cpu: 10m, memory: 48Mi }
+      volumes:
+        - name: code
+          configMap: { name: chat-host-code }
+        - name: page
+          configMap: { name: chat-host-page }
+        - name: tun
+          hostPath: { path: /dev/net/tun, type: CharDevice }
+        - name: mesh-state
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-host
+  namespace: manul
+spec:
+  selector: { app: chat-host }
+  ports: [{ name: http, port: 8080, targetPort: http }]
