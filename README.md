@@ -202,6 +202,13 @@ Notes like “tighter” or “say step 3 differently” don't film anything aga
 
 Already working in Claude Code, Codex or another agent? Switch on **Settings → Keys → Edit from Claude Code or Codex** and press **Add to Claude Code**, **Add to the Claude app** or **Add to Codex** (or copy the setup for any other agent). That agent can then edit the project you have open, with AgentShot's own tools: the transcript, the measurements, the timeline, motion clips and exports. Its cuts arrive in AgentShot as a Before / After to keep or send back, like any other, and AgentShot says who is at work on the film while it happens.
 
+Or install it from Claude Code's plugin marketplace, with nothing to copy:
+
+```
+/plugin marketplace add hormuz-labs/agentshot
+/plugin install agentshot@agentshot
+```
+
 <sub>AgentShot is an MCP server here. It listens on your own computer only, needs a password AgentShot makes, and is off until you switch it on. The Claude app and Codex reach it through a small launcher (<code>agentshot-mcp</code>, in Rust), which opens AgentShot when it's closed. That launcher ships for macOS and Linux for now.</sub>
 
 ## On your phone
