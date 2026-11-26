@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import type { AccountStatus, Balance, KeyInfo } from '../../../shared/types'
 import { OwnProviders } from './OwnProviders'
+import { OutsideSection } from './OutsideSection'
 
 const AGENTSHOT_KEY = 'MANUL_KEY'
 
@@ -27,6 +28,7 @@ export function KeysPanel({ tourTab }: { tourTab?: 'own' | 'agentshot' } = {}) {
 
         <TabsContent value="own">
           <OwnProviders keys={keys} onKeys={setKeys} />
+          <OutsideSection />
         </TabsContent>
 
         <TabsContent value="agentshot">

@@ -263,7 +263,9 @@ export function fileLine(rel: string, files: Record<string, FileInfo>, links: Re
   if (!f) return rel
   const target = f.kind === 'subtitles' ? subtitlesNote(rel, files, links) : ''
   const font = f.font ? `; Fontname=${f.font.family}${/bold/i.test(f.font.style) ? ' with Bold=1' : ''}, also in fonts/ (fontsdir=fonts)` : ''
-  return `${rel} — ${f.summary}${target}${font}`
+  const from = f.source ? `; from ${f.source.page} (${f.source.licence})` : ''
+  const notes = f.notes ? `; your notes (times are this file's own, not the film's): ${f.notes}` : ''
+  return `${rel} — ${f.summary}${target}${font}${from}${notes}`
 }
 
 /**
@@ -305,3 +307,9 @@ export function attachedLines(rels: string[], files: Record<string, FileInfo>, m
   if (rels.length > max) lines.push(`…and ${rels.length - max} more (project_state lists every file)`)
   return lines
 }
+
+/** One line of media/Sources.txt: what was fetched, when, from which page and under which licence. */
+export const sourceLine = (rel: string, source: { page: string; licence: string }, at = new Date()) =>
+  `${at.toISOString().slice(0, 10)}  ${rel}  ${source.page.replace(/\s+/g, ' ').trim()}  ${source.licence.replace(/\s+/g, ' ').trim()}`
+export const SOURCES_FILE = 'media/Sources.txt'
+export const SOURCES_HEAD = 'Files fetched from the web for this project: date, file, the page it came from, its licence.\n'

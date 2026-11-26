@@ -49,6 +49,8 @@ jobs:
           cache-dependency-path: scripts/mesh/go.sum
       - name: Build the bundled mesh node (Headscale)
         run: ./scripts/build-mesh.sh
+      - name: Build the launcher the Claude app and Codex start (Rust)
+        run: node scripts/build-launcher.mjs && cargo test --locked --manifest-path scripts/launcher/Cargo.toml
       - run: npm run test:packaging
       - run: npm run typecheck
       - run: npm test

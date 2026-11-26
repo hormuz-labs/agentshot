@@ -3,7 +3,7 @@
 // Extensions:
 //   coding   read / write / edit / native shell in the project folder (bundled ffmpeg and ffprobe are on PATH)
 //   editor   AgentShot's own tools: project state, probe, ffmpeg, propose a version, seek, resolve a note, ask the user
-import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context'
+import { BACKGROUND_CONTEXT as ctx, withAbortSignal } from '@earendil-works/chord/context'
 import { Type } from '@earendil-works/pi-ai'
 import { createModels } from '@earendil-works/pi-ai/models'
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic'
@@ -13,11 +13,14 @@ import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite
 import { CodingTools, createPowerShellTool } from '@earendil-works/pi-durable/tools'
 import type { BaseEvent } from '@ag-ui/core'
 import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { existsSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import { AguiAdapter } from './agui'
 import { liveEnv } from './bsk'
 import { isWithinDir } from './paths'
+import { kindByName } from '../shared/file-kinds'
 import { chooseModel, describeModels, validateModelChoice, withDefaultReasoning } from './models'
 import { buildProviders, listProviders } from './providers'
 import { chatGPT, chatGPTAvailable } from './chatgpt'
@@ -51,9 +54,10 @@ import { cachedSpeakers, speakersReport, withSentences } from './speakers'
 import { nameOf, speakerOfSegments, type SpeakerNames, type Speakers } from '../shared/speakers'
 import { findSubjects, shotSubjects, subjectsReport, track } from './subjects'
 import { fileLine } from './files'
+import { kindsFor, mentions, saidHits, searchReport, seenRanges, type FileHits } from './search'
 import { ATTACHED } from '../shared/attached'
 import { mkdir, readFile } from 'node:fs/promises'
-import { batch, duration as timelineDuration, sameCut, starts, timelineOfFile, type Edit, type Timeline } from '../shared/timeline'
+import { batch, duration as timelineDuration, rangesOf, sameCut, starts, timelineOfFile, type Edit, type Timeline } from '../shared/timeline'
 import type { ClipInfo, Project, Transcript } from '../shared/types'
 import { ASPECTS } from '../shared/motion-formats'
 import { example as galleryExample } from './gallery'
@@ -89,11 +93,14 @@ export type Bridge = {
   editTimeline(dir: string, edits: Edit[]): Promise<Project>
   /** A sentence on what happened (a new version, or the mix kept with an edit not rendered yet). */
   setMix(dir: string, mix: { filmDb: number; music?: { src: string; db: number; duckDb: number } }): Promise<string>
-  /** Copy a file, folder or .zip (e.g. a download) into media/ and add it to the project; a line per new file. */
-  importFiles(dir: string, absPath: string): Promise<string[]>
+  /** Copy a file, folder or .zip (e.g. a download) into media/ and add it to the project; a line per new file.
+   *  With a source, each file remembers where it came from and media/Sources.txt lists it. */
+  importFiles(dir: string, absPath: string, source?: { page: string; licence: string }): Promise<string[]>
+  /** Keep what the agent wrote down about a file ("" forgets it). */
+  noteFile(dir: string, rel: string, notes: string): Promise<void>
   /** The cut for Premiere / Resolve / Final Cut: a folder with FCPXML, Premiere XML, OTIO and the files it uses. */
   exportForEditors(dir: string): Promise<{ dir: string; files: string[]; notes: string[] }>
-  exportFilm(dir: string, req: { preset: 'original' | 'landscape' | 'vertical' | 'square'; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string }): Promise<{ file: string; srt?: string }>
+  exportFilm(dir: string, req: { preset: 'original' | 'landscape' | 'vertical' | 'square'; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string; loudness?: 'none' | 'online' | 'podcast' }): Promise<{ file: string; srt?: string }>
   /** Start filming the tab the agent's bsk session drives (AgentShot's browser or the user's Chrome, per the setting). */
   startTake(dir: string, o: { session: string }): Promise<Recorder>
   /** The take recording in this project, if any. */
@@ -239,6 +246,8 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       `the transcript tool gives speech; speakers gives who speaks when; find_subjects gives where faces and objects are per shot (and crops that follow them). Then look (frames at chosen times, a zoomed box, or an image file) only for what numbers can't tell: ` +
       `what is in a shot, where faces or text are, whether a render looks right. Never write scripts (Python or other) to analyse pixels or sound, ` +
       `and never use another ffmpeg: the bundled one has what you need (vidstabdetect/vidstabtransform for shake, rubberband for speed, scdet, signalstats, ebur128…).\n` +
+      `- When the user refers to a moment ("the bit with the dog", "where she says thank you"), search_footage finds it across every file. ` +
+      `After you have looked at or listened to one of the user's files, write what is where with note_file, in that file's own times (never the film's, which move with every cut): it comes back in project_state from then on, so nobody looks twice. A file's times in notes and in search_footage stay true after any cut; search_footage also says where each moment plays in the film now.\n` +
       `- Frame inspections have a finite information limit. Never inspect sub-frame windows repeatedly. For "trim tighter", read transcript ` +
       `and measured silence/activity, plan word-safe cuts, and apply them; use at most a few look calls for uncertain action boundaries. ` +
       `If look says no new information, stop inspecting and edit with the evidence already available.\n` +
@@ -552,6 +561,61 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
         },
       }),
       defineTool({
+        name: 'note_file',
+        description: 'Write down what you learned about one of the user\'s files (media/…) after looking at or listening to it: what is where, with times ("0:00–0:12 wide beach, 0:12 dog runs in, ' +
+          '0:31 she laughs; shaky after 0:40"). It is kept with the file and comes back in project_state and search_footage, in this and every later ' +
+          'conversation, so nobody has to look again. The times must be the file\'s own (seconds into that file), never the film\'s: the film\'s times move with every cut, ' +
+          'the file\'s never do. So take them from that file itself (look, transcript or analyze_video with media: its path), not from the edited film. ' +
+          'Replaces the earlier notes on that file; "" forgets them.',
+        parameters: Type.Object({ path: Type.String({ description: 'a file in media/, e.g. media/beach.mp4' }), notes: Type.String({ maxLength: 800 }) }),
+        execute: async (args: Any, api: Any) => {
+          const p = proj(api)
+          const rel = inProject(p, args.path).slice(p.dir.length + 1).split('\\').join('/')
+          if (!p.files?.[rel]) throw new Error(`${args.path} is not one of the project's files (see project_state → files).`)
+          // a render is one cut of the film: its times are gone with the next cut, so notes on it would mislead
+          if (!rel.startsWith('media/')) throw new Error(`Notes go on the user's own files in media/, with that file's own times. ${rel} is a cut of the film, and its times change with the next cut.`)
+          await bridge.noteFile(p.dir, rel, String(args.notes).trim())
+          return text(args.notes.trim() ? `Noted on ${rel}.` : `Forgot the notes on ${rel}.`)
+        },
+      }),
+      defineTool({
+        name: 'search_footage',
+        description: 'Find a moment across every file in the project, with times: by what is shown (shows: "dog", "two people", "a car", "laptop": faces, people, ' +
+          'vehicles, animals and everyday objects, plus anything in your own notes on the files) and/or by what is said (said: a word or phrase from the speech). ' +
+          'Use it before looking at frames when the user refers to a moment ("the bit with the dog", "where she says thank you").',
+        parameters: Type.Object({ shows: Type.Optional(Type.String()), said: Type.Optional(Type.String()) }),
+        execute: async (args: Any, api: Any) => {
+          const p = proj(api)
+          const shows = String(args.shows || '').trim(), said = String(args.said || '').trim()
+          if (!shows && !said) throw new Error('Give shows, said, or both.')
+          const kinds = shows ? kindsFor(shows) : []
+          const canSee = existsSync(VISION) && existsSync(join(MODELS_DIR, 'faces-yunet.onnx')) && existsSync(join(MODELS_DIR, 'objects-yolox-tiny.onnx'))
+          const hits: FileHits[] = [], unseen: string[] = [], unheard: string[] = []
+          for (const rel of Object.keys(p.files || {}).filter(r => r.startsWith('media/'))) {
+            const f = p.files![rel], m = p.media[rel]
+            const hit: FileHits = { rel }
+            if (shows) {
+              if (f.notes && mentions(`${f.notes} ${rel}`, shows)) hit.notes = f.notes
+              if (kinds.length && f.kind === 'video') {
+                if (!canSee || !m?.width) unseen.push(rel)
+                else hit.seen = seenRanges((await findSubjects(p.dir, join(p.dir, rel), { signal: api.signal })).dets, kinds)
+              }
+            }
+            if (said && (f.kind === 'video' || f.kind === 'audio') && m?.hasAudio !== false) {
+              const made = p.transcripts?.[rel]
+              const t = made ? await readFile(join(p.dir, made), 'utf8').then(j => JSON.parse(j) as Transcript, () => null) : null
+              if (t) hit.said = saidHits(t, said)
+              else unheard.push(rel)
+            }
+            hits.push(hit)
+          }
+          // where each moment plays now: the edit's pieces say, unless the film is a render that no longer names the file
+          const tl = p.timeline
+          const inFilm = (rel: string, s: number, e: number) => (tl && tl.items.some(i => i.kind === 'media' && i.src === rel) ? rangesOf(tl, rel, s, e) : null)
+          return text(searchReport({ shows, said }, hits, { kinds, unseen, unheard, inFilm }))
+        },
+      }),
+      defineTool({
         name: 'look',
         description: 'See frames of a video, labelled with their times: at given times, or `count` frames spread over t0–t1; `box` (0–1 fractions, x,y = top-left) zooms every frame ' +
           'into that region to read text or check a detail. Or see an image file in the project (`image`). Use after analyze_video, for what measurements can\'t tell.',
@@ -750,15 +814,16 @@ export function editorExtension(bridge: Bridge, dirOf: (convId: string) => strin
       }),
       defineTool({
         name: 'export_video',
-        description: 'Export the version on screen as a finished MP4 into the project\'s exports/ folder: a size preset (original, landscape 16:9, vertical 9:16 for Shorts/Reels/TikTok, square 1:1) and captions from the transcript (burned in, or an .srt file next to it).',
+        description: 'Export the version on screen as a finished MP4 into the project\'s exports/ folder: a size preset (original, landscape 16:9, vertical 9:16 for Shorts/Reels/TikTok, square 1:1) captions from the transcript (burned in, or an .srt file next to it), and how loud it is.',
         parameters: Type.Object({
           preset: Type.Union([Type.Literal('original'), Type.Literal('landscape'), Type.Literal('vertical'), Type.Literal('square')]),
           fit: Type.Optional(Type.Union([Type.Literal('pad'), Type.Literal('crop')], { description: 'other shapes: blurred fill behind the picture (pad, default) or centre crop' })),
           captions: Type.Union([Type.Literal('none'), Type.Literal('burn'), Type.Literal('srt')]),
           caption_color: Type.Optional(Type.String({ description: '#rrggbb, default white; follow the user\'s remembered caption style' })),
+          loudness: Type.Optional(Type.Union([Type.Literal('none'), Type.Literal('online'), Type.Literal('podcast')], { description: 'bring the whole film to the level a place plays at, with one change of level that cannot clip: online (YouTube, Reels, Shorts, TikTok) or podcast. Default none: the sound as mixed. Use it when the user asks for the film to be loud enough, or says where it is going.' })),
         }),
         execute: async (args: Any, api: Any) => {
-          const r = await bridge.exportFilm(proj(api).dir, { preset: args.preset, fit: args.fit, captions: args.captions, captionColor: args.caption_color })
+          const r = await bridge.exportFilm(proj(api).dir, { preset: args.preset, fit: args.fit, captions: args.captions, captionColor: args.caption_color, loudness: args.loudness })
           return text(`Exported ${r.file}${r.srt ? ` and ${r.srt}` : ''}.`)
         },
       }),
@@ -862,15 +927,24 @@ export function browserExtension(bridge: Bridge, dirOf: (convId: string) => stri
       defineTool({
         name: 'import_media',
         description: 'Add a file in the project folder (e.g. one you downloaded to downloads/) to the project\'s media, so it can be used in the edit. ' +
-          'A folder or .zip adds every file in it. Returns each new path in media/ and what the file is.',
-        parameters: Type.Object({ path: Type.String({ description: 'relative to the project folder, e.g. downloads/music.mp3' }) }),
+          'A folder or .zip adds every file in it. Returns each new path in media/ and what the file is. For anything fetched from the web give source and licence ' +
+          '(required for music and sound): they are kept with the file and listed in media/Sources.txt.',
+        parameters: Type.Object({
+          path: Type.String({ description: 'relative to the project folder, e.g. downloads/music.mp3' }),
+          source: Type.Optional(Type.String({ description: 'the web page it was downloaded from (not the file\'s own address)' })),
+          licence: Type.Optional(Type.String({ description: 'the licence that page gives it, e.g. "CC BY 4.0", "Pixabay Content License", "public domain"' })),
+        }),
         execute: async (args: Any, api: Any) => {
           const dir = dirOf(api.conversationId)
           if (!dir || !bridge.project(dir)) throw new Error('This project is not open.')
           const abs = resolve(dir, args.path)
           if (!isWithinDir(dir, abs)) throw new Error('The file must be inside the project folder (download it to downloads/ first).')
           if (!existsSync(abs)) throw new Error(`No file at ${args.path}.`)
-          return text(`Added:\n${(await bridge.importFiles(dir, abs)).join('\n')}`)
+          const source = args.source?.trim() && args.licence?.trim() ? { page: args.source.trim(), licence: args.licence.trim() } : undefined
+          // music and sound from the web are the files a platform asks about later: no source, no import
+          if (!source && kindByName(abs) === 'audio') throw new Error('Say where this sound came from before adding it: source (the page you downloaded it from) and licence (what that page says, e.g. "CC BY 4.0"). Both are kept with the file and in media/Sources.txt, so the user can show them if a platform asks. If you can\'t tell its licence, don\'t use it.')
+          if (source && !/^https?:\/\/\S+$/.test(source.page)) throw new Error('source must be the address of the page the file came from (https://…).')
+          return text(`Added:\n${(await bridge.importFiles(dir, abs, source)).join('\n')}${source ? `\nListed in media/Sources.txt.` : ''}`)
         },
       }),
       defineTool({
@@ -1107,8 +1181,36 @@ export async function startAgent(opts: {
     l.off(); l.view.dispose?.(); live.delete(dir)
   }
 
+  // An agent outside the app (src/main/mcp.ts) uses the same tools on an open project. A call's "conversation" is its
+  // project folder. Left out: tools that put a card in AgentShot's own conversation and wait for its answer, and the
+  // ones that film AgentShot's own agent driving a browser.
+  const OUTSIDE_SKIP = new Set(['ask_user', 'suggest_next', 'demo_layout', 'compose_demo', 'import_media', 'walkthrough_record', 'compose_walkthrough'])
+  const outsideLooks = new InspectionGuard()
+  const outsideTools = [editorExtension(opts.bridge, id => id, opts.fence, new DemoBriefs(), outsideLooks), memoryExtension(opts.memory),
+    ...(opts.browserPrompt ? [browserExtension(opts.bridge, id => id, opts.browserPrompt)] : [])]
+    .flatMap(e => [...(e.tools || [])] as unknown as Any[]).filter(t => !OUTSIDE_SKIP.has(t.name))
+    .map(t => ({ tool: t, check: z.fromJSONSchema(JSON.parse(JSON.stringify(t.parameters))) }))
+
   return {
     open,
+    outside: {
+      tools: () => outsideTools.map(({ tool }) => ({ name: tool.name as string, description: tool.description as string, parameters: JSON.parse(JSON.stringify(tool.parameters)) as Any })),
+      async call(dir: string, name: string, input: Any, signal: AbortSignal) {
+        const found = outsideTools.find(t => t.tool.name === name)
+        if (!found) throw new Error(`AgentShot has no tool called ${name}.`)
+        const parsed = found.check.safeParse(input)
+        if (!parsed.success) throw new Error(`${name}: ${parsed.error.issues.map(i => `${i.path.join('.') || 'input'}: ${i.message}`).join('; ')}`)
+        // "look" stops answering when one moment is inspected over and over; anything else done in between starts it afresh
+        if (name !== 'look') outsideLooks.reset(dir)
+        let output = ''
+        const api = { conversationId: dir, callId: randomUUID(), env: envFor({ cwd: dir }), signal, diagnostic: () => {}, outputWindow: undefined,
+          output: (chunk: string | Uint8Array) => { output = (output + (typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString())).slice(-64 * 1024) } }
+        const result = (await found.tool.execute(parsed.data, api, withAbortSignal(signal, ctx)) || {}) as Any
+        const content = ((result.content || [{ type: 'text', text: output || 'Done.' }]) as Any[]).map(b =>
+          b.type === 'image' ? { type: 'image' as const, data: b.data as string, mimeType: b.mimeType as string } : { type: 'text' as const, text: String(b.text || '') })
+        return { content, ...(result.isError ? { isError: true } : {}) }
+      },
+    },
     /** Start a new conversation in a project (the old ones stay, durable). */
     newConversation: (dir: string) => open(dir, undefined, true),
     current: (dir: string) => (live.has(dir) ? String(live.get(dir)!.conv.id) : undefined),

@@ -4,6 +4,7 @@ dist/
 node_modules/
 out/
 resources/bin/
+scripts/launcher/target/
 resources/models/
 resources/lib/*.min.js
 resources/lib/fonts/

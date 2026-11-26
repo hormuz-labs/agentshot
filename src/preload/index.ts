@@ -5,6 +5,7 @@ import type { AccountStatus, Anchor, Balance, BrowserMode, BrowserState, ChromeB
 import type { CustomProvider, CustomProviderInfo } from '../shared/providers'
 import type { ChatGPTStatus } from '../shared/chatgpt'
 import type { ClaudeCodeStatus } from '../shared/claude-code'
+import type { OutsideActivity, OutsideAgent, OutsideStatus } from '../shared/outside'
 import type { Cue } from '../shared/subtitles'
 import type { Edit } from '../shared/timeline'
 import type { PreviewState } from '../shared/proxy'
@@ -129,7 +130,7 @@ const api = {
   /** Who speaks when in a media file (make: work it out as a background job if not done yet). */
   /** The subtitles that go with a media file, their lines, and the subtitle files there are to choose from. */
   export: {
-    run: (dir: string, req: { preset: 'original' | 'landscape' | 'vertical' | 'square'; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string }) =>
+    run: (dir: string, req: { preset: 'original' | 'landscape' | 'vertical' | 'square'; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string; loudness?: 'none' | 'online' | 'podcast' }) =>
       ipcRenderer.invoke('export:run', dir, req) as Promise<{ file: string; srt?: string } | null>,
     reveal: (file: string) => ipcRenderer.invoke('export:reveal', file),
     /** For another editor: a folder with the cut as FCPXML, Premiere XML and OTIO, and its files. */
@@ -183,6 +184,17 @@ const api = {
     cancel: () => ipcRenderer.invoke('claude-code:cancel') as Promise<void>,
     usage: () => ipcRenderer.invoke('claude-code:usage') as Promise<void>,
     help: () => ipcRenderer.invoke('claude-code:help') as Promise<void>,
+  },
+  /** Editing from an agent outside AgentShot (Claude Code, Codex…). The token never comes to the window. */
+  outside: {
+    status: () => ipcRenderer.invoke('outside:status') as Promise<OutsideStatus>,
+    set: (on: boolean) => ipcRenderer.invoke('outside:set', on) as Promise<OutsideStatus>,
+    /** Puts the setup other agents read (with the token) on the clipboard. */
+    copy: () => ipcRenderer.invoke('outside:copy') as Promise<void>,
+    /** Adds AgentShot to one of the person's agents (Claude Code, the Claude app, Codex). */
+    add: (which: OutsideAgent) => ipcRenderer.invoke('outside:add', which) as Promise<void>,
+    /** An outside agent used a tool on a project just now. */
+    onActivity: on<[OutsideActivity]>('outside:activity'),
   },
   /** Signing in to AgentShot: brings the person's AgentShot key (stays in the main process); only who is signed in comes back. */
   account: {

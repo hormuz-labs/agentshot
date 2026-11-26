@@ -3,7 +3,8 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { captionCues, exportArgs, PRESETS, toSrt } from '../src/shared/export'
+import { captionCues, exportArgs, LOUDNESS, loudnessGain, PRESETS, toSrt } from '../src/shared/export'
+import { measureLoudness } from '../src/main/analysis'
 import { FFMPEG, probe } from '../src/main/media'
 import type { Transcript } from '../src/shared/types'
 import { escapeFilterPath, escapeFilterValue } from '../src/shared/ffmpeg'
@@ -164,5 +165,64 @@ describe('caption fonts', () => {
       const head = readFileSync(join(fonts, f)).subarray(0, 4)
       expect(head.equals(Buffer.from([0, 1, 0, 0]))).toBe(true) // a TrueType font
     }
+  })
+})
+
+describe('how loud an export is', () => {
+  it('offers the levels people publish at', () => {
+    expect(LOUDNESS.map(l => [l.id, l.lufs])).toEqual([['none', undefined], ['online', -14], ['podcast', -16]])
+  })
+  it('is one change of level to the target', () => {
+    expect(loudnessGain('online', { lufs: -23, peak: -12 })).toBe(9)
+    expect(loudnessGain('podcast', { lufs: -23, peak: -12 })).toBe(7)
+    expect(loudnessGain('online', { lufs: -9.5, peak: -0.2 })).toBe(-4.5)
+  })
+  it('stops short of the target rather than clip the loudest moment', () => {
+    // 9 dB would reach the target, but the peak has only 2 dB of room below -1
+    expect(loudnessGain('online', { lufs: -23, peak: -3 })).toBe(2)
+    expect(loudnessGain('online', { lufs: -23, peak: -0.5 })).toBe(-0.5)
+  })
+  it('changes nothing when not asked, when there is nothing to measure, or when it is already there', () => {
+    expect(loudnessGain('none', { lufs: -23, peak: -12 })).toBe(0)
+    expect(loudnessGain(undefined, { lufs: -23, peak: -12 })).toBe(0)
+    expect(loudnessGain('online', null)).toBe(0)
+    expect(loudnessGain('online', { lufs: -Infinity, peak: -Infinity })).toBe(0)
+    expect(loudnessGain('online', { lufs: NaN, peak: NaN })).toBe(0)
+    expect(loudnessGain('online', { lufs: -14.2, peak: -6 })).toBe(0)
+  })
+  it('keeps the picture untouched when only the level changes, and leaves the sound alone otherwise', () => {
+    const base = { preset: 'original' as const, input: 'in.mp4', out: 'out.mp4', source: { width: 1280, height: 720 } }
+    expect(exportArgs(base).join(' ')).toContain('-c copy')
+    expect(exportArgs({ ...base, gainDb: 0 }).join(' ')).toContain('-c copy')
+    const louder = exportArgs({ ...base, gainDb: 6.5 }).join(' ')
+    expect(louder).toContain('-c:v copy -af volume=6.5dB -c:a aac')
+    expect(exportArgs({ ...base, preset: 'vertical', gainDb: -3 }).join(' ')).toContain('-af volume=-3dB -c:a aac')
+    expect(exportArgs({ ...base, preset: 'vertical' }).join(' ')).not.toContain('volume=')
+  })
+  it('renders for real: a quiet film comes out at the level asked for, with room above its peaks', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-loud-'))
+    try {
+      // pink noise at about -30 LUFS, the kind of level a phone recording arrives at
+      execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=black:s=320x180:r=10:d=6', '-f', 'lavfi', '-i', 'anoisesrc=color=pink:duration=6:amplitude=0.05',
+        '-c:v', 'libx264', '-c:a', 'aac', '-shortest', 'in.mp4'], { cwd: dir })
+      const before = await measureLoudness(join(dir, 'in.mp4'))
+      expect(before!.lufs).toBeLessThan(-20)
+      const gainDb = loudnessGain('online', before)
+      expect(gainDb).toBeGreaterThan(3)
+      execFileSync(FFMPEG, ['-y', '-loglevel', 'error', ...exportArgs({ preset: 'original', input: 'in.mp4', out: 'out.mp4', source: { width: 320, height: 180 }, gainDb })], { cwd: dir })
+      const after = await measureLoudness(join(dir, 'out.mp4'))
+      expect(after!.peak).toBeLessThanOrEqual(-0.5)
+      // at the target, unless the peak got in the way; then as close as the peak allows
+      const want = before!.lufs + gainDb
+      expect(Math.abs(after!.lufs - want)).toBeLessThan(0.7)
+      if (-1 - before!.peak >= -14 - before!.lufs) expect(Math.abs(after!.lufs + 14)).toBeLessThan(0.7)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+  it('measures nothing in a film with no sound', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-loud-'))
+    try {
+      execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=black:s=320x180:r=10:d=1', '-c:v', 'libx264', 'in.mp4'], { cwd: dir })
+      expect(await measureLoudness(join(dir, 'in.mp4'))).toBeNull()
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })

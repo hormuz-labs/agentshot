@@ -5,13 +5,14 @@ import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { PRESETS, type PresetId } from '../../../shared/export'
+import { LOUDNESS, PRESETS, type LoudnessId, type PresetId } from '../../../shared/export'
 import { CloudJobs } from './CloudJobs'
 
 export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: boolean; onOpenChange(v: boolean): void }) {
   const [preset, setPreset] = useState<PresetId>('original')
   const [fit, setFit] = useState<'pad' | 'crop'>('pad')
   const [captions, setCaptions] = useState<'none' | 'burn' | 'srt'>('none')
+  const [loudness, setLoudness] = useState<LoudnessId>('none')
   const [largeInstalled, setLargeInstalled] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState('')
@@ -31,7 +32,7 @@ export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: b
   const go = async () => {
     setState('busy')
     try {
-      const r = await window.agentshot.export.run(dir, { preset, fit, captions })
+      const r = await window.agentshot.export.run(dir, { preset, fit, captions, loudness })
       setState(r ? { file: r.file } : 'idle')
     } catch (e) { setState({ error: String((e as Error).message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '').slice(0, 300) }) }
   }
@@ -87,6 +88,15 @@ export function ExportDialog({ dir, open, onOpenChange }: { dir: string; open: b
         </div>
         {downloadError && <p role="alert" className="mt-2 text-xs text-bad">{downloadError}</p>}
         {captions !== 'none' && <p className="mt-2 text-xs text-dim">{largeInstalled ? 'Using Whisper Large-v3 for export captions.' : 'Using your current transcription model.'}</p>}
+      </div>
+      <div className="mb-5">
+        <div className="mb-1.5 text-xs text-dim">How loud</div>
+        <div className="inline-flex rounded-lg border border-line bg-bg p-0.5" role="radiogroup" aria-label="How loud">
+          {LOUDNESS.map(l => (
+            <button key={l.id} role="radio" aria-checked={loudness === l.id} onClick={() => setLoudness(l.id)} className={cn('rounded-md px-3 py-1 text-xs', loudness === l.id ? 'bg-raised text-fg' : 'text-dim')}>{l.label}</button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-dim">{LOUDNESS.find(l => l.id === loudness)!.hint}{loudness !== 'none' && '. The whole film is turned up or down together, never squashed.'}</p>
       </div>
       {typeof state === 'object' && 'file' in state && (
         <div className="mb-3 flex items-center gap-2 rounded-lg border border-ok/30 bg-ok/10 px-3 py-2 text-xs">

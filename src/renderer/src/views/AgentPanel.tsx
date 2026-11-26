@@ -21,6 +21,7 @@ import type { Project } from '../../../shared/types'
 import { cn, timecode } from '@/lib/utils'
 import type { Anchor } from '../../../shared/types'
 import { splitAttached } from '../../../shared/attached'
+import { OutsideActivity } from './OutsideActivity'
 import { chipGroups, FileIcon } from './FilesPanel'
 import { insertMention, matches, mentionables, mentionAt, refChip, type Mention } from '@/lib/mentions'
 
@@ -516,6 +517,7 @@ export function AgentPanel({ project, projectInfo, model, agent, anchor, text, o
 
       <div data-tour="composer" className={cn(col, 'pb-5')}>
         {!empty && <ManulCompanion agent={agent} needsConsent={consents.length > 0} active={active} />}
+        <OutsideActivity dir={project} />
         {box}
       </div>
     </div>

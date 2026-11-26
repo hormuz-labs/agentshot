@@ -1,0 +1,16 @@
+[package]
+name = "agentshot-mcp"
+version = "1.0.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Lets an agent that speaks MCP over stdin and stdout (the Claude app, Codex) reach AgentShot"
+
+[dependencies]
+serde_json = "1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

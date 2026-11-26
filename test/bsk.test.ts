@@ -171,13 +171,24 @@ describe('browserExtension', () => {
     const dir = mkdtempSync(join(tmpdir(), 'agentshot-proj-'))
     mkdirSync(join(dir, 'downloads'))
     writeFileSync(join(dir, 'downloads', 'song.mp3'), 'x')
-    const got: string[] = []
-    const bridge = { project: () => ({ dir }), importFiles: async (_d: string, abs: string) => { got.push(abs); return ['media/song.mp3 — audio, 3:12'] } }
+    writeFileSync(join(dir, 'downloads', 'logo.png'), 'x')
+    const got: string[] = [], sources: unknown[] = []
+    const bridge = { project: () => ({ dir }), importFiles: async (_d: string, abs: string, source?: unknown) => { got.push(abs); sources.push(source); return ['media/song.mp3 — audio, 3:12'] } }
     const ext = browserExtension(bridge as never, () => dir, () => 'Browser: test') as unknown as { tools: { name: string; execute: (a: object, api: object) => Promise<{ content: { text: string }[] }> }[] }
     const tool = ext.tools.find(t => t.name === 'import_media')!
-    const out = await tool.execute({ path: 'downloads/song.mp3' }, { conversationId: '1' })
+    // music from the web isn't added until it says where it came from and under what licence
+    await expect(tool.execute({ path: 'downloads/song.mp3' }, { conversationId: '1' })).rejects.toThrow(/Say where this sound came from/)
+    await expect(tool.execute({ path: 'downloads/song.mp3', source: 'https://example.com/track' }, { conversationId: '1' })).rejects.toThrow(/Say where this sound came from/)
+    await expect(tool.execute({ path: 'downloads/song.mp3', source: 'a site I found', licence: 'CC BY 4.0' }, { conversationId: '1' })).rejects.toThrow(/address of the page/)
+    expect(got).toEqual([])
+    const out = await tool.execute({ path: 'downloads/song.mp3', source: 'https://example.com/track', licence: 'CC BY 4.0' }, { conversationId: '1' })
     expect(out.content[0].text).toContain('media/song.mp3')
+    expect(out.content[0].text).toContain('Listed in media/Sources.txt.')
     expect(got).toEqual([join(dir, 'downloads', 'song.mp3')])
+    expect(sources).toEqual([{ page: 'https://example.com/track', licence: 'CC BY 4.0' }])
+    // other files may come without one
+    expect((await tool.execute({ path: 'downloads/logo.png' }, { conversationId: '1' })).content[0].text).not.toContain('Sources.txt')
+    expect(sources[1]).toBeUndefined()
     await expect(tool.execute({ path: '/etc/hosts' }, { conversationId: '1' })).rejects.toThrow(/inside the project/)
     await expect(tool.execute({ path: `${dir}-sibling/song.mp3` }, { conversationId: '1' })).rejects.toThrow(/inside the project/)
     await expect(tool.execute({ path: '../song.mp3' }, { conversationId: '1' })).rejects.toThrow(/inside the project/)

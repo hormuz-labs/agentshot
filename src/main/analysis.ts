@@ -79,6 +79,16 @@ export function parseLoudness(log: string) {
   return { lufs: num(/I:\s+(-?[\d.]+|-inf) LUFS/), lra: num(/LRA:\s+(-?[\d.]+) LU/), peak: num(/Peak:\s+(-?[\d.]+|-inf) dBFS/) }
 }
 
+/** How loud a file is as a whole (integrated loudness and its loudest peak), or null when it has no sound to measure. */
+export function measureLoudness(file: string, signal?: AbortSignal) {
+  return new Promise<{ lufs: number; peak: number } | null>(done => execFile(FFMPEG,
+    ['-hide_banner', '-nostats', '-i', file, '-vn', '-map', '0:a:0', '-af', 'ebur128=peak=true:framelog=verbose', '-f', 'null', '-'],
+    { maxBuffer: 16 * 1024 * 1024, signal, windowsHide: true }, (err, _out, log) => {
+      const l = err ? null : parseLoudness(String(log))
+      done(l && Number.isFinite(l.lufs) && Number.isFinite(l.peak) ? { lufs: l.lufs, peak: l.peak } : null)
+    }))
+}
+
 /**
  * vid.stab's ASCII transforms file: per frame a list of local motions `(LM dx dy x y size contrast match)`.
  * The camera's motion for a frame is the median of its local motions (robust against things moving in the shot).

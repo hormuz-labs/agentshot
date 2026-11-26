@@ -1,6 +1,6 @@
 // AgentShot's main process: the window, the media protocol, projects, keys, and the agent (pi-durable → AG-UI → renderer).
 import { CRASHES_AVAILABLE } from './crash' // first: crash reports must start before anything else
-import { app, BrowserWindow, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell, session as electronSession } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain as electronIpcMain, nativeTheme, powerMonitor, protocol, shell, session as electronSession } from 'electron'
 import { DEFAULT_MOBILE_PORT, MobileBridge, reachableIps } from './mobile-bridge'
 import { projectArgument } from './mobile-contract'
 import { rangeNotesContent } from './range-notes'
@@ -14,7 +14,7 @@ import { initializeNetwork } from './network-electron'
 import { startMeshNode, stopAllMesh, type MeshNode } from './mesh'
 import QRCode from 'qrcode'
 import { closeSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } from 'node:fs'
-import { copyFile, mkdtemp, readFile } from 'node:fs/promises'
+import { appendFile, copyFile, mkdtemp, readFile } from 'node:fs/promises'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import { artifactPath } from './artifacts'
 import { explain, forPhone } from './explain'
@@ -32,6 +32,9 @@ import { startUpdates } from './updates'
 import { CLOUD_WORKER_SECRET, KEYS, keyStatus, loadKeys, setKey } from './keys'
 import { chatGPT, chatGPTStatus } from './chatgpt'
 import { ClaudeCodeConnection } from './claude-code'
+import { OutsideAccess, SERVER_NAME } from './mcp'
+import { claudeAppConfig, codexConfig, installedAgents, setClaudeAppServer, setCodexServer, type Launch } from './outside-agents'
+import type { OutsideAgent } from '../shared/outside'
 import * as UserSpace from './user-space'
 import { isProviderKeyEnv } from '../shared/providers'
 import { accountStatus, accountWorkers, adoptKey, balance, cancelSignIn, checkout, leaseAccountWorker, manageBilling, meshJoin, releaseAccountWorker, signIn, signOut, workerHeartbeat } from './account'
@@ -68,7 +71,8 @@ import * as Gallery from './gallery'
 import * as Files from './files'
 import { addOverlay, applyEdit, composeArgs, describeEdit, duration as timelineDuration, insertAt, sameCut, type Edit, type Item, type Overlay } from '../shared/timeline'
 import { moveElement, prepareClipHtml } from '../shared/clip-html'
-import { captionCues, exportArgs, toSrt, type ExportOptions } from '../shared/export'
+import { captionCues, exportArgs, loudnessGain, toSrt, type ExportOptions, type LoudnessId } from '../shared/export'
+import { measureLoudness } from './analysis'
 import { PreviewCopies } from './proxies'
 import { joinAttached } from '../shared/attached'
 import { extOf } from '../shared/file-kinds'
@@ -77,7 +81,7 @@ import type { Speakers as SpeakersResult } from '../shared/speakers'
 import * as Speakers from './speakers'
 import { duckEnvelope, mixArgs, mixCommands, regionsOnTimeline, type Mix } from '../shared/mix'
 import { spawn } from 'node:child_process'
-import { FFMPEG, FFPROBE, probe } from './media'
+import { BIN, FFMPEG, FFPROBE, probe } from './media'
 import { exportForEditors } from './handoff'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -85,7 +89,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import type { Anchor, BrowserMode, ClipInfo, ConsentRequest, Project, RecentProject, Transcript } from '../shared/types'
 import type { Timeline } from '../shared/timeline'
 import { decodeMediaPath, filesystemSlug, pathBasename } from '../shared/paths'
-import { relativeProjectPath } from './paths'
+import { executableName, relativeProjectPath } from './paths'
 import { serveMedia as mediaResponse } from './media-protocol'
 
 declare const __MANUL_TELEMETRY_URL__: string
@@ -119,6 +123,7 @@ let meshNode: MeshNode | null = null
 let meshIp: string | undefined
 let agent: AgentHandle | null = null
 let claudeCode: ClaudeCodeConnection | undefined
+let outside: OutsideAccess | undefined
 let memory: Memory
 let skills: Skills
 let updates: ReturnType<typeof startUpdates> | null = null
@@ -431,6 +436,7 @@ const browserMode = (): BrowserMode => getConfig().browser?.mode ?? 'manul'
 function shutdown() {
   quitting = true
   claudeCode?.cancel()
+  void outside?.stop()
   for (const c of consents.values()) c.answer(false)
   consents.clear()
   return shutdownTask ??= new Promise<void>(done => {
@@ -957,7 +963,7 @@ async function renderEdit(p: Project) {
 }
 
 // ---------------------------------------------------------------- export
-export type ExportRequest = { preset: ExportOptions['preset']; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string }
+export type ExportRequest = { preset: ExportOptions['preset']; fit?: 'pad' | 'crop'; captions: 'none' | 'burn' | 'srt'; captionColor?: string; loudness?: LoudnessId }
 
 /** Export the version on screen to outAbs (and an .srt next to it when asked). */
 async function exportFilm(p: Project, req: ExportRequest, outAbs: string, by: 'user' | 'agent', version = p.current) {
@@ -977,7 +983,12 @@ async function exportFilm(p: Project, req: ExportRequest, outAbs: string, by: 'u
     }
     const tmpSrt = req.captions === 'burn' && srt ? join(p.dir, '.agentshot-captions.srt') : undefined
     if (tmpSrt) await writeFile(tmpSrt, await readFile(srt!, 'utf8'))
-    const args = exportArgs({ preset: req.preset, fit: req.fit, input: join(p.dir, v.path), out: outAbs, source: info,
+    let gainDb = 0
+    if (req.loudness && req.loudness !== 'none' && info.hasAudio) {
+      j.progress(null, 'Listening to how loud it is')
+      gainDb = loudnessGain(req.loudness, await measureLoudness(join(p.dir, v.path)))
+    }
+    const args = exportArgs({ preset: req.preset, fit: req.fit, input: join(p.dir, v.path), out: outAbs, source: info, gainDb,
       burnCaptions: tmpSrt ? '.agentshot-captions.srt' : undefined, fontsDir: join(LIB, 'fonts'), captionColor: req.captionColor })
     try {
       await new Promise<void>((ok, fail) => {
@@ -1194,6 +1205,62 @@ function wire() {
     return claudeCode!
   }
   const claudeChanged = async (status: ReturnType<ClaudeCodeConnection['status']>) => { const s = await status; send('agent:ready'); return s }
+  // Editing from an agent outside AgentShot (Claude Code, Codex…): an MCP server on this computer only, off until
+  // switched on. Its token goes to the clipboard or to Claude Code, never to the window.
+  outside = new OutsideAccess(join(app.getPath('userData'), 'outside.json'), {
+    tools: () => agent?.outside.tools() || [],
+    call: (dir, name, args, signal) => { if (!agent) throw new Error('AgentShot is still starting. Try again in a moment.'); return agent.outside.call(dir, name, args, signal) },
+    projects: () => [...open.values()].map(p => ({ dir: p.dir, title: p.title })),
+    async addFiles(dir, abs) {
+      const p = projectOf(dir)
+      const rels = await Projects.addFiles(p, abs)
+      await checkpoint(p, `Added ${rels.length === 1 ? rels[0] : `${rels.length} files`}`)
+      for (const rel of rels) { ensureProxy(p, rel); autoTranscribe(p, rel) }
+      return Files.attachedLines(rels, p.files || {}, 30, p.subtitles)
+    },
+    seen: (who, dir, tool) => send('outside:activity', { dir, who, tool, at: Date.now() }),
+  })
+  if (!WORKER_MODE) void outside.start()
+  // the Claude app and Codex speak MCP over stdin and stdout: they start AgentShot's small launcher, which reaches the
+  // server above and opens AgentShot when it is closed
+  const launcher = join(BIN, executableName('agentshot-mcp'))
+  const launchFor = (who: string): Launch => {
+    const appPath = !app.isPackaged ? undefined : process.platform === 'darwin' ? resolve(process.execPath, '..', '..', '..') : process.env.APPIMAGE || process.execPath
+    return { command: launcher, args: [outside!.stateFile, ...(appPath ? ['--app', appPath] : []), '--from', who] }
+  }
+  const localOutside = (e: Electron.IpcMainInvokeEvent) => {
+    if (!win || e.sender !== win.webContents) throw new Error('Manage this on the local desktop.')
+    return outside!
+  }
+  const outsideStatus = (o: OutsideAccess) => {
+    const there = existsSync(launcher) ? installedAgents(homedir()) : { claudeApp: false, codex: false }
+    return { ...o.status(), agents: { claudeCode: !!claudeCode?.executable, ...there } }
+  }
+  ipcMain.handle('outside:status', e => outsideStatus(localOutside(e)))
+  ipcMain.handle('outside:set', async (e, on: boolean) => {
+    const o = localOutside(e)
+    await o.set(on === true)
+    // switched off: Claude Code's entry would only fail from now on, so it goes too
+    if (on !== true) {
+      const there = installedAgents(homedir())
+      try { if (there.claudeApp) setClaudeAppServer(claudeAppConfig(homedir()), SERVER_NAME, null) } catch { /* a file AgentShot can't read stays as it is */ }
+      try { if (there.codex) setCodexServer(codexConfig(homedir()), SERVER_NAME, null) } catch { /* likewise */ }
+      await claudeCode?.removeServer(SERVER_NAME).catch(() => {})
+    }
+    return outsideStatus(o)
+  })
+  ipcMain.handle('outside:copy', e => { clipboard.writeText(localOutside(e).setup().json) })
+  ipcMain.handle('outside:add', async (e, which: OutsideAgent) => {
+    const s = localOutside(e).setup()
+    if (which === 'claudeCode') {
+      if (!claudeCode?.executable) throw new Error('Claude Code isn’t in this installation. Copy the setup instead.')
+      return claudeCode.addServer(SERVER_NAME, s.url, s.token)
+    }
+    if (!existsSync(launcher)) throw new Error('This installation has no launcher for it. Copy the setup instead.')
+    if (which === 'claudeApp') return setClaudeAppServer(claudeAppConfig(homedir()), SERVER_NAME, launchFor('Claude'))
+    if (which === 'codex') return setCodexServer(codexConfig(homedir()), SERVER_NAME, launchFor('Codex'))
+    throw new Error('AgentShot doesn’t know that agent.')
+  })
   ipcMain.handle('claude-code:status', e => localClaudeCode(e).status())
   ipcMain.handle('claude-code:signIn', async e => { const c = localClaudeCode(e); await agent?.stopClaudeCode(); return claudeChanged(c.signIn()) })
   ipcMain.handle('claude-code:connect', e => claudeChanged(localClaudeCode(e).connect()))
@@ -1739,9 +1806,22 @@ const startup = app.whenReady().then(async () => {
           return `Mixed as version ${await applyMix(p, mix)}.`
         },
         editTimeline: (dir, edits) => editTimeline(projectOf(dir), edits),
-        async importFiles(dir, abs) {
+        async noteFile(dir, rel, notes) {
+          const p = projectOf(dir)
+          const f = p.files?.[rel]
+          if (!f) throw new Error(`${rel} is not one of the project's files.`)
+          if (notes) f.notes = notes.slice(0, 800); else delete f.notes
+          await publish(p)
+        },
+        async importFiles(dir, abs, source) {
           const p = projectOf(dir)
           const rels = await Projects.addFiles(p, abs)
+          if (source) {
+            for (const rel of rels) if (p.files?.[rel]) p.files[rel].source = source
+            const ledger = join(p.dir, Files.SOURCES_FILE)
+            await appendFile(ledger, `${existsSync(ledger) ? '' : Files.SOURCES_HEAD}${rels.map(rel => Files.sourceLine(rel, source)).join('\n')}\n`)
+            await Projects.syncFiles(p)
+          }
           await checkpoint(p, `Added ${rels.length === 1 ? rels[0] : `${rels.length} files`}`)
           for (const rel of rels) { ensureProxy(p, rel); autoTranscribe(p, rel) }
           return Files.attachedLines(rels, p.files || {}, 30, p.subtitles)
