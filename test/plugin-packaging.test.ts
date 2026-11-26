@@ -16,6 +16,8 @@ import { options, OUTFILE } from '../plugin/build.mjs'
 
 const root = resolve(__dirname, '..')
 const json = (path: string) => JSON.parse(readFileSync(join(root, path), 'utf8'))
+/** A text file as committed, whatever line endings this checkout gave it (Windows may give CRLF). */
+const text = (path: string) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
 const BUNDLE = join(root, 'plugin', 'bin', 'agentshot-mcp.mjs')
 
 const cleanups: (() => Promise<unknown>)[] = []
@@ -112,7 +114,7 @@ describe('Claude plugin packaging', () => {
   })
 
   it('ships a skill that tells Claude how to set up and use AgentShot’s tools', () => {
-    const skill = readFileSync(join(root, 'plugin', 'skills', 'edit-video', 'SKILL.md'), 'utf8')
+    const skill = text(join(root, 'plugin', 'skills', 'edit-video', 'SKILL.md'))
     const front = /^---\n([\s\S]*?)\n---\n/.exec(skill)?.[1] ?? ''
     expect(front).toMatch(/^name: edit-video$/m)
     expect(front).toMatch(/^description: .{40,}$/m)
@@ -122,7 +124,7 @@ describe('Claude plugin packaging', () => {
 
   it('commits the bundle as the sources build it', async () => {
     const fresh = await build({ ...options, write: false, outfile: OUTFILE })
-    expect(readFileSync(OUTFILE, 'utf8') === fresh.outputFiles![0].text, 'plugin/bin/agentshot-mcp.mjs is stale: run npm run plugin:build').toBe(true)
+    expect(text(OUTFILE) === fresh.outputFiles![0].text.replace(/\r\n/g, '\n'), 'plugin/bin/agentshot-mcp.mjs is stale: run npm run plugin:build').toBe(true)
   }, 60_000)
 })
 

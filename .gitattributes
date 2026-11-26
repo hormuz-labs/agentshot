@@ -1,0 +1,3 @@
+# The Claude plugin ships as checked out: keep its files LF on every platform, so the committed bundle is byte-for-byte
+# what plugin/build.mjs makes, and its JSON and Markdown parse the same on Windows.
+plugin/** text=auto eol=lf
