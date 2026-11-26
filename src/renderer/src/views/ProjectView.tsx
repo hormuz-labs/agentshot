@@ -9,6 +9,7 @@ import { JobsTray } from '@/components/JobsTray'
 import { HistoryButton } from '@/components/HistoryButton'
 import { Conversations } from '@/components/Conversations'
 import { InlineAsk } from '@/components/InlineAsk'
+import { GoToTime } from '@/components/GoToTime'
 import { useCommands } from '@/lib/commands'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
@@ -56,6 +57,9 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const [anchor, setAnchor] = useState<Anchor | undefined>()
   const [draft, setDraft] = useState('')
   const focusRange = useRef(false)
+  const goTo = useRef<HTMLInputElement>(null)
+  // a typed time: the zoomed timeline scrolls to show it
+  const [reveal, setReveal] = useState({ t: 0, key: 0 })
   useLayoutEffect(() => {
     if (!focusRange.current || !input.current) return
     focusRange.current = false
@@ -142,7 +146,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   const noteHere = () => { stage.current?.video?.pause(); setAnchor(a => (a?.t1 != null ? a : { t0: time })); setInline(true) }
   const playPause = () => { const v = stage.current?.video; if (v) v.paused ? v.play() : v.pause() }
 
-  // keyboard: Space play/pause · N note · B box · ←/→ ±1 s (⇧ ±5 s) · Esc clears
+  // keyboard: Space play/pause · N note · B box · G go to a time · ←/→ ±1 s (⇧ ±5 s) · Esc clears
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!active || recordingVoiceover || (e.target as HTMLElement).closest('textarea, input')) return
@@ -152,6 +156,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
       else if ((e.key === 'b' || e.key === 'B') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); v?.pause(); setDrawing(d => !d) }
       else if (e.key === 'ArrowLeft' && v) seek(Math.max(0, v.currentTime - (e.shiftKey ? 5 : 1)))
       else if (e.key === 'ArrowRight' && v) seek(Math.min(duration, v.currentTime + (e.shiftKey ? 5 : 1)))
+      else if ((e.key === 'g' || e.key === 'G') && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); goTo.current?.focus() }
       else if (e.key === 'Escape') { setAnchor(undefined); setDrawing(false); setEditing(null) }
     }
     window.addEventListener('keydown', onKey)
@@ -357,6 +362,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         fps={live ? tl.fps : p.media[onScreen.path]?.fps || 30}
         duration={duration}
         time={time}
+        reveal={reveal}
         notes={p.notes}
         range={anchor}
         ranges={parseRangeNotes(draft).map(n => n.anchor)}
@@ -400,7 +406,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
         <Button size="iconSm" variant="ghost" disabled={recordingVoiceover} onClick={playPause}>
           {playing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
         </Button>
-        <span className="tabular text-xs text-dim">{timecode(time)} <span className="text-faint">/ {timecode(duration)}</span></span>
+        <GoToTime ref={goTo} time={time} duration={duration} disabled={recordingVoiceover} onGo={t => { stage.current?.video?.pause(); seek(t); setReveal(r => ({ t, key: r.key + 1 })) }} />
         <span className="flex-1" />
         <div data-manual-tools className="flex flex-wrap items-center gap-1">
           <Tip label={moveMode ? 'Move mode is on. Click Move clip again to turn it off, or press Esc.' : 'Click to enable moving, then grab a clip and drag it to a new position.'}>
