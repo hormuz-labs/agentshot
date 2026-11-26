@@ -18,6 +18,10 @@ password to copy: the plugin reads what it needs from AgentShot each time.
 
 Use the plugin *or* AgentShot's **Add to Claude Code** button, not both: they're the same server under the same name.
 
+**Updates:** Claude Code doesn't update plugins from marketplaces other than Anthropic's own unless you ask it to. Turn
+on auto-update once (`/plugin` → **Marketplaces** → **agentshot** → enable auto-update), or update by hand with
+`claude plugin update agentshot@agentshot`.
+
 ## How it works
 
 ```
@@ -63,6 +67,11 @@ installs plugins without running `npm install`. Rebuild it after changing the so
 ```
 npm run plugin:build
 ```
+
+**Every change to the plugin needs a new version.** Raise `version` in `.claude-plugin/plugin.json` (it's set there
+only): installed copies are cached by version, so a change under the same version never reaches anyone. CI fails a
+pull request that changes `plugin/` without raising it (`scripts/check-plugin-version.mjs`); only this README is
+exempt.
 
 `test/plugin-launcher.test.ts` drives the launcher against AgentShot's real MCP server. `test/plugin-packaging.test.ts`
 checks the manifests and runs the bundle end to end, and fails when the bundle is stale.

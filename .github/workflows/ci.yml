@@ -15,6 +15,20 @@ on:
       - '.github/workflows/site-release.yml'
 
 jobs:
+  # Claude Code caches an installed plugin by its version: a change to plugin/ reaches people only when it goes up.
+  plugin-version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The plugin's version goes up when the plugin changes
+        run: node scripts/check-plugin-version.mjs "origin/${{ github.base_ref }}"
+
   test:
     strategy:
       fail-fast: false

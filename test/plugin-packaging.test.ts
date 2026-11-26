@@ -45,7 +45,9 @@ describe('Claude plugin packaging', () => {
     expect(market.name).toBe('agentshot')
     expect(market.owner?.name).toBeTruthy()
     const entry = market.plugins.find((p: { name: string }) => p.name === 'agentshot')
-    expect(entry).toMatchObject({ source: './plugin', version: VERSION })
+    expect(entry).toMatchObject({ source: './plugin' })
+    // the version lives in plugin.json only: set in both places, plugin.json silently wins
+    expect(entry).not.toHaveProperty('version')
     expect(entry.description.length).toBeGreaterThan(20)
     expect(existsSync(join(root, entry.source, '.claude-plugin', 'plugin.json'))).toBe(true)
   })
@@ -77,6 +79,7 @@ describe('Claude plugin packaging', () => {
     expect(json('plugin/.claude-plugin/plugin.json').network).toEqual({ hosts: ['127.0.0.1'] })
     const readme = readFileSync(join(root, 'plugin', 'README.md'), 'utf8')
     expect(readme).toMatch(/## What it runs and sends/)
+    expect(readme).toMatch(/auto-update/i)
     expect(readme).toContain('127.0.0.1')
   })
 

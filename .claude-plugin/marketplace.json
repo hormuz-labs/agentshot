@@ -11,7 +11,6 @@
     {
       "name": "agentshot",
       "source": "./plugin",
-      "version": "0.1.0",
       "description": "Edit video from Claude Code with AgentShot, the open-source editor on your own computer: transcripts, cuts, titles and exports, each new cut a Before / After you keep or send back.",
       "category": "media",
       "homepage": "https://agentshot.si"
