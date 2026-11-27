@@ -71,11 +71,14 @@ export function chatHost(o: Options) {
   const json = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) =>
     res.writeHead(status, { 'content-type': 'application/json', ...headers }).end(JSON.stringify(body))
 
-  /** The worker answers for the person, leasing again once if the one held stopped answering for them. */
-  async function onWorker<T>(person: Person, token: string | undefined, run: (w: Worker) => Promise<T>): Promise<T> {
+  /** The worker answers for the person, leasing again once if the one held is gone or no longer theirs. Only when it
+   *  took nothing of the request (it couldn't be reached, or it refused the lease before doing anything): a call that
+   *  broke off halfway may have run, and is never run again. [whole]: the request can be sent again after a refusal
+   *  (not a file that arrives as it is sent). */
+  async function onWorker<T>(person: Person, token: string | undefined, run: (w: Worker) => Promise<T>, whole = true): Promise<T> {
     const w = await o.people.worker(person, token)
     try { return await run(w) } catch (e) {
-      if (!(e instanceof WorkerError) || !(e.status === 0 || e.status === 401)) throw e
+      if (!(e instanceof WorkerError) || !(e.unsent || (whole && e.status === 401))) throw e
       return run(await o.people.worker(person, token, true))
     }
   }
@@ -114,7 +117,7 @@ export function chatHost(o: Options) {
         if (!Number.isSafeInteger(size) || size <= 0) throw new Error('The file is empty.')
         if (size > MAX_UPLOAD) throw new Error('The file is over 4 GB, more than AgentShot takes at once.')
         const dir = typeof project === 'string' && project ? pick(recent, project).dir : undefined
-        const url = `${base}/upload/${signUpload(o.secret, { sub: person.sub, name: args.name, size, ...(dir ? { dir } : {}), exp: Date.now() + 60 * 60_000 })}`
+        const url = `${base}/upload/${signUpload(o.secret, { sub: person.sub, name: args.name, size, ...(dir ? { dir } : {}), exp: Date.now() + 60 * 60_000, key: o.people.keyOf(person.sub) })}`
         return { content: [{ type: 'text', text: 'Send the file there.' }], structuredContent: { url } }
       }
       // no projects yet: the editor opens on its start screen, to bring a video in
@@ -132,7 +135,7 @@ export function chatHost(o: Options) {
       const result = await onWorker(person, token, w => rpc(w, 'outside:call', [p.dir, name, args])) as Any
       // the page's files: through links signed here for this person and project
       if (result?.structuredContent?.media === WORKER_MEDIA) {
-        result.structuredContent.media = `${base}/media/${signLink(o.secret, { sub: person.sub, dir: p.dir, exp: Date.now() + linkMs })}/`
+        result.structuredContent.media = `${base}/media/${signLink(o.secret, { sub: person.sub, dir: p.dir, exp: Date.now() + linkMs, key: o.people.keyOf(person.sub) })}/`
         result.structuredContent.upload = true
       }
       return result
@@ -149,7 +152,11 @@ export function chatHost(o: Options) {
 
   async function mcp(req: IncomingMessage, res: ServerResponse) {
     const token = /^Bearer (.+)$/.exec(req.headers.authorization || '')?.[1]
-    const person = token ? await o.people.who(token).catch(() => undefined) : undefined
+    let person: Person | undefined
+    // Clerk not answering isn't "signed out": the chat would drop the connection and make them sign in again
+    try { person = token ? await o.people.who(token) : undefined } catch {
+      return json(res, 503, { error: 'AgentShot can’t check who is signed in just now. Try again in a moment.' }, { 'retry-after': '5' })
+    }
     // not signed in (or no longer): where to sign in, as MCP has it
     if (!token || !person) return json(res, 401, { error: 'Connect AgentShot to sign in.' }, { 'www-authenticate': `Bearer resource_metadata="${metadata}"` })
     if (req.method !== 'POST') return json(res, 405, { error: 'Use POST.' }, { allow: 'POST' })
@@ -179,6 +186,7 @@ export function chatHost(o: Options) {
     if (rel.split('/').some(s => !s || s === '..' || s.startsWith('.'))) return res.writeHead(404).end()
     const pass = ['range', 'if-range', 'if-none-match', 'if-match']
     const headers = Object.fromEntries(pass.filter(h => typeof req.headers[h] === 'string').map(h => [h, req.headers[h] as string]))
+    if (link.key) o.people.know(link.sub, link.key)
     try {
       const up = await onWorker({ sub: link.sub }, undefined, async w => {
         const r = await media(w, link.dir, rel, headers, req.method)
@@ -189,6 +197,9 @@ export function chatHost(o: Options) {
       res.writeHead(up.statusCode || 502, { ...Object.fromEntries(keep.filter(h => up.headers[h] != null).map(h => [h, String(up.headers[h])])), 'cache-control': 'private, max-age=300', 'access-control-allow-origin': '*' })
       up.pipe(res)
       res.on('close', () => up.destroy())
+      // the worker went away halfway: the player hears of it and asks again from where it was, instead of waiting
+      up.on('error', () => res.destroy())
+      up.on('close', () => { if (!up.complete) res.destroy() })
     } catch { if (!res.headersSent) res.writeHead(502).end(); else res.destroy() }
   }
 
@@ -201,9 +212,9 @@ export function chatHost(o: Options) {
     if (!u) return json(res, 404, { error: 'This upload link has run out. Choose the file again.' }, cors)
     if (Number(req.headers['content-length']) !== u.size) return json(res, 400, { error: 'The file isn’t the size the page said.' }, cors)
     try {
-      // the bytes go on as they come, so a lease can't be retried halfway: one worker, the one leased
-      const w = await o.people.worker({ sub: u.sub }, undefined)
-      const made = await upload(w, u.name, u.size, req, u.dir) as { dir?: string; title?: string } | null
+      if (u.key) o.people.know(u.sub, u.key)
+      // the bytes go on as they come, so another worker is leased only while none have been sent
+      const made = await onWorker({ sub: u.sub }, undefined, w => upload(w, u.name, u.size, req, u.dir), false) as { dir?: string; title?: string } | null
       if (!made?.dir) throw new Error('AgentShot didn’t take the file.')
       json(res, 200, { folder: basename(made.dir), ...(made.title ? { title: made.title } : {}) }, cors)
     } catch (e) {

@@ -48,6 +48,19 @@ describe('who is asking', () => {
   })
 })
 
+describe('when Clerk itself is in trouble', () => {
+  it('says so, instead of taking the person for signed out', async () => {
+    let status = 500
+    const f = vi.fn(async () => (status === 200 ? Response.json({ sub: 'user_maya' }) : new Response('down', { status })))
+    const people = new People({ clerk: 'https://clerk.test', account: 'https://account.test', fetch: f as unknown as typeof fetch })
+    await expect(people.who('good')).rejects.toMatchObject({ status: 503 })
+    status = 429
+    await expect(people.who('good')).rejects.toBeInstanceOf(AccountError)
+    status = 200 // back: the same token is who it was
+    expect(await people.who('good')).toEqual({ sub: 'user_maya' })
+  })
+})
+
 describe('their cloud worker', () => {
   it('is leased with their AgentShot key (got with their sign-in), and kept while the lease lasts', async () => {
     const { f, people } = services()
@@ -81,6 +94,23 @@ describe('their cloud worker', () => {
     const failed = people.worker(maya, 'good')
     await expect(failed).rejects.toBeInstanceOf(AccountError)
     await expect(failed).rejects.toThrow('No cloud workers are free right now.')
+  })
+
+  it('is leased by a copy of the server that never saw their sign-in, with the key a link brought back', async () => {
+    const first = services()
+    const maya = (await first.people.who('good'))!
+    await first.people.worker(maya, 'good')
+    const key = first.people.keyOf('user_maya')!
+    expect(key).toEqual({ key: 'sk-user_maya', keyId: 'vk-user_maya' })
+    // another copy: no sign-in, no key asked for, and their worker all the same
+    const other = services()
+    expect(other.people.keyOf('user_maya')).toBeUndefined()
+    other.people.know('user_maya', key)
+    expect((await other.people.worker({ sub: 'user_maya' }, undefined)).id).toBe('w1')
+    expect(other.f.mock.calls.filter(c => String(c[0]).endsWith('/v1/key'))).toHaveLength(0)
+    // a key it has from their own sign-in isn't replaced by a link's
+    first.people.know('user_maya', { key: 'sk-old', keyId: 'vk-old' })
+    expect(first.people.keyOf('user_maya')).toEqual(key)
   })
 
   it('needs a sign-in the first time', async () => {
@@ -117,5 +147,26 @@ describe('upload links', () => {
     const up = signUpload('s3cret', { sub: 'user_maya', name: 'a.mp4', size: 1, exp: 2_000 })
     expect(readUpload('s3cret', video, 1_000)).toBeUndefined()
     expect(readLink('s3cret', up, 1_000)).toBeUndefined()
+  })
+})
+
+describe('the key a link carries', () => {
+  const key = { key: 'sk-maya-secret-key', keyId: 'vk-maya' }
+  it('comes back to the server that sealed it, from a video link and from an upload link', () => {
+    const exp = Date.now() + 60_000
+    expect(readLink('s3cret', signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp, key }))).toEqual({ sub: 'user_maya', dir: '/space/p', exp, key })
+    expect(readUpload('s3cret', signUpload('s3cret', { sub: 'user_maya', name: 'a.mp4', size: 5, exp, key }))).toEqual({ sub: 'user_maya', name: 'a.mp4', size: 5, exp, key })
+    // a link made without one is a link without one
+    expect(readLink('s3cret', signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp }))).toEqual({ sub: 'user_maya', dir: '/space/p', exp })
+  })
+
+  it('can’t be read out of the link by whoever holds it', () => {
+    const link = signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp: Date.now() + 60_000, key })
+    const shown = Buffer.from(link.split('.')[0], 'base64url').toString('utf8')
+    expect(shown).toContain('user_maya')
+    expect(shown).not.toContain('sk-maya-secret-key')
+    expect(shown).not.toContain(Buffer.from('sk-maya-secret-key').toString('base64url').slice(0, 12))
+    // sealed afresh each time: two links for the same person don't show the same bytes
+    expect(signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp: 1e15, key })).not.toBe(signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp: 1e15, key }))
   })
 })

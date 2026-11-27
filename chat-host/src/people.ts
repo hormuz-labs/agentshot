@@ -7,7 +7,7 @@ import type { Worker } from './worker.ts'
 
 export type Person = { sub: string; email?: string }
 type Fetch = typeof fetch
-type Key = { key: string; keyId: string }
+export type Key = { key: string; keyId: string }
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex')
 
@@ -35,6 +35,8 @@ export class People {
     const known = this.seen.get(id)
     if (known && known.until > now) return known.person
     const res = await this.o.fetch(`${this.o.clerk}/oauth/userinfo`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) })
+    // Clerk itself in trouble says nothing about the token: that is thrown, never taken for "signed out"
+    if (res.status >= 500 || res.status === 429) throw new AccountError(503, 'AgentShot can’t check who is signed in just now. Try again in a moment.')
     if (!res.ok) { this.seen.delete(id); return undefined }
     const info = await res.json() as { sub?: string; email?: string }
     if (!info.sub) return undefined
@@ -61,6 +63,12 @@ export class People {
     this.keys.set(person.sub, key)
     return key
   }
+
+  /** Their key as this server has it (once they've asked with their sign-in): what a link carries, sealed. */
+  keyOf(sub: string): Key | undefined { return this.keys.get(sub) }
+  /** The key a link of this server's brought back: this copy of the server may never have seen their sign-in (another
+   *  copy made the link, or this one started again since), and can lease their worker all the same. */
+  know(sub: string, key: Key) { if (!this.keys.has(sub)) this.keys.set(sub, key) }
 
   /** Their cloud worker: the one leased, while the lease lasts, else a new lease. [fresh]: the one leased stopped
    *  answering for them (it went, or the lease moved), so lease again. */

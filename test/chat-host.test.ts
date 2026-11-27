@@ -17,7 +17,7 @@ import { APP_MIME, EDITOR_URI } from '../src/shared/editor-view'
 const cleanups: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const c of cleanups.splice(0).reverse()) await c() })
 
-async function setup(o: { projects?: number } = {}) {
+async function setup(o: { projects?: number; firstLeaseUrls?: string[] } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'chat-host-')); cleanups.push(() => rm(root, { recursive: true, force: true }))
   const projects = await Promise.all(Array.from({ length: o.projects ?? 2 }, async (_, i) => {
     const dir = join(root, `film-${i + 1}`)
@@ -35,6 +35,8 @@ async function setup(o: { projects?: number } = {}) {
     ]
     if (method === 'outside:call') {
       const [dir, name] = args as [string, string]
+      // the worker goes away in the middle of the work
+      if (name === 'ffmpeg') { void bridge.stop(); return new Promise(() => {}) }
       if (name === 'open_editor') return { content: [{ type: 'text', text: 'open' }], structuredContent: { folder: 'x', media: 'agentshot-worker-media:/', project: { dir } } }
       return { content: [{ type: 'text', text: `${name} on ${dir}` }] }
     }
@@ -49,7 +51,7 @@ async function setup(o: { projects?: number } = {}) {
     if (!into) projects.push({ dir, title: basename(file) })
     return { dir, title: basename(file) }
   })
-  const bridge = new MobileBridge({ invoke, projects: () => projects, importFile, galleryFile: () => new Response(''), stateFile: join(root, 'bridge.json'), pool: true })
+  const bridge: MobileBridge = new MobileBridge({ invoke, projects: () => projects, importFile, galleryFile: () => new Response(''), stateFile: join(root, 'bridge.json'), pool: true })
   cleanups.push(() => bridge.stop())
   const status = await bridge.start()
   const creds = bridge.workerCredentials() as { secret: string; fingerprint: string }
@@ -58,11 +60,13 @@ async function setup(o: { projects?: number } = {}) {
   // as if Maya made them (the bridge records that when a lessee creates a project)
   for (const p of projects) (bridge as unknown as { claim(r: unknown, who: string): void }).claim(p, 'user_maya')
   // Clerk and the account service
+  let leases = 0
   const f = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const u = String(url), bearer = /^Bearer (.+)$/.exec(new Headers(init?.headers).get('authorization') || '')?.[1]
+    if (u.endsWith('/oauth/userinfo') && bearer === 'while-clerk-is-down') return new Response('down', { status: 502 })
     if (u.endsWith('/oauth/userinfo')) return bearer === 'maya-token' ? Response.json({ sub: 'user_maya', email: 'maya@example.com' }) : new Response('', { status: 401 })
     if (u.endsWith('/v1/key')) return Response.json({ key: 'sk-maya', key_id: 'vk-maya' })
-    if (u.endsWith('/v1/workers/lease')) return Response.json({ worker: { id: 'w1', urls: status.addresses.slice(0, 1), fingerprint: creds.fingerprint, token: signWorkerToken(creds.secret, 'user_maya', true, until), expiresAt: until } })
+    if (u.endsWith('/v1/workers/lease')) return Response.json({ worker: { id: 'w1', urls: (++leases === 1 && o.firstLeaseUrls) || status.addresses.slice(0, 1), fingerprint: creds.fingerprint, token: signWorkerToken(creds.secret, 'user_maya', true, until), expiresAt: until } })
     return new Response('', { status: 404 })
   })
   const people = new People({ clerk: 'https://clerk.test', account: 'https://account.test', fetch: f as typeof fetch })
@@ -79,7 +83,15 @@ async function setup(o: { projects?: number } = {}) {
     cleanups.push(() => client.close())
     return client
   }
-  return { base, chat, invoke, projects, importFile }
+  /** Another copy of the server (as Kubernetes runs two), which has seen nobody sign in: same secret, nothing shared. */
+  const anotherCopy = async () => {
+    const copy = createServer(chatHost({ publicUrl: base, clerk: 'https://clerk.test', people: new People({ clerk: 'https://clerk.test', account: 'https://account.test', fetch: f as typeof fetch }), secret: 'link-secret', page: () => '' }))
+    await new Promise<void>(ok => copy.listen(0, '127.0.0.1', ok))
+    cleanups.push(() => new Promise(ok => copy.close(ok)))
+    return `http://127.0.0.1:${(copy.address() as { port: number }).port}`
+  }
+  const asked = (path: string) => f.mock.calls.filter(c => String(c[0]).endsWith(path)).length
+  return { base, chat, invoke, projects, importFile, anotherCopy, asked }
 }
 
 const send = (url: string, method: string, body?: Buffer, headers: Record<string, string> = {}) => new Promise<{ status: number; body: string; headers: Record<string, unknown> }>((ok, fail) => {
@@ -148,6 +160,48 @@ describe('AgentShot in a chat on the web', () => {
     // another file outside the project, a changed link: nothing
     expect((await get(`${media}..%2F..%2Fetc%2Fpasswd`)).status).toBe(404)
     expect((await get(`${media.replace(/\.[^.]+\/$/, '.forged/')}media/talk.mp4`)).status).toBe(404)
+  })
+})
+
+describe('more than one copy of the server', () => {
+  it('plays a video link, and takes an upload, on a copy that didn’t make the link and never saw the sign-in', async () => {
+    const { chat, base, anotherCopy, importFile } = await setup()
+    const c = await chat()
+    const media = ((await c.callTool({ name: 'open_editor', arguments: {} })) as { structuredContent: { media: string } }).structuredContent.media
+    const other = await anotherCopy()
+    expect(await get(`${media.replace(base, other)}media/talk.mp4`, { range: 'bytes=2-4' })).toMatchObject({ status: 206, body: '234' })
+    const { url } = ((await c.callTool({ name: 'upload_start', arguments: { name: 'b-roll.mp4', size: 5 } })) as { structuredContent: { url: string } }).structuredContent
+    expect((await send(url.replace(base, other), 'PUT', Buffer.from('hello'))).status).toBe(200)
+    expect(importFile).toHaveBeenCalledTimes(1)
+    // the key that rides in the link is sealed: it isn't in the address
+    expect(Buffer.from(media.split('/media/')[1].split('.')[0], 'base64url').toString()).not.toContain('sk-maya')
+  })
+})
+
+describe('when something behind it is in trouble', () => {
+  it('doesn’t tell the chat to sign in again while Clerk can’t be asked', async () => {
+    const { base } = await setup()
+    const r = await send(`${base}/mcp`, 'POST', Buffer.from('{}'), { authorization: 'Bearer while-clerk-is-down', 'content-type': 'application/json' })
+    expect(r.status).toBe(503)
+    expect(r.headers['www-authenticate']).toBeUndefined()
+    expect(r.headers['retry-after']).toBe('5')
+  })
+
+  it('leases again when the worker held can’t be reached: nothing was sent, so nothing runs twice', async () => {
+    const { chat, invoke, asked } = await setup({ firstLeaseUrls: ['https://127.0.0.1:1'] })
+    const r = (await (await chat()).callTool({ name: 'project_state', arguments: {} })) as { isError?: boolean }
+    expect(r.isError).toBeFalsy()
+    expect(asked('/v1/workers/lease')).toBe(2)
+    expect(invoke.mock.calls.filter(c => c[0] === 'outside:call')).toHaveLength(1)
+  })
+
+  it('never runs a tool a second time when the worker went away in the middle of it', async () => {
+    const { chat, invoke, asked } = await setup()
+    const r = (await (await chat()).callTool({ name: 'ffmpeg', arguments: { args: ['-i', 'a.mp4', 'b.mp4'] } })) as { isError: boolean; content: { text: string }[] }
+    expect(r.isError).toBe(true)
+    expect(r.content[0].text).toMatch(/stopped answering/)
+    expect(invoke.mock.calls.filter(c => c[0] === 'outside:call')).toHaveLength(1)
+    expect(asked('/v1/workers/lease')).toBe(1) // and no new worker was taken to try it on
   })
 })
 

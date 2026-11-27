@@ -51,7 +51,7 @@ chat-host ──/oauth/userinfo──▶ Clerk                          who is i
 | `PUBLIC_URL` | where it is, e.g. `https://mcp.agentshot.si` |
 | `CLERK_ISSUER` | `https://clerk.agentshot.si` |
 | `ACCOUNT_URL` | the account service, inside the cluster: `http://account` |
-| `LINK_SECRET` | signs the editor's video links |
+| `LINK_SECRET` | signs the editor's video and upload links, and seals the person's AgentShot key inside them (so any copy of the server can serve a link); the same in every copy |
 | `EDITOR_PAGE` | the built editor page (`npm run chat-host:build` makes it beside the bundled server) |
 | `PORT` | 8080 |
 
