@@ -58,11 +58,15 @@ export const mobileSchemas = {
   'browser:navigate': z.tuple([z.url().refine(s => /^https?:\/\//.test(s))]),
   'browser:back': z.tuple([]), 'browser:forward': z.tuple([]), 'browser:reload': z.tuple([]), 'browser:new': z.tuple([]),
   'browser:select': z.tuple([z.number().int().positive()]), 'browser:close': z.tuple([z.number().int().positive()]),
+  // the MCP tools (src/main/mcp.ts), for AgentShot in Claude or ChatGPT (chat-host): what they are, and one call on a
+  // project; each tool checks its own arguments
+  'outside:tools': z.tuple([]),
+  'outside:call': z.tuple([dir, z.string().regex(/^[a-z][a-z0-9_]{0,63}$/), z.record(z.string(), z.unknown())]),
 } satisfies Record<string, z.ZodType>
 export function mobileArgs(method: string, args: unknown): unknown[] {
   if (!Object.hasOwn(mobileSchemas, method)) throw new Error('Unsupported mobile method')
   return (mobileSchemas[method as keyof typeof mobileSchemas] as z.ZodType<unknown[]>).parse(args)
 }
 export function projectArgument(method: string): boolean {
-  return /^(project:(open|peek|close|delete|decide|current|removeFiles)|agent:(attach|stop|send|models|setModel|newConversation|switch|rename)|timeline:|history:|transcript:|preview:|mobile:export|clip:|media:thumbnails|demo:|mix:|export:run)/.test(method)
+  return /^(project:(open|peek|close|delete|decide|current|removeFiles)|agent:(attach|stop|send|models|setModel|newConversation|switch|rename)|timeline:|history:|transcript:|preview:|mobile:export|clip:|media:thumbnails|demo:|mix:|export:run|outside:call)/.test(method)
 }

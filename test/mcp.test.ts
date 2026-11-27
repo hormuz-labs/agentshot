@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, request } from 'node:http'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { callTool, OutsideAccess, pickProject, toolList, type Editor } from '../src/main/mcp'
+import { APP_MIME, EDITOR_URI } from '../src/shared/editor-view'
 import { startAgent } from '../src/main/agent'
 import { ClaudeCodeConnection } from '../src/main/claude-code'
 import { Memory } from '../src/main/memory'
@@ -14,6 +15,7 @@ import { Skills } from '../src/main/skills'
 
 vi.mock('node:child_process', async importOriginal => ({ ...await importOriginal<typeof import('node:child_process')>(), execFile: vi.fn() }))
 
+type Any = Record<string, any>
 const A = { dir: '/films/holiday', title: 'Holiday' }, B = { dir: '/films/launch-2', title: 'Launch' }
 const never = new AbortController().signal
 
@@ -234,5 +236,224 @@ describe('adding AgentShot to Claude Code', () => {
       ['mcp', 'remove', '--scope', 'user', 'agentshot'],
       ['mcp', 'add', '--scope', 'user', '--transport', 'http', 'agentshot', 'http://127.0.0.1:48620/mcp', '--header', 'Authorization: Bearer secret'],
     ])
+  })
+})
+
+describe('the editor inside Claude and ChatGPT (an MCP App)', () => {
+  const PAGE = '<!doctype html><title>AgentShot editor</title>'
+  /** A real project folder with one file, and an editor that knows it. */
+  function withProject() {
+    const dir = mkdtempSync(join(tmpdir(), 'agentshot-app-'))
+    mkdirSync(join(dir, 'media'))
+    writeFileSync(join(dir, 'media', 'talk.mp4'), Buffer.from('0123456789'))
+    writeFileSync(join(dir, 'project.json'), '{"secret":true}')
+    const project = {
+      id: 'p', title: 'Talk', dir, createdAt: 1, notes: [], current: 'v1',
+      versions: [{ id: 'v1', path: 'media/talk.mp4', title: 'Original', createdAt: 1, by: 'import' as const }],
+      media: { 'media/talk.mp4': { duration: 10, width: 640, height: 360, fps: 30 } as never },
+      timeline: { width: 640, height: 360, fps: 30, items: [{ id: 'a', kind: 'media' as const, src: 'media/talk.mp4', in: 0, out: 10 }] },
+    }
+    return editor({ projects: () => [{ dir, title: 'Talk' }], snapshot: d => (d === dir ? { project, edited: false } : undefined), page: () => PAGE, invoke: vi.fn(async (method: string, args: unknown[]) => ({ method, args })) })
+  }
+  function get(url: string, headers: Record<string, string> = {}, method = 'GET') {
+    return new Promise<{ status: number; body: string; headers: Record<string, unknown> }>((ok, fail) => {
+      const req = request(url, { method, headers }, res => { let body = ''; res.on('data', c => { body += c }); res.on('end', () => ok({ status: res.statusCode!, body, headers: res.headers })) })
+      req.on('error', fail); req.end()
+    })
+  }
+  async function opened() {
+    const r = await running(withProject())
+    const client = await connect(r.url, r.token)
+    const result = await client.callTool({ name: 'open_editor', arguments: {} }) as { isError?: boolean; content: { text: string }[]; structuredContent: { media: string; folder: string; project: { dir: string; title: string } } }
+    return { ...r, client, result }
+  }
+
+  it('offers open_editor to the model, linked to the page, and the page’s own tool to the page only', () => {
+    const tools = toolList(withProject())
+    const open = tools.find(t => t.name === 'open_editor')!
+    expect(open._meta).toMatchObject({ ui: { resourceUri: EDITOR_URI }, 'openai/outputTemplate': EDITOR_URI })
+    const view = tools.find(t => t.name === 'editor_view')!
+    expect(view._meta).toMatchObject({ ui: { resourceUri: EDITOR_URI, visibility: ['app'] } })
+  })
+
+  it('has no editor where the app can’t show one', () => {
+    expect(toolList(editor()).map(t => t.name)).not.toContain('open_editor')
+  })
+
+  it('serves the page as an MCP App that may play video from this server only', async () => {
+    const r = await running(withProject())
+    const client = await connect(r.url, r.token)
+    expect((await client.listResources()).resources).toEqual([expect.objectContaining({ uri: EDITOR_URI, mimeType: APP_MIME })])
+    const read = await client.readResource({ uri: EDITOR_URI })
+    const page = read.contents[0] as { uri: string; mimeType: string; text: string; _meta: Any }
+    expect(page).toMatchObject({ uri: EDITOR_URI, mimeType: APP_MIME, text: PAGE })
+    expect(page._meta.ui.csp).toEqual({ resourceDomains: [new URL(r.url).origin], frameDomains: [new URL(r.url).origin], connectDomains: [] })
+    expect(page._meta.ui.permissions).toEqual({ microphone: {} })
+    await expect(client.readResource({ uri: 'ui://agentshot/other.html' })).rejects.toThrow()
+  })
+
+  it('opens the editor on the project, with an address its video plays from', async () => {
+    const { result, url } = await opened()
+    expect(result.isError).toBeFalsy()
+    expect(result.content[0].text).toMatch(/editor/i)
+    expect(result.structuredContent.media).toMatch(new RegExp(`^${new URL(url).origin}/media/[A-Za-z0-9_-]{20,}/$`))
+    expect(result.structuredContent.project).toMatchObject({ title: 'Talk' })
+    // when it was opened: the page asks to go beside the chat only then, not each time the chat draws an old card again
+    expect(Math.abs((result.structuredContent as unknown as { openedAt: number }).openedAt - Date.now())).toBeLessThan(5000)
+    expect(result.structuredContent.folder).toBe(result.structuredContent.project.dir.split('/').pop())
+  })
+
+  it('plays the film’s files from that address, in ranges, to the page’s frame', async () => {
+    const { result } = await opened()
+    const base = result.structuredContent.media
+    const whole = await get(base + 'media/talk.mp4', { origin: 'https://abc.claudemcpcontent.com' })
+    expect(whole).toMatchObject({ status: 200, body: '0123456789' })
+    expect(whole.headers['content-type']).toBe('video/mp4')
+    expect(await get(base + 'media/talk.mp4', { range: 'bytes=2-4' })).toMatchObject({ status: 206, body: '234' })
+  })
+
+  it('gives out nothing else: other files, other keys, other hosts, writes', async () => {
+    const { result, url } = await opened()
+    const base = result.structuredContent.media, origin = new URL(url).origin
+    expect((await get(base + 'project.json')).status).toBe(404)
+    expect((await get(base + '..%2Fproject.json')).status).toBe(404)
+    expect((await get(base + 'media/../project.json')).status).toBe(404)
+    expect((await get(`${origin}/media/not-the-key/media/talk.mp4`)).status).toBe(404)
+    expect((await get(base + 'media/talk.mp4', { host: 'evil.example' })).status).toBe(403)
+    expect((await get(base + 'media/talk.mp4', {}, 'POST')).status).toBe(405)
+  })
+
+  it('keeps a copy of the page beside the tools, for the launcher to answer with while AgentShot is closed', async () => {
+    const r = await running(withProject())
+    const client = await connect(r.url, r.token)
+    await client.listTools()
+    const kept = JSON.parse(readFileSync(join(r.file, '..', 'outside-resources.json'), 'utf8'))
+    expect(kept.resources).toEqual([expect.objectContaining({ uri: EDITOR_URI, mimeType: APP_MIME })])
+    expect(kept.read[EDITOR_URI]).toEqual(await client.readResource({ uri: EDITOR_URI }))
+  })
+
+  it('sends a light copy of a film file through MCP itself, in pieces, for chats that won’t load video from this computer', async () => {
+    const e = withProject()
+    const dir = e.projects()[0].dir
+    const light = join(dir, 'light.mp4')
+    writeFileSync(light, Buffer.from('x'.repeat(10)))
+    e.preview = vi.fn(async () => light)
+    const tools = toolList(e)
+    expect(tools.find(t => t.name === 'editor_media')!._meta).toMatchObject({ ui: { visibility: ['app'] } })
+    const first = await callTool(e, 'editor_media', { src: 'media/talk.mp4' }, never, 'x', () => 'm/')
+    expect(first.isError).toBeFalsy()
+    expect(e.preview).toHaveBeenCalledWith(dir, 'media/talk.mp4', never)
+    expect(first.structuredContent).toEqual({ mime: 'video/mp4', size: 10, offset: 0, base64: Buffer.from('x'.repeat(10)).toString('base64') })
+    const later = await callTool(e, 'editor_media', { src: 'media/talk.mp4', offset: 6 }, never, 'x', () => 'm/')
+    expect(later.structuredContent).toMatchObject({ offset: 6, base64: Buffer.from('xxxx').toString('base64') })
+    expect((await callTool(e, 'editor_media', { src: 'project.json' }, never, 'x', () => 'm/')).isError).toBe(true)
+    expect((await callTool(e, 'editor_media', { src: 'media/talk.mp4', offset: 7 }, never, 'x', () => 'm/')).isError).toBe(true) // not on a piece boundary
+    // a picture is sent as it is, not as a copy
+    const snap = e.snapshot!(dir)!.project
+    snap.media['media/logo.png'] = { duration: 0, width: 10, height: 10 } as never
+    writeFileSync(join(dir, 'media', 'logo.png'), Buffer.from('png!'))
+    const logo = await callTool(e, 'editor_media', { src: 'media/logo.png' }, never, 'x', () => 'm/')
+    expect(logo.structuredContent).toMatchObject({ mime: 'image/png', size: 4, base64: Buffer.from('png!').toString('base64') })
+    expect(e.preview).toHaveBeenCalledTimes(2)
+  })
+
+  it('runs the film panel’s own calls for the page, on its project, checked as the phone’s are', async () => {
+    const e = withProject()
+    const dir = e.projects()[0].dir
+    const tools = toolList(e)
+    expect(tools.find(t => t.name === 'editor_call')!._meta).toMatchObject({ ui: { visibility: ['app'] } })
+    const run = (method: string, args: unknown[]) => callTool(e, 'editor_call', { method, args }, never, 'x', () => 'm/')
+    const edited = await run('timeline:edit', [dir, [{ op: 'split', at: 2 }]])
+    expect(edited.isError).toBeFalsy()
+    expect(e.invoke).toHaveBeenCalledWith('timeline:edit', [dir, [{ op: 'split', at: 2 }]])
+    expect(edited.structuredContent).toEqual({ value: { method: 'timeline:edit', args: [dir, [{ op: 'split', at: 2 }]] } })
+    expect((await run('project:decide', [dir, true])).isError).toBeFalsy()
+    // not the panel's: the agent, keys, other projects
+    for (const [m, a] of [['agent:send', [dir, { text: 'hi' }]], ['keys:set', ['OPENAI_API_KEY', 'x']], ['project:open', [dir]]] as const) {
+      const r = await run(m, [...a])
+      expect(r.isError, m).toBe(true)
+      expect(r.content[0].text, m).toMatch(/editor can’t/)
+    }
+    expect((await run('timeline:undo', ['/films/someone-else', false])).isError).toBe(true)
+    // checked like the phone's: a malformed edit never reaches the app
+    expect((await run('timeline:edit', [dir, [{ op: 'split', at: -5 }]])).isError).toBe(true)
+    expect(e.invoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends thumbnails as pictures the page can show, whichever way its video comes', async () => {
+    const e = withProject()
+    const dir = e.projects()[0].dir
+    const jpg = join(dir, 'thumb.jpg'); writeFileSync(jpg, Buffer.from([0xff, 0xd8, 0xff]))
+    e.invoke = vi.fn(async () => [jpg])
+    const r = await callTool(e, 'editor_call', { method: 'media:thumbnails', args: [dir, 'media/talk.mp4', 1] }, never, 'x', () => 'm/')
+    expect(r.structuredContent).toEqual({ value: ['data:image/jpeg;base64,/9j/'] })
+  })
+
+  it('takes a voiceover recorded in the page as base64, for the app as bytes', async () => {
+    const e = withProject()
+    e.invoke = vi.fn(async () => ({ src: 'voiceovers/a.webm' }))
+    const r = await callTool(e, 'editor_call', { method: 'voiceover:save', args: ['token-1', Buffer.from('opus').toString('base64'), [0.1, 0.5]] }, never, 'x', () => 'm/')
+    expect(r.isError).toBeFalsy()
+    const [, args] = vi.mocked(e.invoke!).mock.calls[0]
+    expect(args[0]).toBe('token-1')
+    expect(Buffer.from(args[1] as Uint8Array).toString()).toBe('opus')
+    expect(args[2]).toEqual([0.1, 0.5])
+  })
+
+  it('forgets every address when switched off', async () => {
+    const { result, access } = await opened()
+    await access.set(false); await access.set(true)
+    const port = new URL(access.url).port
+    expect((await get(result.structuredContent.media.replace(/:\d+\//, `:${port}/`) + 'media/talk.mp4')).status).toBe(404)
+  })
+  it('doesn’t count the page’s own calls as an agent at work: it looks again every few seconds', async () => {
+    const e = withProject()
+    const seen = vi.fn(); e.seen = seen
+    const dir = e.projects()[0].dir
+    await callTool(e, 'editor_view', {}, never, 'Chat', () => 'm/')
+    await callTool(e, 'editor_call', { method: 'timeline:edit', args: [dir, [{ op: 'split', at: 2 }]] }, never, 'Chat', () => 'm/')
+    await callTool(e, 'editor_media', { src: 'project.json' }, never, 'Chat', () => 'm/')
+    expect(seen).not.toHaveBeenCalled()
+    // the agent opening the editor, or using a tool, is
+    await callTool(e, 'open_editor', {}, never, 'Chat', () => 'm/')
+    await callTool(e, 'seek', { t: 1 }, never, 'Chat', () => 'm/')
+    expect(seen.mock.calls.map(c => c[2])).toEqual(['open_editor', 'seek'])
+  })
+
+  it('shows only this project’s files in the file manager, however the path is written', async () => {
+    const e = withProject()
+    const dir = e.projects()[0].dir
+    const run = (file: string) => callTool(e, 'editor_call', { method: 'export:reveal', args: [file] }, never, 'x', () => 'm/')
+    expect((await run(join(dir, 'exports', 'film.mp4'))).isError).toBeFalsy()
+    expect(e.invoke).toHaveBeenLastCalledWith('export:reveal', [join(dir, 'exports', 'film.mp4')])
+    for (const out of [`${dir}/../../etc/hosts`, `${dir}/exports/../../elsewhere/film.mp4`, 'exports/film.mp4', `${dir}-other/film.mp4`]) {
+      const r = await run(out)
+      expect(r.isError, out).toBe(true)
+      expect(r.content[0].text, out).toMatch(/only show this project/)
+    }
+    expect(e.invoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('from somewhere else (through the bridge: a chat on the web, a cloud lessee): nothing of this computer’s own', async () => {
+    const e = withProject()
+    const dir = e.projects()[0].dir
+    // no add_files, listed or called: it copies any path on this computer
+    expect(toolList(e, true).map(t => t.name)).not.toContain('add_files')
+    expect(toolList(e).map(t => t.name)).toContain('add_files')
+    const file = join(dir, 'media', 'talk.mp4')
+    const added = await callTool(e, 'add_files', { path: file }, never, 'Chat', () => 'm/', true)
+    expect(added).toMatchObject({ isError: true, content: [{ text: 'AgentShot has no tool called add_files.' }] })
+    expect(e.addFiles).not.toHaveBeenCalled()
+    // no file manager, no save dialog: there is no screen there to show them on
+    const run = (method: string, args: unknown[], remote: boolean) => callTool(e, 'editor_call', { method, args }, never, 'Chat', () => 'm/', remote)
+    for (const [m, a] of [['project:reveal', [dir]], ['project:revealFile', [dir, 'media/talk.mp4']], ['project:downloadFile', [dir, 'media/talk.mp4']], ['export:reveal', [join(dir, 'film.mp4')]]] as const) {
+      const r = await run(m, [...a], true)
+      expect(r.isError, m).toBe(true)
+      expect(r.content[0].text, m).toBe('Do this in the AgentShot app.')
+    }
+    expect(e.invoke).not.toHaveBeenCalled()
+    // editing is the same from anywhere; and on this computer those calls still work
+    expect((await run('timeline:edit', [dir, [{ op: 'split', at: 2 }]], true)).isError).toBeFalsy()
+    expect((await run('project:revealFile', [dir, 'media/talk.mp4'], false)).isError).toBeFalsy()
   })
 })

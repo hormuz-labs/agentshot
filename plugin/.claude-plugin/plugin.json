@@ -1,0 +1,24 @@
+{
+  "name": "agentshot",
+  "version": "0.2.0",
+  "description": "Edit video from Claude Code with AgentShot, the open-source editor on your own computer: transcripts, cuts, titles and exports, each new cut a Before / After you keep or send back.",
+  "author": {
+    "name": "Hormuz Labs",
+    "url": "https://agentshot.si"
+  },
+  "homepage": "https://agentshot.si",
+  "repository": "https://github.com/hormuz-labs/agentshot",
+  "license": "GPL-3.0-or-later",
+  "network": {
+    "hosts": [
+      "127.0.0.1"
+    ]
+  },
+  "keywords": [
+    "video",
+    "video-editing",
+    "editor",
+    "captions",
+    "mcp"
+  ]
+}

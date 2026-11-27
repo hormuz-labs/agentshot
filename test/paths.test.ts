@@ -2,7 +2,7 @@ import { posix, win32 } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { decodeMediaPath, encodeMediaPath, filesystemSlug, pathBasename, toPortablePath } from '../src/shared/paths'
 import { envPath, executableName, isWithinDir, relativeProjectPath, withToolPath } from '../src/main/paths'
-import { mediaUrl } from '../src/renderer/src/lib/utils'
+import { mediaUrl, setMediaResolver } from '../src/renderer/src/lib/utils'
 
 describe('media URL contract', () => {
   it.each([
@@ -24,8 +24,14 @@ describe('media URL contract', () => {
     expect(decodeMediaPath(encoded, platform)).toBe(decodeMediaPath(url, platform))
   })
 
-  it('uses exactly the same encoder in the renderer', () => {
-    expect(mediaUrl).toBe(encodeMediaPath)
+  it('encodes in the renderer exactly as the main process does', () => {
+    for (const path of ['/home/me/My project/clips/title/clip.html', String.raw`D:\My project\clips\title\clip.html`, '/a/b#c?d.mp4']) expect(mediaUrl(path)).toBe(encodeMediaPath(path))
+  })
+
+  it('plays from elsewhere only where a page outside the app says so (the editor in a chat)', () => {
+    setMediaResolver(path => `https://media.test${path}`)
+    try { expect(mediaUrl('/films/a.mp4')).toBe('https://media.test/films/a.mp4') } finally { setMediaResolver(undefined) }
+    expect(mediaUrl('/films/a.mp4')).toBe(encodeMediaPath('/films/a.mp4'))
   })
 
   it.each([

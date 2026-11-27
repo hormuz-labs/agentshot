@@ -1,41 +1,30 @@
 // A project on screen: the conversation first, the film beside it (the proposal to decide on, the picture, the timeline).
 // Point at the film (a box, a range, N for the moment) and say what should change, right there or in the chat.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Clapperboard, Globe, Images, MessagesSquare, PanelRight, Loader2, Upload, Check, FolderOpen, MessageSquarePlus, Pause, Play, SquareDashed, X, SplitSquareHorizontal, MoveHorizontal, Mic } from 'lucide-react'
-import { VoiceoverRecorder } from './VoiceoverPanel'
-import type { LiveVoiceover } from './VoiceoverTimeline'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Clapperboard, Globe, Images, MessagesSquare, PanelRight, Upload, FolderOpen } from 'lucide-react'
 import { voiceoverName } from '../../../shared/voiceover'
 import { JobsTray } from '@/components/JobsTray'
 import { HistoryButton } from '@/components/HistoryButton'
 import { Conversations } from '@/components/Conversations'
 import { InlineAsk } from '@/components/InlineAsk'
-import { GoToTime } from '@/components/GoToTime'
 import { useCommands } from '@/lib/commands'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
 import { paneStyle, Resizer, useWidth } from '@/components/ui/resizer'
-import { Kbd } from '@/components/ui/kbd'
 import { useAgent } from '@/lib/agui'
 import { addFiles, attachFiles, clearAttached, detachFiles, pickFiles, useAttached } from '@/lib/attach'
 import { MAC, REVEAL, cn, mediaUrl, timecode } from '@/lib/utils'
+import { FilmPanel, useFilm } from './FilmPanel'
 import { AgentPanel } from './AgentPanel'
 import { BrowserPanel } from './BrowserPanel'
 import { FootagePanel } from './FootagePanel'
-import { EditStatus } from './EditStatus'
-import { ClipEditor } from './ClipEditor'
 import { ExportDialog } from './ExportDialog'
 import { DemoFollowup } from './DemoFollowup'
 import { CameraControls } from './CameraControls'
 import { VideoControls } from './VideoControls'
-import { useLiveMix, type MixSource } from '@/lib/liveMix'
-import { dbToGain, type Mix } from '../../../shared/mix'
-import { sameCut, sourceAt, timelineOfFile, itemAt, starts, length, type Edit } from '../../../shared/timeline'
-import { usePreview } from '@/lib/preview'
 import { demoOutputMessage } from '@/lib/demo-output'
-import { cameraAt, cameraRange } from '../../../shared/demo'
-import { Scrubber } from './Scrubber'
-import { Stage, type LiveEdit, type StageHandle } from './Stage'
-import type { Anchor, Box, Project } from '../../../shared/types'
+import { cameraAt } from '../../../shared/demo'
+import type { Anchor, Project } from '../../../shared/types'
 import { appendRange, parseRangeNotes } from '../../../shared/range-notes'
 
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
@@ -43,23 +32,13 @@ const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error
 export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, active = true, lead }: { initial: Project; firstPrompt?: string; firstFiles?: string[]; onKeys(): void; ready: boolean; active?: boolean; lead?: ReactNode }) {
   const [p, setP] = useState(initial)
   const agent = useAgent(p.dir)
-  const stage = useRef<StageHandle>(null)
   const input = useRef<HTMLTextAreaElement>(null)
-  const [time, setTime] = useState(0)
-  const [selectedPiece, setSelectedPiece] = useState<string | null>(null)
-  const [moveMode, setMoveMode] = useState(false)
-  const [duration, setDuration] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const [voiceoverOpen, setVoiceoverOpen] = useState(false)
-  const [recordingVoiceover, setRecordingVoiceover] = useState(false)
-  const [liveVoiceover, setLiveVoiceover] = useState<LiveVoiceover | null>(null)
-  const [voiceoverNotice, setVoiceoverNotice] = useState('')
+  // the film beside the chat (FilmPanel): what it plays and how it edits
+  const film = useFilm({ p, setP, fail: e => alert(clean(e)) })
+  const { stage, goTo, time, duration, recordingVoiceover, compare, cameraMode, setCameraMode, videoEditing, setVideoEditing, setEditing } = film
   const [anchor, setAnchor] = useState<Anchor | undefined>()
   const [draft, setDraft] = useState('')
   const focusRange = useRef(false)
-  const goTo = useRef<HTMLInputElement>(null)
-  // a typed time: the zoomed timeline scrolls to show it
-  const [reveal, setReveal] = useState({ t: 0, key: 0 })
   useLayoutEffect(() => {
     if (!focusRange.current || !input.current) return
     focusRange.current = false
@@ -69,19 +48,11 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   // files attached to the next message: ones just added, or picked in the sidebar's tree
   const attached = useAttached(p.dir)
   const [drawing, setDrawing] = useState(false)
-  const [compare, setCompare] = useState<'after' | 'before'>('after')
   const [over, setOver] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [demoAdjusting, setDemoAdjusting] = useState(false)
   const openAdjustment = useRef(false)
-  const [cameraMode, setCameraMode] = useState<'move' | 'frame' | null>(null)
-  const [videoEditing, setVideoEditing] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [source, setSource] = useState<MixSource | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [regions, setRegions] = useState<[number, number][]>([])
-  // a motion clip open on the picture, to adjust or point at one of its elements
-  const [editing, setEditing] = useState<{ itemId: string; clip: string; start: number } | null>(null)
   const started = useRef(false)
   const [browsing, setBrowsing] = useState(false)
   // every file brought into the project, as pictures (beside the film, in its place)
@@ -118,7 +89,6 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
 
   useEffect(() => window.agentshot.project.onChange(np => { if (np.dir === p.dir) setP(np) }), [p.dir])
   useEffect(() => window.agentshot.onSeek((dir, t) => { if (dir === p.dir && stage.current?.video) stage.current.video.currentTime = t }), [p.dir])
-  useEffect(() => { if (p.proposal) setCompare('after') }, [p.proposal])
 
   const send = useCallback(async (text: string, files = attached) => {
     const a = anchor
@@ -142,9 +112,8 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     else if (firstFiles?.length) attachFiles(p.dir, firstFiles)
   }, [firstPrompt, firstFiles, ready, send, p.dir])
 
-  const seek = (t: number) => { const v = stage.current?.video; if (v) v.currentTime = t; setTime(t) }
+  const { seek, playPause } = film
   const noteHere = () => { stage.current?.video?.pause(); setAnchor(a => (a?.t1 != null ? a : { t0: time })); setInline(true) }
-  const playPause = () => { const v = stage.current?.video; if (v) v.paused ? v.play() : v.pause() }
 
   // keyboard: Space play/pause · N note · B box · G go to a time · ←/→ ±1 s (⇧ ±5 s) · Esc clears
   useEffect(() => {
@@ -166,50 +135,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   // a background project stops playing and leaves the menu, palette and keys to the one on screen
   useEffect(() => { if (!active) stage.current?.video?.pause() }, [active])
 
-  const current = p.versions.find(v => v.id === p.current)!
-  const proposal = p.proposal ? p.versions.find(v => v.id === p.proposal) : undefined
-  const onScreen = proposal && compare === 'after' ? proposal : current
-  // The edit (p.timeline) changed since the version on screen was rendered (the agent can leave it so): it plays from
-  // its pieces until it's saved as a version.
-  const tl = p.timeline!
-  const edited = useMemo(() => !sameCut(tl, current.timeline ?? (p.media[current.path] ? timelineOfFile(current.path, p.media[current.path]) : tl)), [tl, current, p.media])
-  const live = (edited || (cameraMode && !!tl.demo) || videoEditing) && onScreen === current
-  // what the timeline shows: the edit, or the proposal's pieces while it is on screen
-  // Fallback timelines generate piece ids: retain them across clock updates so thumbnails do not remount.
-  const track = useMemo(() => onScreen === current ? tl : onScreen.timeline ?? timelineOfFile(onScreen.path, p.media[onScreen.path]), [onScreen, current, tl, p.media])
-  const manualItem = itemAt(track, time).item
-  const manualStart = manualItem ? starts(track)[track.items.indexOf(manualItem)] : 0
-  const canSplit = manualItem?.kind === 'media' && time > manualStart + .001 && time < manualStart + length(manualItem) - .001
-  useEffect(() => { if (!track.items.some(it => it.id === selectedPiece)) setSelectedPiece(null) }, [track])
-  useEffect(() => { setMoveMode(false); setSelectedPiece(null) }, [onScreen.id, !!proposal])
-  const liveEdit = useMemo<LiveEdit | null>(() => !live ? null : {
-    pieces: tl.items.map(it => it.kind === 'media'
-      ? { id: it.id, url: mediaUrl(`${p.dir}/${p.proxies?.[it.src] || it.src}`), in: it.in, out: it.out, gain: it.muted ? 0 : dbToGain(it.db || 0) }
-      : { id: it.id, url: `${mediaUrl(`${p.dir}/${p.clips?.[it.clip]?.video}`)}?v=${p.clips?.[it.clip]?.updatedAt}`, in: 0, out: it.dur, gain: 0 }),
-    fps: tl.fps, width: tl.width, height: tl.height,
-    overlays: (tl.overlays || []).filter(o => p.clips?.[o.clip]).map(o => ({ id: o.id, url: `${mediaUrl(`${p.dir}/clips/${o.clip}/clip.html`)}?v=${p.clips![o.clip].updatedAt}`, start: o.start, dur: o.dur })),
-    timeline: tl, cameraUrl: tl.demo ? mediaUrl(`${p.dir}/${cameraMode === 'frame' ? tl.demo.camera : p.proxies?.[tl.demo.camera] || tl.demo.camera}`) : undefined,
-  }, [live, tl, p.dir, p.proxies, p.clips, cameraMode])
-  // the mix the version on screen was rendered with (or the edit's), heard live over its dry film
-  const mix: Mix = (live ? tl.mix : onScreen.timeline?.mix) || { filmDb: 0 }
-  const speechKey = live ? JSON.stringify([tl.items, tl.mix?.voiceovers]) : onScreen.id
-  useEffect(() => { window.agentshot.mix.speech(p.dir, live ? 'edit' : onScreen.id).then(setRegions).catch(() => setRegions([])) }, [p.dir, speechKey, p.transcripts]) // eslint-disable-line react-hooks/exhaustive-deps
-  useLiveMix(source, p.dir, recordingVoiceover ? { filmDb: -100 } : mix, regions)
-
-  /** Change the edit by hand (a piece moved, footage dropped in): it plays at once, ⌘Z undoes it. */
-  const doEdit = async (edits: Edit[], then?: number) => {
-    try { setP(await window.agentshot.timeline.edit(p.dir, edits)); if (then != null) seek(then) } catch (e) { alert(clean(e)) }
-  }
-  const insertFootage = (rel: string, t: number) => {
-    const m = p.media[rel]
-    if (!m?.width || !(m.duration > 0)) return alert(`${rel.split('/').pop()} isn't footage that can go in the film.`)
-    doEdit([{ op: 'insert', at: t, src: rel, in: 0, out: Math.round(m.duration * 1000) / 1000 }], t)
-  }
-  const undoEdit = async (redo: boolean) => { try { setP(await window.agentshot.timeline.undo(p.dir, redo)) } catch (e) { alert(clean(e)) } }
-  const saveVersion = async () => {
-    setSaving(true)
-    try { await window.agentshot.timeline.render(p.dir) } catch (e) { alert(clean(e)) } finally { setSaving(false) }
-  }
+  const { current, proposal, tl, edited, undoEdit, saveVersion, insertFootage, doEdit, selectedVideo, revealCamera } = film
   // the menu and palette run these with what is on screen now
   const act = useRef({ undoEdit, saveVersion, edited })
   act.current = { undoEdit, saveVersion, edited }
@@ -230,27 +156,11 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
     { id: 'timeline.redo', title: 'Redo', keywords: 'timeline edit', run: () => act.current.undoEdit(true) },
     { id: 'timeline.render', title: 'Save as version', keywords: 'render timeline edit', run: () => { if (act.current.edited) act.current.saveVersion() } },
   ], [p.dir, active])
-  const playable = onScreen.dry || onScreen.path
-  const liveItem = live ? sourceAt(tl, time)?.item : undefined
-  const previewMedia = liveItem?.kind === 'media' ? liveItem.src : liveItem?.kind === 'clip' ? p.clips?.[liveItem.clip]?.video || '' : playable
-  const previewCopy = usePreview(p.dir, previewMedia)
-  const decide = async (accept: boolean) => setP(await window.agentshot.project.decide(p.dir, accept))
-  const selectedVideo = sourceAt(tl, time)?.item
   useEffect(() => {
     if (openAdjustment.current && tl.demo && !proposal) {
       openAdjustment.current = false; setDemoAdjusting(true); setCameraMode('move'); setVideoEditing(false); revealCamera(tl)
     } else { setCameraMode(null); setVideoEditing(false); setDemoAdjusting(false) }
   }, [p.current, !!proposal])
-  const revealCamera = (timeline: typeof tl) => {
-    if (timeline.demo && !cameraAt(timeline, time)) {
-      let at = 0
-      for (const it of timeline.items) {
-        const range = it.kind === 'media' && it.src === timeline.demo.screen ? cameraRange(timeline.demo, it.in, it.out) : null
-        if (range && it.kind === 'media') { seek(at + range.s - it.in + Math.min(1, (range.e - range.s) / 2)); break }
-        at += it.kind === 'media' ? it.out - it.in : it.dur
-      }
-    }
-  }
   const adjustDemo = async () => {
     stage.current?.video?.pause()
     if (proposal?.timeline?.demo) openAdjustment.current = true
@@ -281,160 +191,41 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
   ) : null
 
   /** The film's column: the proposal to decide on, the picture, the timeline, and the transport. */
-  const film = (
+  const filmColumn = (
     <div
       className={cn('relative flex min-w-0 flex-col gap-2 bg-canvas p-3', chatShut ? 'flex-1 min-w-[360px]' : 'shrink-0 border-l border-line', over && 'bg-amber-soft')}
       style={chatShut ? undefined : paneStyle(previewW)}
     >
       <Resizer pane={previewW} edge="left" label="Resize the film preview"
         snap={{ self: shut => setPreview(!shut), other: setChatShut, otherCollapsed: chatShut }} />
-      <BrowserPanel visible={browsing && active && !footage} onClose={() => setBrowsing(false)} />
-      {footage && <FootagePanel project={p} onClose={() => setFootage(false)} onInsert={rel => { setFootage(false); insertFootage(rel, time) }} />}
-      {proposal && (
-        <div data-tour="proposal" className="flex flex-wrap items-center gap-2 rounded-lg border border-amber/30 bg-amber-soft px-3 py-1.5">
-          <span className="font-medium text-amber">Proposed:</span>
-          <span className="min-w-0 flex-1 truncate">{proposal.title}</span>
-          <div className="inline-flex rounded-md border border-line bg-panel p-0.5">
-            {(['before', 'after'] as const).map(k => (
-              <button key={k} onClick={() => setCompare(k)} className={cn('rounded px-2 py-0.5 text-xs capitalize', compare === k ? 'bg-raised text-fg' : 'text-dim')}>{k}</button>
-            ))}
-          </div>
-          <Button size="sm" variant="ghost" onClick={() => decide(false)}><X />Reject</Button>
-          <Button size="sm" variant="primary" onClick={() => decide(true)}><Check />Accept</Button>
-        </div>
-      )}
-      {onScreen.timeline?.demo?.warning && <p className="px-2 text-xs text-dim">{onScreen.timeline.demo.warning}</p>}
-      {onScreen.timeline?.demo?.summary && <p data-edit-summary className="rounded-lg bg-ok/10 px-3 py-2 text-xs text-fg"><strong>Cleanup:</strong> {onScreen.timeline.demo.summary.message}</p>}
-
-      <div data-tour="picture" className="relative min-h-0 flex-1">
-        {previewCopy.state?.status === 'running' && (
-          <div data-preview-status className="pointer-events-none absolute bottom-3 left-3 right-3 z-10 flex items-center gap-2 rounded-lg bg-black/80 px-3 py-2 text-xs text-white">
-            <Loader2 className="size-4 shrink-0 animate-spin text-amber" />
-            <span>Making a preview copy for smooth playback… {Math.round((previewCopy.state.progress || 0) * 100)}%</span>
-          </div>
-        )}
-        {previewCopy.state?.status === 'failed' && <div data-preview-status className="absolute bottom-3 left-3 right-3 z-10 flex items-center gap-2 rounded-lg bg-black/80 px-3 py-2 text-xs text-white">
-          <span className="flex-1" title={previewCopy.state.error}>Preview copy failed. Playing the original where supported.</span>
-          <Button size="sm" variant="secondary" onClick={previewCopy.retry}>Retry preview</Button>
-        </div>}
-        {editing && p.clips?.[editing.clip] && (
-          <ClipEditor
-            dir={p.dir}
-            clip={p.clips[editing.clip]}
-            width={(onScreen.timeline || p.timeline)!.width}
-            height={(onScreen.timeline || p.timeline)!.height}
-            time={time - editing.start}
-            picked={anchor?.clip?.element}
-            onPick={el => { setAnchor({ t0: time, clip: { id: editing.clip, element: el } }); ask() }}
-            onClose={() => setEditing(null)}
-          />
-        )}
-        <Stage
-          ref={stage}
-          src={mediaUrl(`${p.dir}/${p.proxies?.[playable] || playable}`)}
-          edit={liveEdit}
-          cameraEditing={!!cameraMode}
-          cameraMode={cameraMode}
-          videoEditing={videoEditing}
-          onVideoFraming={framing => { if (selectedVideo?.kind === 'media') doEdit([{ op: 'frame', ids: [selectedVideo.id], framing }]) }}
-          onCameraLayout={layout => doEdit([{ op: 'camera', layout }])}
-          onSource={setSource}
-          notes={p.notes}
-          time={time}
-          drawing={drawing}
-          box={anchor?.box}
-          working={agent.busy}
-          onBox={(b: Box) => { setAnchor(a => ({ t0: a?.t0 ?? time, t1: a?.t1, box: b })); setDrawing(false); setInline(true) }}
-          ask={anchor?.box ? inlineAsk : undefined}
-          onTime={setTime}
-          onDuration={setDuration}
-          onPlaying={setPlaying}
-        />
-      </div>
-
-      <div data-contextual-tools className="max-h-[34vh] shrink-0 space-y-2 overflow-auto">
-      {!tl.demo && selectedVideo?.kind === 'media' && !proposal && <VideoControls item={selectedVideo} onEdit={doEdit} editing={videoEditing} onEditing={v => { stage.current?.video?.pause(); setVideoEditing(v); if (v) setCameraMode(null) }} />}
-      </div>
-      <div className="max-h-[42vh] shrink-0 space-y-2 overflow-y-auto">
-      <Scrubber
-        dir={p.dir}
-        revision={onScreen.createdAt}
-        fps={live ? tl.fps : p.media[onScreen.path]?.fps || 30}
-        duration={duration}
-        time={time}
-        reveal={reveal}
-        notes={p.notes}
-        range={anchor}
+      <FilmPanel
+        film={film} p={p} setP={setP} fail={e => alert(clean(e))}
+        anchor={anchor} setAnchor={setAnchor} drawing={drawing} setDrawing={setDrawing}
+        inlineAsk={inlineAsk} noteHere={noteHere} onBox={() => setInline(true)}
+        onClipPick={a => { setAnchor(a); ask() }}
+        onRange={r => { if (r) setChatShut(false) }}
+        onRangeEnd={r => {
+          focusRange.current = true
+          setDraft(text => appendRange(text, r.t0, r.t1))
+          setAnchor(undefined); setInline(false); setChatShut(false)
+        }}
         ranges={parseRangeNotes(draft).map(n => n.anchor)}
-        track={track}
-        clips={p.clips || {}}
-        voiceoverAssets={p.voiceovers}
-        liveVoiceover={liveVoiceover}
         onAttachVoiceover={src => {
           attachFiles(p.dir, [src])
           const mention = `@${voiceoverName(p.voiceovers || [], src)}`
           setDraft(text => text.includes(mention) ? text : `${text.trimEnd()}${text.trim() ? ' ' : ''}${mention} `)
           ask()
         }}
-        selected={selectedPiece ?? editing?.itemId ?? null}
-        onSelect={id => { stage.current?.video?.pause(); setSelectedPiece(id) }}
-        moveMode={moveMode}
-        onExitMove={() => setMoveMode(false)}
-        status={edited && !proposal ? <EditStatus saving={saving} onSave={saveVersion} /> : null}
-        onSeek={t => { if (!recordingVoiceover) seek(t) }}
-        onRange={r => { setAnchor(r ? { ...r, box: anchor?.box } : undefined); if (r) setChatShut(false) }}
-        onRangeEnd={r => {
-          stage.current?.video?.pause()
-          focusRange.current = true
-          setDraft(text => appendRange(text, r.t0, r.t1))
-          setAnchor(undefined); setInline(false); setChatShut(false)
+        onVoiceoverSaved={(_next, src) => {
+          attachFiles(p.dir, [src]); setChatShut(false)
+          film.setNotice('Voiceover added to your video and this chat\'s files. You can trim, move, adjust the volume, or ask for changes in the chat.')
         }}
-        ask={anchor && !anchor.box && !anchor.clip ? inlineAsk : undefined}
-        onNote={n => seek(n.anchor.t0)}
-        movable={!proposal && !recordingVoiceover}
-        onEdit={async edits => { stage.current?.video?.pause(); setP(await window.agentshot.timeline.edit(p.dir, edits)) }}
-        onMove={(id, before) => doEdit([{ op: 'move', id, ...(before ? { before } : {}) }])}
-        onInsert={insertFootage}
-        onOpenClip={(id, clip, start) => {
-          stage.current?.video?.pause()
-          seek(start + Math.min((p.clips?.[clip]?.duration ?? 2) / 2, 1))
-          setEditing({ itemId: id, clip, start })
-        }}
+        working={agent.busy} active={active}
+        overlays={<>
+          <BrowserPanel visible={browsing && active && !footage} onClose={() => setBrowsing(false)} />
+          {footage && <FootagePanel project={p} onClose={() => setFootage(false)} onInsert={rel => { setFootage(false); insertFootage(rel, time) }} />}
+        </>}
       />
-
-      <div data-timeline-transport className="flex flex-wrap items-center gap-1">
-        <Button size="iconSm" variant="ghost" disabled={recordingVoiceover} onClick={playPause}>
-          {playing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
-        </Button>
-        <GoToTime ref={goTo} time={time} duration={duration} disabled={recordingVoiceover} onGo={t => { stage.current?.video?.pause(); seek(t); setReveal(r => ({ t, key: r.key + 1 })) }} />
-        <span className="flex-1" />
-        <div data-manual-tools className="flex flex-wrap items-center gap-1">
-          <Tip label={moveMode ? 'Move mode is on. Click Move clip again to turn it off, or press Esc.' : 'Click to enable moving, then grab a clip and drag it to a new position.'}>
-            <Button size="sm" variant="ghost" className={cn('border border-transparent', moveMode && 'border-amber bg-amber-soft text-amber hover:bg-amber-soft hover:text-amber')} aria-label="Move clip" aria-pressed={moveMode} aria-describedby={moveMode ? 'move-clip-hint' : undefined} disabled={!!proposal || recordingVoiceover || track.items.length < 2} onClick={() => { stage.current?.video?.pause(); setMoveMode(v => !v) }}><MoveHorizontal />Move clip</Button>
-          </Tip>
-        <Tip label={<>Note at the playhead <Kbd>N</Kbd></>}>
-          <Button size="sm" variant="ghost" disabled={recordingVoiceover} onClick={noteHere}><MessageSquarePlus />Note</Button>
-        </Tip>
-        <Tip label={<>Draw a box on the picture <Kbd>B</Kbd></>}>
-          <Button data-tour="box" size="sm" variant={drawing ? 'secondary' : 'ghost'} disabled={recordingVoiceover} onClick={() => { stage.current?.video?.pause(); setDrawing(d => !d) }}><SquareDashed />Box</Button>
-        </Tip>
-          <Tip label="Split the selected clip at the playhead">
-            <Button size="sm" variant="ghost" aria-label="Split" disabled={!!proposal || recordingVoiceover || !canSplit} onClick={() => { stage.current?.video?.pause(); doEdit([{ op: 'split', at: time }]) }}><SplitSquareHorizontal />Split</Button>
-          </Tip>
-        </div>
-        <Button size="sm" variant={voiceoverOpen ? 'secondary' : 'ghost'} disabled={!!proposal || voiceoverOpen || agent.busy || duration <= 0} onClick={() => { stage.current?.video?.pause(); setVoiceoverOpen(true); setMoveMode(false) }}><Mic />Voiceover <span className="text-[10px] font-semibold text-amber">PRO</span></Button>
-      </div>
-      {moveMode && <p id="move-clip-hint" className="text-right text-xs text-amber">Drag a clip to move it · Click Move clip again to turn off · Esc also exits</p>}
-      {voiceoverNotice && <p role="status" className="flex items-center gap-2 rounded-lg bg-ok/10 px-3 py-2 text-xs"><Check className="size-4 text-ok" /><span className="flex-1">{voiceoverNotice}</span><button aria-label="Dismiss voiceover notification" onClick={() => setVoiceoverNotice('')}><X className="size-3" /></button></p>}
-      {voiceoverOpen && <VoiceoverRecorder key={p.conversation} project={p} time={time} duration={duration} active={active} onLive={setLiveVoiceover} onClose={() => setVoiceoverOpen(false)} onRecording={(on, paused) => {
-        setRecordingVoiceover(on)
-        const v = stage.current?.video
-        if (v) { if (on && !paused) void v.play().catch(() => {}); else { v.pause(); setTime(v.currentTime) } }
-      }} onSaved={(next, src) => {
-        setP(next); attachFiles(p.dir, [src]); setChatShut(false)
-        setVoiceoverNotice('Voiceover added to your video and this chat\'s files. You can trim, move, adjust the volume, or ask for changes in the chat.')
-      }} />}
-      </div>
     </div>
   )
 
@@ -513,7 +304,7 @@ export function ProjectView({ initial, firstPrompt, firstFiles, onKeys, ready, a
             />
           </div>
         )}
-        {preview && film}
+        {preview && filmColumn}
       </div>
     </div>
   )

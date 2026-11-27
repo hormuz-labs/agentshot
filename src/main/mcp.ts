@@ -8,16 +8,22 @@
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { open as openFile, readFile } from 'node:fs/promises'
+import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node:path'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { CallToolRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { OutsideStatus } from '../shared/outside'
+import type { Project } from '../shared/types'
+import { APP_MIME, EDITOR_CALLS, EDITOR_URI, editorView, servable } from '../shared/editor-view'
+import { mobileArgs, mobileSchemas, projectArgument } from './mobile-contract'
+import { z } from 'zod'
+import { serveMobileMedia } from './mobile-media'
 
 type Any = Record<string, any>
 type Block = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
-export type ToolResult = { content: Block[]; isError?: boolean }
-export type OutsideTool = { name: string; description: string; parameters: Any }
+export type ToolResult = { content: Block[]; isError?: boolean; structuredContent?: Any }
+export type OutsideTool = { name: string; description: string; parameters: Any; _meta?: Any }
 
 /** What the server needs from the app. */
 export type Editor = {
@@ -30,7 +36,19 @@ export type Editor = {
   addFiles(dir: string, absPath: string): Promise<string[]>
   /** An outside agent is using a tool on a project: who it says it is, for showing in the app. */
   seen?(who: string, dir: string, tool: string): void
+  /** An open project as it is now, and whether its film changed since the current version was rendered: what the
+   *  editor page inside Claude or ChatGPT shows. Without it there is no editor page. */
+  snapshot?(dir: string): { project: Project; edited: boolean } | undefined
+  /** The editor page (src/mcp-app, built into one HTML file). */
+  page?(): string
+  /** A light copy of a project file for the editor page to play (small, H.264), made once: its absolute path. */
+  preview?(dir: string, rel: string, signal: AbortSignal): Promise<string>
+  /** Runs one of the app's own calls (as the phone's bridge does) for the editor page: see EDITOR_CALLS. */
+  invoke?(method: string, args: unknown[]): Promise<unknown>
 }
+
+/** Where the editor page's files are, as a cloud worker says it: the hosted server (chat-host) puts its own address there. */
+export const WORKER_MEDIA = 'agentshot-worker-media:/'
 
 /** The name the server goes by in an agent's list of MCP servers. */
 export const SERVER_NAME = 'agentshot'
@@ -73,11 +91,81 @@ const OWN: OutsideTool[] = [
     parameters: { type: 'object', properties: { path: { type: 'string', description: 'absolute path on this computer' } }, required: ['path'] } },
 ]
 
-/** Every tool an outside agent sees, each taking an optional project. */
-export function toolList(editor: Editor) {
-  return [...OWN, ...editor.tools()].map(t => ({
+// The editor inside the chat (an MCP App, which Claude and ChatGPT both show): open_editor brings it up; the page then
+// keeps itself up to date with editor_view and edits with the tools the model has (edit_timeline, decide_version…).
+// The old key is what ChatGPT read before MCP Apps; it does no harm elsewhere.
+const EDITOR: OutsideTool[] = [
+  { name: 'open_editor', description: 'Show the user AgentShot\'s editor right here in the chat: the film to play, its pieces on a timeline, and the cut waiting for review to keep or send back. Use it when the user wants to see, play or review the film, or edit it by hand.',
+    parameters: { type: 'object', properties: {} }, _meta: { ui: { resourceUri: EDITOR_URI }, 'openai/outputTemplate': EDITOR_URI } },
+  { name: 'editor_view', description: 'For the editor page only: the project as the page shows it.',
+    parameters: { type: 'object', properties: {} }, _meta: { ui: { resourceUri: EDITOR_URI, visibility: ['app'] } } },
+]
+// A chat's frame may not load video from this computer (a page on the internet reaching 127.0.0.1). Then the page gets
+// a light copy of each file through MCP itself, a piece at a time: base64 of whole 3-byte groups, so pieces join.
+const MEDIA_TOOL: OutsideTool = {
+  name: 'editor_media', description: 'For the editor page only: a light copy of a film file, a piece at a time.',
+  parameters: { type: 'object', properties: { src: { type: 'string' }, offset: { type: 'number' } }, required: ['src'] },
+  _meta: { ui: { resourceUri: EDITOR_URI, visibility: ['app'] } },
+}
+export const MEDIA_PIECE = 3 * 512 * 1024
+const VIDEO = /\.(mp4|mov|m4v|webm|mkv|avi|mts|m2ts|mpg|mpeg|3gp)$/i
+const MIME: Record<string, string> = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.flac': 'audio/flac',
+  '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
+}
+// The film panel's own calls to the app, from the page (the same ones the window makes; checked as the phone's are)
+const CALL_TOOL: OutsideTool = {
+  name: 'editor_call', description: 'For the editor page only: one of the film panel\'s calls to AgentShot.',
+  parameters: { type: 'object', properties: { method: { type: 'string' }, args: { type: 'array' } }, required: ['method', 'args'] },
+  _meta: { ui: { resourceUri: EDITOR_URI, visibility: ['app'] } },
+}
+// The panel's calls the phone doesn't make (voiceover, revealing and downloading on this computer, export for another
+// editor, the loudness choice of export) are checked here; the rest as the phone's are.
+const DIR = z.string().min(1).max(4096)
+const REL = z.string().min(1).max(4096).refine(s => !s.startsWith('/') && !s.includes('\\') && !s.split('/').some(x => x === '..' || x === '') && !s.includes('\0'))
+const ownSchemas: Record<string, z.ZodType<unknown[]>> = {
+  'export:run': z.tuple([DIR, z.object({ preset: z.enum(['original', 'landscape', 'vertical', 'square']), fit: z.enum(['pad', 'crop']).optional(), captions: z.enum(['none', 'burn', 'srt']), captionColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), loudness: z.enum(['none', 'online', 'podcast']).optional() }).strict()]),
+  'export:editors': z.tuple([DIR]),
+  'export:reveal': z.tuple([z.string().min(1).max(4096)]),
+  'project:reveal': z.tuple([DIR]),
+  'project:revealFile': z.tuple([DIR, REL]),
+  'project:downloadFile': z.tuple([DIR, REL]),
+  'voiceover:access': z.tuple([]),
+  'voiceover:begin': z.tuple([z.string().min(1).max(4096), z.number().finite().min(0).max(86400)]),
+  'voiceover:cancel': z.tuple([z.string().min(1).max(200)]),
+  'voiceover:save': z.tuple([z.string().min(1).max(200), z.string().max(200 * 1024 * 1024).regex(/^[A-Za-z0-9+/]*={0,2}$/), z.array(z.number().finite()).max(100_000)]),
+}
+/** The page's calls that are about this computer itself (its file manager, a save dialog): not for a page whose
+ *  AgentShot is somewhere else (through the bridge: a cloud worker has no screen to show them on). */
+const LOCAL_CALLS = /^(export:reveal|project:(reveal|revealFile|downloadFile))$/
+/** The tools the editor page calls for itself: the person at the page, not an agent at work. */
+const PAGE_TOOLS = new Set(['editor_view', 'editor_call', 'editor_media'])
+/** The call's arguments, checked; the project it is about must be the page's own. */
+function editorArgs(method: string, args: unknown, dir: string, remote = false): unknown[] {
+  if (!(EDITOR_CALLS as readonly string[]).includes(method)) throw new Error(`The editor can’t ask AgentShot for ${method}.`)
+  if (remote && LOCAL_CALLS.test(method)) throw new Error('Do this in the AgentShot app.')
+  const checked = Object.hasOwn(ownSchemas, method) ? ownSchemas[method].parse(args) : Object.hasOwn(mobileSchemas, method) ? mobileArgs(method, args) : []
+  const about = projectArgument(method) || /^(voiceover:begin|export:editors|project:(reveal|revealFile|downloadFile))$/.test(method)
+  if (about && checked[0] !== dir) throw new Error('The editor can only change the project it shows.')
+  // what's shown in the file manager is an export of this project
+  if (method === 'export:reveal') {
+    // as it resolves ("..", "."), so nothing outside the folder passes for a file in it
+    const file = resolve(String(checked[0]))
+    if (!isAbsolute(String(checked[0])) || !file.startsWith(resolve(dir) + sep)) throw new Error('The editor can only show this project’s files.')
+    return [file]
+  }
+  return method === 'voiceover:save' ? [checked[0], new Uint8Array(Buffer.from(checked[1] as string, 'base64')), checked[2]] : checked
+}
+const hasEditor = (editor: Editor) => !!editor.snapshot && !!editor.page
+
+/** Every tool an outside agent sees, each taking an optional project. [remote]: the agent isn't on this computer (it
+ *  comes through the bridge), so nothing that reads this computer's own files. */
+export function toolList(editor: Editor, remote = false) {
+  return [...OWN.filter(t => !remote || t.name !== 'add_files'), ...(hasEditor(editor) ? [...EDITOR, ...(editor.preview ? [MEDIA_TOOL] : []), ...(editor.invoke ? [CALL_TOOL] : [])] : []), ...editor.tools()].map(t => ({
     name: t.name, description: t.description,
     inputSchema: { ...t.parameters, type: 'object', properties: { ...(t.name === 'projects' ? {} : { project: PROJECT }), ...t.parameters.properties } },
+    ...(t._meta ? { _meta: t._meta } : {}),
   }))
 }
 
@@ -89,8 +177,10 @@ export function whoOf(headers: { [name: string]: string | string[] | undefined }
   return /claude/i.test(agent) ? 'Claude Code' : /codex/i.test(agent) ? 'Codex' : /cursor/i.test(agent) ? 'Cursor' : 'Another agent'
 }
 
-/** Runs one tool call. A failure is an answer the agent can read and act on, never a broken connection. */
-export async function callTool(editor: Editor, name: string, input: Any | undefined, signal: AbortSignal, who = 'Another agent'): Promise<ToolResult> {
+/** Runs one tool call. A failure is an answer the agent can read and act on, never a broken connection. [remote]: the
+ *  caller isn't on this computer (the bridge: a chat on the web, on a cloud worker its lessee), so it gets nothing
+ *  that reaches this computer's own files or screen. */
+export async function callTool(editor: Editor, name: string, input: Any | undefined, signal: AbortSignal, who = 'Another agent', media?: (dir: string) => string, remote = false): Promise<ToolResult> {
   try {
     const { project, ...args } = input || {}
     const open = editor.projects()
@@ -98,11 +188,50 @@ export async function callTool(editor: Editor, name: string, input: Any | undefi
       return text(open.length ? open.map((p, i) => `${basename(p.dir)}: "${p.title}" in ${p.dir}${i === open.length - 1 ? ' (used when no project is given)' : ''}`).join('\n') : 'No project is open in AgentShot.')
     }
     const p = pickProject(open, typeof project === 'string' && project ? project : undefined)
-    editor.seen?.(who, p.dir, name)
+    // the page looking again every few seconds, or the person editing in it, isn't an agent at work
+    if (!PAGE_TOOLS.has(name)) editor.seen?.(who, p.dir, name)
     if (name === 'add_files') {
+      if (remote) throw new Error('AgentShot has no tool called add_files.')
       if (typeof args.path !== 'string' || !isAbsolute(args.path)) throw new Error('Give the absolute path of a file or folder on this computer.')
       if (!existsSync(args.path)) throw new Error(`No file at ${args.path}.`)
       return text(`Added:\n${(await editor.addFiles(p.dir, args.path)).join('\n')}`)
+    }
+    if ((name === 'open_editor' || name === 'editor_view') && hasEditor(editor)) {
+      const now = editor.snapshot!(p.dir)
+      if (!now || !media) throw new Error('AgentShot can’t show this project here.')
+      const view = editorView(now.project, { base: media(p.dir), folder: basename(p.dir), edited: now.edited })
+      const pr = now.project, waiting = pr.proposal && pr.versions.find(v => v.id === pr.proposal)
+      const said = `The editor is open on "${pr.title}" (${pr.timeline?.items.length ?? 0} pieces${now.edited ? ', edited since the last version' : ''}).` +
+        (waiting ? ` A cut is waiting for review: "${waiting.title}". The user can keep it or send it back there.` : '')
+      // opening it (not looking again): when, so the page asks to go beside the chat only now, never when the chat
+      // draws this card again later
+      return { content: [{ type: 'text', text: said }], structuredContent: { ...view, ...(name === 'open_editor' ? { openedAt: Date.now() } : {}) } as unknown as Any }
+    }
+    if (name === 'editor_call' && hasEditor(editor) && editor.invoke) {
+      const method = String(args.method)
+      const checked = editorArgs(method, args.args, p.dir, remote)
+      let value = await editor.invoke(method, checked)
+      // thumbnails are files in the project's cache: as pictures, they show whichever way the page gets its video
+      if (method === 'media:thumbnails' && Array.isArray(value)) {
+        value = await Promise.all(value.map(async f => typeof f === 'string' && f.startsWith(p.dir) ? `data:image/jpeg;base64,${(await readFile(f)).toString('base64')}` : ''))
+      }
+      return { content: [{ type: 'text', text: `${method} done.` }], structuredContent: { value: value ?? null } }
+    }
+    if (name === 'editor_media' && hasEditor(editor) && editor.preview) {
+      const now = editor.snapshot!(p.dir)
+      const offset = Number(args.offset ?? 0)
+      if (!now || typeof args.src !== 'string' || !servable(now.project, args.src)) throw new Error('That file isn’t part of the film.')
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset % 3) throw new Error('offset must be where a previous piece ended.')
+      // video as a light copy; a picture, a sound or a clip's page as it is
+      const video = VIDEO.test(args.src)
+      const file = video ? await editor.preview(p.dir, args.src, signal) : join(p.dir, args.src)
+      const mime = video ? 'video/mp4' : MIME[extname(args.src).toLowerCase()] || 'application/octet-stream'
+      const handle = await openFile(file, 'r')
+      try {
+        const size = (await handle.stat()).size
+        const { bytesRead, buffer } = await handle.read(Buffer.alloc(Math.max(0, Math.min(MEDIA_PIECE, size - offset))), 0, Math.max(0, Math.min(MEDIA_PIECE, size - offset)), offset)
+        return { content: [{ type: 'text', text: `${bytesRead} bytes of ${size}` }], structuredContent: { mime, size, offset, base64: buffer.subarray(0, bytesRead).toString('base64') } }
+      } finally { await handle.close() }
     }
     if (!editor.tools().some(t => t.name === name)) throw new Error(`AgentShot has no tool called ${name}.`)
     return await editor.call(p.dir, name, args, signal)
@@ -118,6 +247,14 @@ export class OutsideAccess {
   private saved: Saved = { enabled: false }
   private http?: HttpServer
   private problem?: string
+  /** The editor page's media addresses: a random key per project, made afresh every time it's switched on. Holding
+   *  one lets a page play that project's film (and nothing else); nobody gets one without the token. */
+  private keys = new Map<string, string>()
+  private mediaBase(dir: string) {
+    let key = [...this.keys].find(([, d]) => d === dir)?.[0]
+    if (!key) { key = randomBytes(24).toString('base64url'); this.keys.set(key, dir) }
+    return `http://127.0.0.1:${this.saved.port}/media/${key}/`
+  }
   /** `file` remembers the switch, the port and the token (readable by this user only). */
   constructor(private file: string, private editor: Editor, private port = DEFAULT_PORT) {
     try { const s = JSON.parse(readFileSync(file, 'utf8')); this.saved = { enabled: s.enabled === true, port: Number(s.port) || undefined, token: typeof s.token === 'string' ? s.token : undefined } } catch { /* never switched on */ }
@@ -134,7 +271,27 @@ export class OutsideAccess {
       this.listed = json
       try { writeFileSync(join(dirname(this.file), 'outside-tools.json'), json) } catch { /* the launcher then asks AgentShot itself */ }
     }
+    this.keepPage()
     return tools
+  }
+  private kept = ''
+  /** The editor page as last served, kept beside the tools: the launcher answers with it while AgentShot is closed,
+   *  so a chat getting ready doesn't open AgentShot just to look at the page. */
+  private keepPage() {
+    if (!hasEditor(this.editor)) return
+    let json: string
+    try { json = JSON.stringify({ resources: this.resources(), read: { [EDITOR_URI]: this.readPage() } }) } catch { return }
+    if (json === this.kept) return
+    this.kept = json
+    try { writeFileSync(join(dirname(this.file), 'outside-resources.json'), json) } catch { /* the launcher then asks AgentShot itself */ }
+  }
+  private resources() { return [{ uri: EDITOR_URI, name: 'AgentShot editor', mimeType: APP_MIME }] }
+  private readPage() {
+    // the page may load video and pictures from this server, show a clip's page from it, and reach nothing else; it
+    // asks for the microphone for Voiceover
+    const here = `http://127.0.0.1:${this.saved.port}`
+    const csp = { resourceDomains: [here], frameDomains: [here], connectDomains: [] }
+    return { contents: [{ uri: EDITOR_URI, mimeType: APP_MIME, text: this.editor.page!(), _meta: { ui: { csp, permissions: { microphone: {} }, prefersBorder: false } } }] }
   }
 
   get url() { return `http://127.0.0.1:${this.saved.port}/mcp` }
@@ -165,6 +322,7 @@ export class OutsideAccess {
     return this.status()
   }
   async stop() {
+    this.keys.clear()
     const h = this.http
     this.http = undefined
     if (h) await new Promise<void>(done => { h.close(() => done()); h.closeAllConnections() })
@@ -185,23 +343,48 @@ export class OutsideAccess {
     } catch { this.problem = 'AgentShot couldn’t start listening on this computer. Switch it off and on again.' }
   }
 
+  /** GET /media/<key>/<file in the project>: a file the editor page plays, in ranges. Anything else is not found. */
+  private async media(req: IncomingMessage, res: ServerResponse, path: string) {
+    const missing = () => res.writeHead(404).end()
+    if (req.method !== 'GET' && req.method !== 'HEAD') return res.writeHead(405, { allow: 'GET, HEAD' }).end()
+    const m = /^\/media\/([A-Za-z0-9_-]+)\/(.+)$/.exec(path)
+    const dir = m && this.keys.get(m[1])
+    if (!m || !dir) return missing()
+    let rel: string
+    try { rel = decodeURIComponent(m[2]) } catch { return missing() }
+    const now = this.editor.snapshot?.(dir)
+    if (!now || !servable(now.project, rel)) return missing()
+    try { await serveMobileMedia(req, res, join(dir, rel)) } catch { if (!res.headersSent) missing(); else res.destroy() }
+  }
+
   private async answer(req: IncomingMessage, res: ServerResponse) {
     const refuse = (status: number, message: string, headers: Record<string, string> = {}) =>
       res.writeHead(status, { 'content-type': 'application/json', ...headers }).end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }))
     const port = this.saved.port
-    if (req.headers.origin !== undefined) return refuse(403, 'AgentShot does not answer web pages.')
     if (req.headers.host !== `127.0.0.1:${port}` && req.headers.host !== `localhost:${port}`) return refuse(403, 'Wrong host.')
-    if (new URL(req.url || '/', 'http://x').pathname !== '/mcp') return refuse(404, 'Not found.')
+    const path = new URL(req.url || '/', 'http://x').pathname
+    // the editor page's video: from the chat's frame (a web page), with the key in the address instead of the token
+    if (path.startsWith('/media/')) return this.media(req, res, path)
+    if (req.headers.origin !== undefined) return refuse(403, 'AgentShot does not answer web pages.')
+    if (path !== '/mcp') return refuse(404, 'Not found.')
     const given = /^Bearer (.+)$/.exec(req.headers.authorization || '')?.[1]
     if (!this.saved.token || !given || !sameToken(given, this.saved.token)) return refuse(401, 'Set AgentShot up again from Settings → Keys: this token is not the current one.')
     // each request stands alone (no session to keep or lose), so only POST means anything
     if (req.method !== 'POST') return refuse(405, 'Use POST.', { allow: 'POST' })
     const gone = new AbortController()
-    const server = new Server({ name: SERVER_NAME, version: '1' }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS })
+    const app = hasEditor(this.editor)
+    const server = new Server({ name: SERVER_NAME, version: '1' }, { capabilities: { tools: {}, ...(app ? { resources: {} } : {}) }, instructions: INSTRUCTIONS })
     const who = whoOf(req.headers)
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: this.tools() }))
     server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
-      callTool(this.editor, request.params.name, request.params.arguments, AbortSignal.any([gone.signal, extra.signal]), who))
+      callTool(this.editor, request.params.name, request.params.arguments, AbortSignal.any([gone.signal, extra.signal]), who, dir => this.mediaBase(dir)))
+    if (app) {
+      server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: this.resources() }))
+      server.setRequestHandler(ReadResourceRequestSchema, async request => {
+        if (request.params.uri !== EDITOR_URI) throw new McpError(-32002, `No resource ${request.params.uri}.`)
+        return this.readPage()
+      })
+    }
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
     // the agent hung up (or was stopped) mid-call: stop the work it asked for
     res.on('close', () => { if (!res.writableEnded) gone.abort(); void transport.close(); void server.close() })

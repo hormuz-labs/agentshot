@@ -97,13 +97,14 @@ fn result(id: &Value, result: Value) -> String {
     json!({ "jsonrpc": "2.0", "id": id, "result": result }).to_string()
 }
 
-/// What can be answered without AgentShot: getting ready, and the tools as it last listed them.
+/// What can be answered without AgentShot: getting ready, the tools as it last listed them, and the editor page the
+/// chat shows (kept beside the tools as outside-resources.json; none before AgentShot ever gave one).
 fn answer_closed(msg: &Value, tools_file: &Path) -> Option<String> {
     let id = &msg["id"];
     match msg["method"].as_str()? {
         "initialize" => Some(result(id, json!({
             "protocolVersion": msg["params"]["protocolVersion"].as_str().unwrap_or(PROTOCOL),
-            "capabilities": { "tools": {} },
+            "capabilities": { "tools": {}, "resources": {} },
             "serverInfo": { "name": "agentshot", "version": env!("CARGO_PKG_VERSION") },
             "instructions": "AgentShot is a video editor on this computer. These tools edit the project the user has open in it; start with project_state.",
         }))),
@@ -111,6 +112,16 @@ fn answer_closed(msg: &Value, tools_file: &Path) -> Option<String> {
         "tools/list" => {
             let tools: Value = serde_json::from_str(&std::fs::read_to_string(tools_file).ok()?).ok()?;
             tools.is_array().then(|| result(id, json!({ "tools": tools })))
+        }
+        "resources/list" | "resources/read" => {
+            let kept: Value = std::fs::read_to_string(tools_file.with_file_name("outside-resources.json")).ok()
+                .and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+            if msg["method"] == "resources/list" {
+                let listed = if kept["resources"].is_array() { kept["resources"].clone() } else { json!([]) };
+                return Some(result(id, json!({ "resources": listed })));
+            }
+            let page = &kept["read"][msg["params"]["uri"].as_str()?];
+            page.is_object().then(|| result(id, page.clone()))
         }
         _ => None,
     }
@@ -256,6 +267,27 @@ mod tests {
         // no list kept yet, and anything that does work: AgentShot has to answer those itself
         assert!(answer_closed(&json!({ "id": 3, "method": "tools/list" }), none).is_none());
         assert!(answer_closed(&json!({ "id": 4, "method": "tools/call", "params": { "name": "project_state" } }), none).is_none());
+        assert_eq!(init["result"]["capabilities"]["resources"], json!({}));
+        // no page kept yet: none to list, and nothing opened to say so
+        let listed: Value = serde_json::from_str(&answer_closed(&json!({ "id": 5, "method": "resources/list" }), none).unwrap()).unwrap();
+        assert_eq!(listed["result"]["resources"], json!([]));
+        assert!(answer_closed(&json!({ "id": 6, "method": "resources/read", "params": { "uri": "ui://agentshot/editor.html" } }), none).is_none());
+    }
+
+    #[test]
+    fn shows_the_editor_page_agentshot_last_gave() {
+        let dir = std::env::temp_dir().join(format!("agentshot-mcp-page-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let tools = dir.join("outside-tools.json");
+        let page = json!({ "contents": [{ "uri": "ui://agentshot/editor.html", "mimeType": "text/html;profile=mcp-app", "text": "<!doctype html>" }] });
+        std::fs::write(dir.join("outside-resources.json"), json!({ "resources": [{ "uri": "ui://agentshot/editor.html" }], "read": { "ui://agentshot/editor.html": page } }).to_string()).unwrap();
+        let listed: Value = serde_json::from_str(&answer_closed(&json!({ "id": 1, "method": "resources/list" }), &tools).unwrap()).unwrap();
+        assert_eq!(listed["result"]["resources"][0]["uri"], "ui://agentshot/editor.html");
+        let read: Value = serde_json::from_str(&answer_closed(&json!({ "id": 2, "method": "resources/read", "params": { "uri": "ui://agentshot/editor.html" } }), &tools).unwrap()).unwrap();
+        assert_eq!(read["result"], page);
+        // a page it doesn't have is AgentShot's to answer
+        assert!(answer_closed(&json!({ "id": 3, "method": "resources/read", "params": { "uri": "ui://agentshot/other.html" } }), &tools).is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

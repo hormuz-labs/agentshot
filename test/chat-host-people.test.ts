@@ -1,0 +1,172 @@
+// Who is asking (Clerk), their AgentShot key and their cloud worker (the account service), and the video links made
+// for them (chat-host/src/people.ts, links.ts).
+import { describe, expect, it, vi } from 'vitest'
+import { AccountError, People } from '../chat-host/src/people'
+import { readLink, readUpload, signLink, signUpload } from '../chat-host/src/links'
+
+const worker = (id: string, ms = 24 * 60 * 60_000) => ({ id, name: id, urls: [`https://${id}.mesh:47821`], fingerprint: 'ab'.repeat(32), token: `lease.${id}`, expiresAt: Date.now() + ms })
+
+/** Clerk and the account service as they answer. */
+function services(o: { tokens?: Record<string, { sub: string; email?: string }>; lease?: () => Response } = {}) {
+  const tokens = o.tokens ?? { good: { sub: 'user_maya', email: 'maya@example.com' } }
+  let leases = 0
+  const f = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    const u = String(url), h = new Headers(init?.headers)
+    const bearer = /^Bearer (.+)$/.exec(h.get('authorization') || '')?.[1] || ''
+    if (u === 'https://clerk.test/oauth/userinfo') return tokens[bearer] ? Response.json(tokens[bearer]) : new Response('no', { status: 401 })
+    if (u === 'https://account.test/v1/key') return tokens[bearer] ? Response.json({ key: `sk-${tokens[bearer].sub}`, key_id: `vk-${tokens[bearer].sub}`, email: tokens[bearer].email }) : Response.json({ error: 'Your sign-in has expired. Sign in again.' }, { status: 401 })
+    if (u === 'https://account.test/v1/workers/lease') {
+      if (o.lease) return o.lease()
+      if (!bearer.startsWith('sk-') || h.get('x-manul-key-id') !== bearer.replace('sk-', 'vk-')) return Response.json({ error: 'Sign in again.' }, { status: 401 })
+      return Response.json({ worker: worker(`w${++leases}`) })
+    }
+    return new Response('?', { status: 404 })
+  })
+  return { f, people: new People({ clerk: 'https://clerk.test/', account: 'https://account.test', fetch: f as typeof fetch }) }
+}
+
+describe('who is asking', () => {
+  it('is who Clerk says the token is, asked once for a while', async () => {
+    const { f, people } = services()
+    expect(await people.who('good')).toEqual({ sub: 'user_maya', email: 'maya@example.com' })
+    expect(await people.who('good')).toEqual({ sub: 'user_maya', email: 'maya@example.com' })
+    expect(f).toHaveBeenCalledTimes(1)
+  })
+  it('is nobody for a token Clerk doesn’t know', async () => {
+    const { people } = services()
+    expect(await people.who('forged')).toBeUndefined()
+  })
+  it('asks Clerk again after five minutes, so a token signed out stops working', async () => {
+    let now = 1_000_000
+    const tokens: Record<string, { sub: string }> = { good: { sub: 'user_maya' } }
+    const { f } = services({ tokens })
+    const people = new People({ clerk: 'https://clerk.test', account: 'https://account.test', fetch: f as typeof fetch, now: () => now })
+    expect(await people.who('good')).toBeTruthy()
+    delete tokens.good
+    now += 6 * 60_000
+    expect(await people.who('good')).toBeUndefined()
+  })
+})
+
+describe('when Clerk itself is in trouble', () => {
+  it('says so, instead of taking the person for signed out', async () => {
+    let status = 500
+    const f = vi.fn(async () => (status === 200 ? Response.json({ sub: 'user_maya' }) : new Response('down', { status })))
+    const people = new People({ clerk: 'https://clerk.test', account: 'https://account.test', fetch: f as unknown as typeof fetch })
+    await expect(people.who('good')).rejects.toMatchObject({ status: 503 })
+    status = 429
+    await expect(people.who('good')).rejects.toBeInstanceOf(AccountError)
+    status = 200 // back: the same token is who it was
+    expect(await people.who('good')).toEqual({ sub: 'user_maya' })
+  })
+})
+
+describe('their cloud worker', () => {
+  it('is leased with their AgentShot key (got with their sign-in), and kept while the lease lasts', async () => {
+    const { f, people } = services()
+    const maya = (await people.who('good'))!
+    const w = await people.worker(maya, 'good')
+    expect(w).toMatchObject({ id: 'w1', urls: ['https://w1.mesh:47821'], token: 'lease.w1' })
+    expect(await people.worker(maya, 'good')).toBe(w)
+    expect(f.mock.calls.filter(c => String(c[0]).endsWith('/v1/key'))).toHaveLength(1)
+    expect(f.mock.calls.filter(c => String(c[0]).endsWith('/lease'))).toHaveLength(1)
+  })
+
+  it('is leased again when the one held stopped answering, without asking for the key again', async () => {
+    const { f, people } = services()
+    const maya = (await people.who('good'))!
+    await people.worker(maya, 'good')
+    expect((await people.worker(maya, undefined, true)).id).toBe('w2')
+    expect(f.mock.calls.filter(c => String(c[0]).endsWith('/v1/key'))).toHaveLength(1)
+  })
+
+  it('leases once when asked many times at once', async () => {
+    const { f, people } = services()
+    const maya = (await people.who('good'))!
+    const all = await Promise.all([1, 2, 3].map(() => people.worker(maya, 'good')))
+    expect(new Set(all.map(w => w.id)).size).toBe(1)
+    expect(f.mock.calls.filter(c => String(c[0]).endsWith('/lease'))).toHaveLength(1)
+  })
+
+  it('passes on what the account service says when there is none to be had', async () => {
+    const { people } = services({ lease: () => Response.json({ error: 'No cloud workers are free right now. Try again in a moment.' }, { status: 404 }) })
+    const maya = (await people.who('good'))!
+    const failed = people.worker(maya, 'good')
+    await expect(failed).rejects.toBeInstanceOf(AccountError)
+    await expect(failed).rejects.toThrow('No cloud workers are free right now.')
+  })
+
+  it('is leased by a copy of the server that never saw their sign-in, with the key a link brought back', async () => {
+    const first = services()
+    const maya = (await first.people.who('good'))!
+    await first.people.worker(maya, 'good')
+    const key = first.people.keyOf('user_maya')!
+    expect(key).toEqual({ key: 'sk-user_maya', keyId: 'vk-user_maya' })
+    // another copy: no sign-in, no key asked for, and their worker all the same
+    const other = services()
+    expect(other.people.keyOf('user_maya')).toBeUndefined()
+    other.people.know('user_maya', key)
+    expect((await other.people.worker({ sub: 'user_maya' }, undefined)).id).toBe('w1')
+    expect(other.f.mock.calls.filter(c => String(c[0]).endsWith('/v1/key'))).toHaveLength(0)
+    // a key it has from their own sign-in isn't replaced by a link's
+    first.people.know('user_maya', { key: 'sk-old', keyId: 'vk-old' })
+    expect(first.people.keyOf('user_maya')).toEqual(key)
+  })
+
+  it('needs a sign-in the first time', async () => {
+    const { people } = services()
+    await expect(people.worker({ sub: 'user_new' }, undefined)).rejects.toThrow(/Connect AgentShot again/)
+  })
+})
+
+describe('video links', () => {
+  it('play one project’s files for the person they were made for, until they run out', () => {
+    const t = signLink('s3cret', { sub: 'user_maya', dir: '/space/maya/launch', exp: 2_000 })
+    expect(readLink('s3cret', t, 1_000)).toEqual({ sub: 'user_maya', dir: '/space/maya/launch', exp: 2_000 })
+    expect(readLink('s3cret', t, 2_000)).toBeUndefined()
+    expect(readLink('other', t, 1_000)).toBeUndefined()
+  })
+  it('can’t be changed into someone else’s', () => {
+    const t = signLink('s3cret', { sub: 'user_maya', dir: '/space/maya/launch', exp: 2_000 })
+    const [, sig] = t.split('.')
+    const forged = `${Buffer.from(JSON.stringify(['user_sam', '/space/sam/x', 2_000])).toString('base64url')}.${sig}`
+    for (const bad of [forged, `${t}x`, t.replace('.', '..'), '', 'a.b.c']) expect(readLink('s3cret', bad, 1_000), bad).toBeUndefined()
+  })
+})
+
+describe('upload links', () => {
+  it('take one file of the size given, for the person and project they were made for, until they run out', () => {
+    const t = signUpload('s3cret', { sub: 'user_maya', name: 'talk.mov', size: 1234, dir: '/space/maya/launch', exp: 2_000 })
+    expect(readUpload('s3cret', t, 1_000)).toEqual({ sub: 'user_maya', name: 'talk.mov', size: 1234, dir: '/space/maya/launch', exp: 2_000 })
+    expect(readUpload('s3cret', t, 2_001)).toBeUndefined()
+    const fresh = signUpload('s3cret', { sub: 'user_maya', name: 'talk.mov', size: 1234, exp: 2_000 })
+    expect(readUpload('s3cret', fresh, 1_000)).toEqual({ sub: 'user_maya', name: 'talk.mov', size: 1234, exp: 2_000 })
+  })
+  it('aren’t video links, and video links aren’t upload links', () => {
+    const video = signLink('s3cret', { sub: 'user_maya', dir: '/space/maya/launch', exp: 2_000 })
+    const up = signUpload('s3cret', { sub: 'user_maya', name: 'a.mp4', size: 1, exp: 2_000 })
+    expect(readUpload('s3cret', video, 1_000)).toBeUndefined()
+    expect(readLink('s3cret', up, 1_000)).toBeUndefined()
+  })
+})
+
+describe('the key a link carries', () => {
+  const key = { key: 'sk-maya-secret-key', keyId: 'vk-maya' }
+  it('comes back to the server that sealed it, from a video link and from an upload link', () => {
+    const exp = Date.now() + 60_000
+    expect(readLink('s3cret', signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp, key }))).toEqual({ sub: 'user_maya', dir: '/space/p', exp, key })
+    expect(readUpload('s3cret', signUpload('s3cret', { sub: 'user_maya', name: 'a.mp4', size: 5, exp, key }))).toEqual({ sub: 'user_maya', name: 'a.mp4', size: 5, exp, key })
+    // a link made without one is a link without one
+    expect(readLink('s3cret', signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp }))).toEqual({ sub: 'user_maya', dir: '/space/p', exp })
+  })
+
+  it('can’t be read out of the link by whoever holds it', () => {
+    const link = signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp: Date.now() + 60_000, key })
+    const shown = Buffer.from(link.split('.')[0], 'base64url').toString('utf8')
+    expect(shown).toContain('user_maya')
+    expect(shown).not.toContain('sk-maya-secret-key')
+    expect(shown).not.toContain(Buffer.from('sk-maya-secret-key').toString('base64url').slice(0, 12))
+    // sealed afresh each time: two links for the same person don't show the same bytes
+    expect(signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp: 1e15, key })).not.toBe(signLink('s3cret', { sub: 'user_maya', dir: '/space/p', exp: 1e15, key }))
+  })
+})

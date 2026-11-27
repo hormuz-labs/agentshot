@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "agentshot": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/bin/agentshot-mcp.mjs"
+      ],
+      "env": {
+        "AGENTSHOT_FROM": "Claude Code"
+      }
+    }
+  }
+}
