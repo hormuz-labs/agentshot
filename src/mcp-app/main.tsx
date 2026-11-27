@@ -109,7 +109,7 @@ function App() {
     const rel = cur ? v.project.proxies?.[cur.dry || cur.path] || cur.dry || cur.path : undefined
     void (async () => { if (!rel || !(await media.probe(rel))) media.refuse(); setReady(true) })()
   }, [v, ready])
-  if (start) return <div className="p-3"><StartScreen send={(file, progress) => send(file, progress, undefined)} onDone={async sent => { const r = await tool('editor_view', { project: sent.folder }); if (r.structuredContent) take(r.structuredContent as EditorView) }} /></div>
+  if (start) return <div className="p-3"><StartScreen send={(file, progress, into) => send(file, progress, into)} onDone={async sent => { const r = await tool('editor_view', { project: sent.folder }); if (r.structuredContent) take(r.structuredContent as EditorView) }} /></div>
   if (problem && !v) return <p className="p-6 text-sm text-dim">{problem}</p>
   if (!v || !ready) return <p className="flex h-40 items-center justify-center text-sm text-dim">Opening AgentShot…</p>
   return <ChatEditor initial={v.project} folder={v.folder} chat={chat(host.context)} mediaVersion={mediaVersion} />
