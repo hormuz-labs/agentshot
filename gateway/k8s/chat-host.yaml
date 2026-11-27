@@ -40,9 +40,11 @@ spec:
           securityContext: { capabilities: { add: [NET_ADMIN] } }
           env:
             - { name: TS_AUTHKEY, valueFrom: { secretKeyRef: { name: manul-secrets, key: CHAT_MESH_AUTHKEY } } }
-            - { name: TS_EXTRA_ARGS, value: "--login-server=http://headscale:8080" }
+            # tag:client: the mesh lets clients reach the workers' bridge (headscale acl.json)
+            - { name: TS_EXTRA_ARGS, value: "--login-server=http://headscale:8080 --advertise-tags=tag:client" }
             - { name: TS_USERSPACE, value: "false" }
             - { name: TS_STATE_DIR, value: /var/lib/tailscale }
+            - { name: TS_KUBE_SECRET, value: "" }   # state in the folder above, not a Kubernetes Secret (no RBAC for that)
             - { name: TS_HOSTNAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
           volumeMounts:
             - { name: tun, mountPath: /dev/net/tun }
@@ -64,6 +66,42 @@ kind: Service
 metadata:
   name: chat-host
   namespace: manul
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "chat-host"}'
 spec:
   selector: { app: chat-host }
   ports: [{ name: http, port: 8080, targetPort: http }]
+---
+# the load balancer checks /healthz; an upload or a long tool call may take minutes
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: chat-host
+  namespace: manul
+spec:
+  healthCheck: { port: 8080, requestPath: /healthz, type: HTTP }
+  timeoutSec: 3600
+---
+# mcp.agentshot.si's certificate, on the shared load balancer (the manul Ingress names it)
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: chat-host
+  namespace: manul
+spec:
+  domains: [mcp.agentshot.si]
+---
+# Its own load balancer (not the shared manul Ingress), so it comes and goes on its own. mcp.agentshot.si points at
+# its address (kubectl -n manul get ingress chat-host), DNS only.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chat-host
+  namespace: manul
+  annotations:
+    kubernetes.io/ingress.class: gce
+    networking.gke.io/managed-certificates: chat-host
+spec:
+  defaultBackend:
+    service: { name: chat-host, port: { number: 8080 } }
