@@ -9,7 +9,7 @@ import { createServer, type IncomingMessage, type Server as HttpServer, type Ser
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { open as openFile, readFile } from 'node:fs/promises'
-import { basename, dirname, extname, isAbsolute, join, sep } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, resolve, sep } from 'node:path'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { CallToolRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -136,21 +136,33 @@ const ownSchemas: Record<string, z.ZodType<unknown[]>> = {
   'voiceover:cancel': z.tuple([z.string().min(1).max(200)]),
   'voiceover:save': z.tuple([z.string().min(1).max(200), z.string().max(200 * 1024 * 1024).regex(/^[A-Za-z0-9+/]*={0,2}$/), z.array(z.number().finite()).max(100_000)]),
 }
+/** The page's calls that are about this computer itself (its file manager, a save dialog): not for a page whose
+ *  AgentShot is somewhere else (through the bridge: a cloud worker has no screen to show them on). */
+const LOCAL_CALLS = /^(export:reveal|project:(reveal|revealFile|downloadFile))$/
+/** The tools the editor page calls for itself: the person at the page, not an agent at work. */
+const PAGE_TOOLS = new Set(['editor_view', 'editor_call', 'editor_media'])
 /** The call's arguments, checked; the project it is about must be the page's own. */
-function editorArgs(method: string, args: unknown, dir: string): unknown[] {
+function editorArgs(method: string, args: unknown, dir: string, remote = false): unknown[] {
   if (!(EDITOR_CALLS as readonly string[]).includes(method)) throw new Error(`The editor can’t ask AgentShot for ${method}.`)
+  if (remote && LOCAL_CALLS.test(method)) throw new Error('Do this in the AgentShot app.')
   const checked = Object.hasOwn(ownSchemas, method) ? ownSchemas[method].parse(args) : Object.hasOwn(mobileSchemas, method) ? mobileArgs(method, args) : []
   const about = projectArgument(method) || /^(voiceover:begin|export:editors|project:(reveal|revealFile|downloadFile))$/.test(method)
   if (about && checked[0] !== dir) throw new Error('The editor can only change the project it shows.')
   // what's shown in the file manager is an export of this project
-  if (method === 'export:reveal' && !String(checked[0]).startsWith(dir + sep)) throw new Error('The editor can only show this project’s files.')
+  if (method === 'export:reveal') {
+    // as it resolves ("..", "."), so nothing outside the folder passes for a file in it
+    const file = resolve(String(checked[0]))
+    if (!isAbsolute(String(checked[0])) || !file.startsWith(resolve(dir) + sep)) throw new Error('The editor can only show this project’s files.')
+    return [file]
+  }
   return method === 'voiceover:save' ? [checked[0], new Uint8Array(Buffer.from(checked[1] as string, 'base64')), checked[2]] : checked
 }
 const hasEditor = (editor: Editor) => !!editor.snapshot && !!editor.page
 
-/** Every tool an outside agent sees, each taking an optional project. */
-export function toolList(editor: Editor) {
-  return [...OWN, ...(hasEditor(editor) ? [...EDITOR, ...(editor.preview ? [MEDIA_TOOL] : []), ...(editor.invoke ? [CALL_TOOL] : [])] : []), ...editor.tools()].map(t => ({
+/** Every tool an outside agent sees, each taking an optional project. [remote]: the agent isn't on this computer (it
+ *  comes through the bridge), so nothing that reads this computer's own files. */
+export function toolList(editor: Editor, remote = false) {
+  return [...OWN.filter(t => !remote || t.name !== 'add_files'), ...(hasEditor(editor) ? [...EDITOR, ...(editor.preview ? [MEDIA_TOOL] : []), ...(editor.invoke ? [CALL_TOOL] : [])] : []), ...editor.tools()].map(t => ({
     name: t.name, description: t.description,
     inputSchema: { ...t.parameters, type: 'object', properties: { ...(t.name === 'projects' ? {} : { project: PROJECT }), ...t.parameters.properties } },
     ...(t._meta ? { _meta: t._meta } : {}),
@@ -165,8 +177,10 @@ export function whoOf(headers: { [name: string]: string | string[] | undefined }
   return /claude/i.test(agent) ? 'Claude Code' : /codex/i.test(agent) ? 'Codex' : /cursor/i.test(agent) ? 'Cursor' : 'Another agent'
 }
 
-/** Runs one tool call. A failure is an answer the agent can read and act on, never a broken connection. */
-export async function callTool(editor: Editor, name: string, input: Any | undefined, signal: AbortSignal, who = 'Another agent', media?: (dir: string) => string): Promise<ToolResult> {
+/** Runs one tool call. A failure is an answer the agent can read and act on, never a broken connection. [remote]: the
+ *  caller isn't on this computer (the bridge: a chat on the web, on a cloud worker its lessee), so it gets nothing
+ *  that reaches this computer's own files or screen. */
+export async function callTool(editor: Editor, name: string, input: Any | undefined, signal: AbortSignal, who = 'Another agent', media?: (dir: string) => string, remote = false): Promise<ToolResult> {
   try {
     const { project, ...args } = input || {}
     const open = editor.projects()
@@ -174,8 +188,10 @@ export async function callTool(editor: Editor, name: string, input: Any | undefi
       return text(open.length ? open.map((p, i) => `${basename(p.dir)}: "${p.title}" in ${p.dir}${i === open.length - 1 ? ' (used when no project is given)' : ''}`).join('\n') : 'No project is open in AgentShot.')
     }
     const p = pickProject(open, typeof project === 'string' && project ? project : undefined)
-    editor.seen?.(who, p.dir, name)
+    // the page looking again every few seconds, or the person editing in it, isn't an agent at work
+    if (!PAGE_TOOLS.has(name)) editor.seen?.(who, p.dir, name)
     if (name === 'add_files') {
+      if (remote) throw new Error('AgentShot has no tool called add_files.')
       if (typeof args.path !== 'string' || !isAbsolute(args.path)) throw new Error('Give the absolute path of a file or folder on this computer.')
       if (!existsSync(args.path)) throw new Error(`No file at ${args.path}.`)
       return text(`Added:\n${(await editor.addFiles(p.dir, args.path)).join('\n')}`)
@@ -193,7 +209,7 @@ export async function callTool(editor: Editor, name: string, input: Any | undefi
     }
     if (name === 'editor_call' && hasEditor(editor) && editor.invoke) {
       const method = String(args.method)
-      const checked = editorArgs(method, args.args, p.dir)
+      const checked = editorArgs(method, args.args, p.dir, remote)
       let value = await editor.invoke(method, checked)
       // thumbnails are files in the project's cache: as pictures, they show whichever way the page gets its video
       if (method === 'media:thumbnails' && Array.isArray(value)) {

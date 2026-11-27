@@ -406,4 +406,54 @@ describe('the editor inside Claude and ChatGPT (an MCP App)', () => {
     const port = new URL(access.url).port
     expect((await get(result.structuredContent.media.replace(/:\d+\//, `:${port}/`) + 'media/talk.mp4')).status).toBe(404)
   })
+  it('doesn’t count the page’s own calls as an agent at work: it looks again every few seconds', async () => {
+    const e = withProject()
+    const seen = vi.fn(); e.seen = seen
+    const dir = e.projects()[0].dir
+    await callTool(e, 'editor_view', {}, never, 'Chat', () => 'm/')
+    await callTool(e, 'editor_call', { method: 'timeline:edit', args: [dir, [{ op: 'split', at: 2 }]] }, never, 'Chat', () => 'm/')
+    await callTool(e, 'editor_media', { src: 'project.json' }, never, 'Chat', () => 'm/')
+    expect(seen).not.toHaveBeenCalled()
+    // the agent opening the editor, or using a tool, is
+    await callTool(e, 'open_editor', {}, never, 'Chat', () => 'm/')
+    await callTool(e, 'seek', { t: 1 }, never, 'Chat', () => 'm/')
+    expect(seen.mock.calls.map(c => c[2])).toEqual(['open_editor', 'seek'])
+  })
+
+  it('shows only this project’s files in the file manager, however the path is written', async () => {
+    const e = withProject()
+    const dir = e.projects()[0].dir
+    const run = (file: string) => callTool(e, 'editor_call', { method: 'export:reveal', args: [file] }, never, 'x', () => 'm/')
+    expect((await run(join(dir, 'exports', 'film.mp4'))).isError).toBeFalsy()
+    expect(e.invoke).toHaveBeenLastCalledWith('export:reveal', [join(dir, 'exports', 'film.mp4')])
+    for (const out of [`${dir}/../../etc/hosts`, `${dir}/exports/../../elsewhere/film.mp4`, 'exports/film.mp4', `${dir}-other/film.mp4`]) {
+      const r = await run(out)
+      expect(r.isError, out).toBe(true)
+      expect(r.content[0].text, out).toMatch(/only show this project/)
+    }
+    expect(e.invoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('from somewhere else (through the bridge: a chat on the web, a cloud lessee): nothing of this computer’s own', async () => {
+    const e = withProject()
+    const dir = e.projects()[0].dir
+    // no add_files, listed or called: it copies any path on this computer
+    expect(toolList(e, true).map(t => t.name)).not.toContain('add_files')
+    expect(toolList(e).map(t => t.name)).toContain('add_files')
+    const file = join(dir, 'media', 'talk.mp4')
+    const added = await callTool(e, 'add_files', { path: file }, never, 'Chat', () => 'm/', true)
+    expect(added).toMatchObject({ isError: true, content: [{ text: 'AgentShot has no tool called add_files.' }] })
+    expect(e.addFiles).not.toHaveBeenCalled()
+    // no file manager, no save dialog: there is no screen there to show them on
+    const run = (method: string, args: unknown[], remote: boolean) => callTool(e, 'editor_call', { method, args }, never, 'Chat', () => 'm/', remote)
+    for (const [m, a] of [['project:reveal', [dir]], ['project:revealFile', [dir, 'media/talk.mp4']], ['project:downloadFile', [dir, 'media/talk.mp4']], ['export:reveal', [join(dir, 'film.mp4')]]] as const) {
+      const r = await run(m, [...a], true)
+      expect(r.isError, m).toBe(true)
+      expect(r.content[0].text, m).toBe('Do this in the AgentShot app.')
+    }
+    expect(e.invoke).not.toHaveBeenCalled()
+    // editing is the same from anywhere; and on this computer those calls still work
+    expect((await run('timeline:edit', [dir, [{ op: 'split', at: 2 }]], true)).isError).toBeFalsy()
+    expect((await run('project:revealFile', [dir, 'media/talk.mp4'], false)).isError).toBeFalsy()
+  })
 })

@@ -670,6 +670,67 @@ describe('cloud & home worker extensions', () => {
     expect((await rpc('project:recent')).status).toBe(200) // reading is fine
   })
 
+  it('on a cloud worker: a chat’s tools in a full space still open the editor and delete files, and take no new work', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'agentshot-full-chat-')); folders.push(root)
+    const dir = join(root, 'film')
+    const invoke = vi.fn(async (method: string) => ({ method }))
+    const quota = { ensureRoom: () => { throw new SpaceError(507, 'Your AgentShot space is full (20.0 of 20.0 GB). Delete a project or some files to make room.') }, add: () => {} }
+    const bridge = new MobileBridge({ invoke, projects: () => [{ dir }], importFile: async () => null, galleryFile: () => new Response(''), stateFile: join(root, 'bridge.json'), pool: true, quota }); bridges.push(bridge)
+    const port = new URL((await bridge.start()).addresses[0]).port
+    const until = Date.now() + 60 * 60_000
+    const maya = signWorkerToken((bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, until)
+    bridge.setLease({ userId: 'user_maya', until });
+    (bridge as unknown as { claim(r: unknown, who: string): void }).claim({ dir }, 'user_maya')
+    const call = (name: string, args: Record<string, unknown> = {}) => new Promise<{ status: number; body: { error?: string } }>((ok, fail) => {
+      const data = JSON.stringify({ method: 'outside:call', args: [dir, name, args] })
+      const req = request(`https://127.0.0.1:${port}/rpc`, { rejectUnauthorized: false, method: 'POST', headers: { authorization: `Bearer ${maya}`, 'content-length': String(Buffer.byteLength(data)) } }, res => {
+        const chunks: Buffer[] = []; res.on('data', c => chunks.push(c)); res.on('end', () => ok({ status: res.statusCode!, body: JSON.parse(Buffer.concat(chunks).toString() || 'null') })); res.on('error', fail)
+      }); req.on('error', fail); req.end(data)
+    })
+    // looking, and making room
+    for (const name of ['projects', 'project_state', 'open_editor', 'editor_view']) expect((await call(name)).status, name).toBe(200)
+    expect((await call('editor_call', { method: 'project:removeFiles', args: [dir, ['media/big.mp4']] })).status).toBe(200)
+    expect((await call('editor_call', { method: 'history:log', args: [dir] })).status).toBe(200)
+    // new work that writes: the agent's tools, and the page's own edits
+    for (const name of ['edit_timeline', 'ffmpeg', 'generate_music']) {
+      const r = await call(name)
+      expect(r.status, name).toBe(507)
+      expect(r.body.error).toMatch(/space is full/)
+    }
+    expect((await call('editor_call', { method: 'timeline:edit', args: [dir, [{ op: 'split', at: 2 }]] })).status).toBe(507)
+    expect((await call('editor_call', { method: 'export:run', args: [dir, { preset: 'original', captions: 'none' }] })).status).toBe(507)
+    expect(invoke.mock.calls.filter(c => c[0] === 'outside:call')).toHaveLength(6)
+  })
+
+  it('on a cloud worker: the editor page can’t reach the worker’s own settings by way of a chat tool', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'agentshot-private-chat-')); folders.push(root)
+    const dir = join(root, 'film')
+    const invoke = vi.fn(async (method: string) => ({ method }))
+    const bridge = new MobileBridge({ invoke, projects: () => [{ dir }], importFile: async () => null, galleryFile: () => new Response(''), stateFile: join(root, 'bridge.json'), pool: true }); bridges.push(bridge)
+    const port = new URL((await bridge.start()).addresses[0]).port
+    const until = Date.now() + 60 * 60_000
+    const maya = signWorkerToken((bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, until)
+    bridge.setLease({ userId: 'user_maya', until });
+    (bridge as unknown as { claim(r: unknown, who: string): void }).claim({ dir }, 'user_maya')
+    const rpc = (method: string, args: unknown[]) => new Promise<{ status: number; body: { error?: string } }>((ok, fail) => {
+      const data = JSON.stringify({ method, args })
+      const req = request(`https://127.0.0.1:${port}/rpc`, { rejectUnauthorized: false, method: 'POST', headers: { authorization: `Bearer ${maya}`, 'content-length': String(Buffer.byteLength(data)) } }, res => {
+        const chunks: Buffer[] = []; res.on('data', c => chunks.push(c)); res.on('end', () => ok({ status: res.statusCode!, body: JSON.parse(Buffer.concat(chunks).toString() || 'null') })); res.on('error', fail)
+      }); req.on('error', fail); req.end(data)
+    })
+    // refused when asked for directly, and just the same wrapped in the page's call
+    expect((await rpc('tools:install', ['whisper-large'])).status).toBe(403)
+    for (const method of ['tools:install', 'tools:remove', 'keys:set', 'memory:list', 'browser:state']) {
+      const r = await rpc('outside:call', [dir, 'editor_call', { method, args: ['whisper-large'] }])
+      expect(r.status, method).toBe(403)
+      expect(r.body.error).toBe('Not available on a cloud worker')
+    }
+    expect(invoke).not.toHaveBeenCalled()
+    // what the page is for goes through
+    expect((await rpc('outside:call', [dir, 'editor_call', { method: 'tools:list', args: [] }])).status).toBe(200)
+    expect((await rpc('outside:call', [dir, 'edit_timeline', { edits: [] }])).status).toBe(200)
+  })
+
   it('refuses cloud tokens on a computer that is not a cloud worker', async () => {
     const f = await fixture()
     const token = signWorkerToken((f.bridge.workerCredentials() as { secret: string }).secret, 'user_maya', true, Date.now() + 60_000)

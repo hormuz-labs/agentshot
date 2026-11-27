@@ -63,8 +63,19 @@ const CREATES_PROJECT = new Set(['project:create', 'project:createMotion'])
 /** Answers the phone keeps and asks for again often (lists, projects, conversations): tagged, so an unchanged one isn't sent again. */
 const VERSIONED = new Set(['project:recent', 'project:open', 'project:peek', 'jobs:list', 'consent:list', 'agent:attach'])
 /** What starts new work that writes into the project (refused for a cloud lessee whose space is full). */
-const WRITES = new Set(['outside:call', 'project:create', 'project:createMotion', 'agent:send', 'timeline:edit', 'mobile:export', 'export:run', 'clip:overlay', 'clip:save',
+const WRITES = new Set(['project:create', 'project:createMotion', 'agent:send', 'timeline:edit', 'mobile:export', 'export:run', 'clip:overlay', 'clip:save',
   'clip:insert', 'clip:move', 'clip:render', 'demo:create', 'mix:speech'])
+/** A chat's tools (outside:call) that only look: they run in a full space too, so the editor still opens there and
+ *  files can be deleted from it. Every other tool may write. */
+const OUTSIDE_READS = new Set(['projects', 'project_state', 'open_editor', 'editor_view'])
+/** The editor page's own call, carried inside outside:call's editor_call: held to the rules of the call it is. */
+const pageCall = (method: string, args: unknown[]) =>
+  method === 'outside:call' && args[1] === 'editor_call' ? String((args[2] as { method?: unknown } | undefined)?.method ?? '') : undefined
+const writes = (method: string, args: unknown[]) => {
+  if (method !== 'outside:call') return WRITES.has(method)
+  const inner = pageCall(method, args)
+  return inner === undefined ? !OUTSIDE_READS.has(String(args[1])) : WRITES.has(inner)
+}
 /** An upload nobody has sent a chunk to for this long no longer counts as work running; after [UPLOAD_GONE], it's dropped. */
 const UPLOAD_IDLE = 10 * 60_000, UPLOAD_GONE = 60 * 60_000
 const secret = () => randomBytes(32).toString('base64url')
@@ -431,10 +442,10 @@ export class MobileBridge {
       const body = await this.json(req); doingOf.set(req, String(body.method)); const args = mobileArgs(body.method, body.args)
       const lessee = device.lessee
       // the worker's own settings aren't a lessee's to read or change
-      if (lessee && WORKER_PRIVATE.test(body.method)) throw new HttpError(403, 'Not available on a cloud worker')
+      if (lessee && (WORKER_PRIVATE.test(body.method) || WORKER_PRIVATE.test(pageCall(body.method, args) ?? ''))) throw new HttpError(403, 'Not available on a cloud worker')
       if (projectArgument(body.method) && args.length) this.authorizeProject(args[0], lessee)
       // a full space takes nothing new: no new work that writes (an edit, a render, the agent), until there's room
-      if (lessee && WRITES.has(body.method)) this.options.quota?.ensureRoom(0)
+      if (lessee && writes(body.method, args)) this.options.quota?.ensureRoom(0)
       const result = await this.options.invoke(body.method, args)
       let value = result
       if (lessee) {

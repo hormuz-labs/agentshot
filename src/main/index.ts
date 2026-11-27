@@ -1238,11 +1238,12 @@ function wire() {
   if (!WORKER_MODE) void outside.start()
   // The same tools for AgentShot in Claude or ChatGPT (chat-host), through the bridge: on a cloud worker that's the
   // lessee's own projects (the bridge checks the folder). The page's files come from the hosted server, which puts its
-  // own address where WORKER_MEDIA stands.
-  ipcMain.handle('outside:tools', () => toolList(outsideEditor))
+  // own address where WORKER_MEDIA stands. Whoever calls isn't at this computer: no add_files (any path on it), no
+  // file manager or save dialog.
+  ipcMain.handle('outside:tools', () => toolList(outsideEditor, true))
   ipcMain.handle('outside:call', async (_e, dir: string, name: string, args: Record<string, unknown>) => {
     if (!open.has(dir)) await handlers.get('project:open')!(undefined as unknown as Electron.IpcMainInvokeEvent, dir)
-    return callTool(outsideEditor, name, { ...args, project: dir }, AbortSignal.timeout(30 * 60_000), 'Chat', () => WORKER_MEDIA)
+    return callTool(outsideEditor, name, { ...args, project: dir }, AbortSignal.timeout(30 * 60_000), 'Chat', () => WORKER_MEDIA, true)
   })
   // the Claude app and Codex speak MCP over stdin and stdout: they start AgentShot's small launcher, which reaches the
   // server above and opens AgentShot when it is closed
