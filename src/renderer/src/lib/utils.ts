@@ -22,7 +22,7 @@ let mediaResolver: ((path: string) => string) | undefined
  *  has no main process beside it, so it plays the same files from where its MCP server says they are. */
 export const mediaUrl = (path: string) => (mediaResolver ? mediaResolver(path) : encodeMediaPath(path))
 /** Where files play from outside the app window (src/mcp-app). */
-export const setMediaResolver = (fn: (path: string) => string) => { mediaResolver = fn }
+export const setMediaResolver = (fn: ((path: string) => string) | undefined) => { mediaResolver = fn }
 
 /** Typing in a field: keys and menu commands are its own (undo is the field's). */
 export const typing = () => !!(document.activeElement as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]')
