@@ -2,7 +2,7 @@
 // for them (chat-host/src/people.ts, links.ts).
 import { describe, expect, it, vi } from 'vitest'
 import { AccountError, People } from '../chat-host/src/people'
-import { readLink, signLink } from '../chat-host/src/links'
+import { readLink, readUpload, signLink, signUpload } from '../chat-host/src/links'
 
 const worker = (id: string, ms = 24 * 60 * 60_000) => ({ id, name: id, urls: [`https://${id}.mesh:47821`], fingerprint: 'ab'.repeat(32), token: `lease.${id}`, expiresAt: Date.now() + ms })
 
@@ -101,5 +101,21 @@ describe('video links', () => {
     const [, sig] = t.split('.')
     const forged = `${Buffer.from(JSON.stringify(['user_sam', '/space/sam/x', 2_000])).toString('base64url')}.${sig}`
     for (const bad of [forged, `${t}x`, t.replace('.', '..'), '', 'a.b.c']) expect(readLink('s3cret', bad, 1_000), bad).toBeUndefined()
+  })
+})
+
+describe('upload links', () => {
+  it('take one file of the size given, for the person and project they were made for, until they run out', () => {
+    const t = signUpload('s3cret', { sub: 'user_maya', name: 'talk.mov', size: 1234, dir: '/space/maya/launch', exp: 2_000 })
+    expect(readUpload('s3cret', t, 1_000)).toEqual({ sub: 'user_maya', name: 'talk.mov', size: 1234, dir: '/space/maya/launch', exp: 2_000 })
+    expect(readUpload('s3cret', t, 2_001)).toBeUndefined()
+    const fresh = signUpload('s3cret', { sub: 'user_maya', name: 'talk.mov', size: 1234, exp: 2_000 })
+    expect(readUpload('s3cret', fresh, 1_000)).toEqual({ sub: 'user_maya', name: 'talk.mov', size: 1234, exp: 2_000 })
+  })
+  it('aren’t video links, and video links aren’t upload links', () => {
+    const video = signLink('s3cret', { sub: 'user_maya', dir: '/space/maya/launch', exp: 2_000 })
+    const up = signUpload('s3cret', { sub: 'user_maya', name: 'a.mp4', size: 1, exp: 2_000 })
+    expect(readUpload('s3cret', video, 1_000)).toBeUndefined()
+    expect(readLink('s3cret', up, 1_000)).toBeUndefined()
   })
 })

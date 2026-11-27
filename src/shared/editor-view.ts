@@ -18,7 +18,11 @@ export type EditorView = {
   project: Project
   /** when open_editor opened it (ms): only a page opened just now asks to go beside the chat */
   openedAt?: number
+  /** the page may send files in (upload_start): AgentShot in the cloud */
+  upload?: boolean
 }
+/** No projects yet (AgentShot in the cloud): the editor opens on a start screen, to bring a video in. */
+export type StartView = { start: true; upload: true; openedAt?: number }
 
 export const editorView = (project: Project, o: { base: string; folder: string; edited: boolean }): EditorView =>
   ({ folder: o.folder, media: o.base, edited: o.edited, project })

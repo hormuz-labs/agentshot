@@ -10,8 +10,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, McpError, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { APP_MIME, EDITOR_URI } from '../../src/shared/editor-view.ts'
 import { AccountError, type People, type Person } from './people.ts'
-import { media, rpc, WorkerError, type Worker } from './worker.ts'
-import { readLink, signLink } from './links.ts'
+import { media, rpc, upload, WorkerError, type Worker } from './worker.ts'
+import { readLink, readUpload, signLink, signUpload } from './links.ts'
 
 /** What a cloud worker puts where the page's files are (src/main/mcp.ts WORKER_MEDIA). */
 const WORKER_MEDIA = 'agentshot-worker-media:/'
@@ -48,6 +48,18 @@ const ADD_VIDEO: Tool = {
   inputSchema: { type: 'object', properties: { url: { type: 'string', description: 'https address of the file' }, project: { type: 'string', description: 'add it to this project (a name from projects)' } }, required: ['url'] },
 }
 
+// The editor page sends a file it was given (dropped, or picked on this device) straight here: a link for that one
+// file, then the bytes, which go on to the person's worker as they arrive. For the page only.
+const UPLOAD_START: Tool = {
+  name: 'upload_start',
+  description: 'For the editor page only: where to send a file the user chose, as a new project or into one.',
+  inputSchema: { type: 'object', properties: { name: { type: 'string' }, size: { type: 'number' }, project: { type: 'string' } }, required: ['name', 'size'] },
+  _meta: { ui: { resourceUri: EDITOR_URI, visibility: ['app'] } },
+}
+const MAX_UPLOAD = 4 * 1024 ** 3
+/** A name the worker takes (the bridge's rule). */
+const fileName = (name: unknown) => typeof name === 'string' && /^[^/\\\x00-\x1f]{1,180}$/.test(name) && !name.startsWith('.') && !name.includes(':')
+
 export function chatHost(o: Options) {
   const base = o.publicUrl.replace(/\/+$/, '')
   const resource = `${base}/mcp`
@@ -71,7 +83,7 @@ export function chatHost(o: Options) {
   async function toolList(person: Person, token: string) {
     if (!tools || tools.until < Date.now()) {
       const list = await onWorker(person, token, w => rpc(w, 'outside:tools', [])) as Tool[]
-      tools = { list: [...list.filter(t => t.name !== 'add_files'), ADD_VIDEO], until: Date.now() + 60 * 60_000 }
+      tools = { list: [...list.filter(t => t.name !== 'add_files'), ADD_VIDEO, UPLOAD_START], until: Date.now() + 60 * 60_000 }
     }
     return tools.list
   }
@@ -96,6 +108,19 @@ export function chatHost(o: Options) {
       if (name === 'projects') {
         return text(recent.length ? recent.map((p, i) => `${basename(p.dir)}: "${p.title || basename(p.dir)}"${i === 0 ? ' (used when no project is given)' : ''}`).join('\n') : 'No projects yet.')
       }
+      if (name === 'upload_start') {
+        if (!fileName(args.name)) throw new Error('That file name can’t be used. Rename the file and try again.')
+        const size = Number(args.size)
+        if (!Number.isSafeInteger(size) || size <= 0) throw new Error('The file is empty.')
+        if (size > MAX_UPLOAD) throw new Error('The file is over 4 GB, more than AgentShot takes at once.')
+        const dir = typeof project === 'string' && project ? pick(recent, project).dir : undefined
+        const url = `${base}/upload/${signUpload(o.secret, { sub: person.sub, name: args.name, size, ...(dir ? { dir } : {}), exp: Date.now() + 60 * 60_000 })}`
+        return { content: [{ type: 'text', text: 'Send the file there.' }], structuredContent: { url } }
+      }
+      // no projects yet: the editor opens on its start screen, to bring a video in
+      if ((name === 'open_editor' || name === 'editor_view') && !recent.length) {
+        return { content: [{ type: 'text', text: 'The editor is open on its start screen: there are no projects yet. The user can drop a video there, or give a link (add_video).' }], structuredContent: { start: true, upload: true, ...(name === 'open_editor' ? { openedAt: Date.now() } : {}) } }
+      }
       if (name === 'add_video') {
         if (!o.addVideo) throw new Error('Adding videos isn’t available here.')
         if (typeof args.url !== 'string') throw new Error('Give the video’s https address.')
@@ -108,6 +133,7 @@ export function chatHost(o: Options) {
       // the page's files: through links signed here for this person and project
       if (result?.structuredContent?.media === WORKER_MEDIA) {
         result.structuredContent.media = `${base}/media/${signLink(o.secret, { sub: person.sub, dir: p.dir, exp: Date.now() + linkMs })}/`
+        result.structuredContent.upload = true
       }
       return result
     } catch (e) {
@@ -166,6 +192,26 @@ export function chatHost(o: Options) {
     } catch { if (!res.headersSent) res.writeHead(502).end(); else res.destroy() }
   }
 
+  /** PUT /upload/<link>: the file a page was given a link for, on to the person's worker as it arrives. */
+  async function take(req: IncomingMessage, res: ServerResponse, path: string) {
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'PUT, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '600' }
+    if (req.method === 'OPTIONS') return res.writeHead(204, cors).end()
+    if (req.method !== 'PUT') return json(res, 405, { error: 'Use PUT.' }, { ...cors, allow: 'PUT, OPTIONS' })
+    const u = readUpload(o.secret, path.slice('/upload/'.length))
+    if (!u) return json(res, 404, { error: 'This upload link has run out. Choose the file again.' }, cors)
+    if (Number(req.headers['content-length']) !== u.size) return json(res, 400, { error: 'The file isn’t the size the page said.' }, cors)
+    try {
+      // the bytes go on as they come, so a lease can't be retried halfway: one worker, the one leased
+      const w = await o.people.worker({ sub: u.sub }, undefined)
+      const made = await upload(w, u.name, u.size, req, u.dir) as { dir?: string; title?: string } | null
+      if (!made?.dir) throw new Error('AgentShot didn’t take the file.')
+      json(res, 200, { folder: basename(made.dir), ...(made.title ? { title: made.title } : {}) }, cors)
+    } catch (e) {
+      req.resume()
+      json(res, e instanceof WorkerError && e.status === 413 ? 413 : 502, { error: (e as Error).message || 'The file didn’t arrive. Try again.' }, cors)
+    }
+  }
+
   return async (req: IncomingMessage, res: ServerResponse) => {
     const path = new URL(req.url || '/', 'http://x').pathname
     try {
@@ -175,6 +221,7 @@ export function chatHost(o: Options) {
       }
       if (path === '/mcp') return await mcp(req, res)
       if (path.startsWith('/media/')) return await file(req, res, path)
+      if (path.startsWith('/upload/')) return await take(req, res, path)
       json(res, 404, { error: 'Not found.' })
     } catch (e) {
       console.error(e)

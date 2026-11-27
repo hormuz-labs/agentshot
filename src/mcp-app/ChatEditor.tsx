@@ -2,7 +2,7 @@
 // the same parts (Stage, Scrubber with its filmstrip, the transport, VideoControls, the proposal bar, History, Files,
 // Export, Voiceover). The chat it sits in is the agent: a note, a box or a range is asked there, as a message.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Images, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoveHorizontal, Mic, Pause, Play, Redo2, SplitSquareHorizontal, SquareDashed, Undo2, Upload, X } from 'lucide-react'
+import { Check, FilePlus2, Images, Loader2, Maximize2, MessageSquarePlus, Minimize2, MoveHorizontal, Mic, Pause, Play, Redo2, SplitSquareHorizontal, SquareDashed, Undo2, Upload, X } from 'lucide-react'
 import { Stage, type LiveEdit, type StageHandle } from '@/views/Stage'
 import { Scrubber } from '@/views/Scrubber'
 import { VideoControls } from '@/views/VideoControls'
@@ -36,6 +36,8 @@ export type Chat = {
   say(text: string, still?: string): Promise<void>
   /** Tell the model what the user did here, quietly, for its next answer. */
   note(text: string): void
+  /** Send a file the user chose into this project (AgentShot in the cloud only). */
+  upload?(file: File, progress: (done: number) => void): Promise<{ folder: string; title?: string }>
   /** Ask the chat for the editor to fill the window (or back), when it can. */
   fullscreen?: { on: boolean; toggle(): void }
 }
@@ -68,6 +70,20 @@ export function ChatEditor({ initial, folder, chat, mediaVersion }: { initial: P
   const [notice, setNotice] = useState('')
   const [problem, setProblem] = useState('')
   const [reveal, setReveal] = useState({ t: 0, key: 0 })
+  const picker = useRef<HTMLInputElement>(null)
+  const [sending, setSending] = useState<{ name: string; done: number } | null>(null)
+  /** Files the user chose, into this project one after another; then Files shows them, to put in the film. */
+  const addFiles = async (files: File[]) => {
+    if (!chat.upload || sending) return
+    for (const file of files) {
+      setSending({ name: file.name, done: 0 })
+      try { await chat.upload(file, done => setSending({ name: file.name, done })) }
+      catch (e) { fail(e); setSending(null); return }
+    }
+    setSending(null)
+    setNotice(files.length === 1 ? `${files[0].name} is in the project. Put it in the film from Files.` : `${files.length} files are in the project. Put them in the film from Files.`)
+    setFootage(true)
+  }
   // what the ask at the selection is about, when it isn't the film's time (a voiceover to talk about)
   const [about, setAbout] = useState<string | undefined>()
 
@@ -208,6 +224,10 @@ export function ChatEditor({ initial, folder, chat, mediaVersion }: { initial: P
         <Tip label={<>Undo <Kbd>⌘Z</Kbd></>} side="bottom"><Button size="iconSm" variant="ghost" aria-label="Undo" onClick={() => undoEdit(false)}><Undo2 /></Button></Tip>
         <Tip label={<>Redo <Kbd>⇧⌘Z</Kbd></>} side="bottom"><Button size="iconSm" variant="ghost" aria-label="Redo" onClick={() => undoEdit(true)}><Redo2 /></Button></Tip>
         <HistoryButton project={p} open={historyOpen} onOpenChange={setHistoryOpen} onRestored={np => { setP(np); setEditing(null) }} />
+        {chat.upload && <Tip label="Add a video, picture or sound from this device" side="bottom">
+          <Button size="iconSm" variant="ghost" disabled={!!sending} onClick={() => picker.current?.click()} aria-label="Add files"><FilePlus2 /></Button>
+        </Tip>}
+        <input ref={picker} type="file" multiple accept="video/*,audio/*,image/*" hidden onChange={e => { void addFiles(Array.from(e.target.files || []).filter(f => f.size > 0)); e.target.value = '' }} />
         <Tip label="Files: everything you brought in" side="bottom">
           <Button size="iconSm" variant={footage ? 'secondary' : 'ghost'} onClick={() => setFootage(x => !x)} aria-label="Files"><Images /></Button>
         </Tip>
@@ -342,6 +362,12 @@ export function ChatEditor({ initial, folder, chat, mediaVersion }: { initial: P
             <Button size="sm" variant={voiceoverOpen ? 'secondary' : 'ghost'} disabled={!!proposal || voiceoverOpen || duration <= 0} onClick={() => { stage.current?.video?.pause(); setVoiceoverOpen(true); setMoveMode(false) }}><Mic />Voiceover <span className="text-[10px] font-semibold text-amber">PRO</span></Button>
           </div>
           {moveMode && <p className="text-right text-xs text-amber">Drag a clip to move it · Click Move clip again to turn off · Esc also exits</p>}
+          {sending && (
+            <div role="status" className="space-y-1 rounded-lg bg-hover/60 px-3 py-2 text-xs">
+              <p className="flex items-center gap-2"><Loader2 className="size-3.5 animate-spin text-amber" />Sending {sending.name}… {Math.round(sending.done * 100)}%</p>
+              <div className="h-1 overflow-hidden rounded-full bg-hover"><div className="h-full bg-amber" style={{ width: `${sending.done * 100}%` }} /></div>
+            </div>
+          )}
           {(notice || problem) && (
             <p role="status" className={cn('flex items-center gap-2 rounded-lg px-3 py-2 text-xs', problem ? 'bg-red-500/10 text-red-400' : 'bg-ok/10')}>
               {!problem && <Check className="size-4 text-ok" />}

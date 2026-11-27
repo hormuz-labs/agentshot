@@ -10,7 +10,9 @@ import { Host, type ToolResult } from './host'
 import { makeBridge } from './bridge'
 import { MediaSource } from './media'
 import { ChatEditor, type Chat } from './ChatEditor'
-import type { EditorView } from '../shared/editor-view'
+import type { EditorView, StartView } from '../shared/editor-view'
+import { StartScreen } from './StartScreen'
+import { sendFile, type Sent } from './upload'
 import type { Project } from '../shared/types'
 
 const host = new Host(m => window.parent.postMessage(m, '*'))
@@ -18,12 +20,16 @@ window.addEventListener('message', e => { if (e.source === window.parent) host.r
 
 const textOf = (r: ToolResult) => r.content?.map(c => c.text || '').join('\n').trim()
 let view: EditorView | undefined
-const viewListeners = new Set<(v: EditorView) => void>()
+/** no projects yet: the start screen */
+let starting: StartView | undefined
+const viewListeners = new Set<() => void>()
 const projectListeners = new Set<(p: Project) => void>()
 let shown = ''
-function take(v: EditorView) {
+function take(v: EditorView | StartView) {
+  if ('start' in v) { starting = v; viewListeners.forEach(fn => fn()); return }
+  starting = undefined
   view = v
-  viewListeners.forEach(fn => fn(v))
+  viewListeners.forEach(fn => fn())
   const now = JSON.stringify(v.project)
   if (now !== shown) { shown = now; projectListeners.forEach(fn => fn(v.project)) }
 }
@@ -36,7 +42,7 @@ async function tool(name: string, args: Record<string, unknown> = {}) {
 let looking: Promise<void> | undefined
 /** Look at the project again (after a change here, and every few seconds: the chat's agent edits it too). */
 function refresh() {
-  looking ??= tool('editor_view').then(r => { if (r.structuredContent) take(r.structuredContent as EditorView) }).catch(() => {}).finally(() => { looking = undefined })
+  looking ??= tool('editor_view').then(r => { if (r.structuredContent) take(r.structuredContent as EditorView | StartView) }).catch(() => {}).finally(() => { looking = undefined })
   return looking
 }
 
@@ -56,7 +62,15 @@ function paint(ctx: Record<string, any>) {
   document.body.dataset.mode = ctx.displayMode || 'inline'
 }
 
+/** A file the user chose, into their space (into the open project, or as a new one); the model hears of it. */
+async function send(file: File, progress: (done: number) => void, into = view?.folder): Promise<Sent> {
+  const sent = await sendFile((name, args) => host.callTool(name, args || {}).then(r => { if (r.isError) throw new Error(textOf(r) || 'AgentShot couldn’t take the file.'); return r }), file, into, progress)
+  void host.request('ui/update-model-context', { content: [{ type: 'text', text: into ? `In the AgentShot editor the user added ${file.name} to project "${sent.folder}".` : `In the AgentShot editor the user brought in ${file.name}: it is the new project "${sent.folder}".` }] }).catch(() => {})
+  return sent
+}
+
 const chat = (ctx: Record<string, any>): Chat => ({
+  ...(view?.upload ? { upload: (file: File, progress: (done: number) => void) => send(file, progress) } : {}),
   async say(text, still) {
     const words = { type: 'text', text }
     const picture = still?.startsWith('data:') ? { type: 'image', mimeType: still.slice(5, still.indexOf(';')), data: still.slice(still.indexOf(',') + 1) } : undefined
@@ -80,7 +94,8 @@ function App() {
   const [, setCtx] = useState(0)
   const [mediaVersion, setMediaVersion] = useState(0)
   const [problem, setProblem] = useState('')
-  useEffect(() => { const fn = (x: EditorView) => setV(x); viewListeners.add(fn); return () => { viewListeners.delete(fn) } }, [])
+  const [start, setStart] = useState(starting)
+  useEffect(() => { const fn = () => { setV(view); setStart(starting) }; viewListeners.add(fn); return () => { viewListeners.delete(fn) } }, [])
   useEffect(() => { const fn = () => setCtx(n => n + 1); contextListeners.add(fn); return () => { contextListeners.delete(fn) } }, [])
   useEffect(() => media.onChange(() => setMediaVersion(n => n + 1)), [])
   useEffect(() => {
@@ -94,6 +109,7 @@ function App() {
     const rel = cur ? v.project.proxies?.[cur.dry || cur.path] || cur.dry || cur.path : undefined
     void (async () => { if (!rel || !(await media.probe(rel))) media.refuse(); setReady(true) })()
   }, [v, ready])
+  if (start) return <div className="p-3"><StartScreen send={(file, progress) => send(file, progress, undefined)} onDone={async sent => { const r = await tool('editor_view', { project: sent.folder }); if (r.structuredContent) take(r.structuredContent as EditorView) }} /></div>
   if (problem && !v) return <p className="p-6 text-sm text-dim">{problem}</p>
   if (!v || !ready) return <p className="flex h-40 items-center justify-center text-sm text-dim">Opening AgentShot…</p>
   return <ChatEditor initial={v.project} folder={v.folder} chat={chat(host.context)} mediaVersion={mediaVersion} />
@@ -101,7 +117,7 @@ function App() {
 
 host.on('ui/notifications/tool-result', (r: ToolResult) => {
   if (r.isError || !r.structuredContent) return
-  const v = r.structuredContent as EditorView
+  const v = r.structuredContent as EditorView | StartView
   take(v)
   // just opened (not an old card drawn again): beside the chat, where the chat can put it
   const ctx = host.context

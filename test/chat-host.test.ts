@@ -2,7 +2,8 @@
 // as they answer, and a real bridge in cloud-worker mode leased to the person (its tools stand in for AgentShot's).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createServer, request, type Server as HttpServer } from 'node:http'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { basename } from 'node:path'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -40,7 +41,15 @@ async function setup(o: { projects?: number } = {}) {
     return null
   })
   // the worker: a real bridge, leased to Maya
-  const bridge = new MobileBridge({ invoke, projects: () => projects, importFile: async () => null, galleryFile: () => new Response(''), stateFile: join(root, 'bridge.json'), pool: true })
+  // a file sent in becomes a project (or goes into one), as AgentShot imports it
+  const importFile = vi.fn(async (file: string, into?: string) => {
+    const dir = into ?? join(root, `film-${projects.length + 1}`)
+    await mkdir(join(dir, 'media'), { recursive: true })
+    await writeFile(join(dir, 'media', basename(file)), await readFile(file))
+    if (!into) projects.push({ dir, title: basename(file) })
+    return { dir, title: basename(file) }
+  })
+  const bridge = new MobileBridge({ invoke, projects: () => projects, importFile, galleryFile: () => new Response(''), stateFile: join(root, 'bridge.json'), pool: true })
   cleanups.push(() => bridge.stop())
   const status = await bridge.start()
   const creds = bridge.workerCredentials() as { secret: string; fingerprint: string }
@@ -70,9 +79,13 @@ async function setup(o: { projects?: number } = {}) {
     cleanups.push(() => client.close())
     return client
   }
-  return { base, chat, invoke, projects }
+  return { base, chat, invoke, projects, importFile }
 }
 
+const send = (url: string, method: string, body?: Buffer, headers: Record<string, string> = {}) => new Promise<{ status: number; body: string; headers: Record<string, unknown> }>((ok, fail) => {
+  const req = request(url, { method, headers: { ...(body ? { 'content-length': String(body.length) } : {}), ...headers } }, res => { let out = ''; res.on('data', c => { out += c }); res.on('end', () => ok({ status: res.statusCode!, body: out, headers: res.headers })) })
+  req.on('error', fail); req.end(body)
+})
 const get = (url: string, headers: Record<string, string> = {}) => new Promise<{ status: number; body: string; headers: Record<string, unknown> }>((ok, fail) => {
   const req = request(url, { headers }, res => { let body = ''; res.on('data', c => { body += c }); res.on('end', () => ok({ status: res.statusCode!, body, headers: res.headers })) })
   req.on('error', fail); req.end()
@@ -92,7 +105,7 @@ describe('AgentShot in a chat on the web', () => {
   it('offers AgentShot’s tools from the person’s worker, with add_video for files and not add_files', async () => {
     const { chat } = await setup()
     const names = (await (await chat()).listTools()).tools.map(t => t.name)
-    expect(names).toEqual(['projects', 'open_editor', 'project_state', 'add_video'])
+    expect(names).toEqual(['projects', 'open_editor', 'project_state', 'add_video', 'upload_start'])
   })
 
   it('lists their projects, newest first, and runs a tool on the newest or the one named', async () => {
@@ -135,5 +148,62 @@ describe('AgentShot in a chat on the web', () => {
     // another file outside the project, a changed link: nothing
     expect((await get(`${media}..%2F..%2Fetc%2Fpasswd`)).status).toBe(404)
     expect((await get(`${media.replace(/\.[^.]+\/$/, '.forged/')}media/talk.mp4`)).status).toBe(404)
+  })
+})
+
+describe('bringing a video in from the editor page', () => {
+  type Started = { isError?: boolean; content: { text: string }[]; structuredContent: { url: string } }
+
+  it('gives the page a link to send one file to, which becomes a new project of theirs', async () => {
+    const { chat, projects } = await setup({ projects: 1 })
+    const c = await chat()
+    const started = await c.callTool({ name: 'upload_start', arguments: { name: 'talk.mov', size: 5 } }) as Started
+    expect(started.isError).toBeFalsy()
+    const sent = await send(started.structuredContent.url, 'PUT', Buffer.from('hello'), { 'content-type': 'video/quicktime', origin: 'https://abc.claudemcpcontent.com' })
+    expect(sent.status).toBe(200)
+    expect(sent.headers['access-control-allow-origin']).toBe('*')
+    expect(JSON.parse(sent.body)).toEqual({ folder: 'film-2', title: 'talk.mov' })
+    expect(await readFile(join(projects[1].dir, 'media', 'talk.mov'), 'utf8')).toBe('hello')
+    // it's theirs: the tools see it, newest first
+    const listed = await c.callTool({ name: 'projects', arguments: {} }) as { content: { text: string }[] }
+    expect(listed.content[0].text).toMatch(/^film-2/)
+  })
+
+  it('sends a file into the project named', async () => {
+    const { chat, projects, importFile } = await setup({ projects: 1 })
+    const started = await (await chat()).callTool({ name: 'upload_start', arguments: { name: 'song.mp3', size: 3, project: 'film-1' } }) as Started
+    expect((await send(started.structuredContent.url, 'PUT', Buffer.from('abc'))).status).toBe(200)
+    expect(importFile).toHaveBeenCalledWith(expect.stringMatching(/song\.mp3$/), projects[0].dir)
+  })
+
+  it('lets the chat’s frame ask first (CORS), and takes nothing else: another size, a changed link, a bad name', async () => {
+    const { chat, base } = await setup({ projects: 1 })
+    const c = await chat()
+    const started = await c.callTool({ name: 'upload_start', arguments: { name: 'talk.mov', size: 5 } }) as Started
+    const pre = await send(started.structuredContent.url, 'OPTIONS', undefined, { origin: 'https://abc.claudemcpcontent.com', 'access-control-request-method': 'PUT' })
+    expect(pre.status).toBe(204)
+    expect(pre.headers['access-control-allow-methods']).toMatch(/PUT/)
+    expect((await send(started.structuredContent.url, 'PUT', Buffer.from('hello world'))).status).toBe(400)
+    expect((await send(`${base}/upload/forged.link`, 'PUT', Buffer.from('hello'))).status).toBe(404)
+    for (const name of ['../x.mp4', '.hidden', 'a:b.mp4', '']) {
+      const r = await c.callTool({ name: 'upload_start', arguments: { name, size: 5 } }) as Started
+      expect(r.isError, name).toBe(true)
+    }
+    const big = await c.callTool({ name: 'upload_start', arguments: { name: 'x.mp4', size: 5 * 1024 ** 3 } }) as Started
+    expect(big.isError).toBe(true)
+  })
+
+  it('opens the editor on a start screen when there are no projects yet, and says the page can upload', async () => {
+    const { chat } = await setup({ projects: 0 })
+    const c = await chat()
+    const opened = await c.callTool({ name: 'open_editor', arguments: {} }) as { isError?: boolean; structuredContent: { start?: boolean; upload?: boolean } }
+    expect(opened.isError).toBeFalsy()
+    expect(opened.structuredContent).toMatchObject({ start: true, upload: true })
+  })
+
+  it('tells an opened editor it can upload', async () => {
+    const { chat } = await setup({ projects: 1 })
+    const opened = await (await chat()).callTool({ name: 'open_editor', arguments: {} }) as { structuredContent: { upload?: boolean } }
+    expect(opened.structuredContent.upload).toBe(true)
   })
 })
